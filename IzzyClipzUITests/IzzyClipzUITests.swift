@@ -46,6 +46,10 @@ final class IzzyClipzUITests: XCTestCase {
     func testSearchingServices() {
         openTab("Services")
         let search = app.searchFields.firstMatch
+        if !search.waitForExistence(timeout: 3) || !search.isHittable {
+            // The search bar can start tucked under the large title.
+            app.swipeDown()
+        }
         XCTAssertTrue(search.waitForExistence(timeout: 5))
         search.tap()
         search.typeText("beard")
