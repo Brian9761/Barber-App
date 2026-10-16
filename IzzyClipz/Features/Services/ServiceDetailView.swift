@@ -140,6 +140,8 @@ struct OfferingRow: View {
     let offering: Offering
     let barber: Barber
     var isFavorite = false
+    /// "Book" opens booking straight away; "Select" moves on to the next step.
+    var actionLabel = "Book"
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -172,7 +174,7 @@ struct OfferingRow: View {
                     .font(.headline)
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.trailing)
-                Text("Book")
+                Text(actionLabel)
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(Theme.red)
             }
@@ -181,9 +183,9 @@ struct OfferingRow: View {
         .contentShape(Rectangle())
     }
 
-    static func accessibilityText(offering: Offering, barber: Barber, isFavorite: Bool) -> String {
+    static func accessibilityText(offering: Offering, barber: Barber, isFavorite: Bool, verb: String = "Book with") -> String {
         var parts = [
-            "Book with \(barber.name)" + (isFavorite ? ", your barber" : ""),
+            "\(verb) \(barber.name)" + (isFavorite ? ", your barber" : ""),
             offering.price.label,
             DurationText.spoken(minutes: offering.durationMinutes),
         ]

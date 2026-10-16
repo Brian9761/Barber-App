@@ -113,10 +113,10 @@ private struct ChooseBarberView: View {
                     if let barber = catalog.barber(withID: offering.barberID) {
                         let isFavorite = favorites.isFavorite(barber.id)
                         NavigationLink(value: BookingStep.review(.offering(offering))) {
-                            OfferingRow(offering: offering, barber: barber, isFavorite: isFavorite)
+                            OfferingRow(offering: offering, barber: barber, isFavorite: isFavorite, actionLabel: "Select")
                         }
                         .buttonStyle(.pressable)
-                        .accessibilityLabel(OfferingRow.accessibilityText(offering: offering, barber: barber, isFavorite: isFavorite))
+                        .accessibilityLabel(OfferingRow.accessibilityText(offering: offering, barber: barber, isFavorite: isFavorite, verb: "Choose"))
                         .accessibilityIdentifier("choose-\(offering.id)")
                     }
                 }

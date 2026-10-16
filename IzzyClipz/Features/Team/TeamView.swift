@@ -59,7 +59,8 @@ private struct BarberCard: View {
                 FlowingChips(items: barber.specialties)
                     .padding(.top, 2)
             }
-            Spacer(minLength: 0)
+            // Take the whole row so the chips wrap only when they have to.
+            .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: Symbol.chevron)
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(Theme.secondaryText)

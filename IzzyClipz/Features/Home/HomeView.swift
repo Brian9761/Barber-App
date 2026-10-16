@@ -15,39 +15,20 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
-                    HomeHero()
-
-                    VStack(spacing: 12) {
-                        Button {
-                            router.startBooking()
-                        } label: {
-                            Label("Book an Appointment", systemImage: Symbol.book)
+            GeometryReader { outer in
+                // The hero photo runs under the status and navigation bars, so the
+                // system can't tell when content scrolls beneath them. This reads
+                // how tall those bars are so the scrim below can cover them.
+                let barHeight = outer.safeAreaInsets.top
+                ScrollView {
+                    content
+                        .overlay(alignment: .top) {
+                            BarScrim(height: barHeight, scrollSpace: Self.scrollSpace)
                         }
-                        .buttonStyle(.primary)
-                        .accessibilityIdentifier("homeBookButton")
-
-                        QuickActions()
-                    }
-                    .padding(.horizontal, Theme.gutter)
-
-                    if let barber = favorites.barber {
-                        FavoriteBarberCard(barber: barber)
-                            .padding(.horizontal, Theme.gutter)
-                    }
-
-                    popularServices
-                    team
-                    gallery
-                    reviews
-
-                    WalkInCard()
-                        .padding(.horizontal, Theme.gutter)
                 }
-                .padding(.bottom, 32)
+                .coordinateSpace(.named(Self.scrollSpace))
+                .ignoresSafeArea(.container, edges: .top)
             }
-            .ignoresSafeArea(.container, edges: .top)
             .screenBackground()
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -74,6 +55,41 @@ struct HomeView: View {
         }
     }
 
+    private static let scrollSpace = "homeScroll"
+
+    private var content: some View {
+        VStack(alignment: .leading, spacing: 32) {
+            HomeHero()
+
+            VStack(spacing: 12) {
+                Button {
+                    router.startBooking()
+                } label: {
+                    Label("Book an Appointment", systemImage: Symbol.book)
+                }
+                .buttonStyle(.primary)
+                .accessibilityIdentifier("homeBookButton")
+
+                QuickActions()
+            }
+            .padding(.horizontal, Theme.gutter)
+
+            if let barber = favorites.barber {
+                FavoriteBarberCard(barber: barber)
+                    .padding(.horizontal, Theme.gutter)
+            }
+
+            popularServices
+            team
+            gallery
+            reviews
+
+            WalkInCard()
+                .padding(.horizontal, Theme.gutter)
+        }
+        .padding(.bottom, 32)
+    }
+
     private var popularServices: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader("Popular") {
@@ -83,7 +99,7 @@ struct HomeView: View {
             .padding(.horizontal, Theme.gutter)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(alignment: .top, spacing: 12) {
                     ForEach(catalog.popularServices) { service in
                         NavigationLink(value: service) {
                             PopularServiceCard(service: service)
@@ -186,6 +202,36 @@ struct HomeView: View {
     }
 }
 
+/// Fades in behind the status and navigation bars as content scrolls under them.
+///
+/// Sits at the top of the scrolling content and is pushed down by exactly how
+/// far the content has scrolled, so it stays pinned to the top of the screen.
+/// Everything is derived from geometry while drawing; no state is updated.
+private struct BarScrim: View {
+    let height: CGFloat
+    let scrollSpace: String
+
+    var body: some View {
+        GeometryReader { proxy in
+            let scrolled = max(0, -proxy.frame(in: .named(scrollSpace)).minY)
+            LinearGradient(
+                stops: [
+                    .init(color: Theme.background, location: 0),
+                    .init(color: Theme.background.opacity(0.92), location: 0.75),
+                    .init(color: Theme.background.opacity(0), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: height + 16)
+            .opacity(min(1, scrolled / 200))
+            .offset(y: scrolled)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 /// Full-bleed photo with the wordmark and live open/closed status.
 private struct HomeHero: View {
     var body: some View {
@@ -243,7 +289,9 @@ private struct PopularServiceCard: View {
                 .foregroundStyle(Theme.secondaryText)
         }
         .padding(14)
-        .frame(width: 160, height: 180, alignment: .topLeading)
+        // Grows taller instead of clipping at large text sizes.
+        .frame(width: 160, alignment: .topLeading)
+        .frame(minHeight: 180, alignment: .topLeading)
         .background(Theme.surface, in: RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous).strokeBorder(Theme.stroke))
     }

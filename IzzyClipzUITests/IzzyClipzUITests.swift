@@ -25,8 +25,10 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("directionsButton").exists)
         screenshot("01-Home")
 
-        scroll(toReveal: element("popular-haircut"))
-        screenshot("02-Home-Popular")
+        // Scrolled content should pass under a dark scrim, not the bare status bar.
+        app.swipeUp()
+        XCTAssertTrue(element("popular-haircut").exists)
+        screenshot("02-Home-Scrolled")
 
         scroll(toReveal: element("seeAllPhotos"))
         screenshot("03-Home-Gallery")

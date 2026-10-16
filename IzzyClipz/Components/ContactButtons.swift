@@ -64,12 +64,15 @@ struct DirectionsButton<Label: View>: View {
 struct ActionTile: View {
     let title: String
     let symbol: String
+    /// Symbols differ in height; a shared frame keeps the labels in line.
+    @ScaledMetric(relativeTo: .title3) private var iconHeight: CGFloat = 26
 
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(Theme.red)
+                .frame(height: iconHeight)
             Text(title)
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(.white)
