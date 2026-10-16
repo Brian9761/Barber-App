@@ -29,6 +29,7 @@
 		9266FC8A029FA7C9FE99ABC3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C26768EDFE09ADA1F0C62D41 /* PrivacyInfo.xcprivacy */; };
 		99A506159452810438AA5690 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FC57B77BB0ECB2EF278882 /* RootView.swift */; };
 		9A939D346449134A2312B50A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9936F928C0F89B8141D429E5 /* AppDelegate.swift */; };
+		A71B576635D1B421F05C53CD /* DemoTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 470F460CB5B25C2667F1BE21 /* DemoTour.swift */; };
 		AAE62A6F04CECB60DD503FF6 /* BookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB842C9C713AFD38826B3B5D /* BookView.swift */; };
 		AC722B937A2892A18F938389 /* AppData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A295D285ED067B5D23B917D3 /* AppData.swift */; };
 		B9A0851D2AD3A5F03153DE77 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E681C98A58629ACF7C5A503F /* Theme.swift */; };
@@ -63,6 +64,7 @@
 		2C44BF8563CDBB65D5BCC207 /* TeamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamView.swift; sourceTree = "<group>"; };
 		370B4EEC30FB02A264DA50E4 /* ServiceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceDetailView.swift; sourceTree = "<group>"; };
 		39848D17A9348C704C83000D /* IzzyClipzKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IzzyClipzKit; path = Packages/IzzyClipzKit; sourceTree = SOURCE_ROOT; };
+		470F460CB5B25C2667F1BE21 /* DemoTour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTour.swift; sourceTree = "<group>"; };
 		4CA492B76FCA979DF9BACFC7 /* IzzyClipzApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IzzyClipzApp.swift; sourceTree = "<group>"; };
 		4D02D4B68363C6EE276BFEDE /* ReminderStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderStoreTests.swift; sourceTree = "<group>"; };
 		4F7962EAA52E7C094788052F /* ReminderStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderStore.swift; sourceTree = "<group>"; };
@@ -167,6 +169,7 @@
 		6111BA0258D7622019042637 /* IzzyClipzUITests */ = {
 			isa = PBXGroup;
 			children = (
+				470F460CB5B25C2667F1BE21 /* DemoTour.swift */,
 				F6D7F661B1CC04FEA08F33A1 /* IzzyClipzUITests.swift */,
 			);
 			path = IzzyClipzUITests;
@@ -415,6 +418,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A71B576635D1B421F05C53CD /* DemoTour.swift in Sources */,
 				033F5264A29ECCEBAFB1F33F /* IzzyClipzUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

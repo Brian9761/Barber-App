@@ -1,0 +1,151 @@
+name: Demo video
+
+# Records the app running in the iOS Simulator while DemoTour walks through
+# every tab, including the live Squire booking pages, and publishes the video
+# and screenshots to the "demo" branch. Run it from the Actions tab.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: demo
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    name: Record the app
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Boot an iPhone simulator
+        run: |
+          SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          best = None
+          for runtime, devices in json.load(sys.stdin)["devices"].items():
+              if ".iOS-" not in runtime:
+                  continue
+              version = tuple(int(part) for part in runtime.split(".iOS-")[-1].split("-"))
+              for device in devices:
+                  name = device["name"]
+                  if not name.startswith("iPhone") or not device.get("isAvailable", True):
+                      continue
+                  rank = (version, name.endswith(" Pro"), name)
+                  if best is None or rank > best[0]:
+                      best = (rank, device["udid"], name, runtime)
+          if best is None:
+              sys.exit("No iPhone simulator available")
+          print(best[1], best[2], best[3], file=sys.stderr)
+          print(best[1])
+          ')
+          echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR" || true
+          xcrun simctl bootstatus "$SIMULATOR" -b
+          xcrun simctl status_bar "$SIMULATOR" override --time "9:41" --dataNetwork wifi --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100
+
+      - name: Build
+        run: |
+          mkdir -p build
+          xcodebuild build-for-testing \
+            -project IzzyClipz.xcodeproj \
+            -scheme IzzyClipz \
+            -destination "id=$SIMULATOR" \
+            -derivedDataPath build/DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            > build/build.log 2>&1 || { tail -80 build/build.log; exit 1; }
+          grep -E "\*\* TEST BUILD" build/build.log
+
+      - name: Record the tour
+        env:
+          TEST_RUNNER_DEMO_TOUR: "1"
+        run: |
+          xcrun simctl io "$SIMULATOR" recordVideo --codec=h264 --force build/demo.mov &
+          RECORDER=$!
+          sleep 3
+          set +e
+          xcodebuild test-without-building \
+            -project IzzyClipz.xcodeproj \
+            -scheme IzzyClipz \
+            -destination "id=$SIMULATOR" \
+            -derivedDataPath build/DerivedData \
+            -only-testing:IzzyClipzUITests/DemoTour \
+            -resultBundlePath build/Demo.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            > build/tour.log 2>&1
+          status=$?
+          sleep 2
+          kill -INT $RECORDER
+          wait $RECORDER
+          grep -E "DEMO TOUR|Test Case|\*\* TEST|error:" build/tour.log | head -100
+          ls -la build/demo.mov
+          exit $status
+
+      - name: Collect video and screenshots
+        if: always()
+        run: |
+          mkdir -p build/demo build/attachments
+          if [ -f build/demo.mov ]; then
+            size=$(stat -f%z build/demo.mov)
+            if [ "$size" -lt 90000000 ]; then
+              cp build/demo.mov build/demo/demo.mov
+            else
+              avconvert --source build/demo.mov --output build/demo/demo.mov --preset PresetAppleM4V720pHD --replace
+            fi
+          fi
+          if [ -d build/Demo.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/Demo.xcresult --output-path build/attachments || true
+          fi
+          python3 - <<'EOF'
+          import json, pathlib, re, shutil
+          source = pathlib.Path("build/attachments")
+          target = pathlib.Path("build/demo")
+          try:
+              for test in json.loads((source / "manifest.json").read_text()):
+                  for index, attachment in enumerate(test.get("attachments", []), start=1):
+                      name = attachment["suggestedHumanReadableName"].split("_0_")[0]
+                      name = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-")
+                      shutil.copy(source / attachment["exportedFileName"], target / f"{index:02d}-{name}.png")
+          except Exception as error:
+              print(f"No screenshots exported: {error}")
+          EOF
+          for file in build/demo/*.png; do [ -f "$file" ] && sips -Z 1400 "$file" > /dev/null; done
+          cp build/tour.log build/demo/tour.log 2>/dev/null || true
+          ls -la build/demo
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo
+          path: build/demo
+          if-no-files-found: warn
+
+  publish:
+    name: Publish to the demo branch
+    needs: record
+    if: always() && needs.record.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: demo
+          path: demo
+
+      - name: Push to the demo branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd demo
+          git init -q -b demo
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Demo from ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" demo
