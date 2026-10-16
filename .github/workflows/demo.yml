@@ -63,7 +63,8 @@ jobs:
         env:
           TEST_RUNNER_DEMO_TOUR: "1"
         run: |
-          xcrun simctl io "$SIMULATOR" recordVideo --codec=h264 --force build/demo.mov &
+          # HEVC is about half the size of H.264 for the same quality.
+          xcrun simctl io "$SIMULATOR" recordVideo --codec=hevc --force build/demo.mov &
           RECORDER=$!
           sleep 3
           set +e
@@ -90,10 +91,14 @@ jobs:
           mkdir -p build/demo build/attachments
           if [ -f build/demo.mov ]; then
             size=$(stat -f%z build/demo.mov)
+            echo "Recorded $size bytes"
             if [ "$size" -lt 90000000 ]; then
               cp build/demo.mov build/demo/demo.mov
             else
-              avconvert --source build/demo.mov --output build/demo/demo.mov --preset PresetAppleM4V720pHD --replace
+              # Too big for a git branch (100 MB file limit): shrink it.
+              HOMEBREW_NO_AUTO_UPDATE=1 HOMEBREW_NO_INSTALL_CLEANUP=1 brew install ffmpeg > /dev/null
+              ffmpeg -loglevel error -i build/demo.mov -vf "scale=-2:1600" -c:v libx264 -crf 24 -preset medium \
+                -pix_fmt yuv420p -an -movflags +faststart build/demo/demo.mp4
             fi
           fi
           if [ -d build/Demo.xcresult ]; then
