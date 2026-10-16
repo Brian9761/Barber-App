@@ -22,7 +22,7 @@ jobs:
     container: swift:6.0-jammy
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Test IzzyClipzKit
         run: swift test --package-path Packages/IzzyClipzKit
 
@@ -36,7 +36,7 @@ jobs:
         # macos-26 has Xcode 26, the SDK the App Store requires; macos-15 checks Xcode 16 still builds.
         runner: [macos-26, macos-15]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Show toolchain
         run: |
@@ -109,15 +109,34 @@ jobs:
       - name: Export screenshots
         if: always()
         run: |
-          mkdir -p build/screenshots
+          mkdir -p build/attachments build/screenshots
           if [ -d build/TestResults.xcresult ]; then
-            xcrun xcresulttool export attachments --path build/TestResults.xcresult --output-path build/screenshots || true
+            xcrun xcresulttool export attachments --path build/TestResults.xcresult --output-path build/attachments || true
+          fi
+          if [ -f build/attachments/manifest.json ]; then
+            # Name each file after its screenshot ("01-Home.png") and shrink it for the web.
+            python3 - <<'EOF'
+          import json, pathlib, shutil
+          source = pathlib.Path("build/attachments")
+          target = pathlib.Path("build/screenshots")
+          try:
+              for test in json.loads((source / "manifest.json").read_text()):
+                  for attachment in test.get("attachments", []):
+                      name = attachment["suggestedHumanReadableName"].split("_0_")[0]
+                      shutil.copy(source / attachment["exportedFileName"], target / f"{name}.png")
+          except Exception as error:
+              # Screenshots are a convenience; never fail the build over them.
+              print(f"Couldn't read the attachment manifest ({error}); keeping original names")
+              for png in source.glob("*.png"):
+                  shutil.copy(png, target / png.name)
+          EOF
+            for file in build/screenshots/*.png; do sips -Z 1400 "$file" > /dev/null; done
           fi
           ls build/screenshots
 
       - name: Upload screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: screenshots-${{ matrix.runner }}
           path: build/screenshots
@@ -125,10 +144,37 @@ jobs:
 
       - name: Upload test results
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.runner }}
           path: |
             build/TestResults.xcresult
             build/*.log
           if-no-files-found: ignore
+
+  publish-screenshots:
+    name: Publish screenshots
+    needs: app
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: screenshots-macos-26
+          path: screenshots
+
+      # Keeps the latest screenshots on a "screenshots" branch so the README can show them.
+      - name: Push to the screenshots branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd screenshots
+          git init -q -b screenshots
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Screenshots from ${GITHUB_SHA::7}"
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screenshots
