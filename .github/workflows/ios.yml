@@ -1,0 +1,134 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "docs/**"]
+  pull_request:
+    paths-ignore: ["**.md", "docs/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core logic on Linux
+    runs-on: ubuntu-latest
+    container: swift:6.0-jammy
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test IzzyClipzKit
+        run: swift test --package-path Packages/IzzyClipzKit
+
+  app:
+    name: App on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-26 has Xcode 26, the SDK the App Store requires; macos-15 checks Xcode 16 still builds.
+        runner: [macos-26, macos-15]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Test IzzyClipzKit on macOS
+        run: swift test --package-path Packages/IzzyClipzKit
+
+      - name: Pick an iPhone simulator
+        run: |
+          SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          best = None
+          for runtime, devices in json.load(sys.stdin)["devices"].items():
+              if ".iOS-" not in runtime:
+                  continue
+              version = tuple(int(part) for part in runtime.split(".iOS-")[-1].split("-"))
+              for device in devices:
+                  name = device["name"]
+                  if not name.startswith("iPhone") or not device.get("isAvailable", True):
+                      continue
+                  # Newest iOS first, then prefer a standard "Pro" model.
+                  rank = (version, name.endswith(" Pro"), name)
+                  if best is None or rank > best[0]:
+                      best = (rank, device["udid"], name, runtime)
+          if best is None:
+              sys.exit("No iPhone simulator available")
+          print(best[1], best[2], best[3], file=sys.stderr)
+          print(best[1])
+          ')
+          echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR" || true
+          xcrun simctl bootstatus "$SIMULATOR" -b
+          xcrun simctl status_bar "$SIMULATOR" override --time "9:41" --dataNetwork wifi --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+
+      - name: Build and test the app
+        run: |
+          mkdir -p build
+          set +e
+          xcodebuild test \
+            -project IzzyClipz.xcodeproj \
+            -scheme IzzyClipz \
+            -destination "id=$SIMULATOR" \
+            -resultBundlePath build/TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            > build/test.log 2>&1
+          status=$?
+          # The full log is huge; show what matters.
+          grep -E "error:|warning:|\*\* TEST|Executed [0-9]+ test" build/test.log | sort -u | head -200
+          grep -iE "^Test case .*(passed|failed)" build/test.log | head -200
+          if [ $status -ne 0 ]; then tail -80 build/test.log; fi
+          exit $status
+
+      - name: Build for devices (Release)
+        run: |
+          set +e
+          xcodebuild build \
+            -project IzzyClipz.xcodeproj \
+            -scheme IzzyClipz \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            > build/release.log 2>&1
+          status=$?
+          grep -E "error:|warning:|\*\* BUILD" build/release.log | sort -u | head -200
+          if [ $status -ne 0 ]; then tail -80 build/release.log; fi
+          exit $status
+
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p build/screenshots
+          if [ -d build/TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/TestResults.xcresult --output-path build/screenshots || true
+          fi
+          ls build/screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.runner }}
+          path: build/screenshots
+          if-no-files-found: warn
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.runner }}
+          path: |
+            build/TestResults.xcresult
+            build/*.log
+          if-no-files-found: ignore

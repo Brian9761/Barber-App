@@ -1,0 +1,120 @@
+# XcodeGen spec for the Izzy Clipz iOS app.
+#
+# IzzyClipz.xcodeproj is generated from this file and committed, so the app
+# opens in Xcode with no extra tools. After changing this file, regenerate it:
+#
+#     xcodegen generate
+#
+name: IzzyClipz
+
+options:
+  bundleIdPrefix: com.izzyclipz
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "16.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    CODE_SIGN_STYLE: Automatic
+    # Set your Apple Developer team here or in Xcode's Signing & Capabilities tab.
+    DEVELOPMENT_TEAM: ""
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+
+packages:
+  IzzyClipzKit:
+    path: Packages/IzzyClipzKit
+
+targets:
+  IzzyClipz:
+    type: application
+    platform: iOS
+    sources:
+      - path: IzzyClipz
+    dependencies:
+      - package: IzzyClipzKit
+    info:
+      path: IzzyClipz/Info.plist
+      properties:
+        CFBundleDisplayName: Izzy Clipz
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+          UIImageName: LaunchLogo
+        UIUserInterfaceStyle: Dark
+        UIRequiredDeviceCapabilities:
+          - arm64
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        PRODUCT_NAME: IzzyClipz
+        PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.app
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        GENERATE_INFOPLIST_FILE: NO
+        SUPPORTS_MACCATALYST: NO
+        ENABLE_PREVIEWS: YES
+
+  IzzyClipzTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: IzzyClipzTests
+    dependencies:
+      - target: IzzyClipz
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.app.tests
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+
+  IzzyClipzUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: IzzyClipzUITests
+    dependencies:
+      - target: IzzyClipz
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.app.uitests
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: IzzyClipz
+
+schemes:
+  IzzyClipz:
+    build:
+      targets:
+        IzzyClipz: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      coverageTargets:
+        - IzzyClipz
+      targets:
+        - name: IzzyClipzTests
+        - name: IzzyClipzUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
