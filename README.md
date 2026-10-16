@@ -4,6 +4,21 @@ A native iPhone app for **Izzy Clipz Barbershop**, 1919 Mission Ave, Ste 105, Oc
 
 Built with SwiftUI for iOS 17 and later. No accounts, no tracking, no backend to run: appointments are booked through the shop's existing [Squire](https://getsquire.com/discover/barbershop/izzy-clipz-oceanside) page, so the barbers keep managing their calendars exactly as they do today.
 
+<p>
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/01-Home.png" width="190" alt="Home screen">
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/05-Service-Detail.png" width="190" alt="Service details with each barber's price">
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/16-Book-Barber.png" width="190" alt="Choosing a barber while booking">
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/10-Visit-Hours.png" width="190" alt="Hours with today highlighted">
+</p>
+<p>
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/04-Services.png" width="190" alt="Service menu">
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/08-Barber-Detail.png" width="190" alt="A barber's profile">
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/09-Visit.png" width="190" alt="Map, address and contact">
+  <img src="https://raw.githubusercontent.com/Brian9761/Barber-App/screenshots/13-Photo-Viewer.png" width="190" alt="Photo viewer">
+</p>
+
+These screenshots are taken by the UI tests on every push to `main`. The full set is on the [`screenshots` branch](https://github.com/Brian9761/Barber-App/tree/screenshots).
+
 ## Features
 
 - **Home**: live open/closed status ("Open now · Closes 7 PM"), one-tap booking, call, directions and Instagram, popular services, the team, recent cuts and reviews.
@@ -66,7 +81,7 @@ xcodebuild test -project IzzyClipz.xcodeproj -scheme IzzyClipz \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
-GitHub Actions (`.github/workflows/ios.yml`) runs everything on every push to `main`: the package tests on Linux and macOS, plus the app's unit and UI tests on Xcode 26 and Xcode 16 simulators, and a Release device build. Screenshots of every screen are uploaded as a build artifact.
+GitHub Actions (`.github/workflows/ios.yml`) runs everything on every push to `main`: the package tests on Linux and macOS, plus the app's unit and UI tests on Xcode 26 and Xcode 16 simulators, and a Release device build. Screenshots of every screen are uploaded as a build artifact and published to the `screenshots` branch.
 
 The test suites check, among other things:
 
@@ -107,5 +122,5 @@ Photos are the shop's own, taken from its website. The team has no headshots onl
 1. **Account**: Apple expects business apps to be published by the business, so use the shop's own Apple Developer account or get the owner's written permission to use the name and photos.
 2. **App Privacy**: answer **Data Not Collected**. The app stores only the favorite barber and reminder settings, on the device. The included privacy manifest declares this.
 3. **Review notes**: mention that booking happens on the shop's Squire page and needs no login to browse.
-4. **Screenshots**: the CI artifact has every screen at iPhone size.
+4. **Screenshots**: the App Store needs full-resolution screenshots; take them in the Simulator (**File → Save Screen**). The ones on the `screenshots` branch are downsized for the web.
 5. Archive in Xcode (**Product → Archive**) and upload with the Organizer.
