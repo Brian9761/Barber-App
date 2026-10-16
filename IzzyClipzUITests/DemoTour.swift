@@ -107,8 +107,13 @@ final class DemoTour: XCTestCase {
     // MARK: Helpers
 
     /// Waits for the Squire page to load, shows it, then closes it.
+    ///
+    /// Squire sits behind a Cloudflare check that can take a while to clear
+    /// for data-center traffic like CI runners, so this waits generously.
     private func showSquire(named name: String) {
-        pause(9)
+        pause(12)
+        capture("\(name)-12s")
+        pause(18)
         capture(name)
         let done = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
         if done.waitForExistence(timeout: 5) {
