@@ -7,6 +7,12 @@ on:
   pull_request:
     paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
+    inputs:
+      macs:
+        description: "Mac runners: Apple silicon, or Intel when Apple silicon runners are short on capacity"
+        type: choice
+        options: [apple-silicon, intel]
+        default: apple-silicon
 
 concurrency:
   group: ios-${{ github.ref }}
@@ -34,7 +40,8 @@ jobs:
       fail-fast: false
       matrix:
         # macos-26 has Xcode 26, the SDK the App Store requires; macos-15 checks Xcode 16 still builds.
-        runner: [macos-26, macos-15]
+        # Runs started by hand can use the Intel images of the same two macOS versions instead.
+        runner: ${{ fromJSON(inputs.macs == 'intel' && '["macos-26-intel", "macos-15-intel"]' || '["macos-26", "macos-15"]') }}
     steps:
       - uses: actions/checkout@v7
 
@@ -164,10 +171,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      # The Xcode 26 run's screenshots, from either kind of Mac.
       - uses: actions/download-artifact@v7
         continue-on-error: true
         with:
-          name: screenshots-macos-26
+          pattern: screenshots-macos-26*
+          merge-multiple: true
           path: screenshots
 
       - name: Push to the screenshots branch
