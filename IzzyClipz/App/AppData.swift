@@ -4,7 +4,10 @@ import Foundation
 enum AppData {
     static let shop = ShopInfo.izzyClipz
     static let catalog = Catalog.izzyClipz
+    static let products = ProductCatalog.bravo
     static let clock = shop.clock
+    /// Day and time picking for appointments, in the shop's time zone.
+    static let bookingCalendar = BookingCalendar(clock: clock)
 
     static func bookingURL(for request: BookingRequest) -> URL {
         shop.booking.url(for: request)
@@ -59,4 +62,15 @@ enum Asset {
     static let storefront = "Storefront"
     static let hero = GalleryPhoto.texturedCrop.assetName
     static let launchLogo = "LaunchLogo"
+    /// The shop's official logo, transparent background.
+    static let logo = "Logo"
+    /// The barber-pole mascot from the logo, transparent background.
+    static let mascot = "LogoMascot"
+
+    /// Every bundled image the app refers to, for a test to check.
+    static var all: [String] {
+        [storefront, hero, launchLogo, logo, mascot]
+            + GalleryPhoto.allCases.map(\.assetName)
+            + AppData.products.products.map(\.imageName)
+    }
 }

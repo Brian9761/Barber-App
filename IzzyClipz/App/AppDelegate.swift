@@ -1,12 +1,19 @@
 import UIKit
 import UserNotifications
 
-/// Owns the app's shared state and handles taps on reminder notifications.
+/// Owns the app's shared state and handles taps on notifications.
 @MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     let router = AppRouter()
     let favorites = Favorites(defaults: LaunchOptions.defaults)
-    let reminders = ReminderStore(scheduler: SystemNotificationScheduler(), defaults: LaunchOptions.defaults)
+    let reminders = ReminderStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
+    let appointments = AppointmentStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
+    let bravo = BravoStore()
+
+    /// UI tests never see a permission alert; everyone else gets the real thing.
+    private static func makeScheduler() -> NotificationScheduling {
+        LaunchOptions.isUITesting ? AlwaysAllowedNotificationScheduler() : SystemNotificationScheduler()
+    }
 
     func application(
         _ application: UIApplication,
@@ -20,7 +27,20 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         return true
     }
 
-    /// Shows reminders even while the app is open.
+    /// Rolls reminders forward, drops old appointments, and treats the latest
+    /// appointment that's over as the client's last cut.
+    func becameActive() {
+        appointments.refresh()
+        if let lastAppointment = appointments.latestFinishedStart, lastAppointment > reminders.lastCut {
+            reminders.setLastCut(lastAppointment)
+        } else {
+            // Also notices permission changes made in Settings.
+            reminders.refresh()
+        }
+        Task { await bravo.refresh() }
+    }
+
+    /// Shows notifications even while the app is open.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -29,16 +49,21 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         completionHandler([.banner, .list, .sound])
     }
 
-    /// Tapping a reminder takes the client straight to booking.
+    /// A cut reminder opens booking; an appointment reminder opens Home, where
+    /// the appointment card is.
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let isReminder = response.notification.request.identifier.hasPrefix(ReminderIdentifiers.prefix)
+        let identifier = response.notification.request.identifier
         Task { @MainActor in
-            if isReminder {
+            if identifier.hasPrefix(ReminderIdentifiers.prefix) {
                 self.router.startBooking()
+            } else if identifier.hasPrefix(AppointmentStore.identifierPrefix) {
+                self.router.closeSheet()
+                self.router.homePath = []
+                self.router.selectedTab = .home
             }
             completionHandler()
         }

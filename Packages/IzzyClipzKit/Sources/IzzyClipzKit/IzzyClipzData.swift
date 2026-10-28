@@ -1,15 +1,23 @@
 import Foundation
 
-// The shop's real data, collected from izzyclipzbarbershop.net and the shop's
-// Squire booking page (getsquire.com/discover/barbershop/izzy-clipz-oceanside).
+// The shop's real data, collected from izzyclipzbarbershop.net, the shop's
+// Squire booking page (getsquire.com/discover/barbershop/izzy-clipz-oceanside),
+// its Google Maps listing and its Yelp page.
 //
 // To update prices, add a barber or change hours, edit this file. Squire IDs
 // come from the `preselect=` value in each service's Squire booking link.
 
+/// Identifiers the shop's data and links share.
+enum IzzyClipzListing {
+    static let fullName = "Izzy Clipz Barbershop"
+    static let squireSlug = "izzy-clipz-oceanside"
+    static let googlePlaceID = "ChIJGz5HChRv3IARYJJy_6jyRm8"
+}
+
 extension ShopInfo {
     public static let izzyClipz = ShopInfo(
         name: "Izzy Clipz",
-        fullName: "Izzy Clipz Barbershop",
+        fullName: IzzyClipzListing.fullName,
         tagline: "Traditional & modern cuts in Oceanside",
         about: [
             "Welcome to Izzy Clipz. We cater to both traditional and modern hairstyles, making us your one-stop destination for exceptional grooming services.",
@@ -37,12 +45,22 @@ extension ShopInfo {
         ]),
         instagramHandle: "izzy_clipz_barbershop_",
         websiteURL: URL(string: "https://www.izzyclipzbarbershop.net")!,
-        booking: BookingLinks(shopSlug: "izzy-clipz-oceanside"),
+        booking: BookingLinks(shopSlug: IzzyClipzListing.squireSlug),
         paymentMethods: ["Credit card", "Gift card"],
         highlights: ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"],
         accessibility: ["Wheelchair accessible", "ADA-compliant entrance", "Accessible parking near the entrance"],
-        rating: Rating(average: 5.0, count: 115),
-        ratingSource: "Squire",
+        ratings: [
+            SourcedRating(
+                source: "Squire",
+                rating: Rating(average: 5.0, count: 115),
+                url: ShopInfo.squireDiscoverURL(shopSlug: IzzyClipzListing.squireSlug)
+            ),
+            SourcedRating(
+                source: "Google",
+                rating: Rating(average: 4.9, count: 59),
+                url: ShopInfo.googleMapsURL(name: IzzyClipzListing.fullName, placeID: IzzyClipzListing.googlePlaceID)
+            ),
+        ],
         reviews: [
             Review(
                 id: "alex-n",
@@ -60,7 +78,17 @@ extension ShopInfo {
                 barberID: nil,
                 source: "Squire"
             ),
-        ]
+            Review(
+                id: "patti-m",
+                author: "Patti M.",
+                stars: 5,
+                text: "Finally found a great hair artist; Christian! … Great conversationalist. Thorough & methodical. I got the haircut I wanted. Thanks bro",
+                barberID: nil,
+                source: "Yelp",
+                date: "Aug 2026"
+            ),
+        ],
+        googlePlaceID: IzzyClipzListing.googlePlaceID
     )
 }
 
@@ -174,9 +202,10 @@ extension Catalog {
                 name: "Izzy",
                 listedName: "Israel F.",
                 title: "Owner · Barber",
-                bio: "Izzy believes a haircut is more than a service. It's an experience. He's the shop's go-to for color, lightener and perms, and a straight-razor shave specialist.",
+                bio: "Izzy is a licensed barber and educator who believes a haircut is more than a service. It's an experience. He's the shop's go-to for color, lightener and perms, and a straight-razor shave specialist.",
                 specialties: ["Color & lightener", "Perms", "VIP service", "Hot towel shaves"],
-                rating: Rating(average: 5.0, count: 92)
+                rating: Rating(average: 5.0, count: 92),
+                instagramHandle: "izzy_clipz_"
             ),
             Barber(
                 id: "carlos-rafael",

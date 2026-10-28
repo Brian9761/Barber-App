@@ -65,26 +65,31 @@ struct ActionTile: View {
     let title: String
     let symbol: String
     /// Symbols differ in height; a shared frame keeps the labels in line.
-    @ScaledMetric(relativeTo: .title3) private var iconHeight: CGFloat = 26
+    @ScaledMetric(relativeTo: .title3) private var iconSize: CGFloat = 40
 
     var body: some View {
         VStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Theme.red)
-                .frame(height: iconHeight)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Theme.blue)
+                .frame(width: iconSize, height: iconSize)
+                .background(Theme.tint, in: Circle())
             Text(title)
                 .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.75)
         }
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
         .padding(.horizontal, 6)
-        .frame(maxWidth: .infinity, minHeight: 76)
-        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.stroke))
-        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .frame(maxWidth: .infinity, minHeight: 84)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.surface)
+                .shadow(color: Theme.shadow, radius: 10, y: 3)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.stroke))
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
@@ -109,5 +114,6 @@ struct QuickActions: View {
         }
         .buttonStyle(.pressable)
         .accessibilityLabel("\(AppData.shop.name) on Instagram")
+        .accessibilityIdentifier("instagramButton")
     }
 }

@@ -11,13 +11,17 @@ struct IzzyClipzApp: App {
                 .environment(appDelegate.router)
                 .environment(appDelegate.favorites)
                 .environment(appDelegate.reminders)
-                .preferredColorScheme(.dark)
+                .environment(appDelegate.appointments)
+                .environment(appDelegate.bravo)
+                .preferredColorScheme(.light)
                 .tint(Theme.red)
+                .task {
+                    await appDelegate.bravo.refresh()
+                }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {
-                // Rolls reminders forward and notices permission changes made in Settings.
-                appDelegate.reminders.refresh()
+                appDelegate.becameActive()
             }
         }
     }

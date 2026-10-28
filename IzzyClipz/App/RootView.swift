@@ -19,20 +19,26 @@ struct RootView: View {
                 .tabItem { Label("Book", systemImage: Symbol.book) }
                 .tag(AppTab.book)
 
-            TeamView()
-                .tabItem { Label("Team", systemImage: Symbol.team) }
-                .tag(AppTab.team)
+            ShopView()
+                .tabItem { Label("Shop", systemImage: Symbol.shop) }
+                .tag(AppTab.shop)
 
             VisitView()
                 .tabItem { Label("Visit", systemImage: Symbol.visit) }
                 .tag(AppTab.visit)
         }
-        .sheet(item: $router.sheet) { sheet in
+        .sheet(item: $router.sheet, onDismiss: router.sheetDidDismiss) { sheet in
             switch sheet {
-            case .booking(let request):
-                BookingSheet(request: request)
+            case .squire(let handoff):
+                WebSheet(url: handoff.url)
+            case .confirmBooking(let plan):
+                ConfirmBookingSheet(plan: plan)
+            case .web(let url):
+                WebSheet(url: url)
             case .reminders:
                 ReminderSettingsView()
+            case .addToCalendar(let appointment):
+                AddToCalendarSheet(appointment: appointment)
             }
         }
     }

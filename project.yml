@@ -54,7 +54,7 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo
-        UIUserInterfaceStyle: Dark
+        UIUserInterfaceStyle: Light
         UIRequiredDeviceCapabilities:
           - arm64
         UISupportedInterfaceOrientations:

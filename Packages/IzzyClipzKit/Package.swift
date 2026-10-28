@@ -3,7 +3,8 @@
 import PackageDescription
 
 // Platform-independent business logic for the Izzy Clipz app: the service
-// menu, team, business hours, booking links and reminder scheduling.
+// menu, team, business hours, booking links and calendar, saved appointments,
+// reminder scheduling and the sponsor's products.
 // It only depends on Foundation so it can be tested anywhere `swift test` runs.
 let package = Package(
     name: "IzzyClipzKit",

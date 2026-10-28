@@ -93,9 +93,11 @@ public struct ShopInfo: Sendable {
     public let paymentMethods: [String]
     public let highlights: [String]
     public let accessibility: [String]
-    public let rating: Rating
-    public let ratingSource: String
+    /// Ratings from each review site, the headline one first.
+    public let ratings: [SourcedRating]
     public let reviews: [Review]
+    /// The shop's Google Maps place ID, used for its Maps page and "Write a review".
+    public let googlePlaceID: String
 
     public init(
         name: String,
@@ -113,11 +115,13 @@ public struct ShopInfo: Sendable {
         paymentMethods: [String],
         highlights: [String],
         accessibility: [String],
-        rating: Rating,
-        ratingSource: String,
-        reviews: [Review]
+        ratings: [SourcedRating],
+        reviews: [Review],
+        googlePlaceID: String
     ) {
         precondition(TimeZone(identifier: timeZoneIdentifier) != nil, "Unknown time zone \(timeZoneIdentifier)")
+        precondition(!ratings.isEmpty, "The shop needs at least one rating")
+        precondition(ShopInfo.isPlaceID(googlePlaceID), "Invalid Google place ID")
         self.name = name
         self.fullName = fullName
         self.tagline = tagline
@@ -133,10 +137,16 @@ public struct ShopInfo: Sendable {
         self.paymentMethods = paymentMethods
         self.highlights = highlights
         self.accessibility = accessibility
-        self.rating = rating
-        self.ratingSource = ratingSource
+        self.ratings = ratings
         self.reviews = reviews
+        self.googlePlaceID = googlePlaceID
     }
+
+    /// The headline rating, e.g. 5.0 from 115 reviews.
+    public var rating: Rating { ratings[0].rating }
+
+    /// Where the headline rating comes from, e.g. "Squire".
+    public var ratingSource: String { ratings[0].source }
 
     public var timeZone: TimeZone {
         // Validated in `init`.
@@ -147,13 +157,18 @@ public struct ShopInfo: Sendable {
         ShopClock(schedule: schedule, timeZone: timeZone)
     }
 
+    /// The in-app booking calendar with its default slot length, lead time and window.
+    public var bookingCalendar: BookingCalendar {
+        BookingCalendar(clock: clock)
+    }
+
     public var instagramURL: URL {
         URL(string: "https://www.instagram.com/\(instagramHandle)/")!
     }
 
     /// Opens the shop in Apple Maps.
     public var appleMapsURL: URL {
-        mapsURL(host: "maps.apple.com", path: "/", query: [
+        ShopInfo.link(host: "maps.apple.com", path: "/", query: [
             ("q", fullName),
             ("address", address.singleLine),
             ("ll", "\(coordinate.latitude),\(coordinate.longitude)"),
@@ -162,7 +177,7 @@ public struct ShopInfo: Sendable {
 
     /// Driving directions to the shop in Apple Maps.
     public var appleMapsDirectionsURL: URL {
-        mapsURL(host: "maps.apple.com", path: "/", query: [
+        ShopInfo.link(host: "maps.apple.com", path: "/", query: [
             ("daddr", address.singleLine),
             ("dirflg", "d"),
         ])
@@ -170,20 +185,59 @@ public struct ShopInfo: Sendable {
 
     /// Directions in Google Maps (the app if installed, otherwise the web).
     public var googleMapsDirectionsURL: URL {
-        mapsURL(host: "www.google.com", path: "/maps/dir/", query: [
+        ShopInfo.link(host: "www.google.com", path: "/maps/dir/", query: [
             ("api", "1"),
             ("destination", "\(fullName), \(address.singleLine)"),
         ])
     }
 
-    private func mapsURL(host: String, path: String, query: [(String, String)]) -> URL {
+    /// The shop's Google Maps page, with its Google reviews.
+    public var googleMapsURL: URL {
+        ShopInfo.googleMapsURL(name: fullName, placeID: googlePlaceID)
+    }
+
+    /// Google's "Write a review" page for the shop.
+    public var googleReviewURL: URL {
+        ShopInfo.googleReviewURL(placeID: googlePlaceID)
+    }
+
+    /// The shop's public Squire page, with its Squire reviews.
+    public var squireDiscoverURL: URL {
+        ShopInfo.squireDiscoverURL(shopSlug: booking.shopSlug)
+    }
+
+    static func googleMapsURL(name: String, placeID: String) -> URL {
+        link(host: "www.google.com", path: "/maps/search/", query: [
+            ("api", "1"),
+            ("query", name),
+            ("query_place_id", placeID),
+        ])
+    }
+
+    static func googleReviewURL(placeID: String) -> URL {
+        link(host: "search.google.com", path: "/local/writereview", query: [("placeid", placeID)])
+    }
+
+    static func squireDiscoverURL(shopSlug: String) -> URL {
+        link(host: "getsquire.com", path: "/discover/barbershop/\(shopSlug)", query: [])
+    }
+
+    /// Google place IDs are URL-safe base64: letters, digits, "-" and "_".
+    static func isPlaceID(_ string: String) -> Bool {
+        !string.isEmpty && string.unicodeScalars.allSatisfy { scalar in
+            ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar) || ("0"..."9").contains(scalar)
+                || scalar == "-" || scalar == "_"
+        }
+    }
+
+    private static func link(host: String, path: String, query: [(String, String)]) -> URL {
         var components = URLComponents()
         components.scheme = "https"
         components.host = host
         components.path = path
-        components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) }
+        components.queryItems = query.isEmpty ? nil : query.map { URLQueryItem(name: $0.0, value: $0.1) }
         guard let url = components.url else {
-            preconditionFailure("Couldn't build a maps URL for \(host)")
+            preconditionFailure("Couldn't build a link to \(host)")
         }
         return url
     }
