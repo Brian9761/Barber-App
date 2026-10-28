@@ -155,26 +155,39 @@ jobs:
   publish-screenshots:
     name: Publish screenshots
     needs: app
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Pushes to main publish to "screenshots" (the README shows those). Runs started
+    # by hand on another branch publish to "screenshots-<branch>", even when a test
+    # failed, so the screens can be reviewed before merging.
+    if: ${{ !cancelled() && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v7
+        continue-on-error: true
         with:
           name: screenshots-macos-26
           path: screenshots
 
-      # Keeps the latest screenshots on a "screenshots" branch so the README can show them.
       - name: Push to the screenshots branch
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
+          if [ -z "$(ls -A screenshots 2>/dev/null)" ]; then
+            echo "No screenshots to publish"
+            exit 0
+          fi
+          if [ "$REF_NAME" = "main" ]; then
+            TARGET=screenshots
+          else
+            TARGET="screenshots-${REF_NAME//\//-}"
+          fi
           cd screenshots
-          git init -q -b screenshots
+          git init -q -b "$TARGET"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
           git commit -q -m "Screenshots from ${GITHUB_SHA::7}"
-          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" screenshots
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$TARGET"
