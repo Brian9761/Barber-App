@@ -8,11 +8,15 @@
 
 /* Begin PBXBuildFile section */
 		000F6B418D1EC757AE602304 /* VisitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED4A464752CE0833B534CC38 /* VisitView.swift */; };
+		005822412528702F407E2506 /* Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71F9CB96C9DCBBF54D482C2D /* Rows.swift */; };
 		033F5264A29ECCEBAFB1F33F /* IzzyClipzUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D7F661B1CC04FEA08F33A1 /* IzzyClipzUITests.swift */; };
 		0510E7BA92235655C8CE7AD5 /* ServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B02B4216B09B876D047FA49 /* ServicesView.swift */; };
+		0A54B5DAE9A7920153914892 /* AppointmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF00DC8CFE69CEB2E557C500 /* AppointmentStore.swift */; };
 		0AA2BFF0C4664BBA3EBA1B15 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C54ED199C14C3F9481A0C44 /* Exports.swift */; };
 		2E62891B5FD26CAEC381D89F /* ReminderStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D02D4B68363C6EE276BFEDE /* ReminderStoreTests.swift */; };
 		303DD541E62D4EF025701CDF /* BarberDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6A390448E683A1C0BBA38 /* BarberDetailView.swift */; };
+		3BA2A113751A4410632DA04A /* Cards.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69C373FD514E15C77FB54DE /* Cards.swift */; };
+		45E49C19EFE43C87D4A492EE /* CalendarEventEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4DD6E1FDC21C62276FFC9C7 /* CalendarEventEditor.swift */; };
 		4B4A59730F2AF95D24E42348 /* ServiceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370B4EEC30FB02A264DA50E4 /* ServiceDetailView.swift */; };
 		504D34A22E267798351CE047 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE0447CED10F303FBB98D18 /* SafariView.swift */; };
 		533D2FE65E528C54329C1C72 /* ReminderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56031AE56794F40034460075 /* ReminderSettingsView.swift */; };
@@ -37,6 +41,7 @@
 		CD34B3251013CF4B748D8A82 /* ZoomableImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAAB3C569176D4EAFD24661 /* ZoomableImage.swift */; };
 		D6407D51E794995C1881760C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0BCAAB1163AECFE10CBD321C /* Assets.xcassets */; };
 		E369D340C2E6462458E29087 /* AppResourcesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9670B7926DDF1EA13073D878 /* AppResourcesTests.swift */; };
+		E3B0375DB8700C1251739CA3 /* BravoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C947325FDA6CB4ED7DF941C /* BravoStore.swift */; };
 		F6B8C95B51CFA703B7CA5968 /* ContactButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A376FC81D018F7A2AEA878F /* ContactButtons.swift */; };
 /* End PBXBuildFile section */
 
@@ -59,6 +64,7 @@
 
 /* Begin PBXFileReference section */
 		0BCAAB1163AECFE10CBD321C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0C947325FDA6CB4ED7DF941C /* BravoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BravoStore.swift; sourceTree = "<group>"; };
 		1C54ED199C14C3F9481A0C44 /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
 		1E368952A8EDA8DF6DCF0B3A /* IzzyClipzTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IzzyClipzTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2C44BF8563CDBB65D5BCC207 /* TeamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamView.swift; sourceTree = "<group>"; };
@@ -73,6 +79,7 @@
 		5CC5F6CFB1332625865847CF /* Favorites.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Favorites.swift; sourceTree = "<group>"; };
 		6A376FC81D018F7A2AEA878F /* ContactButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactButtons.swift; sourceTree = "<group>"; };
 		7074E5EA07292E4890F717D0 /* IzzyClipz.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IzzyClipz.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		71F9CB96C9DCBBF54D482C2D /* Rows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rows.swift; sourceTree = "<group>"; };
 		7C6B66AA7818F8A0E7879607 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		82F6A390448E683A1C0BBA38 /* BarberDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarberDetailView.swift; sourceTree = "<group>"; };
 		8FE0447CED10F303FBB98D18 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
@@ -84,6 +91,7 @@
 		BD512638A8DE4852F7B87A55 /* IzzyClipzUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IzzyClipzUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C26768EDFE09ADA1F0C62D41 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D3092ABB4F1EAAE76C714D67 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		D4DD6E1FDC21C62276FFC9C7 /* CalendarEventEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEventEditor.swift; sourceTree = "<group>"; };
 		D566F90D36D9C66184178865 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		D91C2938A9C95CE1E62A31F7 /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
 		E441C80EBADC82E5DFC7E101 /* Styles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Styles.swift; sourceTree = "<group>"; };
@@ -91,6 +99,8 @@
 		EBDAA4C78877AF944CAD9593 /* Branding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Branding.swift; sourceTree = "<group>"; };
 		ED209FD6E981D079FDBFB11D /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
 		ED4A464752CE0833B534CC38 /* VisitView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisitView.swift; sourceTree = "<group>"; };
+		EF00DC8CFE69CEB2E557C500 /* AppointmentStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppointmentStore.swift; sourceTree = "<group>"; };
+		F69C373FD514E15C77FB54DE /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
 		F6D7F661B1CC04FEA08F33A1 /* IzzyClipzUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IzzyClipzUITests.swift; sourceTree = "<group>"; };
 		FB842C9C713AFD38826B3B5D /* BookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -114,6 +124,7 @@
 				BA02695682F6EA21F36FF368 /* Components */,
 				C188B8D1537A19C0D7835E5E /* Features */,
 				65667F504491DE4BD972C457 /* Resources */,
+				E7EB892868150F20C0213886 /* Stores */,
 				85E24FDB7F580F79ED33C948 /* Theme */,
 				7C6B66AA7818F8A0E7879607 /* Info.plist */,
 			);
@@ -215,7 +226,10 @@
 			isa = PBXGroup;
 			children = (
 				EBDAA4C78877AF944CAD9593 /* Branding.swift */,
+				D4DD6E1FDC21C62276FFC9C7 /* CalendarEventEditor.swift */,
+				F69C373FD514E15C77FB54DE /* Cards.swift */,
 				6A376FC81D018F7A2AEA878F /* ContactButtons.swift */,
+				71F9CB96C9DCBBF54D482C2D /* Rows.swift */,
 				8FE0447CED10F303FBB98D18 /* SafariView.swift */,
 				E441C80EBADC82E5DFC7E101 /* Styles.swift */,
 				AAAAB3C569176D4EAFD24661 /* ZoomableImage.swift */,
@@ -265,6 +279,15 @@
 				D91C2938A9C95CE1E62A31F7 /* GalleryView.swift */,
 			);
 			path = Gallery;
+			sourceTree = "<group>";
+		};
+		E7EB892868150F20C0213886 /* Stores */ = {
+			isa = PBXGroup;
+			children = (
+				EF00DC8CFE69CEB2E557C500 /* AppointmentStore.swift */,
+				0C947325FDA6CB4ED7DF941C /* BravoStore.swift */,
+			);
+			path = Stores;
 			sourceTree = "<group>";
 		};
 		E9A27829F17B07A6A49B0E64 /* Services */ = {
@@ -430,9 +453,13 @@
 				AC722B937A2892A18F938389 /* AppData.swift in Sources */,
 				9A939D346449134A2312B50A /* AppDelegate.swift in Sources */,
 				5F2C9B6C1CC5F9CDE7EA7698 /* AppRouter.swift in Sources */,
+				0A54B5DAE9A7920153914892 /* AppointmentStore.swift in Sources */,
 				303DD541E62D4EF025701CDF /* BarberDetailView.swift in Sources */,
 				AAE62A6F04CECB60DD503FF6 /* BookView.swift in Sources */,
 				BA9FFC1631282F9C7931734D /* Branding.swift in Sources */,
+				E3B0375DB8700C1251739CA3 /* BravoStore.swift in Sources */,
+				45E49C19EFE43C87D4A492EE /* CalendarEventEditor.swift in Sources */,
+				3BA2A113751A4410632DA04A /* Cards.swift in Sources */,
 				F6B8C95B51CFA703B7CA5968 /* ContactButtons.swift in Sources */,
 				0AA2BFF0C4664BBA3EBA1B15 /* Exports.swift in Sources */,
 				6295E2F850557E826EA4048A /* Favorites.swift in Sources */,
@@ -442,6 +469,7 @@
 				533D2FE65E528C54329C1C72 /* ReminderSettingsView.swift in Sources */,
 				802BECECE3F6A02115EA450F /* ReminderStore.swift in Sources */,
 				99A506159452810438AA5690 /* RootView.swift in Sources */,
+				005822412528702F407E2506 /* Rows.swift in Sources */,
 				504D34A22E267798351CE047 /* SafariView.swift in Sources */,
 				4B4A59730F2AF95D24E42348 /* ServiceDetailView.swift in Sources */,
 				0510E7BA92235655C8CE7AD5 /* ServicesView.swift in Sources */,
