@@ -224,4 +224,34 @@ final class CatalogTests: XCTestCase {
     func testOwnerIsListedFirst() {
         XCTAssertEqual(catalog.barbers.first?.id, "israel-flores")
     }
+
+    func testIzzysBio() throws {
+        let izzy = try XCTUnwrap(catalog.barber(withID: "israel-flores"))
+        XCTAssertTrue(izzy.bio.contains("licensed barber and educator"), izzy.bio)
+    }
+
+    func testInstagram() throws {
+        let izzy = try XCTUnwrap(catalog.barber(withID: "israel-flores"))
+        XCTAssertEqual(izzy.instagramHandle, "izzy_clipz_")
+        XCTAssertEqual(izzy.instagramURL?.absoluteString, "https://www.instagram.com/izzy_clipz_/")
+
+        for barber in catalog.barbers where barber.id != "israel-flores" {
+            XCTAssertNil(barber.instagramHandle, barber.id)
+            XCTAssertNil(barber.instagramURL, barber.id)
+        }
+    }
+
+    func testInstagramHandleDefaultsToNone() {
+        let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [], rating: nil)
+        XCTAssertNil(barber.instagramHandle)
+        XCTAssertNil(barber.instagramURL)
+    }
+
+    func testInvalidInstagramHandlesGetNoLink() {
+        for handle in ["", "has space", "@izzy", "a/b", String(repeating: "a", count: 31)] {
+            let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [], rating: nil, instagramHandle: handle)
+            XCTAssertNil(barber.instagramURL, handle)
+        }
+        XCTAssertTrue(Barber.isInstagramHandle("izzy.clipz_99"))
+    }
 }

@@ -1,12 +1,12 @@
 import SwiftUI
 
-/// Diagonal barber-pole stripes: red, white, navy, white.
+/// Diagonal barber-pole stripes: red, white, blue, white.
 struct StripeBand: View {
     var stripeWidth: CGFloat = 9
+    var colors: [Color] = [Theme.red, .white, Theme.blue, .white]
 
     var body: some View {
         Canvas { context, size in
-            let colors: [Color] = [Theme.red, .white, Theme.navy, .white]
             let rise = size.height
             var x = -rise
             var index = 0
@@ -26,24 +26,67 @@ struct StripeBand: View {
     }
 }
 
-/// "IZZY CLIPZ" set in heavy condensed italics over a barber-pole stripe.
-struct Wordmark: View {
-    @ScaledMetric(relativeTo: .largeTitle) private var size: CGFloat = 56
+/// Faint diagonal stripes for laying over dark brand backgrounds.
+struct StripeTexture: View {
+    var opacity: Double = 0.07
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("IZZY CLIPZ")
-                .font(.system(size: size, weight: .black).width(.condensed).italic())
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .foregroundStyle(.white)
-            StripeBand()
-                .frame(width: 132, height: 8)
-                .clipShape(Capsule())
+        Canvas { context, size in
+            let spacing: CGFloat = 26
+            let width: CGFloat = 10
+            var x = -size.height
+            while x < size.width {
+                var stripe = Path()
+                stripe.move(to: CGPoint(x: x, y: size.height))
+                stripe.addLine(to: CGPoint(x: x + size.height, y: 0))
+                stripe.addLine(to: CGPoint(x: x + size.height + width, y: 0))
+                stripe.addLine(to: CGPoint(x: x + width, y: size.height))
+                stripe.closeSubpath()
+                context.fill(stripe, with: .color(.white.opacity(opacity)))
+                x += spacing
+            }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(AppData.shop.name)
-        .accessibilityAddTraits(.isHeader)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The shop's official logo (barber-pole mascot and "Izzy Clipz" wordmark),
+/// with a transparent background.
+struct LogoImage: View {
+    var body: some View {
+        Image(Asset.logo)
+            .resizable()
+            .scaledToFit()
+            .accessibilityLabel("\(AppData.shop.name) logo")
+    }
+}
+
+/// Just the barber-pole mascot from the logo.
+struct MascotImage: View {
+    var body: some View {
+        Image(Asset.mascot)
+            .resizable()
+            .scaledToFit()
+            .accessibilityHidden(true)
+    }
+}
+
+/// The official logo on a white rounded badge, for placing over photos and
+/// brand colors.
+struct LogoBadge: View {
+    var height: CGFloat = 92
+
+    var body: some View {
+        LogoImage()
+            .frame(height: height)
+            .padding(.horizontal, height * 0.18)
+            .padding(.vertical, height * 0.12)
+            .background(
+                RoundedRectangle(cornerRadius: height * 0.24, style: .continuous)
+                    .fill(.white)
+                    .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
+            )
     }
 }
 
@@ -57,7 +100,7 @@ struct BarberAvatar: View {
         ZStack {
             Circle()
                 .fill(LinearGradient(
-                    colors: [Theme.navy, Theme.navy.opacity(0.55)],
+                    colors: [Theme.blueBright, Theme.blue, Theme.blueDeep],
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 ))
@@ -66,12 +109,16 @@ struct BarberAvatar: View {
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
-        .overlay(
-            Circle().strokeBorder(
-                AngularGradient(gradient: Gradient(colors: [Theme.red, .white, Theme.navy, .white, Theme.red]), center: .center),
-                lineWidth: max(2, size * 0.05)
+        .padding(max(2, size * 0.05))
+        .background(
+            Circle().fill(
+                AngularGradient(
+                    gradient: Gradient(colors: [Theme.red, .white, Theme.blue, .white, Theme.red]),
+                    center: .center
+                )
             )
         )
+        .overlay(Circle().strokeBorder(Theme.stroke))
         .accessibilityHidden(true)
     }
 }
@@ -88,7 +135,7 @@ struct RatingStars: View {
                     .font(.system(size: size, weight: .bold))
             }
         }
-        .foregroundStyle(Theme.soon)
+        .foregroundStyle(Theme.star)
         .accessibilityHidden(true)
     }
 
@@ -125,28 +172,36 @@ struct RatingLine: View {
 
 /// "Open now · Closes 7 PM", kept current every minute.
 struct LiveStatusPill: View {
+    /// Use on photos and brand colors; off, it suits white cards.
+    var onDark = true
+
     var body: some View {
         TimelineView(.everyMinute) { context in
-            StatusPill(summary: AppData.clock.summary(at: context.date))
+            StatusPill(summary: AppData.clock.summary(at: context.date), onDark: onDark)
         }
     }
 }
 
 struct StatusPill: View {
     let summary: StatusSummary
+    var onDark = true
 
     var body: some View {
         HStack(spacing: 8) {
             Circle()
                 .fill(Theme.color(for: summary.tone))
-                .frame(width: 8, height: 8)
-            Text("\(Text(summary.headline).fontWeight(.semibold).foregroundStyle(.white)) · \(summary.detail)")
-                .foregroundStyle(Theme.secondaryText)
+                .frame(width: 9, height: 9)
+                .overlay(Circle().strokeBorder(.white.opacity(onDark ? 0.9 : 0), lineWidth: 1.5))
+            Text("\(Text(summary.headline).fontWeight(.bold).foregroundStyle(onDark ? Color.white : Theme.ink)) · \(summary.detail)")
+                .foregroundStyle(onDark ? Color.white.opacity(0.85) : Theme.secondaryText)
         }
         .font(.subheadline)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(.ultraThinMaterial, in: Capsule())
+        .background(
+            Capsule().fill(onDark ? Color.black.opacity(0.32) : Theme.surface)
+        )
+        .overlay(Capsule().strokeBorder(onDark ? Color.white.opacity(0.22) : Theme.stroke))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(summary.accessibilityLabel)
         .accessibilityIdentifier("shopStatus")
@@ -165,12 +220,20 @@ struct SectionHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title.uppercased())
-                .font(.display(.title2))
-                .foregroundStyle(.white)
-                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: 8) {
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Theme.red)
+                    .frame(width: 4, height: 18)
+                    .accessibilityHidden(true)
+                Text(title.uppercased())
+                    .font(.display(.title2))
+                    .foregroundStyle(Theme.ink)
+                    .accessibilityAddTraits(.isHeader)
+            }
             Spacer(minLength: 12)
             trailing
+                .font(.subheadline.weight(.semibold))
+                .tint(Theme.blue)
         }
     }
 }
@@ -188,15 +251,14 @@ struct Chip: View {
     var body: some View {
         Text(text)
             .font(.caption.weight(.semibold))
-            .foregroundStyle(.white.opacity(0.9))
+            .foregroundStyle(Theme.blue)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .background(Theme.surfaceRaised, in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.stroke))
+            .background(Theme.tint, in: Capsule())
     }
 }
 
-/// The square icon used for a service.
+/// The rounded square icon used for a service.
 struct ServiceIcon: View {
     let symbol: String
     var size: CGFloat = 44
@@ -207,9 +269,50 @@ struct ServiceIcon: View {
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             .background(
-                LinearGradient(colors: [Theme.red, Theme.red.opacity(0.7)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                LinearGradient(colors: [Theme.blueBright, Theme.blue], startPoint: .topLeading, endPoint: .bottomTrailing),
                 in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
             )
             .accessibilityHidden(true)
+    }
+}
+
+/// "STEP 3 OF 4" over a big title, for the booking flow.
+struct StepHeader: View {
+    let step: Int
+    let total: Int
+    let title: String
+    let subtitle: String
+
+    init(step: Int, of total: Int = 4, title: String, subtitle: String) {
+        self.step = step
+        self.total = total
+        self.title = title
+        self.subtitle = subtitle
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                ForEach(1...max(total, 1), id: \.self) { index in
+                    Capsule()
+                        .fill(index <= step ? Theme.red : Theme.ink.opacity(0.12))
+                        .frame(width: index == step ? 26 : 12, height: 5)
+                }
+            }
+            .accessibilityHidden(true)
+            Text("STEP \(step) OF \(total)")
+                .font(.caption.weight(.bold))
+                .tracking(1.5)
+                .foregroundStyle(Theme.red)
+            Text(title.uppercased())
+                .font(.display(.title))
+                .foregroundStyle(Theme.ink)
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
     }
 }

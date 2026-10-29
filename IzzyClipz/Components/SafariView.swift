@@ -36,40 +36,52 @@ struct SafariView: UIViewControllerRepresentable {
     }
 }
 
-/// The shop's Squire booking page for a request.
-struct BookingSheet: View {
-    let request: BookingRequest
+/// A web page in a sheet: Squire for booking, Bravo for products, Google for reviews.
+///
+/// The in-app browser only accepts http(s) links, so anything else is opened
+/// by the system instead of crashing.
+struct WebSheet: View {
+    let url: URL
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
-        let url = AppData.bookingURL(for: request)
         if LaunchOptions.isUITesting {
-            // UI tests check where booking leads without depending on Squire being up.
-            BookingLinkPreview(url: url)
-        } else {
+            // UI tests check where a link leads without depending on the network.
+            WebLinkPreview(url: url)
+        } else if url.scheme == "https" || url.scheme == "http" {
             SafariView(url: url) { dismiss() }
                 .ignoresSafeArea()
+        } else {
+            Color.clear
+                .onAppear {
+                    openURL(url)
+                    dismiss()
+                }
         }
     }
 }
 
-private struct BookingLinkPreview: View {
+private struct WebLinkPreview: View {
     let url: URL
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Squire booking page")
+                Text(url.host ?? "Web page")
                     .font(.headline)
+                    .foregroundStyle(Theme.ink)
                 Text(url.absoluteString)
                     .font(.footnote.monospaced())
+                    .foregroundStyle(Theme.ink)
                     .textSelection(.enabled)
-                    .accessibilityIdentifier("bookingURL")
+                    .accessibilityIdentifier("webURL")
                 Spacer()
             }
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
+            .screenBackground()
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }

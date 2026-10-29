@@ -87,6 +87,21 @@ public struct Rating: Hashable, Sendable {
     }
 }
 
+/// A rating as published by one review site, e.g. Squire or Google.
+public struct SourcedRating: Hashable, Sendable {
+    /// The site's name as shown to clients, e.g. "Google".
+    public let source: String
+    public let rating: Rating
+    /// Where the reviews can be read, if there's a page for them.
+    public let url: URL?
+
+    public init(source: String, rating: Rating, url: URL? = nil) {
+        self.source = source
+        self.rating = rating
+        self.url = url
+    }
+}
+
 /// A member of the team, as listed on the shop's Squire page.
 public struct Barber: Identifiable, Hashable, Sendable {
     /// The barber's Squire URL slug, e.g. "israel-flores". Used to build booking links.
@@ -99,6 +114,8 @@ public struct Barber: Identifiable, Hashable, Sendable {
     public let bio: String
     public let specialties: [String]
     public let rating: Rating?
+    /// Their own Instagram account, without the "@", e.g. "izzy_clipz_".
+    public let instagramHandle: String?
 
     public init(
         id: String,
@@ -107,7 +124,8 @@ public struct Barber: Identifiable, Hashable, Sendable {
         title: String,
         bio: String,
         specialties: [String],
-        rating: Rating?
+        rating: Rating?,
+        instagramHandle: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -116,6 +134,21 @@ public struct Barber: Identifiable, Hashable, Sendable {
         self.bio = bio
         self.specialties = specialties
         self.rating = rating
+        self.instagramHandle = instagramHandle
+    }
+
+    /// "https://www.instagram.com/izzy_clipz_/", or `nil` without a valid handle.
+    public var instagramURL: URL? {
+        guard let instagramHandle, Barber.isInstagramHandle(instagramHandle) else { return nil }
+        return URL(string: "https://www.instagram.com/\(instagramHandle)/")
+    }
+
+    /// Instagram usernames are letters, digits, periods and underscores, up to 30 long.
+    static func isInstagramHandle(_ string: String) -> Bool {
+        (1...30).contains(string.count) && string.unicodeScalars.allSatisfy { scalar in
+            ("a"..."z").contains(scalar) || ("A"..."Z").contains(scalar) || ("0"..."9").contains(scalar)
+                || scalar == "_" || scalar == "."
+        }
     }
 
     /// Up to two letters for avatar monograms: "Israel F." -> "IF", "Flowxbori" -> "F".
@@ -169,8 +202,18 @@ public struct Review: Identifiable, Hashable, Sendable {
     public let text: String
     public let barberID: String?
     public let source: String
+    /// When it was written, as display text, e.g. "Aug 2026". `nil` when unknown.
+    public let date: String?
 
-    public init(id: String, author: String, stars: Int, text: String, barberID: String?, source: String) {
+    public init(
+        id: String,
+        author: String,
+        stars: Int,
+        text: String,
+        barberID: String?,
+        source: String,
+        date: String? = nil
+    ) {
         precondition((1...5).contains(stars), "Reviews are 1 to 5 stars")
         self.id = id
         self.author = author
@@ -178,5 +221,6 @@ public struct Review: Identifiable, Hashable, Sendable {
         self.text = text
         self.barberID = barberID
         self.source = source
+        self.date = date
     }
 }

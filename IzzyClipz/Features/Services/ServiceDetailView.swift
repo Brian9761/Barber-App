@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// One service: what it is, what's included, and who does it at what price.
+/// Every way to book leads into the in-app calendar.
 struct ServiceDetailView: View {
     let service: Service
 
@@ -10,7 +12,7 @@ struct ServiceDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
-                header
+                ServiceDetailHeader(service: service)
                 includes
                 bookingOptions
                 WalkInCard()
@@ -22,35 +24,13 @@ struct ServiceDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            ServiceIcon(symbol: service.symbol, size: 60)
-            Text(service.name.uppercased())
-                .font(.display(.largeTitle))
-                .foregroundStyle(.white)
-                .accessibilityAddTraits(.isHeader)
-            HStack(spacing: 8) {
-                Chip(text: catalog.priceSummary(forService: service.id))
-                Chip(text: catalog.durationSummary(forService: service.id))
-            }
-            Text(service.summary)
-                .font(.body)
-                .foregroundStyle(Theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     @ViewBuilder private var includes: some View {
         if !service.includes.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader("What's included")
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     ForEach(service.includes, id: \.self) { item in
-                        Label {
-                            Text(item).foregroundStyle(.white)
-                        } icon: {
-                            Image(systemName: Symbol.included).foregroundStyle(Theme.red)
-                        }
+                        IncludedItem(text: item)
                     }
                 }
                 .card()
@@ -61,34 +41,45 @@ struct ServiceDetailView: View {
     private var bookingOptions: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader("Book with")
-
             if let option = catalog.firstAvailableOption(forService: service.id) {
-                Button {
-                    router.book(.firstAvailable(option))
-                } label: {
-                    FirstAvailableRow(option: option)
-                }
-                .buttonStyle(.pressable)
-                .accessibilityLabel(FirstAvailableRow.accessibilityText(for: option))
-                .accessibilityHint("Opens booking")
-                .accessibilityIdentifier("bookFirstAvailable")
+                firstAvailableButton(option)
             }
-
             ForEach(sortedOfferings) { offering in
                 if let barber = catalog.barber(withID: offering.barberID) {
-                    let isFavorite = favorites.isFavorite(barber.id)
-                    Button {
-                        router.book(.offering(offering))
-                    } label: {
-                        OfferingRow(offering: offering, barber: barber, isFavorite: isFavorite)
-                    }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel(OfferingRow.accessibilityText(offering: offering, barber: barber, isFavorite: isFavorite))
-                    .accessibilityHint("Opens booking")
-                    .accessibilityIdentifier("book-\(offering.id)")
+                    offeringButton(offering, barber: barber)
                 }
             }
+            Text("Next, you'll pick a day and time. Squire confirms the real opening when you book.")
+                .font(.footnote)
+                .foregroundStyle(Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 4)
         }
+    }
+
+    private func firstAvailableButton(_ option: FirstAvailableOption) -> some View {
+        Button {
+            router.startBooking(choice: .firstAvailable(option))
+        } label: {
+            FirstAvailableRow(option: option)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(FirstAvailableRow.accessibilityText(for: option))
+        .accessibilityHint("Next, pick a day and time")
+        .accessibilityIdentifier("bookFirstAvailable")
+    }
+
+    private func offeringButton(_ offering: Offering, barber: Barber) -> some View {
+        let isFavorite = favorites.isFavorite(barber.id)
+        return Button {
+            router.startBooking(choice: .offering(offering))
+        } label: {
+            OfferingRow(offering: offering, barber: barber, isFavorite: isFavorite, actionLabel: "Book")
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(OfferingRow.accessibilityText(offering: offering, barber: barber, isFavorite: isFavorite))
+        .accessibilityHint("Next, pick a day and time")
+        .accessibilityIdentifier("book-\(offering.id)")
     }
 
     /// The client's favorite barber first, then cheapest first.
@@ -99,97 +90,112 @@ struct ServiceDetailView: View {
     }
 }
 
-struct FirstAvailableRow: View {
-    let option: FirstAvailableOption
+/// Icon, category, name, summary, and the price and length ranges.
+private struct ServiceDetailHeader: View {
+    let service: Service
+    private let catalog = AppData.catalog
 
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: Symbol.firstAvailable)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.white)
-                .frame(width: 52, height: 52)
-                .background(Theme.red, in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("First available")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Text("Any of \(option.barberIDs.count) barbers · \(option.durationLabel)")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
-            }
-            Spacer(minLength: 8)
-            Text(option.priceLabel)
-                .font(.headline)
-                .foregroundStyle(.white)
-            Image(systemName: Symbol.chevron)
-                .font(.footnote.weight(.bold))
+        VStack(alignment: .leading, spacing: 16) {
+            ServiceIcon(symbol: service.symbol, size: 68)
+            titles
+            Text(service.summary)
+                .font(.body)
                 .foregroundStyle(Theme.secondaryText)
-                .accessibilityHidden(true)
+                .fixedSize(horizontal: false, vertical: true)
+            chips
         }
-        .card(padding: 14)
-        .contentShape(Rectangle())
+        .card(padding: 20)
     }
 
-    static func accessibilityText(for option: FirstAvailableOption) -> String {
-        "First available barber, any of \(option.barberIDs.count), \(option.priceLabel), \(option.durationLabel)"
+    private var titles: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(service.category.title.uppercased())
+                .font(.caption.weight(.bold))
+                .tracking(1.5)
+                .foregroundStyle(Theme.red)
+                .accessibilityLabel(service.category.title)
+            Text(service.name.uppercased())
+                .font(.display(.largeTitle))
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(service.name)
+                .accessibilityAddTraits(.isHeader)
+        }
+    }
+
+    private var chips: some View {
+        FlowLayout(spacing: 8) {
+            if !priceSummary.isEmpty {
+                DetailChip(text: priceSummary, symbol: nil, isPrice: true)
+                    .accessibilityLabel("Price \(spokenPrice)")
+            }
+            if !durationSummary.isEmpty {
+                DetailChip(text: durationSummary, symbol: Symbol.clock, isPrice: false)
+                    .accessibilityLabel("Takes \(spokenDuration)")
+            }
+        }
+    }
+
+    private var priceSummary: String {
+        catalog.priceSummary(forService: service.id)
+    }
+
+    private var durationSummary: String {
+        catalog.durationSummary(forService: service.id)
+    }
+
+    /// "$35 to $60", so VoiceOver doesn't skip the dash.
+    private var spokenPrice: String {
+        priceSummary.replacingOccurrences(of: "–", with: " to ")
+    }
+
+    /// "45 minutes to 1 hour".
+    private var spokenDuration: String {
+        let minutes = catalog.offerings(forService: service.id).map(\.durationMinutes)
+        guard let shortest = minutes.min(), let longest = minutes.max() else { return durationSummary }
+        if shortest == longest { return DurationText.spoken(minutes: shortest) }
+        return "\(DurationText.spoken(minutes: shortest)) to \(DurationText.spoken(minutes: longest))"
     }
 }
 
-struct OfferingRow: View {
-    let offering: Offering
-    let barber: Barber
-    var isFavorite = false
-    /// "Book" opens booking straight away; "Select" moves on to the next step.
-    var actionLabel = "Book"
+/// A bold capsule: red for the price, light blue for the rest.
+private struct DetailChip: View {
+    let text: String
+    let symbol: String?
+    let isPrice: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            BarberAvatar(barber: barber, size: 52)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 6) {
-                    Text(barber.name)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    if isFavorite {
-                        Image(systemName: Symbol.favoriteFilled)
-                            .font(.caption)
-                            .foregroundStyle(Theme.red)
-                            .accessibilityHidden(true)
-                    }
-                }
-                Text(offering.durationLabel)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
-                if let note = offering.note {
-                    Text(note)
-                        .font(.footnote)
-                        .foregroundStyle(Theme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+        HStack(spacing: 6) {
+            if let symbol {
+                Image(systemName: symbol)
+                    .accessibilityHidden(true)
             }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(offering.price.label)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.trailing)
-                Text(actionLabel)
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(Theme.red)
-            }
+            Text(text)
         }
-        .card(padding: 14)
-        .contentShape(Rectangle())
+        .font(.subheadline.weight(.bold))
+        .foregroundStyle(isPrice ? Color.white : Theme.blue)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
+        .background(Capsule().fill(isPrice ? Theme.red : Theme.tint))
+        .accessibilityElement(children: .combine)
     }
+}
 
-    static func accessibilityText(offering: Offering, barber: Barber, isFavorite: Bool, verb: String = "Book with") -> String {
-        var parts = [
-            "\(verb) \(barber.name)" + (isFavorite ? ", your barber" : ""),
-            offering.price.label,
-            DurationText.spoken(minutes: offering.durationMinutes),
-        ]
-        if let note = offering.note { parts.append(note) }
-        return parts.joined(separator: ", ")
+/// A checkmarked line in "What's included".
+private struct IncludedItem: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: Symbol.included)
+                .foregroundStyle(Theme.blue)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.body)
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
     }
 }

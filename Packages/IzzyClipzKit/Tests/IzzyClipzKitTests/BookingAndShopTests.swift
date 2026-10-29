@@ -120,8 +120,93 @@ final class ShopInfoTests: XCTestCase {
         }
     }
 
+    func testReviews() throws {
+        XCTAssertEqual(shop.reviews.map(\.id), ["alex-n", "justin-b", "patti-m"])
+        XCTAssertEqual(Set(shop.reviews.map(\.id)).count, shop.reviews.count)
+        XCTAssertTrue(shop.reviews.allSatisfy { $0.stars == 5 })
+
+        let alex = shop.reviews[0]
+        XCTAssertEqual(alex.author, "Alex N.")
+        XCTAssertEqual(alex.source, "Squire")
+        XCTAssertEqual(alex.barberID, "carlos-rafael")
+        XCTAssertNil(alex.date)
+
+        let justin = shop.reviews[1]
+        XCTAssertEqual(justin.author, "Justin B.")
+        XCTAssertEqual(justin.text, "Finely faded every time.")
+        XCTAssertEqual(justin.source, "Squire")
+        XCTAssertNil(justin.barberID)
+
+        let patti = shop.reviews[2]
+        XCTAssertEqual(patti.author, "Patti M.")
+        XCTAssertEqual(patti.source, "Yelp")
+        XCTAssertEqual(patti.date, "Aug 2026")
+        XCTAssertNil(patti.barberID)
+        XCTAssertTrue(patti.text.hasPrefix("Finally found a great hair artist; Christian!"), patti.text)
+        XCTAssertTrue(patti.text.hasSuffix("I got the haircut I wanted. Thanks bro"), patti.text)
+    }
+
+    func testReviewDateDefaultsToUnknown() {
+        let review = Review(id: "x", author: "X.", stars: 4, text: "Good", barberID: nil, source: "Google")
+        XCTAssertNil(review.date)
+    }
+
     func testRating() {
         XCTAssertEqual(shop.rating.averageLabel, "5.0")
         XCTAssertEqual(shop.rating.countLabel, "115 reviews")
+        XCTAssertEqual(shop.ratingSource, "Squire")
+    }
+
+    func testRatingsFromEachSite() {
+        XCTAssertEqual(shop.ratings.map(\.source), ["Squire", "Google"])
+        XCTAssertEqual(shop.ratings.map(\.rating.averageLabel), ["5.0", "4.9"])
+        XCTAssertEqual(shop.ratings.map(\.rating.countLabel), ["115 reviews", "59 reviews"])
+        XCTAssertEqual(shop.ratings[0].rating, shop.rating)
+        XCTAssertEqual(shop.ratings[0].url, shop.squireDiscoverURL)
+        XCTAssertEqual(shop.ratings[1].url, shop.googleMapsURL)
+    }
+
+    func testSquireDiscoverPage() {
+        XCTAssertEqual(
+            shop.squireDiscoverURL.absoluteString,
+            "https://getsquire.com/discover/barbershop/izzy-clipz-oceanside"
+        )
+    }
+
+    func testGooglePlaceLinks() {
+        XCTAssertEqual(shop.googlePlaceID, "ChIJGz5HChRv3IARYJJy_6jyRm8")
+        XCTAssertEqual(
+            shop.googleMapsURL.absoluteString,
+            "https://www.google.com/maps/search/?api=1&query=Izzy%20Clipz%20Barbershop&query_place_id=ChIJGz5HChRv3IARYJJy_6jyRm8"
+        )
+        XCTAssertEqual(
+            shop.googleReviewURL.absoluteString,
+            "https://search.google.com/local/writereview?placeid=ChIJGz5HChRv3IARYJJy_6jyRm8"
+        )
+    }
+
+    func testPlaceIDValidation() {
+        XCTAssertTrue(ShopInfo.isPlaceID("ChIJGz5HChRv3IARYJJy_6jyRm8"))
+        XCTAssertTrue(ShopInfo.isPlaceID("Ab-_09"))
+        XCTAssertFalse(ShopInfo.isPlaceID(""))
+        XCTAssertFalse(ShopInfo.isPlaceID("has space"))
+        XCTAssertFalse(ShopInfo.isPlaceID("a&b=c"))
+    }
+
+    func testBookingCalendarUsesTheShopsClock() {
+        let calendar = shop.bookingCalendar
+        XCTAssertEqual(calendar.clock.calendar.timeZone.identifier, "America/Los_Angeles")
+        XCTAssertEqual(calendar.slotIntervalMinutes, 30)
+        XCTAssertEqual(calendar.leadTimeMinutes, 30)
+        XCTAssertEqual(calendar.windowDays, 60)
+    }
+
+    func testHoursAndContactAreUnchanged() {
+        XCTAssertEqual(shop.phone.digits, "4423413053")
+        XCTAssertEqual(shop.address.singleLine, "1919 Mission Ave, Ste 105, Oceanside, CA 92058")
+        for day in [Weekday.monday, .tuesday, .wednesday, .thursday, .friday, .saturday] {
+            XCTAssertEqual(shop.schedule.hours(on: day)?.label, "10 AM – 7 PM", day.name)
+        }
+        XCTAssertEqual(shop.schedule.hours(on: .sunday)?.label, "10 AM – 6 PM")
     }
 }
