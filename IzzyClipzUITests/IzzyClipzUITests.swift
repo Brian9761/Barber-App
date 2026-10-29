@@ -72,15 +72,21 @@ final class IzzyClipzUITests: XCTestCase {
         goBack()
         XCTAssertTrue(element("service-haircut").waitForExistence(timeout: 5))
         let search = app.searchFields.firstMatch
-        if !search.waitForExistence(timeout: 3) || !search.isHittable {
+        var pulls = 0
+        while pulls < 3, !(search.waitForExistence(timeout: 3) && search.isHittable) {
             // The search bar can start tucked under the large title.
             app.swipeDown()
+            pulls += 1
         }
-        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        XCTAssertTrue(search.waitForExistence(timeout: 5), "No search field")
         search.tap()
+        XCTAssertTrue(
+            waitUntil(search, toMatch: NSPredicate(format: "hasKeyboardFocus == true")),
+            "The search field didn't take focus"
+        )
         search.typeText("beard")
-        XCTAssertTrue(element("service-haircut-and-beard").waitForExistence(timeout: 5))
-        XCTAssertFalse(element("service-perm").exists)
+        XCTAssertTrue(waitForDisappearance(of: element("service-perm")), "Searching for beard didn't filter out Perm")
+        XCTAssertTrue(element("service-haircut-and-beard").exists)
         screenshot("07-Services-Search")
     }
 
@@ -308,6 +314,8 @@ final class IzzyClipzUITests: XCTestCase {
             .firstMatch
         XCTAssertTrue(removeItem.waitForExistence(timeout: 5), "The menu has no Remove")
         removeItem.tap()
+        // The menu's own "Remove" must be gone before looking for the dialog's.
+        XCTAssertTrue(waitForDisappearance(of: app.buttons["Call the shop"]), "The menu didn't close")
 
         // "Remove this appointment?" Once it's up, the menu is gone and its
         // own "Remove" is the only one left.
@@ -408,19 +416,24 @@ final class IzzyClipzUITests: XCTestCase {
         let close = element("closePhoto")
         XCTAssertTrue(close.waitForExistence(timeout: 5))
         screenshot("26-Photo-Viewer")
+        // Read while the viewer is up; the button is pinned, so paging doesn't move it.
+        let closeFrame = close.frame
         app.swipeLeft()
         // A tap that lands while the swiped page is still settling can be taken
         // by the paging scroll, so try a few times before calling it a failure.
-        // It's tapped where it is: after a page swipe XCUI can fail to "scroll"
-        // the pinned button into view even though it's on screen.
+        // It's tapped by screen position: after a page swipe XCUI can fail to
+        // "scroll" the pinned button into view, and nothing is looked up again
+        // at tap time.
         var closed = false
         for _ in 0..<3 where !closed {
             guard close.exists else {
                 closed = true
                 break
             }
-            close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-            closed = waitForDisappearance(of: close, timeout: 5)
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: closeFrame.midX, dy: closeFrame.midY))
+                .tap()
+            closed = waitForDisappearance(of: close, timeout: 10)
         }
         XCTAssertTrue(closed, "The photo viewer didn't close")
         XCTAssertTrue(first.waitForExistence(timeout: 5))
@@ -463,11 +476,13 @@ final class IzzyClipzUITests: XCTestCase {
         let next = element("continueToReview")
         let review = element("confirmOnSquireButton")
         next.tap()
-        if !review.waitForExistence(timeout: 5), !next.isEnabled {
-            // The clock passed :00 or :30, so the picked time slipped inside
-            // the lead time and the calendar's minute check dropped it. Pick
-            // the new first time.
-            pickFirstTime(file: file, line: line)
+        if !review.waitForExistence(timeout: 5), next.exists {
+            if !next.isEnabled {
+                // The clock passed :00 or :30, so the picked time slipped inside
+                // the lead time and the calendar's minute check dropped it.
+                pickFirstTime(file: file, line: line)
+            }
+            // Retries a swallowed tap; the calendar ignores a second push.
             next.tap()
         }
         XCTAssertTrue(review.waitForExistence(timeout: 5), "The review didn't open", file: file, line: line)
@@ -490,11 +505,14 @@ final class IzzyClipzUITests: XCTestCase {
     private func popToBookingStart(file: StaticString = #filePath, line: UInt = #line) {
         let start = element("bookService-haircut")
         var pops = 0
-        while !start.waitForExistence(timeout: 2), pops < 4 {
-            goBack(file: file, line: line)
+        while !start.waitForExistence(timeout: 3), pops < 4 {
+            let back = app.navigationBars.buttons.element(boundBy: 0)
+            // No back button: already at step 1, just slow to show.
+            guard back.waitForExistence(timeout: 5) else { break }
+            back.tap()
             pops += 1
         }
-        XCTAssertTrue(start.exists, "Couldn't get back to step 1", file: file, line: line)
+        XCTAssertTrue(start.waitForExistence(timeout: 5), "Couldn't get back to step 1", file: file, line: line)
     }
 
     // MARK: Web pages
@@ -580,7 +598,11 @@ final class IzzyClipzUITests: XCTestCase {
         guard target.exists, target.isHittable else { return false }
         let screen = app.frame
         guard !screen.isEmpty else { return true }
-        return target.frame.midY <= screen.minY + screen.height * 0.7
+        let midY = target.frame.midY
+        // Below the status and navigation bars too: Home's bar is clear but still
+        // takes touches, and XCUI can report what's under it as hittable.
+        return midY >= screen.minY + screen.height * 0.2
+            && midY <= screen.minY + screen.height * 0.7
     }
 
     /// Drags the page about a third of the screen, holding still before
@@ -599,7 +621,7 @@ final class IzzyClipzUITests: XCTestCase {
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
         waitUntil(element, toMatch: NSPredicate(format: "exists == false"), timeout: timeout)
     }
 
