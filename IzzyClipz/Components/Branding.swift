@@ -199,9 +199,9 @@ struct StatusPill: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .background(
-            Capsule().fill(onDark ? Color.black.opacity(0.32) : Theme.tint)
+            Capsule().fill(onDark ? Color.black.opacity(0.32) : Theme.surface)
         )
-        .overlay(Capsule().strokeBorder(onDark ? Color.white.opacity(0.22) : Color.clear))
+        .overlay(Capsule().strokeBorder(onDark ? Color.white.opacity(0.22) : Theme.stroke))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(summary.accessibilityLabel)
         .accessibilityIdentifier("shopStatus")

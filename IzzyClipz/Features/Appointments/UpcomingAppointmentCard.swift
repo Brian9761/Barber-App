@@ -49,10 +49,14 @@ struct UpcomingAppointmentCard: View {
                 .font(.caption.weight(.bold))
                 .tracking(1.5)
                 .foregroundStyle(Color.white.opacity(0.8))
-            Text(calendar.dateTimeLabel(for: appointment.start))
-                .font(.display(.title))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
+            // The day over the time, so "PM" is never left on a line of its own.
+            VStack(alignment: .leading, spacing: 0) {
+                Text(calendar.shortLabel(for: calendar.day(containing: appointment.start)))
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(calendar.timeLabel(for: appointment.start))
+            }
+            .font(.display(.title))
+            .foregroundStyle(.white)
             Text(withLine)
                 .font(.headline)
                 .foregroundStyle(.white)

@@ -60,6 +60,8 @@ struct ConfirmBookingSheet: View {
             .screenBackground()
             .navigationBarTitleDisplayMode(.inline)
         }
+        // A pull on the form mustn't count as "I didn't book"; that button is the way out.
+        .interactiveDismissDisabled(saved == nil)
         .sensoryFeedback(.success, trigger: saved != nil) { _, isSaved in
             isSaved
         }
@@ -82,7 +84,7 @@ struct ConfirmBookingSheet: View {
                 Text("Day and time")
                     .font(.headline)
                     .foregroundStyle(Theme.ink)
-                Text("This is the time you picked. If Squire gave you a different one, change it here.")
+                Text(pickedTimeText)
                     .font(.footnote)
                     .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -96,8 +98,19 @@ struct ConfirmBookingSheet: View {
                 .tint(Theme.red)
                 .environment(\.timeZone, AppData.shop.timeZone)
                 .accessibilityIdentifier("appointmentDatePicker")
-                if showsTimeZoneNote {
-                    Text("Times are in Oceanside time (Pacific).")
+                if isOutsideOpeningHours {
+                    Label {
+                        Text("The shop isn't open then. Check the day and time Squire gave you.")
+                            .foregroundStyle(Theme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: Symbol.warning)
+                            .foregroundStyle(Theme.soon)
+                    }
+                    .font(.footnote.weight(.semibold))
+                }
+                if let zone = BookingFlowCopy.timeZoneNote(at: start) {
+                    Text(zone)
                         .font(.footnote)
                         .foregroundStyle(Theme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
@@ -139,7 +152,8 @@ struct ConfirmBookingSheet: View {
             .accessibilityIdentifier("notBookedButton")
 
             Button {
-                router.openSquire(plan.choice.request, plan: plan)
+                // Comes back with the time as the client left it here.
+                router.openSquire(plan.choice.request, plan: BookingPlan(choice: plan.choice, start: start))
             } label: {
                 Label("Open Squire again", systemImage: Symbol.external)
                     .font(.subheadline.weight(.semibold))
@@ -153,9 +167,19 @@ struct ConfirmBookingSheet: View {
         }
     }
 
-    /// Only worth saying when the phone is set to another time zone.
-    private var showsTimeZoneNote: Bool {
-        TimeZone.current.secondsFromGMT(for: start) != AppData.shop.timeZone.secondsFromGMT(for: start)
+    /// The picked time is prefilled, unless it has passed: the picker can't go
+    /// back that far, so it starts at the current minute instead.
+    private var pickedTimeText: String {
+        if plan.start < range.lowerBound {
+            return "The time you picked has passed. Set the day and time Squire gave you."
+        }
+        return "This is the time you picked. If Squire gave you a different one, change it here."
+    }
+
+    /// Most likely an AM/PM slip: the shop is closed at that time.
+    private var isOutsideOpeningHours: Bool {
+        guard let open = AppData.clock.openInterval(onDayOf: start) else { return true }
+        return start < open.start || start >= open.end
     }
 
     private func save() {
@@ -213,8 +237,8 @@ private struct ConfirmBookingSuccess: View {
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 12) {
-                Image(systemName: Symbol.success)
-                    .font(.system(size: badgeSize * 0.48, weight: .semibold))
+                Image(systemName: Symbol.checkmark)
+                    .font(.system(size: badgeSize * 0.42, weight: .heavy))
                     .foregroundStyle(.white)
                     .frame(width: badgeSize, height: badgeSize)
                     .background(Theme.open, in: Circle())

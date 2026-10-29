@@ -117,6 +117,21 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertTrue(notes.contains(AppData.shop.phone.display), notes)
     }
 
+    func testCalendarNotesForFirstAvailableReadNaturally() {
+        let appointment = Appointment(
+            serviceID: "haircut",
+            serviceName: "Haircut",
+            barberID: nil,
+            barberName: "First available",
+            start: Date(timeIntervalSince1970: 1_793_395_800),
+            durationMinutes: 45,
+            priceLabel: "$45"
+        )
+        let notes = CalendarEventEditor.notes(for: appointment)
+        XCTAssertTrue(notes.contains("Haircut with the first available barber"), notes)
+        XCTAssertFalse(notes.contains("with First available"), notes)
+    }
+
     func testZoomFitsPhotosInsideTheScreen() {
         let portrait = ZoomingImageScrollView.aspectFitSize(for: CGSize(width: 750, height: 1000), in: CGSize(width: 393, height: 852))
         XCTAssertEqual(portrait.width, 393, accuracy: 0.001)

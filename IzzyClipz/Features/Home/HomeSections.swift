@@ -97,6 +97,9 @@ struct HomeActions: View {
                 }
                 if let next = upcoming.first(where: { $0.isUpcoming(at: context.date) }) {
                     UpcomingAppointmentCard(appointment: next)
+                        // A new card when the next one changes, so an open
+                        // "Remove?" can't carry over to another appointment.
+                        .id(next.id)
                 }
                 if let favorite {
                     HomeFavoriteBarberCard(barber: favorite)
@@ -324,6 +327,8 @@ struct HomeBravoBanner: View {
                 Text("PROUD \(sponsor.name.uppercased()) PARTNER")
                     .font(.caption.weight(.heavy))
                     .tracking(1.2)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .foregroundStyle(Color.white.opacity(0.9))
             Text(sponsor.fullName)

@@ -5,34 +5,25 @@ import SwiftUI
 /// shop's booking system, to confirm the real slot.
 struct BookView: View {
     @Environment(AppRouter.self) private var router
-    @Environment(AppointmentStore.self) private var appointments
-    private let catalog = AppData.catalog
+
+    private static let topID = "bookTop"
 
     var body: some View {
         @Bindable var router = router
 
         NavigationStack(path: $router.bookingPath) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    let upcoming = appointments.upcoming
-                    if !upcoming.isEmpty {
-                        BookAppointmentsSection(appointments: upcoming)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    // Re-checked every minute, so an appointment that's over drops off.
+                    TimelineView(.everyMinute) { context in
+                        BookStartContent(now: context.date)
                     }
-
-                    StepHeader(
-                        step: 1,
-                        of: 4,
-                        title: "Pick a service",
-                        subtitle: "Prices and lengths come straight from the shop's booking menu."
-                    )
-
-                    ForEach(catalog.categories) { category in
-                        BookCategorySection(category: category)
-                    }
-
-                    BookOtherWays()
+                    .id(Self.topID)
                 }
-                .padding(Theme.gutter)
+                .onChange(of: router.finishedBookings) {
+                    // Just saved: the new appointment is at the top.
+                    proxy.scrollTo(Self.topID, anchor: .top)
+                }
             }
             .screenBackground()
             .navigationTitle("Book")
@@ -41,6 +32,37 @@ struct BookView: View {
                 BookStepDestination(step: step)
             }
         }
+    }
+}
+
+/// Step 1: saved appointments first, then the menu.
+private struct BookStartContent: View {
+    let now: Date
+
+    @Environment(AppointmentStore.self) private var appointments
+    private let catalog = AppData.catalog
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            let upcoming = appointments.upcoming.filter { $0.isUpcoming(at: now) }
+            if !upcoming.isEmpty {
+                BookAppointmentsSection(appointments: upcoming)
+            }
+
+            StepHeader(
+                step: 1,
+                of: 4,
+                title: "Pick a service",
+                subtitle: "Prices and lengths come straight from the shop's booking menu."
+            )
+
+            ForEach(catalog.categories) { category in
+                BookCategorySection(category: category)
+            }
+
+            BookOtherWays()
+        }
+        .padding(Theme.gutter)
     }
 }
 

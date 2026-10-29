@@ -114,13 +114,20 @@ private struct VisitMapCard: View {
 private struct VisitAddressCard: View {
     @State private var copyCount = 0
     @State private var showsCopied = false
-    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 44
+    @ScaledMetric(relativeTo: .body) private var scaledIconSize: CGFloat = 44
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     private let shop = AppData.shop
+
+    /// Grows with the text, but not so much that the address runs out of room.
+    private var iconSize: CGFloat { min(scaledIconSize, 56) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .top, spacing: 14) {
-                pin
+                // At the largest text sizes the address needs the room more.
+                if !dynamicTypeSize.isAccessibilitySize {
+                    pin
+                }
                 address
                 Spacer(minLength: 8)
                 copyButton
@@ -324,7 +331,7 @@ private struct VisitInfoSection: View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader("Good to know")
             VStack(alignment: .leading, spacing: 14) {
-                VisitInfoRow(symbol: Symbol.walkIn, title: "Walk-ins & appointments", items: shop.highlights)
+                VisitInfoRow(symbol: Symbol.walkIn, title: "What to expect", items: shop.highlights)
                 Divider()
                 VisitInfoRow(symbol: Symbol.payment, title: "Payment", items: shop.paymentMethods)
                 Divider()
@@ -346,7 +353,8 @@ private struct VisitInfoRow: View {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Theme.blue)
-                .frame(width: iconSize, height: iconSize)
+                // Capped, so large text keeps the room for the words.
+                .frame(width: min(iconSize, 56), height: min(iconSize, 56))
                 .background(Theme.tint, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
@@ -447,11 +455,12 @@ private struct VisitReviewsSection: View {
             .accessibilityIdentifier("visitSeeAllReviews")
 
             Button {
-                router.openWeb(shop.googleReviewURL)
+                router.openOutside(shop.googleReviewURL)
             } label: {
                 Label("Leave a review on Google", systemImage: Symbol.writeReview)
             }
-            .buttonStyle(.primary)
+            // Blue: Directions is this screen's main action.
+            .buttonStyle(.blue)
             .accessibilityHint("Opens Google's review form")
             .accessibilityIdentifier("leaveReviewButton")
         }
@@ -536,7 +545,8 @@ private struct VisitLinkRow: View {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Theme.blue)
-                .frame(width: iconSize, height: iconSize)
+                // Capped, so large text keeps the room for the words.
+                .frame(width: min(iconSize, 56), height: min(iconSize, 56))
                 .background(Theme.tint, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {

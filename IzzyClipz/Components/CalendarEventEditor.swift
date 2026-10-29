@@ -8,6 +8,9 @@ import SwiftUI
 /// calendar permission: the client sees exactly what's saved and taps Add.
 struct CalendarEventEditor: UIViewControllerRepresentable {
     let appointment: Appointment
+    /// Off when the app already sends an hour-before reminder, so the client
+    /// doesn't get two alerts at once.
+    var includesAlert = true
     let onDone: () -> Void
 
     func makeCoordinator() -> Coordinator {
@@ -25,7 +28,9 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
         event.location = "\(shop.fullName), \(shop.address.singleLine)"
         event.notes = CalendarEventEditor.notes(for: appointment)
         event.url = shop.websiteURL
-        event.addAlarm(EKAlarm(relativeOffset: -60 * 60))
+        if includesAlert {
+            event.addAlarm(EKAlarm(relativeOffset: -60 * 60))
+        }
 
         let controller = EKEventEditViewController()
         controller.eventStore = store
@@ -40,7 +45,7 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
     static func notes(for appointment: Appointment) -> String {
         let shop = AppData.shop
         return [
-            "\(appointment.serviceName) with \(appointment.barberName)",
+            "\(appointment.serviceName) \(BookingFlowCopy.withBarber(for: appointment))",
             "\(appointment.priceLabel) · \(DurationText.short(minutes: appointment.durationMinutes))",
             "Need to change it? Call \(shop.phone.display).",
         ].joined(separator: "\n")
@@ -64,6 +69,7 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
 struct AddToCalendarSheet: View {
     let appointment: Appointment
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppointmentStore.self) private var appointments
 
     var body: some View {
         if LaunchOptions.isUITesting {
@@ -85,8 +91,13 @@ struct AddToCalendarSheet: View {
                 }
             }
         } else {
-            CalendarEventEditor(appointment: appointment) { dismiss() }
-                .ignoresSafeArea()
+            CalendarEventEditor(
+                appointment: appointment,
+                includesAlert: !appointments.isReminding(appointment.id)
+            ) {
+                dismiss()
+            }
+            .ignoresSafeArea()
         }
     }
 }

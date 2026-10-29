@@ -142,12 +142,11 @@ enum BravoShopCopy {
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    /// Why the shop carries Bravo. Bravo has barbers and stylists test its
-    /// formulas before release; nothing beyond that is claimed.
+    /// Why the shop carries Bravo, in the same words as the Home banner.
     static var partnerLine: String {
         let shop = AppData.shop.name
         let sponsor = AppData.products.sponsor.name
-        return "\(shop) is proud to partner with \(sponsor) — the gels, clay and pomade we use in the chair, tested by barbers and stylists before they're released."
+        return "\(shop) is proud to partner with \(sponsor): the gels, clay and pomade we trust in the chair."
     }
 
     /// Who sells the products and where the prices come from.

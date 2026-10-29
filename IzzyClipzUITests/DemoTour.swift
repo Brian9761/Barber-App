@@ -129,7 +129,14 @@ final class DemoTour: XCTestCase {
         app.swipeLeft()
         pause(2)
         capture("Photo-Viewer")
-        tap("closePhoto")
+        // Tapped where it is: after a page swipe XCUI can fail to "scroll" the
+        // pinned button into view even though it's on screen.
+        let close = element("closePhoto")
+        if close.waitForExistence(timeout: 5) {
+            close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        } else {
+            note("Missing closePhoto")
+        }
         pause(2)
     }
 

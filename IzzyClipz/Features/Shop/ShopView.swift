@@ -133,7 +133,7 @@ private struct ShopPartnerHeader: View {
             router.openWeb(AppData.products.storeURL)
         } label: {
             HStack(spacing: 8) {
-                Text("Shop all \(sponsor.name)")
+                Text("Shop all \(sponsor.name) products")
                 Image(systemName: Symbol.external)
                     .font(.subheadline.weight(.bold))
                     .accessibilityHidden(true)
@@ -154,7 +154,7 @@ private struct ShopPartnerHeader: View {
 
 // MARK: - Featured
 
-/// "Barbershop favorites": the featured products in a row that scrolls
+/// "Featured": Bravo's featured products in a row that scrolls
 /// sideways, snapping to each card.
 private struct ShopFeaturedSection: View {
     let products: [Product]
@@ -162,7 +162,7 @@ private struct ShopFeaturedSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            SectionHeader("Barbershop favorites")
+            SectionHeader("Featured")
                 .padding(.horizontal, Theme.gutter)
             ScrollView(.horizontal) {
                 cards

@@ -3,6 +3,7 @@ import SwiftUI
 /// A service on the menu: icon, name, length and price range.
 struct ServiceRow: View {
     let service: Service
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(spacing: 14) {
@@ -14,12 +15,17 @@ struct ServiceRow: View {
                 Text(AppData.catalog.durationSummary(forService: service.id))
                     .font(.subheadline)
                     .foregroundStyle(Theme.secondaryText)
+                // At the largest text sizes the price moves under the name,
+                // so neither has to break mid-word.
+                if dynamicTypeSize.isAccessibilitySize {
+                    price
+                }
             }
             Spacer(minLength: 8)
-            Text(AppData.catalog.priceSummary(forService: service.id))
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(Theme.red)
-                .multilineTextAlignment(.trailing)
+            if !dynamicTypeSize.isAccessibilitySize {
+                price
+                    .multilineTextAlignment(.trailing)
+            }
             Image(systemName: Symbol.chevron)
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(Theme.tertiaryText)
@@ -28,14 +34,22 @@ struct ServiceRow: View {
         .padding(.vertical, 2)
     }
 
+    private var price: some View {
+        Text(AppData.catalog.priceSummary(forService: service.id))
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(Theme.red)
+    }
+
     static func accessibilityText(for service: Service) -> String {
         "\(service.name), \(AppData.catalog.priceSummary(forService: service.id)), \(AppData.catalog.durationSummary(forService: service.id))"
+            .spokenRanges
     }
 }
 
 /// "First available": book with whichever barber is free first.
 struct FirstAvailableRow: View {
     let option: FirstAvailableOption
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(spacing: 14) {
@@ -52,11 +66,14 @@ struct FirstAvailableRow: View {
                 Text("Any of \(option.barberIDs.count) barbers · \(option.durationLabel)")
                     .font(.subheadline)
                     .foregroundStyle(Theme.secondaryText)
+                if dynamicTypeSize.isAccessibilitySize {
+                    price
+                }
             }
             Spacer(minLength: 8)
-            Text(option.priceLabel)
-                .font(.headline)
-                .foregroundStyle(Theme.red)
+            if !dynamicTypeSize.isAccessibilitySize {
+                price
+            }
             Image(systemName: Symbol.chevron)
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(Theme.tertiaryText)
@@ -66,8 +83,15 @@ struct FirstAvailableRow: View {
         .contentShape(Rectangle())
     }
 
+    private var price: some View {
+        Text(option.priceLabel)
+            .font(.headline)
+            .foregroundStyle(Theme.red)
+    }
+
     static func accessibilityText(for option: FirstAvailableOption) -> String {
         "First available barber, any of \(option.barberIDs.count), \(option.priceLabel), \(option.durationLabel)"
+            .spokenRanges
     }
 }
 
@@ -78,6 +102,7 @@ struct OfferingRow: View {
     var isFavorite = false
     /// What tapping does, e.g. "Book" or "Select".
     var actionLabel = "Book"
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -103,23 +128,42 @@ struct OfferingRow: View {
                         .foregroundStyle(Theme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                // At the largest text sizes the price moves under the name,
+                // so neither has to break mid-word.
+                if dynamicTypeSize.isAccessibilitySize {
+                    HStack(spacing: 10) {
+                        price
+                        actionCapsule
+                    }
+                    .padding(.top, 4)
+                }
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(offering.price.label)
-                    .font(.headline)
-                    .foregroundStyle(Theme.ink)
-                    .multilineTextAlignment(.trailing)
-                Text(actionLabel)
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Theme.red, in: Capsule())
+            if !dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .trailing, spacing: 6) {
+                    price
+                        .multilineTextAlignment(.trailing)
+                    actionCapsule
+                }
             }
         }
         .card(padding: 14)
         .contentShape(Rectangle())
+    }
+
+    private var price: some View {
+        Text(offering.price.label)
+            .font(.headline)
+            .foregroundStyle(Theme.red)
+    }
+
+    private var actionCapsule: some View {
+        Text(actionLabel)
+            .font(.footnote.weight(.bold))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Theme.red, in: Capsule())
     }
 
     static func accessibilityText(offering: Offering, barber: Barber, isFavorite: Bool, verb: String = "Book with") -> String {
@@ -130,6 +174,14 @@ struct OfferingRow: View {
         ]
         if let note = offering.note { parts.append(note) }
         return parts.joined(separator: ", ")
+    }
+}
+
+private extension String {
+    /// "$35–$45" as "$35 to $45" and "45 min – 1 hr" as "45 min to 1 hr":
+    /// VoiceOver doesn't always read a dash between values as "to".
+    var spokenRanges: String {
+        replacingOccurrences(of: " – ", with: " to ").replacingOccurrences(of: "–", with: " to ")
     }
 }
 

@@ -76,7 +76,7 @@ struct ProductDetailView: View {
                 router.openWeb(catalog.storeURL)
             } label: {
                 HStack(spacing: 8) {
-                    Text("Shop all \(catalog.sponsor.name)")
+                    Text("Shop all \(catalog.sponsor.name) products")
                     Image(systemName: Symbol.external)
                         .font(.subheadline.weight(.bold))
                         .accessibilityHidden(true)
@@ -170,7 +170,7 @@ private struct ProductHighlights: View {
     var body: some View {
         if !highlights.isEmpty {
             VStack(alignment: .leading, spacing: 14) {
-                SectionHeader("Why barbers like it")
+                SectionHeader("Highlights")
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Array(highlights.enumerated()), id: \.offset) { item in
                         row(item.element)

@@ -69,6 +69,17 @@ struct ChooseTimeView: View {
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { refresh() }
         }
+        // Keeps today's times honest while the client lingers on the calendar.
+        .task {
+            while true {
+                do {
+                    try await Task.sleep(for: .seconds(60))
+                } catch {
+                    return
+                }
+                refresh()
+            }
+        }
         .sensoryFeedback(.selection, trigger: selectedDay)
         .sensoryFeedback(.selection, trigger: selectedSlot) { _, newValue in
             newValue != nil
@@ -115,7 +126,9 @@ struct ChooseTimeView: View {
     }
 
     private var footnote: String {
-        "These are the shop's hours. Squire shows \(BookingFlowCopy.barberPossessive(choice)) real openings in the last step."
+        let hours = "These are the shop's hours. Squire shows \(BookingFlowCopy.barberPossessive(choice)) real openings in the last step."
+        guard let zone = BookingFlowCopy.timeZoneNote(at: selectedSlot?.start ?? now) else { return hours }
+        return "\(hours) \(zone)"
     }
 
     static func monthID(for day: CalendarDay) -> String {
@@ -147,6 +160,10 @@ struct ChooseTimeView: View {
     }
 
     private func continueToReview() {
+        // A second tap while the review slides in mustn't push it twice.
+        if let last = router.bookingPath.last, case .review = last { return }
+        // The time may have slipped inside the lead time since it was picked.
+        refresh()
         guard let slot = selectedSlot else { return }
         router.bookingPath.append(.review(BookingPlan(choice: choice, start: slot.start)))
     }

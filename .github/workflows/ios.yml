@@ -35,7 +35,8 @@ jobs:
   app:
     name: App on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # Intel Macs run the simulator much more slowly than Apple silicon.
+    timeout-minutes: ${{ inputs.macs == 'intel' && 120 || 60 }}
     strategy:
       fail-fast: false
       matrix:

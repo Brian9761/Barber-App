@@ -8,13 +8,14 @@ struct PrimaryButtonStyle: ButtonStyle {
         configuration.label
             .font(.headline)
             .multilineTextAlignment(.center)
-            .foregroundStyle(.white)
+            // Gray on light gray when off, so the label stays readable.
+            .foregroundStyle(isEnabled ? Color.white : Theme.secondaryText)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, minHeight: 54)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(isEnabled ? AnyShapeStyle(Theme.redGradient) : AnyShapeStyle(Theme.ink.opacity(0.22)))
+                    .fill(isEnabled ? AnyShapeStyle(Theme.redGradient) : AnyShapeStyle(Theme.ink.opacity(0.08)))
             )
             .shadow(color: isEnabled ? Theme.red.opacity(0.28) : .clear, radius: 10, y: 5)
             .opacity(configuration.isPressed ? 0.88 : 1)

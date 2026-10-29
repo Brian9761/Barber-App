@@ -61,6 +61,7 @@ struct BarberDetailView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader("Specialties")
                 FlowingChips(items: barber.specialties)
+                    .card()
             }
         }
     }
@@ -197,7 +198,7 @@ private struct BarberInstagramLink: View {
                 Image(systemName: Symbol.instagram)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Theme.blue)
-                    .frame(width: iconSize, height: iconSize)
+                    .frame(width: min(iconSize, 56), height: min(iconSize, 56))
                     .background(Theme.tint, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: handleText)
@@ -242,7 +243,7 @@ private struct BarberMenuSection: View {
 
     private func row(service: Service, offering: Offering) -> some View {
         Button {
-            router.startBooking(choice: .offering(offering))
+            router.startBooking(fromBarberMenu: offering)
         } label: {
             BarberMenuRow(service: service, offering: offering)
         }
@@ -256,6 +257,7 @@ private struct BarberMenuSection: View {
 private struct BarberMenuRow: View {
     let service: Service
     let offering: Offering
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
@@ -274,24 +276,47 @@ private struct BarberMenuRow: View {
                         .foregroundStyle(Theme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                if stacksPrice {
+                    HStack(spacing: 10) {
+                        price
+                        bookCapsule
+                    }
+                    .padding(.top, 4)
+                }
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 6) {
-                Text(offering.price.label)
-                    .font(.headline)
-                    .foregroundStyle(Theme.red)
-                    .multilineTextAlignment(.trailing)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("Book")
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(Color.white)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(Theme.red, in: Capsule())
+            if !stacksPrice {
+                VStack(alignment: .trailing, spacing: 6) {
+                    price
+                        .multilineTextAlignment(.trailing)
+                    bookCapsule
+                }
             }
         }
         .card(padding: 14)
         .contentShape(Rectangle())
+    }
+
+    /// At the largest text sizes the price moves under the name, so neither
+    /// has to break mid-word.
+    private var stacksPrice: Bool {
+        dynamicTypeSize.isAccessibilitySize
+    }
+
+    private var price: some View {
+        Text(offering.price.label)
+            .font(.headline)
+            .foregroundStyle(Theme.red)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var bookCapsule: some View {
+        Text("Book")
+            .font(.footnote.weight(.bold))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Theme.red, in: Capsule())
     }
 
     static func accessibilityText(service: Service, offering: Offering) -> String {

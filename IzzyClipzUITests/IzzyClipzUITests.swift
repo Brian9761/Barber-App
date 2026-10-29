@@ -409,7 +409,9 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(close.waitForExistence(timeout: 5))
         screenshot("26-Photo-Viewer")
         app.swipeLeft()
-        close.tap()
+        // Tapped where it is: after a page swipe XCUI can fail to "scroll" the
+        // pinned button into view even though it's on screen.
+        close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(waitForDisappearance(of: close), "The photo viewer didn't close")
         XCTAssertTrue(first.waitForExistence(timeout: 5))
     }

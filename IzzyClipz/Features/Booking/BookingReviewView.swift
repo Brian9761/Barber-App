@@ -80,7 +80,9 @@ struct BookingReviewView: View {
         } else {
             opens = "It opens with \(choice.barberName) and \(choice.serviceName) already picked."
         }
-        return "Squire is the shop's booking system. \(opens) Choose \(dayLabel) at \(timeLabel), or the closest open time, and confirm with your name and number."
+        let message = "Squire is the shop's booking system. \(opens) Choose \(dayLabel) at \(timeLabel), or the closest open time, and confirm with your name and number."
+        guard let zone = BookingFlowCopy.timeZoneNote(at: plan.start) else { return message }
+        return "\(message) \(zone)"
     }
 
     /// Back to the calendar to choose again.
@@ -221,6 +223,14 @@ enum BookingFlowCopy {
     /// "Carlos's", or "the barbers'".
     static func barberPossessive(_ choice: BookingChoice) -> String {
         choice.barberID == nil ? "the barbers'" : "\(choice.barberName)'s"
+    }
+
+    /// "Times are in Oceanside time (Pacific).", but only when this iPhone is
+    /// set to another time zone, where shop times could pass for local ones.
+    static func timeZoneNote(at date: Date) -> String? {
+        let shopOffset = AppData.shop.timeZone.secondsFromGMT(for: date)
+        guard TimeZone.current.secondsFromGMT(for: date) != shopOffset else { return nil }
+        return "Times are in Oceanside time (Pacific)."
     }
 }
 

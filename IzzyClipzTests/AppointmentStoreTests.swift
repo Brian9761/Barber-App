@@ -122,6 +122,17 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertTrue(scheduler.pending.isEmpty)
     }
 
+    func testNoPermissionPromptWhenNoReminderIsAhead() async {
+        scheduler.status = .notDetermined
+        let store = makeStore(defaults: makeDefaults())
+        store.save(appointment(at: soon), remind: true)
+        await store.settle()
+        // Nothing could be sent, so there's nothing to ask permission for.
+        XCTAssertEqual(scheduler.permissionRequests, 0)
+        XCTAssertTrue(scheduler.pending.isEmpty)
+        XCTAssertFalse(store.remindersPermissionDenied)
+    }
+
     func testNoRemindersWhenTurnedOff() async {
         scheduler.status = .authorized
         let store = makeStore(defaults: makeDefaults())

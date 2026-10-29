@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import SwiftUI
+import UIKit
 
 enum AppTab: Hashable {
     case home
@@ -164,6 +165,9 @@ final class AppRouter {
     /// Home pushes services, barbers and `HomeRoute`s, so its path holds any of them.
     var homePath = NavigationPath()
     var bookingPath: [BookingStep] = []
+    /// Goes up by one each time a booking is saved, so the Book tab can
+    /// scroll back to the top, where the new appointment is.
+    private(set) var finishedBookings = 0
     /// The sheet on screen. Set it through `present(_:)` so dismissal knows
     /// what was showing; SwiftUI sets it back to `nil` when it goes away.
     var sheet: AppSheet?
@@ -199,6 +203,15 @@ final class AppRouter {
         selectedTab = .book
     }
 
+    /// Switches to the Book tab at the calendar for a service on a barber's
+    /// own menu. Going back shows that barber's services, the way the client
+    /// came, not "Pick your barber".
+    func startBooking(fromBarberMenu offering: Offering) {
+        closeSheet()
+        bookingPath = [.chooseService(barberID: offering.barberID), .chooseTime(.offering(offering))]
+        selectedTab = .book
+    }
+
     /// Opens Squire to confirm a booking. With a plan, the client is asked
     /// afterwards whether they booked it, so it can be saved in the app.
     func openSquire(_ request: BookingRequest, plan: BookingPlan?) {
@@ -208,6 +221,17 @@ final class AppRouter {
     /// Opens a web page in the in-app browser.
     func openWeb(_ url: URL) {
         present(.web(url))
+    }
+
+    /// Opens a page outside the app: in Safari, or in the site's own app (Google
+    /// Maps for Google reviews), where the client is already signed in. UI tests
+    /// get the in-app preview instead, so they never leave the app.
+    func openOutside(_ url: URL) {
+        if LaunchOptions.isUITesting {
+            present(.web(url))
+        } else {
+            UIApplication.shared.open(url)
+        }
     }
 
     func showReminders() {
@@ -243,5 +267,6 @@ final class AppRouter {
     /// After an appointment is saved: back to the start of the Book tab.
     func finishBooking() {
         bookingPath = []
+        finishedBookings += 1
     }
 }

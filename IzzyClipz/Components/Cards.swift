@@ -65,12 +65,13 @@ struct RatingSummary: View {
 private struct RatingTile: View {
     let sourced: SourcedRating
     let showsLink: Bool
+    @ScaledMetric(relativeTo: .largeTitle) private var numberSize: CGFloat = 40
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(sourced.rating.averageLabel)
-                    .font(.system(size: 40, weight: .black).width(.condensed))
+                    .font(.system(size: min(numberSize, 72), weight: .black).width(.condensed))
                     .foregroundStyle(Theme.ink)
                 Spacer(minLength: 0)
                 if showsLink {
@@ -81,10 +82,16 @@ private struct RatingTile: View {
                 }
             }
             RatingStars(average: sourced.rating.average, size: 13)
-            Text("\(sourced.rating.countLabel) on \(sourced.source)")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
+            // The site over the count: short lines keep two tiles side by side.
+            VStack(alignment: .leading, spacing: 1) {
+                Text(sourced.source)
+                    .font(.subheadline.weight(.bold))
+                    .foregroundStyle(Theme.ink)
+                Text(sourced.rating.countLabel)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Theme.secondaryText)
+            }
+            .fixedSize(horizontal: false, vertical: true)
         }
         .card(padding: 14)
         .accessibilityElement(children: .ignore)

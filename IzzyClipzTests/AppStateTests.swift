@@ -41,6 +41,14 @@ final class AppRouterTests: XCTestCase {
         XCTAssertEqual(router.bookingPath, [.chooseBarber(serviceID: "haircut"), .chooseTime(choice)])
     }
 
+    func testStartBookingFromABarbersMenuGoesBackToTheirServices() throws {
+        let router = AppRouter()
+        let offering = try haircutWithCarlos()
+        router.startBooking(fromBarberMenu: offering)
+        XCTAssertEqual(router.selectedTab, .book)
+        XCTAssertEqual(router.bookingPath, [.chooseService(barberID: "carlos-rafael"), .chooseTime(.offering(offering))])
+    }
+
     func testStartBookingWithABarberPicksTheirServiceFirst() {
         let router = AppRouter()
         router.selectedTab = .home
@@ -124,8 +132,11 @@ final class AppRouterTests: XCTestCase {
         let router = AppRouter()
         let plan = try plan()
         router.bookingPath = [.chooseBarber(serviceID: "haircut"), .chooseTime(plan.choice), .review(plan)]
+        XCTAssertEqual(router.finishedBookings, 0)
         router.finishBooking()
         XCTAssertEqual(router.bookingPath, [])
+        // The Book tab scrolls back up to the new appointment on this.
+        XCTAssertEqual(router.finishedBookings, 1)
     }
 
     func testSheetIdentitiesAreDistinct() throws {

@@ -240,7 +240,7 @@ private struct ReminderNextCard: View {
             Image(systemName: Symbol.calendar)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Theme.blue)
-                .frame(width: iconSize, height: iconSize)
+                .frame(width: min(iconSize, 56), height: min(iconSize, 56))
                 .background(Theme.tint, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {

@@ -15,8 +15,8 @@ struct ReviewsView: View {
                 ratings
                 reviews
                 ReviewsYourTurnSection(
-                    onLeaveReview: { router.openWeb(shop.googleReviewURL) },
-                    onReadMore: { router.openWeb(shop.googleMapsURL) }
+                    onLeaveReview: { router.openOutside(shop.googleReviewURL) },
+                    onReadMore: { router.openOutside(shop.googleMapsURL) }
                 )
             }
             .padding(.horizontal, Theme.gutter)

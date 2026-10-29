@@ -132,13 +132,11 @@ final class AppointmentStore {
     }
 
     private func performSync() async {
-        let current = now()
-        let wanted = upcoming.filter { reminding.contains($0.id) }
-
         // Clear everything this store may have scheduled, then add back what's wanted.
         scheduler.removePendingRequests(withIdentifiers: appointments.flatMap { Self.identifiers(for: $0.id) })
 
-        guard !wanted.isEmpty else {
+        // Only ask for permission when there's a reminder still ahead to send.
+        guard !pendingReminders(now: now()).isEmpty else {
             remindersPermissionDenied = false
             return
         }
@@ -156,31 +154,43 @@ final class AppointmentStore {
             return
         }
 
-        for appointment in wanted {
-            let reminders = AppointmentPlanner.reminders(
-                for: appointment,
-                shopName: AppData.shop.name,
-                address: AppData.shop.address.street,
-                calendar: calendar,
-                now: current
+        // The client may have spent a while on the permission alert, and
+        // appointments may have changed meanwhile: plan from what's true now.
+        let current = now()
+        for (appointmentID, reminder) in pendingReminders(now: current) {
+            // Removed, or reminders turned off, while an earlier one was being added.
+            guard reminding.contains(appointmentID) else { continue }
+            let interval = reminder.date.timeIntervalSince(current)
+            guard interval > 0 else { continue }
+            let content = UNMutableNotificationContent()
+            content.title = reminder.title
+            content.body = reminder.body
+            content.sound = .default
+            let request = UNNotificationRequest(
+                identifier: Self.identifier(for: appointmentID, kind: reminder.kind),
+                content: content,
+                // An absolute moment, so a trip to another time zone doesn't move it.
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
             )
-            for reminder in reminders {
-                let interval = reminder.date.timeIntervalSince(current)
-                guard interval > 0 else { continue }
-                let content = UNMutableNotificationContent()
-                content.title = reminder.title
-                content.body = reminder.body
-                content.sound = .default
-                let request = UNNotificationRequest(
-                    identifier: Self.identifier(for: appointment.id, kind: reminder.kind),
-                    content: content,
-                    // An absolute moment, so a trip to another time zone doesn't move it.
-                    trigger: UNTimeIntervalNotificationTrigger(timeInterval: interval, repeats: false)
-                )
-                // One failed reminder shouldn't drop the rest.
-                try? await scheduler.add(request)
-            }
+            // One failed reminder shouldn't drop the rest.
+            try? await scheduler.add(request)
         }
+    }
+
+    /// The reminders still ahead for upcoming appointments that want them.
+    private func pendingReminders(now current: Date) -> [(appointmentID: UUID, reminder: AppointmentReminder)] {
+        upcoming
+            .filter { reminding.contains($0.id) }
+            .flatMap { appointment in
+                AppointmentPlanner.reminders(
+                    for: appointment,
+                    shopName: AppData.shop.name,
+                    address: AppData.shop.address.street,
+                    calendar: calendar,
+                    now: current
+                )
+                .map { (appointmentID: appointment.id, reminder: $0) }
+            }
     }
 }
 

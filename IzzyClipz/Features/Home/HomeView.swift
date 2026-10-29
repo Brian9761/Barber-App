@@ -91,14 +91,13 @@ private struct RemindersButton: View {
         Button {
             router.showReminders()
         } label: {
+            // A plain white bell reads on the navy hero and scrim. No circle of
+            // its own: newer iOS versions draw one around toolbar buttons.
             Image(systemName: reminders.isEnabled ? Symbol.remindersOn : Symbol.reminders)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(Color.white)
-                .frame(width: 36, height: 36)
-                // Dark and see-through, so it reads over the photo and the scrim.
-                .background(Color.black.opacity(0.35), in: Circle())
-                .overlay(Circle().strokeBorder(Color.white.opacity(0.25)))
-                .contentShape(Circle())
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel("Cut reminders")
         .accessibilityValue(stateText)
