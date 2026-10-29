@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 enum AppTab: Hashable {
     case home
@@ -160,7 +161,8 @@ enum AppSheet: Identifiable, Hashable {
 @Observable
 final class AppRouter {
     var selectedTab: AppTab = .home
-    var homePath: [HomeRoute] = []
+    /// Home pushes services, barbers and `HomeRoute`s, so its path holds any of them.
+    var homePath = NavigationPath()
     var bookingPath: [BookingStep] = []
     /// The sheet on screen. Set it through `present(_:)` so dismissal knows
     /// what was showing; SwiftUI sets it back to `nil` when it goes away.

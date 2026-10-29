@@ -1,5 +1,7 @@
 import SwiftUI
 
+/// The Services tab: the whole menu by category, searchable, with each
+/// service's price range and length.
 struct ServicesView: View {
     @State private var query = ""
     private let catalog = AppData.catalog
@@ -8,40 +10,31 @@ struct ServicesView: View {
         catalog.search(query)
     }
 
+    /// Whether the client has typed something to search for. Spaces alone
+    /// still show the whole menu.
+    private var isSearching: Bool {
+        !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                ForEach(catalog.categories) { category in
-                    let services = results.filter { $0.category == category }
-                    if !services.isEmpty {
-                        Section {
-                            ForEach(services) { service in
-                                NavigationLink(value: service) {
-                                    ServiceRow(service: service)
-                                }
-                                .listRowBackground(Theme.surface)
-                                .accessibilityLabel(ServiceRow.accessibilityText(for: service))
-                                .accessibilityIdentifier("service-\(service.id)")
-                            }
-                        } header: {
-                            Label(category.title, systemImage: category.symbol)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(Theme.secondaryText)
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 28) {
+                    if !isSearching {
+                        ServicesHero()
+                    }
+                    ForEach(catalog.categories) { category in
+                        ServiceCategorySection(
+                            category: category,
+                            services: results.filter { $0.category == category }
+                        )
+                    }
+                    if !results.isEmpty {
+                        footnote
                     }
                 }
-
-                if !results.isEmpty {
-                    Section {
-                        Text("Prices are from the shop's booking menu and may vary by barber. You'll see the final price before you confirm.")
-                            .font(.footnote)
-                            .foregroundStyle(Theme.secondaryText)
-                            .listRowBackground(Color.clear)
-                    }
-                }
+                .padding(Theme.gutter)
             }
-            .listStyle(.insetGrouped)
-            .scrollContentBackground(.hidden)
             .screenBackground()
             .overlay {
                 if results.isEmpty {
@@ -50,36 +43,104 @@ struct ServicesView: View {
             }
             .searchable(text: $query, prompt: "Search services")
             .navigationTitle("Services")
+            .navigationBarTitleDisplayMode(.large)
             .navigationDestination(for: Service.self) { ServiceDetailView(service: $0) }
             .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0) }
         }
     }
+
+    private var footnote: some View {
+        Text("Prices are from the shop's booking menu and can differ by barber. Squire shows your barber's price before you confirm.")
+            .font(.footnote)
+            .foregroundStyle(Theme.secondaryText)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
 }
 
-struct ServiceRow: View {
+/// "Every cut, every price", under a barber-pole band.
+private struct ServicesHero: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            StripeBand(stripeWidth: 10)
+                .frame(height: 10)
+            VStack(alignment: .leading, spacing: 6) {
+                Text("EVERY CUT, EVERY PRICE")
+                    .font(.display(.title2))
+                    .foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("Prices straight from the shop's booking menu. Pick one to see each barber's price.")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+        .card(padding: 0)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Every cut, every price. Prices straight from the shop's booking menu. Pick one to see each barber's price.")
+    }
+}
+
+/// One category's services, under a title with the category's icon.
+private struct ServiceCategorySection: View {
+    let category: ServiceCategory
+    let services: [Service]
+
+    var body: some View {
+        if !services.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                ServiceCategoryHeader(category: category)
+                VStack(spacing: 10) {
+                    ForEach(services) { service in
+                        ServiceLink(service: service)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// The section title look (red bar, heavy condensed caps) with the category's icon.
+private struct ServiceCategoryHeader: View {
+    let category: ServiceCategory
+
+    var body: some View {
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(Theme.red)
+                .frame(width: 4, height: 18)
+            Image(systemName: category.symbol)
+                .font(.headline.weight(.semibold))
+                .foregroundStyle(Theme.blue)
+            Text(category.title.uppercased())
+                .font(.display(.title2))
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(category.title)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A service card that opens the service's page.
+private struct ServiceLink: View {
     let service: Service
 
     var body: some View {
-        HStack(spacing: 14) {
-            ServiceIcon(symbol: service.symbol, size: 40)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(service.name)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                Text(AppData.catalog.durationSummary(forService: service.id))
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
-            }
-            Spacer(minLength: 8)
-            Text(AppData.catalog.priceSummary(forService: service.id))
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.trailing)
+        NavigationLink(value: service) {
+            ServiceRow(service: service)
+                .card(padding: 14)
+                .contentShape(Rectangle())
         }
-        .padding(.vertical, 4)
-    }
-
-    static func accessibilityText(for service: Service) -> String {
-        "\(service.name), \(AppData.catalog.priceSummary(forService: service.id)), \(AppData.catalog.durationSummary(forService: service.id))"
+        .buttonStyle(.pressable)
+        .accessibilityLabel(ServiceRow.accessibilityText(for: service))
+        .accessibilityHint("Shows each barber's price")
+        .accessibilityIdentifier("service-\(service.id)")
     }
 }

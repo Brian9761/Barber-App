@@ -1,3 +1,4 @@
+import SwiftUI
 import UIKit
 import UserNotifications
 
@@ -62,7 +63,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                 self.router.startBooking()
             } else if identifier.hasPrefix(AppointmentStore.identifierPrefix) {
                 self.router.closeSheet()
-                self.router.homePath = []
+                self.router.homePath = NavigationPath()
                 self.router.selectedTab = .home
             }
             completionHandler()

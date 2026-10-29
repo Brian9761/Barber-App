@@ -1,9 +1,11 @@
 import SwiftUI
 
-/// Book in three steps: service, barber, review. The last step hands off to
-/// Squire, where the client picks a time and confirms.
+/// The Book tab. Booking takes four steps: a service, a barber, a day and
+/// time on the app's calendar, then a review that hands off to Squire, the
+/// shop's booking system, to confirm the real slot.
 struct BookView: View {
     @Environment(AppRouter.self) private var router
+    @Environment(AppointmentStore.self) private var appointments
     private let catalog = AppData.catalog
 
     var body: some View {
@@ -11,215 +13,157 @@ struct BookView: View {
 
         NavigationStack(path: $router.bookingPath) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    StepHeader(step: 1, title: "Pick a service", subtitle: "Prices and times come straight from the shop's booking menu.")
+                VStack(alignment: .leading, spacing: 28) {
+                    let upcoming = appointments.upcoming
+                    if !upcoming.isEmpty {
+                        BookAppointmentsSection(appointments: upcoming)
+                    }
+
+                    StepHeader(
+                        step: 1,
+                        of: 4,
+                        title: "Pick a service",
+                        subtitle: "Prices and lengths come straight from the shop's booking menu."
+                    )
 
                     ForEach(catalog.categories) { category in
-                        VStack(alignment: .leading, spacing: 10) {
-                            Label(category.title, systemImage: category.symbol)
-                                .font(.subheadline.weight(.bold))
-                                .foregroundStyle(Theme.secondaryText)
-                            ForEach(catalog.services(in: category)) { service in
-                                NavigationLink(value: BookingStep.chooseBarber(serviceID: service.id)) {
-                                    ServiceRow(service: service)
-                                        .card(padding: 14)
-                                }
-                                .buttonStyle(.pressable)
-                                .accessibilityLabel(ServiceRow.accessibilityText(for: service))
-                                .accessibilityIdentifier("bookService-\(service.id)")
-                            }
-                        }
+                        BookCategorySection(category: category)
                     }
 
-                    VStack(spacing: 12) {
-                        Button {
-                            router.book(.anything)
-                        } label: {
-                            Label("Browse everything on Squire", systemImage: Symbol.external)
-                        }
-                        .buttonStyle(.secondary)
-
-                        CallButton {
-                            Label("Prefer to call? \(AppData.shop.phone.display)", systemImage: Symbol.call)
-                        }
-                        .buttonStyle(.secondary)
-                    }
-                    .padding(.top, 4)
+                    BookOtherWays()
                 }
                 .padding(Theme.gutter)
             }
             .screenBackground()
             .navigationTitle("Book")
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: BookingStep.self) { step in
-                switch step {
-                case .chooseBarber(let serviceID):
-                    if let service = catalog.service(withID: serviceID) {
-                        ChooseBarberView(service: service)
-                    } else {
-                        ContentUnavailableView("Service unavailable", systemImage: Symbol.info)
-                    }
-                case .review(let choice):
-                    BookingReviewView(choice: choice)
-                }
+                BookStepDestination(step: step)
             }
         }
     }
 }
 
-private struct StepHeader: View {
-    let step: Int
+/// The screen for each step pushed onto the Book tab.
+private struct BookStepDestination: View {
+    let step: BookingStep
+    private let catalog = AppData.catalog
+
+    var body: some View {
+        switch step {
+        case .chooseBarber(let serviceID):
+            if let service = catalog.service(withID: serviceID) {
+                ChooseBarberView(service: service)
+            } else {
+                BookStepUnavailableView(title: "Service unavailable")
+            }
+        case .chooseService(let barberID):
+            if let barber = catalog.barber(withID: barberID) {
+                ChooseServiceView(barber: barber)
+            } else {
+                BookStepUnavailableView(title: "Barber unavailable")
+            }
+        case .chooseTime(let choice):
+            if catalog.service(withID: choice.serviceID) != nil {
+                ChooseTimeView(choice: choice)
+            } else {
+                BookStepUnavailableView(title: "Service unavailable")
+            }
+        case .review(let plan):
+            if catalog.service(withID: plan.choice.serviceID) != nil {
+                BookingReviewView(plan: plan)
+            } else {
+                BookStepUnavailableView(title: "Service unavailable")
+            }
+        }
+    }
+}
+
+/// Shown if a link points at a service or barber that's no longer on the menu.
+private struct BookStepUnavailableView: View {
     let title: String
-    let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("STEP \(step) OF 3")
-                .font(.caption.weight(.bold))
-                .tracking(1.5)
-                .foregroundStyle(Theme.red)
-            Text(title.uppercased())
-                .font(.display(.title))
-                .foregroundStyle(.white)
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
+        ContentUnavailableView(
+            title,
+            systemImage: Symbol.info,
+            description: Text("It may have changed since you last opened the app. Go back and pick again, or call the shop at \(AppData.shop.phone.display).")
+        )
+        .screenBackground()
     }
 }
 
-private struct ChooseBarberView: View {
-    let service: Service
-    @Environment(Favorites.self) private var favorites
+/// "Your appointments": everything saved that hasn't happened yet.
+private struct BookAppointmentsSection: View {
+    let appointments: [Appointment]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader("Your appointments")
+            ForEach(appointments) { appointment in
+                UpcomingAppointmentCard(
+                    appointment: appointment,
+                    isNext: appointment.id == appointments.first?.id
+                )
+            }
+        }
+    }
+}
+
+/// One category of the menu, e.g. "Haircuts", with a row per service.
+private struct BookCategorySection: View {
+    let category: ServiceCategory
     private let catalog = AppData.catalog
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                StepHeader(step: 2, title: "Pick your barber", subtitle: "\(service.name) · \(catalog.durationSummary(forService: service.id))")
-
-                if let option = catalog.firstAvailableOption(forService: service.id) {
-                    NavigationLink(value: BookingStep.review(.firstAvailable(option))) {
-                        FirstAvailableRow(option: option)
-                    }
-                    .buttonStyle(.pressable)
-                    .accessibilityLabel(FirstAvailableRow.accessibilityText(for: option))
-                    .accessibilityIdentifier("chooseFirstAvailable")
-                }
-
-                ForEach(offerings) { offering in
-                    if let barber = catalog.barber(withID: offering.barberID) {
-                        let isFavorite = favorites.isFavorite(barber.id)
-                        NavigationLink(value: BookingStep.review(.offering(offering))) {
-                            OfferingRow(offering: offering, barber: barber, isFavorite: isFavorite, actionLabel: "Select")
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel(OfferingRow.accessibilityText(offering: offering, barber: barber, isFavorite: isFavorite, verb: "Choose"))
-                        .accessibilityIdentifier("choose-\(offering.id)")
-                    }
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(category.title) {
+                Image(systemName: category.symbol)
+                    .foregroundStyle(Theme.blue)
+                    .accessibilityHidden(true)
             }
-            .padding(Theme.gutter)
+            ForEach(catalog.services(in: category)) { service in
+                NavigationLink(value: BookingStep.chooseBarber(serviceID: service.id)) {
+                    ServiceRow(service: service)
+                        .card(padding: 14)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.pressable)
+                .accessibilityLabel(ServiceRow.accessibilityText(for: service))
+                .accessibilityHint("Next, pick your barber")
+                .accessibilityIdentifier("bookService-\(service.id)")
+            }
         }
-        .screenBackground()
-        .navigationTitle(service.name)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    /// The client's favorite barber first, then cheapest first.
-    private var offerings: [Offering] {
-        let all = catalog.offerings(forService: service.id)
-        guard let favorite = favorites.barberID else { return all }
-        return all.filter { $0.barberID == favorite } + all.filter { $0.barberID != favorite }
     }
 }
 
-private struct BookingReviewView: View {
-    let choice: BookingChoice
+/// Squire's full booking page and the phone, for anything the menu above
+/// doesn't cover.
+private struct BookOtherWays: View {
     @Environment(AppRouter.self) private var router
-    private let catalog = AppData.catalog
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                StepHeader(step: 3, title: "Review & book", subtitle: "Next, you'll choose a time and confirm your details on Squire, the shop's booking system.")
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Looking for something else?")
+                .font(.headline)
+                .foregroundStyle(Theme.ink)
+                .accessibilityAddTraits(.isHeader)
 
-                VStack(alignment: .leading, spacing: 14) {
-                    if let service {
-                        summaryRow(title: "Service", value: service.name)
-                    }
-                    summaryRow(title: "Barber", value: barberText)
-                    summaryRow(title: "Price", value: priceText)
-                    summaryRow(title: "Length", value: durationText)
-                    if case .offering(let offering) = choice, let note = offering.note {
-                        Text(note)
-                            .font(.footnote)
-                            .foregroundStyle(Theme.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .card()
-
-                Button {
-                    router.book(choice.request)
-                } label: {
-                    Label("Choose a Time", systemImage: Symbol.calendar)
-                }
-                .buttonStyle(.primary)
-                .accessibilityIdentifier("chooseTimeButton")
-
-                Text("Squire shows your barber's open times and any extras they offer before you confirm.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+            Button {
+                router.openSquire(.anything, plan: nil)
+            } label: {
+                Label("Browse everything on Squire", systemImage: Symbol.external)
             }
-            .padding(Theme.gutter)
-        }
-        .screenBackground()
-        .navigationTitle("Review")
-        .navigationBarTitleDisplayMode(.inline)
-    }
+            .buttonStyle(.secondary)
+            .accessibilityHint("Opens Squire, the shop's booking system")
+            .accessibilityIdentifier("browseSquireButton")
 
-    private var service: Service? {
-        catalog.service(withID: choice.serviceID)
-    }
-
-    private var barberText: String {
-        switch choice {
-        case .firstAvailable:
-            return "First available"
-        case .offering(let offering):
-            return catalog.barber(withID: offering.barberID)?.name ?? "Your barber"
+            CallButton {
+                Label("Prefer to call? \(AppData.shop.phone.display)", systemImage: Symbol.call)
+            }
+            .buttonStyle(.secondary)
+            .accessibilityIdentifier("bookCallButton")
         }
-    }
-
-    private var priceText: String {
-        switch choice {
-        case .firstAvailable(let option): return option.priceLabel
-        case .offering(let offering): return offering.price.label
-        }
-    }
-
-    private var durationText: String {
-        switch choice {
-        case .firstAvailable(let option): return option.durationLabel
-        case .offering(let offering): return offering.durationLabel
-        }
-    }
-
-    private func summaryRow(title: String, value: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .foregroundStyle(Theme.secondaryText)
-            Spacer(minLength: 12)
-            Text(value)
-                .fontWeight(.semibold)
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.trailing)
-        }
-        .font(.body)
-        .accessibilityElement(children: .combine)
+        .padding(.top, 4)
     }
 }

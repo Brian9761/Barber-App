@@ -27,7 +27,7 @@ struct RootView: View {
                 .tabItem { Label("Visit", systemImage: Symbol.visit) }
                 .tag(AppTab.visit)
         }
-        .sheet(item: $router.sheet, onDismiss: router.sheetDidDismiss) { sheet in
+        .sheet(item: $router.sheet, onDismiss: { router.sheetDidDismiss() }) { sheet in
             switch sheet {
             case .squire(let handoff):
                 WebSheet(url: handoff.url)

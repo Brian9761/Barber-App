@@ -2,88 +2,22 @@ import MapKit
 import SwiftUI
 import UIKit
 
+/// The Visit tab: where the shop is, when it's open, what to know before
+/// coming in, and what clients say.
 struct VisitView: View {
-    private let shop = AppData.shop
-
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    MapCard()
-                    AddressCard()
-                    HoursSection()
-                    InfoSection()
-                    storefront
-                    about
-                    links
-                    footer
+            VisitScreen()
+                .navigationDestination(for: VisitRoute.self) { route in
+                    switch route {
+                    case .reviews:
+                        ReviewsView()
+                    }
                 }
-                .padding(Theme.gutter)
-            }
-            .screenBackground()
-            .navigationTitle("Visit")
         }
     }
 
-    private var storefront: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            FillImage(name: Asset.storefront)
-                .frame(height: 230)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-                .accessibilityLabel("The Izzy Clipz storefront on Mission Avenue")
-            Text("Look for the Izzy Clipz sign at \(shop.address.street).")
-                .font(.footnote)
-                .foregroundStyle(Theme.secondaryText)
-        }
-    }
-
-    private var about: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader("About")
-            VStack(alignment: .leading, spacing: 12) {
-                ForEach(shop.about, id: \.self) { paragraph in
-                    Text(paragraph)
-                        .foregroundStyle(.white.opacity(0.9))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .card()
-        }
-    }
-
-    private var links: some View {
-        VStack(spacing: 12) {
-            Link(destination: shop.instagramURL) {
-                Label("@\(shop.instagramHandle)", systemImage: Symbol.instagram)
-            }
-            .buttonStyle(.secondary)
-
-            Link(destination: shop.websiteURL) {
-                Label("izzyclipzbarbershop.net", systemImage: Symbol.website)
-            }
-            .buttonStyle(.secondary)
-
-            ShareLink(
-                item: shop.websiteURL,
-                subject: Text(shop.fullName),
-                message: Text("\(shop.fullName), \(shop.address.singleLine)")
-            ) {
-                Label("Share the shop", systemImage: Symbol.share)
-            }
-            .buttonStyle(.secondary)
-        }
-    }
-
-    private var footer: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Appointments are booked and managed on Squire.")
-            Text("Version \(Self.appVersion)")
-        }
-        .font(.footnote)
-        .foregroundStyle(Theme.secondaryText)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
+    /// "1.0.0 (1)", from the app's Info.plist.
     static var appVersion: String {
         let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "1"
@@ -91,8 +25,44 @@ struct VisitView: View {
     }
 }
 
-private struct MapCard: View {
+/// Screens pushed from the Visit tab.
+private enum VisitRoute: Hashable {
+    case reviews
+}
+
+/// Everything on the Visit tab, top to bottom.
+private struct VisitScreen: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 32) {
+                VStack(spacing: 14) {
+                    VisitMapCard()
+                    VisitAddressCard()
+                }
+                VisitHoursSection()
+                VisitInfoSection()
+                VisitShopSection()
+                VisitReviewsSection()
+                VisitLinksSection()
+                VisitFooter()
+            }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, 8)
+            // Room for the footer to clear the tab bar.
+            .padding(.bottom, 40)
+        }
+        .screenBackground()
+        .navigationTitle("Visit")
+        .navigationBarTitleDisplayMode(.large)
+    }
+}
+
+// MARK: - Map and address
+
+/// A map of the block with the shop pinned. Tapping it offers directions.
+private struct VisitMapCard: View {
     private let shop = AppData.shop
+    private let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
 
     private var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: shop.coordinate.latitude, longitude: shop.coordinate.longitude)
@@ -100,179 +70,513 @@ private struct MapCard: View {
 
     var body: some View {
         DirectionsButton {
-            Map(
-                initialPosition: .region(MKCoordinateRegion(center: coordinate, latitudinalMeters: 700, longitudinalMeters: 700)),
-                interactionModes: []
-            ) {
-                Marker(shop.name, systemImage: Symbol.services, coordinate: coordinate)
-                    .tint(Theme.red)
-            }
-            .mapStyle(.standard(pointsOfInterest: .excludingAll))
-            .allowsHitTesting(false)
-            .frame(height: 220)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous).strokeBorder(Theme.stroke))
-            .overlay(alignment: .bottomTrailing) {
-                Label("Directions", systemImage: Symbol.directions)
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Theme.red, in: Capsule())
-                    .padding(12)
-            }
-            .contentShape(Rectangle())
+            map
+                .overlay(alignment: .bottomTrailing) {
+                    directionsBadge
+                }
+                .contentShape(shape)
         }
         .buttonStyle(.pressable)
+        .accessibilityHint("Choose Apple Maps or Google Maps")
         .accessibilityIdentifier("mapDirections")
+    }
+
+    private var map: some View {
+        Map(
+            initialPosition: .region(MKCoordinateRegion(center: coordinate, latitudinalMeters: 700, longitudinalMeters: 700)),
+            interactionModes: []
+        ) {
+            Marker(shop.name, systemImage: Symbol.services, coordinate: coordinate)
+                .tint(Theme.red)
+        }
+        .mapStyle(.standard(pointsOfInterest: .excludingAll))
+        // The whole card is one button; the map itself shouldn't take touches.
+        .allowsHitTesting(false)
+        .frame(height: 220)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Theme.stroke))
+        .shadow(color: Theme.shadow, radius: 12, y: 4)
+    }
+
+    private var directionsBadge: some View {
+        Label("Directions", systemImage: Symbol.directions)
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(Theme.redGradient, in: Capsule())
+            .shadow(color: Theme.red.opacity(0.3), radius: 8, y: 4)
+            .padding(12)
     }
 }
 
-private struct AddressCard: View {
+/// The address with a copy button, then Directions and Call.
+private struct VisitAddressCard: View {
     @State private var copyCount = 0
     @State private var showsCopied = false
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 44
     private let shop = AppData.shop
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(shop.fullName)
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                    Text(shop.address.streetLine)
-                    Text(shop.address.cityLine)
-                }
-                .foregroundStyle(Theme.secondaryText)
-                .accessibilityElement(children: .combine)
-
-                Spacer(minLength: 12)
-
-                Button {
-                    UIPasteboard.general.string = shop.address.singleLine
-                    showsCopied = true
-                    copyCount += 1
-                } label: {
-                    Image(systemName: showsCopied ? Symbol.checkmark : Symbol.copy)
-                        .font(.body.weight(.semibold))
-                        .frame(width: 44, height: 44)
-                        .background(Theme.surfaceRaised, in: Circle())
-                }
-                .foregroundStyle(.white)
-                .accessibilityLabel(showsCopied ? "Address copied" : "Copy address")
-                .sensoryFeedback(.success, trigger: copyCount)
-                .task(id: copyCount) {
-                    guard copyCount > 0 else { return }
-                    do {
-                        try await Task.sleep(for: .seconds(2))
-                        showsCopied = false
-                    } catch {
-                        // Cancelled by another copy, which restarts the timer.
-                    }
-                }
+            HStack(alignment: .top, spacing: 14) {
+                pin
+                address
+                Spacer(minLength: 8)
+                copyButton
             }
-
-            HStack(spacing: 12) {
-                DirectionsButton {
-                    Label("Directions", systemImage: Symbol.directions)
-                }
-                .buttonStyle(.primary)
-
-                CallButton {
-                    Label("Call", systemImage: Symbol.call)
-                }
-                .buttonStyle(.secondary)
-            }
+            actions
         }
         .card()
     }
+
+    private var pin: some View {
+        Image(systemName: Symbol.location)
+            .font(.body.weight(.semibold))
+            .foregroundStyle(Theme.blue)
+            .frame(width: iconSize, height: iconSize)
+            .background(Theme.tint, in: Circle())
+            .accessibilityHidden(true)
+    }
+
+    private var address: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(shop.fullName)
+                .font(.headline)
+                .foregroundStyle(Theme.ink)
+            Text(shop.address.streetLine)
+                .font(.subheadline)
+                .foregroundStyle(Theme.secondaryText)
+            Text(shop.address.cityLine)
+                .font(.subheadline)
+                .foregroundStyle(Theme.secondaryText)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var copyButton: some View {
+        Button(action: copyAddress) {
+            Image(systemName: showsCopied ? Symbol.checkmark : Symbol.copy)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Theme.blue)
+                .frame(width: iconSize, height: iconSize)
+                .background(Theme.tint, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(showsCopied ? "Address copied" : "Copy address")
+        .accessibilityIdentifier("copyAddressButton")
+        .sensoryFeedback(.success, trigger: copyCount)
+        .task(id: copyCount) {
+            guard copyCount > 0 else { return }
+            do {
+                try await Task.sleep(for: .seconds(2))
+                showsCopied = false
+            } catch {
+                // Cancelled by another copy, which restarts the timer.
+            }
+        }
+    }
+
+    /// Side by side, or stacked at large text sizes.
+    private var actions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) { actionButtons }
+            VStack(spacing: 12) { actionButtons }
+        }
+    }
+
+    @ViewBuilder private var actionButtons: some View {
+        DirectionsButton {
+            Label("Directions", systemImage: Symbol.directions)
+        }
+        .buttonStyle(.primary)
+        .accessibilityIdentifier("visitDirectionsButton")
+
+        CallButton {
+            Label("Call", systemImage: Symbol.call)
+        }
+        .buttonStyle(.secondary)
+        .accessibilityIdentifier("visitCallButton")
+    }
+
+    private func copyAddress() {
+        UIPasteboard.general.string = shop.address.singleLine
+        showsCopied = true
+        copyCount += 1
+        UIAccessibility.post(notification: .announcement, argument: "Address copied")
+    }
 }
 
-private struct HoursSection: View {
+// MARK: - Hours
+
+/// Open-now status and the week's hours, with today picked out.
+private struct VisitHoursSection: View {
     var body: some View {
-        TimelineView(.everyMinute) { context in
-            let clock = AppData.clock
-            let today = clock.weekday(of: context.date)
-
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader("Hours")
-                StatusPill(summary: clock.summary(at: context.date))
-
-                VStack(spacing: 12) {
-                    ForEach(Weekday.mondayFirst) { day in
-                        let isToday = day == today
-                        HStack(spacing: 8) {
-                            Text(day.name)
-                                .fontWeight(isToday ? .bold : .regular)
-                            if isToday {
-                                Text("TODAY")
-                                    .font(.caption2.weight(.heavy))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Theme.red, in: Capsule())
-                            }
-                            Spacer(minLength: 12)
-                            Text(clock.schedule.hours(on: day)?.label ?? "Closed")
-                                .fontWeight(isToday ? .bold : .regular)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        .foregroundStyle(isToday ? Color.white : Theme.secondaryText)
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(
-                            "\(day.name)\(isToday ? ", today" : ""): \(clock.schedule.hours(on: day)?.label ?? "Closed")"
-                        )
-                    }
-                }
-                .card()
-
-                Text("Hours are in Pacific time and may change on holidays. Walk-ins are welcome any time we're open.")
-                    .font(.footnote)
-                    .foregroundStyle(Theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader("Hours")
+            LiveStatusPill(onDark: false)
+            // Re-checked every minute so "today" moves on at midnight.
+            TimelineView(.everyMinute) { context in
+                VisitHoursCard(today: AppData.clock.weekday(of: context.date))
             }
+            Text("Hours are in Pacific time and may change on holidays. Walk-ins are welcome any time we're open.")
+                .font(.footnote)
+                .foregroundStyle(Theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
 
-private struct InfoSection: View {
+private struct VisitHoursCard: View {
+    let today: Weekday
+
+    var body: some View {
+        VStack(spacing: 2) {
+            ForEach(Weekday.mondayFirst) { day in
+                VisitHoursRow(
+                    day: day,
+                    hours: AppData.clock.schedule.hours(on: day),
+                    isToday: day == today
+                )
+            }
+        }
+        .card(padding: 8)
+    }
+}
+
+/// "Monday · 10 AM – 7 PM"; today's row is tinted, with a red "Today" chip.
+private struct VisitHoursRow: View {
+    let day: Weekday
+    let hours: OpeningHours?
+    let isToday: Bool
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                dayLabel
+                Spacer(minLength: 12)
+                hoursLabel
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                dayLabel
+                hoursLabel
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 11)
+        .background {
+            if isToday {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Theme.tint)
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityIdentifier("hours-\(day.name.lowercased())")
+    }
+
+    private var dayLabel: some View {
+        HStack(spacing: 8) {
+            Text(day.name)
+                .font(.body)
+                .fontWeight(isToday ? .bold : .regular)
+                .foregroundStyle(Theme.ink)
+            if isToday {
+                todayChip
+            }
+        }
+    }
+
+    private var hoursLabel: some View {
+        Text(hours?.label ?? "Closed")
+            .font(.body)
+            .fontWeight(isToday ? .bold : .regular)
+            .foregroundStyle(isToday ? Theme.blue : Theme.secondaryText)
+    }
+
+    private var todayChip: some View {
+        Text("TODAY")
+            .font(.caption2.weight(.heavy))
+            .tracking(0.8)
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Theme.red, in: Capsule())
+    }
+
+    /// "Today, Tuesday: 10 AM to 7 PM". Spelled out, since a dash between
+    /// times isn't always read as "to".
+    private var accessibilityText: String {
+        let spokenHours = hours.map { "\($0.opens.label) to \($0.closes.label)" } ?? "Closed"
+        return isToday ? "Today, \(day.name): \(spokenHours)" : "\(day.name): \(spokenHours)"
+    }
+}
+
+// MARK: - Good to know
+
+private struct VisitInfoSection: View {
     private let shop = AppData.shop
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             SectionHeader("Good to know")
-            VStack(alignment: .leading, spacing: 16) {
-                InfoRow(symbol: Symbol.walkIn, title: "Walk-ins & appointments", detail: shop.highlights.joined(separator: " · "))
-                InfoRow(symbol: Symbol.payment, title: "Payment", detail: shop.paymentMethods.joined(separator: " · "))
-                InfoRow(symbol: Symbol.accessibility, title: "Accessibility", detail: shop.accessibility.joined(separator: " · "))
+            VStack(alignment: .leading, spacing: 14) {
+                VisitInfoRow(symbol: Symbol.walkIn, title: "Walk-ins & appointments", items: shop.highlights)
+                Divider()
+                VisitInfoRow(symbol: Symbol.payment, title: "Payment", items: shop.paymentMethods)
+                Divider()
+                VisitInfoRow(symbol: Symbol.accessibility, title: "Accessibility", items: shop.accessibility)
             }
             .card()
         }
     }
 }
 
-private struct InfoRow: View {
+private struct VisitInfoRow: View {
     let symbol: String
     let title: String
-    let detail: String
+    let items: [String]
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 38
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Theme.red)
-                .frame(width: 28)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Theme.blue)
+                .frame(width: iconSize, height: iconSize)
+                .background(Theme.tint, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.headline)
-                    .foregroundStyle(.white)
-                Text(detail)
+                    .foregroundStyle(Theme.ink)
+                Text(items.joined(separator: " · "))
                     .font(.subheadline)
                     .foregroundStyle(Theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            Spacer(minLength: 0)
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title): \(items.joined(separator: ", "))")
+    }
+}
+
+// MARK: - The shop
+
+/// The storefront, so it's easy to spot, and a few words about the shop.
+private struct VisitShopSection: View {
+    private let shop = AppData.shop
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader("The Shop")
+            VisitStorefrontCard()
+            if !shop.about.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(shop.about, id: \.self) { paragraph in
+                        Text(paragraph)
+                            .font(.body)
+                            .foregroundStyle(Theme.ink)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .card()
+            }
+        }
+    }
+}
+
+/// The storefront photo over a strip of barber-pole stripes.
+private struct VisitStorefrontCard: View {
+    private let shop = AppData.shop
+    private let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            FillImage(name: Asset.storefront)
+                .aspectRatio(3.0 / 2.0, contentMode: .fit)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("The \(shop.name) storefront at \(shop.address.street), with the shop's sign over the windows")
+                .accessibilityAddTraits(.isImage)
+            StripeBand(stripeWidth: 8)
+                .frame(height: 8)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Look for the \(shop.name) sign")
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                Text("\(shop.address.streetLine), \(shop.address.city)")
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.secondaryText)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+        }
+        .background(Theme.surface)
+        .clipShape(shape)
+        .overlay(shape.strokeBorder(Theme.stroke))
+        .shadow(color: Theme.shadow, radius: 12, y: 4)
+    }
+}
+
+// MARK: - Reviews
+
+/// Ratings on each site, then all reviews and Google's review form.
+private struct VisitReviewsSection: View {
+    @Environment(AppRouter.self) private var router
+    private let shop = AppData.shop
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader("Reviews")
+            RatingSummary(ratings: shop.ratings, onOpen: { sourced in
+                if let url = sourced.url {
+                    router.openWeb(url)
+                }
+            })
+
+            NavigationLink(value: VisitRoute.reviews) {
+                Label("See all reviews", systemImage: Symbol.reviews)
+            }
+            .buttonStyle(.secondary)
+            .accessibilityIdentifier("visitSeeAllReviews")
+
+            Button {
+                router.openWeb(shop.googleReviewURL)
+            } label: {
+                Label("Leave a review on Google", systemImage: Symbol.writeReview)
+            }
+            .buttonStyle(.primary)
+            .accessibilityHint("Opens Google's review form")
+            .accessibilityIdentifier("leaveReviewButton")
+        }
+    }
+}
+
+// MARK: - Links
+
+private struct VisitLinksSection: View {
+    @Environment(AppRouter.self) private var router
+    private let shop = AppData.shop
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            SectionHeader("Follow along")
+            VStack(spacing: 0) {
+                instagram
+                Divider().padding(.horizontal, 14)
+                website
+                Divider().padding(.horizontal, 14)
+                share
+            }
+            .card(padding: 4)
+        }
+    }
+
+    private var instagram: some View {
+        Link(destination: shop.instagramURL) {
+            VisitLinkRow(symbol: Symbol.instagram, title: "Instagram", detail: "@\(shop.instagramHandle)")
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("\(shop.name) on Instagram")
+        .accessibilityIdentifier("visitInstagramLink")
+    }
+
+    private var website: some View {
+        Button {
+            router.openWeb(shop.websiteURL)
+        } label: {
+            VisitLinkRow(symbol: Symbol.website, title: "Website", detail: websiteLabel)
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("\(shop.name) website")
+        .accessibilityIdentifier("visitWebsiteLink")
+    }
+
+    private var share: some View {
+        ShareLink(
+            item: shop.websiteURL,
+            subject: Text(shop.fullName),
+            message: Text("\(shop.fullName), \(shop.address.singleLine)")
+        ) {
+            VisitLinkRow(
+                symbol: Symbol.share,
+                title: "Share the shop",
+                detail: "Send \(shop.name) to a friend",
+                trailingSymbol: Symbol.chevron
+            )
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Share \(shop.name)")
+        .accessibilityIdentifier("visitShareLink")
+    }
+
+    /// "izzyclipzbarbershop.net".
+    private var websiteLabel: String {
+        let host = shop.websiteURL.host() ?? shop.websiteURL.absoluteString
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+    }
+}
+
+/// An icon, a title over a detail line, and a trailing arrow.
+private struct VisitLinkRow: View {
+    let symbol: String
+    let title: String
+    let detail: String
+    var trailingSymbol: String = Symbol.external
+    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 38
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: symbol)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Theme.blue)
+                .frame(width: iconSize, height: iconSize)
+                .background(Theme.tint, in: Circle())
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(Theme.ink)
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(Theme.secondaryText)
+            }
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            Image(systemName: trailingSymbol)
+                .font(.footnote.weight(.bold))
+                .foregroundStyle(Theme.blue)
+                .accessibilityHidden(true)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+}
+
+// MARK: - Footer
+
+private struct VisitFooter: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            MascotImage()
+                .frame(height: 48)
+            Text("Appointments are confirmed on Squire, the shop's booking system.")
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Version \(VisitView.appVersion)")
+        }
+        .font(.footnote)
+        .foregroundStyle(Theme.secondaryText)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 4)
     }
 }
