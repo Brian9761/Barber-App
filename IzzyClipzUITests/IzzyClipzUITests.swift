@@ -175,10 +175,7 @@ final class IzzyClipzUITests: XCTestCase {
         let eventTitle = element("calendarEventTitle")
         XCTAssertTrue(eventTitle.waitForExistence(timeout: 10), "Add to Calendar didn't open")
         XCTAssertTrue(eventTitle.label.contains("Haircut"), eventTitle.label)
-        let add = app.buttons["Add"]
-        XCTAssertTrue(add.waitForExistence(timeout: 5))
-        add.tap()
-        XCTAssertTrue(waitForDisappearance(of: eventTitle, timeout: 10), "Add to Calendar didn't close")
+        tapToClose(app.buttons["Add"], closing: eventTitle, "Add to Calendar didn't close")
 
         // Saved: the Book tab is back at step 1 with the appointment on top, and Home shows it.
         XCTAssertTrue(element("upcomingAppointment").waitForExistence(timeout: 5))
@@ -209,8 +206,7 @@ final class IzzyClipzUITests: XCTestCase {
         closeWebPage()
 
         XCTAssertTrue(element("confirmBookingSheet").waitForExistence(timeout: 10), "Closing Squire didn't ask to save the booking")
-        tap("notBookedButton")
-        XCTAssertTrue(waitForDisappearance(of: element("confirmBookingSheet")), "\"I didn't book\" didn't close the sheet")
+        tapToClose(element("notBookedButton"), closing: element("confirmBookingSheet"), "\"I didn't book\" didn't close the sheet")
 
         // Nothing was saved: back on the review, and no appointment anywhere.
         XCTAssertTrue(element("confirmOnSquireButton").waitForExistence(timeout: 5))
@@ -238,8 +234,7 @@ final class IzzyClipzUITests: XCTestCase {
         closeWebPage()
 
         XCTAssertTrue(element("confirmBookingSheet").waitForExistence(timeout: 10), "Closing Squire didn't ask to save the booking")
-        tap("notBookedButton")
-        XCTAssertTrue(waitForDisappearance(of: element("confirmBookingSheet")))
+        tapToClose(element("notBookedButton"), closing: element("confirmBookingSheet"), "\"I didn't book\" didn't close the sheet")
     }
 
     func testBookingFromBarberPage() {
@@ -262,8 +257,7 @@ final class IzzyClipzUITests: XCTestCase {
         closeWebPage()
 
         XCTAssertTrue(element("confirmBookingSheet").waitForExistence(timeout: 10), "Closing Squire didn't ask to save the booking")
-        tap("notBookedButton")
-        XCTAssertTrue(waitForDisappearance(of: element("confirmBookingSheet")))
+        tapToClose(element("notBookedButton"), closing: element("confirmBookingSheet"), "\"I didn't book\" didn't close the sheet")
     }
 
     func testCalendarNavigation() {
@@ -303,8 +297,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("confirmBookingSheet").waitForExistence(timeout: 10), "Closing Squire didn't ask to save the booking")
         tap("saveAppointmentButton")
         XCTAssertTrue(element("confirmDoneButton").waitForExistence(timeout: 5))
-        tap("confirmDoneButton")
-        XCTAssertTrue(waitForDisappearance(of: element("confirmBookingSheet")))
+        tapToClose(element("confirmDoneButton"), closing: element("confirmBookingSheet"), "Done didn't close the sheet")
 
         let card = element("upcomingAppointment")
         XCTAssertTrue(card.waitForExistence(timeout: 5), "The saved appointment isn't on the Book tab")
@@ -443,8 +436,7 @@ final class IzzyClipzUITests: XCTestCase {
         tap("remindersButton")
         XCTAssertTrue(element("remindersToggle").waitForExistence(timeout: 5))
         screenshot("27-Reminders")
-        element("remindersDone").tap()
-        XCTAssertTrue(waitForDisappearance(of: element("remindersToggle")))
+        tapToClose(element("remindersDone"), closing: element("remindersToggle"), "Done didn't close reminder settings")
         XCTAssertTrue(element("homeBookButton").waitForExistence(timeout: 5))
     }
 
@@ -526,10 +518,7 @@ final class IzzyClipzUITests: XCTestCase {
 
     private func closeWebPage(file: StaticString = #filePath, line: UInt = #line) {
         let text = app.staticTexts["webURL"]
-        let done = app.buttons["Done"]
-        XCTAssertTrue(done.waitForExistence(timeout: 5), "The web page has no Done button", file: file, line: line)
-        done.tap()
-        XCTAssertTrue(waitForDisappearance(of: text), "The web page didn't close", file: file, line: line)
+        tapToClose(app.buttons["Done"], closing: text, "The web page didn't close", file: file, line: line)
     }
 
     // MARK: Navigation
@@ -619,6 +608,24 @@ final class IzzyClipzUITests: XCTestCase {
     private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 5) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    /// Taps a button that closes a sheet or page, and waits for it to go.
+    /// Taps once more if both are still there: slow simulators occasionally
+    /// drop a tap. It doesn't scroll first, since dragging a sheet can close it.
+    private func tapToClose(
+        _ button: XCUIElement,
+        closing gone: XCUIElement,
+        _ message: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "Missing \(button)", file: file, line: line)
+        button.tap()
+        if !waitForDisappearance(of: gone), gone.exists, button.exists {
+            button.tap()
+        }
+        XCTAssertTrue(waitForDisappearance(of: gone), message, file: file, line: line)
     }
 
     private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
