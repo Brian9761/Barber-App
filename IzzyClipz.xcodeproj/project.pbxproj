@@ -13,18 +13,25 @@
 		0510E7BA92235655C8CE7AD5 /* ServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B02B4216B09B876D047FA49 /* ServicesView.swift */; };
 		0A54B5DAE9A7920153914892 /* AppointmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF00DC8CFE69CEB2E557C500 /* AppointmentStore.swift */; };
 		0AA2BFF0C4664BBA3EBA1B15 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C54ED199C14C3F9481A0C44 /* Exports.swift */; };
+		260D35E97A569C8433B2B55D /* ReviewsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B09BFA6F00FD4F0375A6C73 /* ReviewsView.swift */; };
 		2E62891B5FD26CAEC381D89F /* ReminderStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D02D4B68363C6EE276BFEDE /* ReminderStoreTests.swift */; };
 		303DD541E62D4EF025701CDF /* BarberDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82F6A390448E683A1C0BBA38 /* BarberDetailView.swift */; };
+		37C03F386E71B1A7052C2034 /* BravoStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB7943F0DA4253877A290B27 /* BravoStoreTests.swift */; };
+		38C9D435AF9CA998A54B580E /* ChooseServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 865897520FDF162411CACDB8 /* ChooseServiceView.swift */; };
 		3BA2A113751A4410632DA04A /* Cards.swift in Sources */ = {isa = PBXBuildFile; fileRef = F69C373FD514E15C77FB54DE /* Cards.swift */; };
+		3E64D1264B312AA5602270B1 /* UpcomingAppointmentCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = E37B60D887284DB0C68B1959 /* UpcomingAppointmentCard.swift */; };
 		45E49C19EFE43C87D4A492EE /* CalendarEventEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4DD6E1FDC21C62276FFC9C7 /* CalendarEventEditor.swift */; };
 		4B4A59730F2AF95D24E42348 /* ServiceDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 370B4EEC30FB02A264DA50E4 /* ServiceDetailView.swift */; };
+		4F56F1424D7E10B5ABF1EA1D /* ProductCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF977F085E4CBE4CA59FAB83 /* ProductCard.swift */; };
 		504D34A22E267798351CE047 /* SafariView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FE0447CED10F303FBB98D18 /* SafariView.swift */; };
 		533D2FE65E528C54329C1C72 /* ReminderSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56031AE56794F40034460075 /* ReminderSettingsView.swift */; };
 		55FAAFE1801C7287609043DC /* Styles.swift in Sources */ = {isa = PBXBuildFile; fileRef = E441C80EBADC82E5DFC7E101 /* Styles.swift */; };
 		5F2C9B6C1CC5F9CDE7EA7698 /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED209FD6E981D079FDBFB11D /* AppRouter.swift */; };
 		6295E2F850557E826EA4048A /* Favorites.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CC5F6CFB1332625865847CF /* Favorites.swift */; };
+		63C4D103B919756C0CE14B06 /* AppointmentStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7CBCE94DF8D07495BA167A4 /* AppointmentStoreTests.swift */; };
 		75514CBDC4C20B6847B8559A /* TeamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C44BF8563CDBB65D5BCC207 /* TeamView.swift */; };
 		761F8AE37A69065ED7732CF9 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3092ABB4F1EAAE76C714D67 /* HomeView.swift */; };
+		7B542F6E16D158998CD9FBD9 /* ShopView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FAF5F73AF4285917C24D769 /* ShopView.swift */; };
 		802BECECE3F6A02115EA450F /* ReminderStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F7962EAA52E7C094788052F /* ReminderStore.swift */; };
 		80DD09AC469C71378505ED25 /* IzzyClipzKit in Frameworks */ = {isa = PBXBuildFile; productRef = 3BA1BDEC87FF1EE5F02830F4 /* IzzyClipzKit */; };
 		81390DB8F56D3806C1088349 /* IzzyClipzApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4CA492B76FCA979DF9BACFC7 /* IzzyClipzApp.swift */; };
@@ -33,15 +40,22 @@
 		9266FC8A029FA7C9FE99ABC3 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C26768EDFE09ADA1F0C62D41 /* PrivacyInfo.xcprivacy */; };
 		99A506159452810438AA5690 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94FC57B77BB0ECB2EF278882 /* RootView.swift */; };
 		9A939D346449134A2312B50A /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9936F928C0F89B8141D429E5 /* AppDelegate.swift */; };
+		9AF91FD3BDDE902B1D17E880 /* ProductDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E720A11705384F49957EA74 /* ProductDetailView.swift */; };
 		A71B576635D1B421F05C53CD /* DemoTour.swift in Sources */ = {isa = PBXBuildFile; fileRef = 470F460CB5B25C2667F1BE21 /* DemoTour.swift */; };
 		AAE62A6F04CECB60DD503FF6 /* BookView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB842C9C713AFD38826B3B5D /* BookView.swift */; };
 		AC722B937A2892A18F938389 /* AppData.swift in Sources */ = {isa = PBXBuildFile; fileRef = A295D285ED067B5D23B917D3 /* AppData.swift */; };
 		B9A0851D2AD3A5F03153DE77 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = E681C98A58629ACF7C5A503F /* Theme.swift */; };
 		BA9FFC1631282F9C7931734D /* Branding.swift in Sources */ = {isa = PBXBuildFile; fileRef = EBDAA4C78877AF944CAD9593 /* Branding.swift */; };
+		C84703F119BE64F132FD6038 /* HomeSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE6C08C37D3710B0E6834B58 /* HomeSections.swift */; };
 		CD34B3251013CF4B748D8A82 /* ZoomableImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = AAAAB3C569176D4EAFD24661 /* ZoomableImage.swift */; };
+		D2766DDB7DEE940230894FA6 /* ChooseTimeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01D1DED83E4EF0A54C02234B /* ChooseTimeView.swift */; };
 		D6407D51E794995C1881760C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0BCAAB1163AECFE10CBD321C /* Assets.xcassets */; };
+		D7061BC6BA8BF626EF579433 /* ConfirmBookingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 251B5B9DC4311843E2D8FA14 /* ConfirmBookingSheet.swift */; };
 		E369D340C2E6462458E29087 /* AppResourcesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9670B7926DDF1EA13073D878 /* AppResourcesTests.swift */; };
 		E3B0375DB8700C1251739CA3 /* BravoStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C947325FDA6CB4ED7DF941C /* BravoStore.swift */; };
+		E9F25274233CA94DC2A4BFCF /* CalendarMonthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BD77BBE3F11DAC49D852DF9 /* CalendarMonthView.swift */; };
+		ED601B934FEDABC02174DE9B /* ChooseBarberView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 786AE547A1FE2E085D1B00F5 /* ChooseBarberView.swift */; };
+		F682A6C25288248DE4F1CB55 /* BookingReviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0BDA5792184FE8964C0F1C /* BookingReviewView.swift */; };
 		F6B8C95B51CFA703B7CA5968 /* ContactButtons.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A376FC81D018F7A2AEA878F /* ContactButtons.swift */; };
 /* End PBXBuildFile section */
 
@@ -63,11 +77,16 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		01D1DED83E4EF0A54C02234B /* ChooseTimeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseTimeView.swift; sourceTree = "<group>"; };
 		0BCAAB1163AECFE10CBD321C /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		0BD77BBE3F11DAC49D852DF9 /* CalendarMonthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarMonthView.swift; sourceTree = "<group>"; };
 		0C947325FDA6CB4ED7DF941C /* BravoStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BravoStore.swift; sourceTree = "<group>"; };
+		1B09BFA6F00FD4F0375A6C73 /* ReviewsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReviewsView.swift; sourceTree = "<group>"; };
 		1C54ED199C14C3F9481A0C44 /* Exports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Exports.swift; sourceTree = "<group>"; };
 		1E368952A8EDA8DF6DCF0B3A /* IzzyClipzTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IzzyClipzTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		251B5B9DC4311843E2D8FA14 /* ConfirmBookingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfirmBookingSheet.swift; sourceTree = "<group>"; };
 		2C44BF8563CDBB65D5BCC207 /* TeamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TeamView.swift; sourceTree = "<group>"; };
+		2E720A11705384F49957EA74 /* ProductDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductDetailView.swift; sourceTree = "<group>"; };
 		370B4EEC30FB02A264DA50E4 /* ServiceDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServiceDetailView.swift; sourceTree = "<group>"; };
 		39848D17A9348C704C83000D /* IzzyClipzKit */ = {isa = PBXFileReference; lastKnownFileType = folder; name = IzzyClipzKit; path = Packages/IzzyClipzKit; sourceTree = SOURCE_ROOT; };
 		470F460CB5B25C2667F1BE21 /* DemoTour.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoTour.swift; sourceTree = "<group>"; };
@@ -80,20 +99,27 @@
 		6A376FC81D018F7A2AEA878F /* ContactButtons.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactButtons.swift; sourceTree = "<group>"; };
 		7074E5EA07292E4890F717D0 /* IzzyClipz.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = IzzyClipz.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		71F9CB96C9DCBBF54D482C2D /* Rows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rows.swift; sourceTree = "<group>"; };
+		786AE547A1FE2E085D1B00F5 /* ChooseBarberView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseBarberView.swift; sourceTree = "<group>"; };
 		7C6B66AA7818F8A0E7879607 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		7FAF5F73AF4285917C24D769 /* ShopView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShopView.swift; sourceTree = "<group>"; };
 		82F6A390448E683A1C0BBA38 /* BarberDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BarberDetailView.swift; sourceTree = "<group>"; };
+		865897520FDF162411CACDB8 /* ChooseServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChooseServiceView.swift; sourceTree = "<group>"; };
 		8FE0447CED10F303FBB98D18 /* SafariView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariView.swift; sourceTree = "<group>"; };
 		94FC57B77BB0ECB2EF278882 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		9670B7926DDF1EA13073D878 /* AppResourcesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppResourcesTests.swift; sourceTree = "<group>"; };
 		9936F928C0F89B8141D429E5 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A295D285ED067B5D23B917D3 /* AppData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppData.swift; sourceTree = "<group>"; };
 		AAAAB3C569176D4EAFD24661 /* ZoomableImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZoomableImage.swift; sourceTree = "<group>"; };
+		AF977F085E4CBE4CA59FAB83 /* ProductCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCard.swift; sourceTree = "<group>"; };
 		BD512638A8DE4852F7B87A55 /* IzzyClipzUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IzzyClipzUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C26768EDFE09ADA1F0C62D41 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C7CBCE94DF8D07495BA167A4 /* AppointmentStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppointmentStoreTests.swift; sourceTree = "<group>"; };
 		D3092ABB4F1EAAE76C714D67 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		D4DD6E1FDC21C62276FFC9C7 /* CalendarEventEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarEventEditor.swift; sourceTree = "<group>"; };
 		D566F90D36D9C66184178865 /* AppStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStateTests.swift; sourceTree = "<group>"; };
 		D91C2938A9C95CE1E62A31F7 /* GalleryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalleryView.swift; sourceTree = "<group>"; };
+		DB7943F0DA4253877A290B27 /* BravoStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BravoStoreTests.swift; sourceTree = "<group>"; };
+		E37B60D887284DB0C68B1959 /* UpcomingAppointmentCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpcomingAppointmentCard.swift; sourceTree = "<group>"; };
 		E441C80EBADC82E5DFC7E101 /* Styles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Styles.swift; sourceTree = "<group>"; };
 		E681C98A58629ACF7C5A503F /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		EBDAA4C78877AF944CAD9593 /* Branding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Branding.swift; sourceTree = "<group>"; };
@@ -103,6 +129,8 @@
 		F69C373FD514E15C77FB54DE /* Cards.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cards.swift; sourceTree = "<group>"; };
 		F6D7F661B1CC04FEA08F33A1 /* IzzyClipzUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IzzyClipzUITests.swift; sourceTree = "<group>"; };
 		FB842C9C713AFD38826B3B5D /* BookView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookView.swift; sourceTree = "<group>"; };
+		FC0BDA5792184FE8964C0F1C /* BookingReviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookingReviewView.swift; sourceTree = "<group>"; };
+		FE6C08C37D3710B0E6834B58 /* HomeSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeSections.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -134,8 +162,10 @@
 		0CA055C00482316630CFABF4 /* IzzyClipzTests */ = {
 			isa = PBXGroup;
 			children = (
+				C7CBCE94DF8D07495BA167A4 /* AppointmentStoreTests.swift */,
 				9670B7926DDF1EA13073D878 /* AppResourcesTests.swift */,
 				D566F90D36D9C66184178865 /* AppStateTests.swift */,
+				DB7943F0DA4253877A290B27 /* BravoStoreTests.swift */,
 				4D02D4B68363C6EE276BFEDE /* ReminderStoreTests.swift */,
 			);
 			path = IzzyClipzTests;
@@ -159,10 +189,24 @@
 			path = Team;
 			sourceTree = "<group>";
 		};
+		583E97CB9B0ABBC33E6BB7C9 /* Reviews */ = {
+			isa = PBXGroup;
+			children = (
+				1B09BFA6F00FD4F0375A6C73 /* ReviewsView.swift */,
+			);
+			path = Reviews;
+			sourceTree = "<group>";
+		};
 		58CD6CCCFD7C863BDFFEED00 /* Booking */ = {
 			isa = PBXGroup;
 			children = (
+				FC0BDA5792184FE8964C0F1C /* BookingReviewView.swift */,
 				FB842C9C713AFD38826B3B5D /* BookView.swift */,
+				0BD77BBE3F11DAC49D852DF9 /* CalendarMonthView.swift */,
+				786AE547A1FE2E085D1B00F5 /* ChooseBarberView.swift */,
+				865897520FDF162411CACDB8 /* ChooseServiceView.swift */,
+				01D1DED83E4EF0A54C02234B /* ChooseTimeView.swift */,
+				251B5B9DC4311843E2D8FA14 /* ConfirmBookingSheet.swift */,
 			);
 			path = Booking;
 			sourceTree = "<group>";
@@ -209,6 +253,7 @@
 		7E7A2E43FAD5D5D90166CAD6 /* Home */ = {
 			isa = PBXGroup;
 			children = (
+				FE6C08C37D3710B0E6834B58 /* HomeSections.swift */,
 				D3092ABB4F1EAAE76C714D67 /* HomeView.swift */,
 			);
 			path = Home;
@@ -220,6 +265,24 @@
 				E681C98A58629ACF7C5A503F /* Theme.swift */,
 			);
 			path = Theme;
+			sourceTree = "<group>";
+		};
+		88E2629BD99EDA00336E0B93 /* Shop */ = {
+			isa = PBXGroup;
+			children = (
+				AF977F085E4CBE4CA59FAB83 /* ProductCard.swift */,
+				2E720A11705384F49957EA74 /* ProductDetailView.swift */,
+				7FAF5F73AF4285917C24D769 /* ShopView.swift */,
+			);
+			path = Shop;
+			sourceTree = "<group>";
+		};
+		AF11BFF8EAB5CABFFB0E678F /* Appointments */ = {
+			isa = PBXGroup;
+			children = (
+				E37B60D887284DB0C68B1959 /* UpcomingAppointmentCard.swift */,
+			);
+			path = Appointments;
 			sourceTree = "<group>";
 		};
 		BA02695682F6EA21F36FF368 /* Components */ = {
@@ -240,11 +303,14 @@
 		C188B8D1537A19C0D7835E5E /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				AF11BFF8EAB5CABFFB0E678F /* Appointments */,
 				58CD6CCCFD7C863BDFFEED00 /* Booking */,
 				E3736E92AEE4915A2E6A313F /* Gallery */,
 				7E7A2E43FAD5D5D90166CAD6 /* Home */,
 				2D72C59B005E32F5FE4F1859 /* Reminders */,
+				583E97CB9B0ABBC33E6BB7C9 /* Reviews */,
 				E9A27829F17B07A6A49B0E64 /* Services */,
+				88E2629BD99EDA00336E0B93 /* Shop */,
 				3EEE6FE2DA1A3FA59AEC522A /* Team */,
 				FBA51ADAF1772B53C08C6668 /* Visit */,
 			);
@@ -433,6 +499,8 @@
 			files = (
 				E369D340C2E6462458E29087 /* AppResourcesTests.swift in Sources */,
 				85058C8A286B40AD67ED5283 /* AppStateTests.swift in Sources */,
+				63C4D103B919756C0CE14B06 /* AppointmentStoreTests.swift in Sources */,
+				37C03F386E71B1A7052C2034 /* BravoStoreTests.swift in Sources */,
 				2E62891B5FD26CAEC381D89F /* ReminderStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -456,26 +524,38 @@
 				0A54B5DAE9A7920153914892 /* AppointmentStore.swift in Sources */,
 				303DD541E62D4EF025701CDF /* BarberDetailView.swift in Sources */,
 				AAE62A6F04CECB60DD503FF6 /* BookView.swift in Sources */,
+				F682A6C25288248DE4F1CB55 /* BookingReviewView.swift in Sources */,
 				BA9FFC1631282F9C7931734D /* Branding.swift in Sources */,
 				E3B0375DB8700C1251739CA3 /* BravoStore.swift in Sources */,
 				45E49C19EFE43C87D4A492EE /* CalendarEventEditor.swift in Sources */,
+				E9F25274233CA94DC2A4BFCF /* CalendarMonthView.swift in Sources */,
 				3BA2A113751A4410632DA04A /* Cards.swift in Sources */,
+				ED601B934FEDABC02174DE9B /* ChooseBarberView.swift in Sources */,
+				38C9D435AF9CA998A54B580E /* ChooseServiceView.swift in Sources */,
+				D2766DDB7DEE940230894FA6 /* ChooseTimeView.swift in Sources */,
+				D7061BC6BA8BF626EF579433 /* ConfirmBookingSheet.swift in Sources */,
 				F6B8C95B51CFA703B7CA5968 /* ContactButtons.swift in Sources */,
 				0AA2BFF0C4664BBA3EBA1B15 /* Exports.swift in Sources */,
 				6295E2F850557E826EA4048A /* Favorites.swift in Sources */,
 				829E03B5DC4F74245E688F7C /* GalleryView.swift in Sources */,
+				C84703F119BE64F132FD6038 /* HomeSections.swift in Sources */,
 				761F8AE37A69065ED7732CF9 /* HomeView.swift in Sources */,
 				81390DB8F56D3806C1088349 /* IzzyClipzApp.swift in Sources */,
+				4F56F1424D7E10B5ABF1EA1D /* ProductCard.swift in Sources */,
+				9AF91FD3BDDE902B1D17E880 /* ProductDetailView.swift in Sources */,
 				533D2FE65E528C54329C1C72 /* ReminderSettingsView.swift in Sources */,
 				802BECECE3F6A02115EA450F /* ReminderStore.swift in Sources */,
+				260D35E97A569C8433B2B55D /* ReviewsView.swift in Sources */,
 				99A506159452810438AA5690 /* RootView.swift in Sources */,
 				005822412528702F407E2506 /* Rows.swift in Sources */,
 				504D34A22E267798351CE047 /* SafariView.swift in Sources */,
 				4B4A59730F2AF95D24E42348 /* ServiceDetailView.swift in Sources */,
 				0510E7BA92235655C8CE7AD5 /* ServicesView.swift in Sources */,
+				7B542F6E16D158998CD9FBD9 /* ShopView.swift in Sources */,
 				55FAAFE1801C7287609043DC /* Styles.swift in Sources */,
 				75514CBDC4C20B6847B8559A /* TeamView.swift in Sources */,
 				B9A0851D2AD3A5F03153DE77 /* Theme.swift in Sources */,
+				3E64D1264B312AA5602270B1 /* UpcomingAppointmentCard.swift in Sources */,
 				000F6B418D1EC757AE602304 /* VisitView.swift in Sources */,
 				CD34B3251013CF4B748D8A82 /* ZoomableImage.swift in Sources */,
 			);
