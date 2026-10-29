@@ -119,18 +119,23 @@ private struct VisitAddressCard: View {
     private let shop = AppData.shop
 
     /// Grows with the text, but not so much that the address runs out of room.
+    /// (At accessibility sizes the pin and the round copy button give way.)
     private var iconSize: CGFloat { min(scaledIconSize, 56) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top, spacing: 14) {
-                // At the largest text sizes the address needs the room more.
-                if !dynamicTypeSize.isAccessibilitySize {
-                    pin
-                }
+            if dynamicTypeSize.isAccessibilitySize {
+                // At the largest text sizes the address gets the card's full
+                // width, and copying it becomes a labeled button under it.
                 address
-                Spacer(minLength: 8)
                 copyButton
+            } else {
+                HStack(alignment: .top, spacing: 14) {
+                    pin
+                    address
+                    Spacer(minLength: 8)
+                    copyButton
+                }
             }
             actions
         }
@@ -163,15 +168,24 @@ private struct VisitAddressCard: View {
     }
 
     private var copyButton: some View {
-        Button(action: copyAddress) {
-            Image(systemName: showsCopied ? Symbol.checkmark : Symbol.copy)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Theme.blue)
-                .frame(width: iconSize, height: iconSize)
-                .background(Theme.tint, in: Circle())
-                .contentShape(Circle())
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                Button(action: copyAddress) {
+                    Label(showsCopied ? "Copied" : "Copy Address", systemImage: showsCopied ? Symbol.checkmark : Symbol.copy)
+                }
+                .buttonStyle(.secondary)
+            } else {
+                Button(action: copyAddress) {
+                    Image(systemName: showsCopied ? Symbol.checkmark : Symbol.copy)
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(Theme.blue)
+                        .frame(width: iconSize, height: iconSize)
+                        .background(Theme.tint, in: Circle())
+                        .contentShape(Circle())
+                }
+                .buttonStyle(.pressable)
+            }
         }
-        .buttonStyle(.pressable)
         .accessibilityLabel(showsCopied ? "Address copied" : "Copy address")
         .accessibilityIdentifier("copyAddressButton")
         .sensoryFeedback(.success, trigger: copyCount)
@@ -352,6 +366,8 @@ private struct VisitInfoRow: View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
+                // The glyph stops growing with the circle, so it stays inside.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .foregroundStyle(Theme.blue)
                 // Capped, so large text keeps the room for the words.
                 .frame(width: min(iconSize, 56), height: min(iconSize, 56))
@@ -544,6 +560,8 @@ private struct VisitLinkRow: View {
         HStack(spacing: 14) {
             Image(systemName: symbol)
                 .font(.body.weight(.semibold))
+                // The glyph stops growing with the circle, so it stays inside.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .foregroundStyle(Theme.blue)
                 // Capped, so large text keeps the room for the words.
                 .frame(width: min(iconSize, 56), height: min(iconSize, 56))

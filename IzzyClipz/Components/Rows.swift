@@ -55,6 +55,8 @@ struct FirstAvailableRow: View {
         HStack(spacing: 14) {
             Image(systemName: Symbol.firstAvailable)
                 .font(.title3.weight(.semibold))
+                // The circle doesn't grow, so the glyph stops growing too.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .foregroundStyle(.white)
                 .frame(width: 52, height: 52)
                 .background(Theme.redGradient, in: Circle())
@@ -129,11 +131,18 @@ struct OfferingRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 // At the largest text sizes the price moves under the name,
-                // so neither has to break mid-word.
+                // so neither has to break mid-word: beside the button if they
+                // fit on one line, otherwise over it.
                 if dynamicTypeSize.isAccessibilitySize {
-                    HStack(spacing: 10) {
-                        price
-                        actionCapsule
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            price
+                            actionCapsule
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            price
+                            actionCapsule
+                        }
                     }
                     .padding(.top, 4)
                 }

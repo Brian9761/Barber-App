@@ -450,8 +450,17 @@ final class IzzyClipzUITests: XCTestCase {
     }
 
     private func continueToReview(file: StaticString = #filePath, line: UInt = #line) {
-        element("continueToReview").tap()
-        XCTAssertTrue(element("confirmOnSquireButton").waitForExistence(timeout: 5), "The review didn't open", file: file, line: line)
+        let next = element("continueToReview")
+        let review = element("confirmOnSquireButton")
+        next.tap()
+        if !review.waitForExistence(timeout: 5), !next.isEnabled {
+            // The clock passed :00 or :30, so the picked time slipped inside
+            // the lead time and the calendar's minute check dropped it. Pick
+            // the new first time.
+            pickFirstTime(file: file, line: line)
+            next.tap()
+        }
+        XCTAssertTrue(review.waitForExistence(timeout: 5), "The review didn't open", file: file, line: line)
     }
 
     private func confirmOnSquire(file: StaticString = #filePath, line: UInt = #line) {

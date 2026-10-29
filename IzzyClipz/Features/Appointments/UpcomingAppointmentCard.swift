@@ -49,11 +49,15 @@ struct UpcomingAppointmentCard: View {
                 .font(.caption.weight(.bold))
                 .tracking(1.5)
                 .foregroundStyle(Color.white.opacity(0.8))
-            // The day over the time, so "PM" is never left on a line of its own.
+            // The day over the time. A long date breaks after the comma, never
+            // inside "Oct 30", and the time stays on one line, shrinking a
+            // little at the largest sizes, so AM/PM stays with it.
             VStack(alignment: .leading, spacing: 0) {
-                Text(calendar.shortLabel(for: calendar.day(containing: appointment.start)))
+                Text(dayLine)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(calendar.timeLabel(for: appointment.start))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .font(.display(.title))
             .foregroundStyle(.white)
@@ -67,6 +71,13 @@ struct UpcomingAppointmentCard: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
+    }
+
+    /// "Thu, Oct 30", with "Oct 30" held together.
+    private var dayLine: String {
+        calendar.shortLabel(for: calendar.day(containing: appointment.start))
+            .replacingOccurrences(of: " ", with: "\u{00A0}")
+            .replacingOccurrences(of: ",\u{00A0}", with: ", ")
     }
 
     private var moreMenu: some View {

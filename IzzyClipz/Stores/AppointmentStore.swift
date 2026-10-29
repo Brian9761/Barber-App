@@ -64,6 +64,14 @@ final class AppointmentStore {
         reminding.contains(id)
     }
 
+    /// Whether this app will send the appointment's hour-before reminder: the
+    /// client asked for reminders, notifications aren't off, and that moment
+    /// is still ahead. Only then would a calendar alarm double it.
+    func willSendHourBeforeReminder(for id: UUID) -> Bool {
+        guard !remindersPermissionDenied else { return false }
+        return pendingReminders(now: now()).contains { $0.appointmentID == id && $0.reminder.kind == .hourBefore }
+    }
+
     func save(_ appointment: Appointment, remind: Bool) {
         appointments.removeAll { $0.id == appointment.id }
         appointments.append(appointment)

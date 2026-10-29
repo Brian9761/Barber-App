@@ -321,14 +321,15 @@ struct HomeBravoBanner: View {
 
     private var copy: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: Symbol.partner)
                     .font(.caption.weight(.bold))
+                // Wraps on narrow screens and at large text sizes rather than
+                // cutting off the partner's name.
                 Text("PROUD \(sponsor.name.uppercased()) PARTNER")
                     .font(.caption.weight(.heavy))
                     .tracking(1.2)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(Color.white.opacity(0.9))
             Text(sponsor.fullName)

@@ -239,6 +239,8 @@ private struct ReminderNextCard: View {
         HStack(alignment: .top, spacing: 14) {
             Image(systemName: Symbol.calendar)
                 .font(.body.weight(.semibold))
+                // The glyph stops growing with the circle, so it stays inside.
+                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                 .foregroundStyle(Theme.blue)
                 .frame(width: min(iconSize, 56), height: min(iconSize, 56))
                 .background(Theme.tint, in: Circle())

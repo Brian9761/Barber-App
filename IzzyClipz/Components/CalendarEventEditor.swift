@@ -8,8 +8,9 @@ import SwiftUI
 /// calendar permission: the client sees exactly what's saved and taps Add.
 struct CalendarEventEditor: UIViewControllerRepresentable {
     let appointment: Appointment
-    /// Off when the app already sends an hour-before reminder, so the client
-    /// doesn't get two alerts at once.
+    /// Off only when the app will send its own hour-before reminder, so the
+    /// client doesn't get two alerts at once. With notifications off, or the
+    /// reminder turned off, the calendar's alert is the one they get.
     var includesAlert = true
     let onDone: () -> Void
 
@@ -93,7 +94,7 @@ struct AddToCalendarSheet: View {
         } else {
             CalendarEventEditor(
                 appointment: appointment,
-                includesAlert: !appointments.isReminding(appointment.id)
+                includesAlert: !appointments.willSendHourBeforeReminder(for: appointment.id)
             ) {
                 dismiss()
             }

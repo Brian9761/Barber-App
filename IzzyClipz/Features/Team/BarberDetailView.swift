@@ -197,6 +197,8 @@ private struct BarberInstagramLink: View {
             HStack(spacing: 12) {
                 Image(systemName: Symbol.instagram)
                     .font(.body.weight(.semibold))
+                    // The glyph stops growing with the circle, so it stays inside.
+                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
                     .foregroundStyle(Theme.blue)
                     .frame(width: min(iconSize, 56), height: min(iconSize, 56))
                     .background(Theme.tint, in: Circle())
@@ -277,9 +279,16 @@ private struct BarberMenuRow: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if stacksPrice {
-                    HStack(spacing: 10) {
-                        price
-                        bookCapsule
+                    // Beside the button if they fit on one line, otherwise over it.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) {
+                            price
+                            bookCapsule
+                        }
+                        VStack(alignment: .leading, spacing: 6) {
+                            price
+                            bookCapsule
+                        }
                     }
                     .padding(.top, 4)
                 }

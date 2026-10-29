@@ -15,6 +15,11 @@ struct ChooseTimeView: View {
     @State private var selectedSlot: TimeSlot?
     /// The month on screen, as `MonthPage.id` ("2026-10").
     @State private var displayedMonthID: String
+    /// Counts the client's own day taps, so the app moving the day on by
+    /// itself doesn't make the phone tick.
+    @State private var dayPickCount = 0
+    /// Why the picked time went away, when the clock took it.
+    @State private var expiredNote: String?
 
     private let calendar = AppData.bookingCalendar
 
@@ -42,6 +47,7 @@ struct ChooseTimeView: View {
                 monthCalendar
                 ChooseTimeDayCard(
                     calendar: calendar,
+                    notice: expiredNote,
                     day: selectedDay,
                     today: today,
                     durationMinutes: durationMinutes,
@@ -80,7 +86,7 @@ struct ChooseTimeView: View {
                 refresh()
             }
         }
-        .sensoryFeedback(.selection, trigger: selectedDay)
+        .sensoryFeedback(.selection, trigger: dayPickCount)
         .sensoryFeedback(.selection, trigger: selectedSlot) { _, newValue in
             newValue != nil
         }
@@ -127,7 +133,12 @@ struct ChooseTimeView: View {
 
     private var footnote: String {
         let hours = "These are the shop's hours. Squire shows \(BookingFlowCopy.barberPossessive(choice)) real openings in the last step."
-        guard let zone = BookingFlowCopy.timeZoneNote(at: selectedSlot?.start ?? now) else { return hours }
+        // Checked on the day being looked at, which may be across a daylight
+        // saving change from today. Noon is clear of the 2 AM switch.
+        let reference = selectedSlot?.start
+            ?? selectedDay.flatMap { calendar.date(on: $0, at: TimeOfDay(hour: 12)) }
+            ?? now
+        guard let zone = BookingFlowCopy.timeZoneNote(at: reference) else { return hours }
         return "\(hours) \(zone)"
     }
 
@@ -150,20 +161,23 @@ struct ChooseTimeView: View {
             selectedDay = day
             // A time on another day doesn't carry over.
             selectedSlot = nil
+            expiredNote = nil
+            dayPickCount += 1
         }
     }
 
     private func selectSlot(_ slot: TimeSlot) {
         withAnimation(.snappy) {
             selectedSlot = slot
+            expiredNote = nil
         }
     }
 
     private func continueToReview() {
         // A second tap while the review slides in mustn't push it twice.
         if let last = router.bookingPath.last, case .review = last { return }
-        // The time may have slipped inside the lead time since it was picked.
-        refresh()
+        // A time that has just slipped inside the lead time still goes
+        // through: the review warns about short-notice and passed times.
         guard let slot = selectedSlot else { return }
         router.bookingPath.append(.review(BookingPlan(choice: choice, start: slot.start)))
     }
@@ -173,6 +187,9 @@ struct ChooseTimeView: View {
     /// offered is dropped, and the first open day is picked if needed.
     private func refresh() {
         let current = Date()
+        let droppedSlot = selectedSlot
+        let oldDay = selectedDay
+        let oldMonthID = oldDay.map(Self.monthID(for:))
         now = current
         if let day = selectedDay,
            calendar.availability(of: day, durationMinutes: durationMinutes, now: current).isBookable {
@@ -184,7 +201,9 @@ struct ChooseTimeView: View {
             let first = calendar.firstBookableDay(durationMinutes: durationMinutes, now: current)
             selectedDay = first
             selectedSlot = nil
-            if let first {
+            // Follows the new day only if the client was looking at the old
+            // one's month, not browsing another.
+            if let first, oldMonthID == nil || displayedMonthID == oldMonthID {
                 displayedMonthID = Self.monthID(for: first)
             }
         }
@@ -192,6 +211,21 @@ struct ChooseTimeView: View {
         if !pages.contains(where: { $0.id == displayedMonthID }), let firstPage = pages.first {
             displayedMonthID = firstPage.id
         }
+        if let droppedSlot, selectedSlot == nil {
+            noteExpired(droppedSlot, on: oldDay)
+        }
+    }
+
+    /// Says why the picked time went away, on screen and to VoiceOver.
+    private func noteExpired(_ slot: TimeSlot, on oldDay: CalendarDay?) {
+        let note: String
+        if let oldDay, let newDay = selectedDay, newDay != oldDay {
+            note = "\(slot.label) on \(calendar.shortLabel(for: oldDay)) is no longer available. Pick a time on \(calendar.longLabel(for: newDay))."
+        } else {
+            note = "\(slot.label) is no longer available. Pick another time."
+        }
+        expiredNote = note
+        UIAccessibility.post(notification: .announcement, argument: note)
     }
 }
 
@@ -209,6 +243,8 @@ private struct ChooseTimeSlotGroup: Identifiable {
 /// morning, afternoon and evening.
 private struct ChooseTimeDayCard: View {
     let calendar: BookingCalendar
+    /// Why the picked time went away, if it did.
+    let notice: String?
     let day: CalendarDay?
     let today: CalendarDay
     let durationMinutes: Int
@@ -218,6 +254,9 @@ private struct ChooseTimeDayCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
+            if let notice {
+                ChooseTimeExpiredNote(text: notice)
+            }
             if let day {
                 dayHeader(day)
             }
@@ -291,6 +330,25 @@ private struct ChooseTimeDayCard: View {
             let last = calendar.lastBookableDay(now: now)
             return "You can book up to \(calendar.shortLabel(for: last)). Pick an earlier day."
         }
+    }
+}
+
+/// The picked time is no longer offered, e.g. it slipped inside the lead time.
+private struct ChooseTimeExpiredNote: View {
+    let text: String
+
+    var body: some View {
+        Label {
+            Text(text)
+                .foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        } icon: {
+            Image(systemName: Symbol.warning)
+                .foregroundStyle(Theme.soon)
+        }
+        .font(.footnote.weight(.semibold))
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("slotExpiredNote")
     }
 }
 

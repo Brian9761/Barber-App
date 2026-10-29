@@ -164,6 +164,39 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertEqual(store.next, saved)
     }
 
+    func testHourBeforeReminderIsOnlyPromisedWhenItCanBeSent() async {
+        scheduler.status = .authorized
+        let store = makeStore(defaults: makeDefaults())
+        let reminded = appointment(at: friday)
+        let notReminded = appointment(at: friday.addingTimeInterval(2 * 60 * 60))
+        let tooSoon = appointment(at: soon)
+        store.save(reminded, remind: true)
+        store.save(notReminded, remind: false)
+        store.save(tooSoon, remind: true)
+        await store.settle()
+
+        // The app sends it, so the calendar event can skip its own alarm.
+        XCTAssertTrue(store.willSendHourBeforeReminder(for: reminded.id))
+        // Reminders off, or 45 minutes away: the calendar's alarm is the only one.
+        XCTAssertFalse(store.willSendHourBeforeReminder(for: notReminded.id))
+        XCTAssertFalse(store.willSendHourBeforeReminder(for: tooSoon.id))
+        XCTAssertFalse(store.willSendHourBeforeReminder(for: UUID()))
+    }
+
+    func testHourBeforeReminderIsNotPromisedWithNotificationsOff() async {
+        scheduler.status = .notDetermined
+        scheduler.grantsPermission = false
+        let store = makeStore(defaults: makeDefaults())
+        let saved = appointment(at: friday)
+        store.save(saved, remind: true)
+        await store.settle()
+
+        // Still wanted, but it can't come through.
+        XCTAssertTrue(store.isReminding(saved.id))
+        XCTAssertTrue(store.remindersPermissionDenied)
+        XCTAssertFalse(store.willSendHourBeforeReminder(for: saved.id))
+    }
+
     func testRemovingCancelsItsReminders() async {
         scheduler.status = .authorized
         let defaults = makeDefaults()
