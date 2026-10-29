@@ -123,13 +123,18 @@ jobs:
           if [ -f build/attachments/manifest.json ]; then
             # Name each file after its screenshot ("01-Home.png") and shrink it for the web.
             python3 - <<'EOF'
-          import json, pathlib, shutil
+          import json, pathlib, re, shutil
           source = pathlib.Path("build/attachments")
           target = pathlib.Path("build/screenshots")
           try:
               for test in json.loads((source / "manifest.json").read_text()):
                   for attachment in test.get("attachments", []):
+                      # Only the named screenshots; failed tests also attach recordings and logs.
+                      if not attachment["exportedFileName"].lower().endswith(".png"):
+                          continue
                       name = attachment["suggestedHumanReadableName"].split("_0_")[0]
+                      # Artifact uploads reject characters like quotes and colons.
+                      name = re.sub(r"[^A-Za-z0-9._ -]", "-", name)
                       shutil.copy(source / attachment["exportedFileName"], target / f"{name}.png")
           except Exception as error:
               # Screenshots are a convenience; never fail the build over them.
@@ -137,7 +142,7 @@ jobs:
               for png in source.glob("*.png"):
                   shutil.copy(png, target / png.name)
           EOF
-            for file in build/screenshots/*.png; do sips -Z 1400 "$file" > /dev/null; done
+            for file in build/screenshots/*.png; do sips -Z 1400 "$file" > /dev/null || echo "Couldn't resize $file"; done
           fi
           ls build/screenshots
 
