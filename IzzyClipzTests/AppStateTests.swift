@@ -58,22 +58,20 @@ final class AppRouterTests: XCTestCase {
     }
 
     func testOpeningPagesSetsTheSheet() throws {
-        let router = AppRouter()
         let plan = try plan()
-
-        router.openSquire(plan.choice.request, plan: plan)
-        XCTAssertEqual(router.sheet, .squire(SquireHandoff(request: plan.choice.request, plan: plan)))
-
-        let bravo = AppData.products.storeURL
-        router.openWeb(bravo)
-        XCTAssertEqual(router.sheet, .web(bravo))
-
-        router.showReminders()
-        XCTAssertEqual(router.sheet, .reminders)
-
         let appointment = plan.appointment()
-        router.addToCalendar(appointment)
-        XCTAssertEqual(router.sheet, .addToCalendar(appointment))
+        let bravo = AppData.products.storeURL
+        let cases: [(open: (AppRouter) -> Void, sheet: AppSheet)] = [
+            ({ $0.openSquire(plan.choice.request, plan: plan) }, .squire(SquireHandoff(request: plan.choice.request, plan: plan))),
+            ({ $0.openWeb(bravo) }, .web(bravo)),
+            ({ $0.showReminders() }, .reminders),
+            ({ $0.addToCalendar(appointment) }, .addToCalendar(appointment)),
+        ]
+        for (open, sheet) in cases {
+            let router = AppRouter()
+            open(router)
+            XCTAssertEqual(router.sheet, sheet)
+        }
     }
 
     func testClosingSquireAfterPickingATimeAsksWhetherItWasBooked() throws {
@@ -113,17 +111,58 @@ final class AppRouterTests: XCTestCase {
         XCTAssertNil(router.sheet)
     }
 
-    func testASheetThatReplacedAnotherIsLeftAlone() throws {
+    func testOpeningASheetOverAnotherWaitsForItToClose() throws {
+        let router = AppRouter()
+        let plan = try plan()
+        router.present(.confirmBooking(plan))
+
+        // "Add to Calendar" on the "Did you book it?" sheet: that sheet closes first...
+        let appointment = plan.appointment()
+        router.addToCalendar(appointment)
+        XCTAssertNil(router.sheet)
+
+        // ...and the calendar opens once it has gone.
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .addToCalendar(appointment))
+
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertNil(router.sheet)
+    }
+
+    func testSquireClosedToOpenSomethingElseDoesNotAskAboutTheBooking() throws {
         let router = AppRouter()
         let plan = try plan()
         router.openSquire(plan.choice.request, plan: plan)
-        // A notification tap or button presents something else while Squire is up.
         router.showReminders()
-        // The Squire sheet's dismissal arrives with the new sheet already set.
         router.sheetDidDismiss()
         XCTAssertEqual(router.sheet, .reminders)
 
         router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertNil(router.sheet)
+    }
+
+    func testOpeningSquireAgainFromTheConfirmationComesBackToIt() throws {
+        let router = AppRouter()
+        let plan = try plan()
+        router.present(.confirmBooking(plan))
+
+        router.openSquire(plan.choice.request, plan: plan)
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .squire(SquireHandoff(request: plan.choice.request, plan: plan)))
+
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .confirmBooking(plan))
+    }
+
+    func testClosingTheSheetDropsAnythingWaiting() throws {
+        let router = AppRouter()
+        let plan = try plan()
+        router.present(.confirmBooking(plan))
+        router.addToCalendar(plan.appointment())
+        router.startBooking()
         router.sheetDidDismiss()
         XCTAssertNil(router.sheet)
     }

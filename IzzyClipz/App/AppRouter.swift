@@ -174,6 +174,8 @@ final class AppRouter {
 
     /// What was presented last, so its dismissal can lead somewhere.
     @ObservationIgnored private var lastPresentedSheet: AppSheet?
+    /// A sheet waiting for the one on screen to finish closing.
+    @ObservationIgnored private var queuedSheet: AppSheet?
 
     /// Switches to the Book tab at step 1.
     func startBooking() {
@@ -242,21 +244,38 @@ final class AppRouter {
         present(.addToCalendar(appointment))
     }
 
+    /// Shows a sheet. If another one is up (e.g. "Add to Calendar" from the
+    /// "Did you book it?" sheet), that one closes first and the new one opens
+    /// once it has gone: swapping sheets mid-presentation is unreliable on
+    /// some iOS versions.
     func present(_ sheet: AppSheet) {
+        if let current = self.sheet, current != sheet {
+            queuedSheet = sheet
+            // The sheet being closed for this shouldn't trigger its own follow-up.
+            lastPresentedSheet = nil
+            self.sheet = nil
+            return
+        }
         lastPresentedSheet = sheet
         self.sheet = sheet
     }
 
     /// Closes whatever sheet is up without anything following it.
     func closeSheet() {
+        queuedSheet = nil
         lastPresentedSheet = nil
         sheet = nil
     }
 
     /// Called by the root view whenever a sheet finishes dismissing.
     func sheetDidDismiss() {
-        // When one sheet replaces another, the new one is already set; leave it.
+        // Something already put a new sheet up; leave it.
         guard sheet == nil else { return }
+        if let next = queuedSheet {
+            queuedSheet = nil
+            present(next)
+            return
+        }
         let dismissed = lastPresentedSheet
         lastPresentedSheet = nil
         if case .squire(let handoff)? = dismissed, let plan = handoff.plan {

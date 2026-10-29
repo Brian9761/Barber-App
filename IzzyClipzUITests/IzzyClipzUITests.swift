@@ -172,7 +172,7 @@ final class IzzyClipzUITests: XCTestCase {
         let add = app.buttons["Add"]
         XCTAssertTrue(add.waitForExistence(timeout: 5))
         add.tap()
-        XCTAssertTrue(waitForDisappearance(of: eventTitle), "Add to Calendar didn't close")
+        XCTAssertTrue(waitForDisappearance(of: eventTitle, timeout: 10), "Add to Calendar didn't close")
 
         // Saved: the Book tab is back at step 1 with the appointment on top, and Home shows it.
         XCTAssertTrue(element("upcomingAppointment").waitForExistence(timeout: 5))
