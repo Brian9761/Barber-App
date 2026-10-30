@@ -1,45 +1,53 @@
 import SwiftUI
 
-/// What clients say: the shop's rating on each review site, every quoted
-/// review, and links to read more or leave one on Google.
+/// What clients say: the shop's score on each review site as bone tiles, every quoted review on a
+/// bone card with an honest byline, and the screen's one red, "Leave a review on Google".
 ///
-/// Pushed from Home and from the Visit tab, so it has no navigation stack of
-/// its own, and it pushes nothing itself (the two stacks know different screens).
+/// Pushed from Home and from the Visit tab, so it has no navigation stack of its own, and it pushes
+/// nothing itself (the two stacks know different screens).
 struct ReviewsView: View {
     @Environment(AppRouter.self) private var router
+    @State private var titleIsUnderBar = false
+    @State private var isScrolled = false
     private let shop = AppData.shop
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 32) {
-                ratings
-                reviews
-                ReviewsYourTurnSection(
-                    onLeaveReview: { router.openOutside(shop.googleReviewURL) },
-                    onReadMore: { router.openOutside(shop.googleMapsURL) }
-                )
+        GeometryReader { _ in
+            ScrollView {
+                VStack(alignment: .leading, spacing: Theme.Space.section) {
+                    VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                        ScreenHeader(kicker: Self.kicker(for: shop.ratings), title: "Reviews")
+                            .pageScrolledUnderBar($titleIsUnderBar)
+                        scores
+                    }
+                    reviews
+                    ReviewsYourTurnSection(
+                        onLeaveReview: { router.openOutside(shop.googleReviewURL) },
+                        onReadMore: { router.openOutside(shop.googleMapsURL) }
+                    )
+                }
+                .padding(.horizontal, Theme.gutter)
+                .padding(.top, Theme.Space.s)
+                .padding(.bottom, Theme.Space.xxl)
+                .pageScrolled($isScrolled)
             }
-            .padding(.horizontal, Theme.gutter)
-            .padding(.top, 8)
-            // Room for the last button to clear the tab bar.
-            .padding(.bottom, 40)
         }
+        .coordinateSpace(.named(PageBar.space))
         .screenBackground()
-        .navigationTitle("Reviews")
-        .navigationBarTitleDisplayMode(.large)
+        .pageBar(title: "Reviews", showsTitle: titleIsUnderBar, isScrolled: isScrolled)
     }
 
-    private var ratings: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader("Ratings")
+    /// The score tiles, side by side (stacked from xxLarge text). Each opens its site.
+    private var scores: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             RatingSummary(ratings: shop.ratings, onOpen: { sourced in
                 if let url = sourced.url {
                     router.openWeb(url)
                 }
             })
             if shop.ratings.contains(where: { $0.url != nil }) {
-                Text("Tap a rating to read the reviews on that site.")
-                    .font(.footnote)
+                Text("Tap a score to read the reviews on that site.")
+                    .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -48,18 +56,16 @@ struct ReviewsView: View {
 
     @ViewBuilder private var reviews: some View {
         if !shop.reviews.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
                 SectionHeader("What clients say")
                 ForEach(shop.reviews) { review in
                     ReviewCard(review: review)
                 }
                 if !reviewSources.isEmpty {
-                    InfoCallout(
-                        title: "Real reviews",
-                        message: "Each one is quoted from a review a client left on \(ReviewsView.joined(reviewSources, conjunction: "or")).",
-                        symbol: Symbol.reviews
-                    )
-                    .padding(.top, 4)
+                    Text("Each one is quoted from a review a client left on \(ReviewsView.joined(reviewSources, conjunction: "or")).")
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -72,6 +78,13 @@ struct ReviewsView: View {
             sources.append(review.source)
         }
         return sources
+    }
+
+    /// "174 reviews on Squire and Google": every review the scores are based on, and where.
+    static func kicker(for ratings: [SourcedRating]) -> String {
+        let total = ratings.reduce(0) { $0 + $1.rating.count }
+        let count = total == 1 ? "1 review" : "\(total) reviews"
+        return "\(count) on \(joined(ratings.map(\.source), conjunction: "and"))"
     }
 
     /// "Squire", "Squire or Yelp", "Squire, Yelp, or Google".
@@ -90,18 +103,20 @@ struct ReviewsView: View {
     }
 }
 
-/// An invitation to review the shop on Google, or read more there.
+/// An invitation to review the shop on Google (the screen's red), or read more there.
 private struct ReviewsYourTurnSection: View {
     let onLeaveReview: () -> Void
     let onReadMore: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader("Your turn")
-            Text("Had a good cut? A few words on Google mean a lot to the team.")
-                .font(.subheadline)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                SectionHeader("Your turn")
+                Text("Had a good cut? A few words on Google mean a lot to the team.")
+                    .textRole(.body)
+                    .foregroundStyle(Theme.smoke)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Button(action: onLeaveReview) {
                 Text("Leave a review on Google")
@@ -111,9 +126,15 @@ private struct ReviewsYourTurnSection: View {
             .accessibilityIdentifier("leaveReviewButton")
 
             Button(action: onReadMore) {
-                Label("Read more on Google", systemImage: Symbol.external)
+                HStack(spacing: 5) {
+                    Text("Read more on Google")
+                    Image(systemName: Symbol.external)
+                        .font(.system(size: 12, weight: .heavy))
+                        .accessibilityHidden(true)
+                }
             }
-            .buttonStyle(.tertiary)
+            .buttonStyle(.textLink)
+            .frame(maxWidth: .infinity)
             .accessibilityHint("Opens the shop's Google Maps page")
             .accessibilityIdentifier("readGoogleReviewsButton")
         }
