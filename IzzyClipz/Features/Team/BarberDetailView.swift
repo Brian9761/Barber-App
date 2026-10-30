@@ -1,11 +1,14 @@
 import SwiftUI
 
-/// A barber's page: who they are, what they offer at which price, and what
-/// clients say. Booking from here starts the in-app calendar with them chosen.
+/// A barber's page: their monogram band with the favorite button, who they are, their own menu at
+/// their prices, and what clients say about them. Menu rows go straight to the calendar with that
+/// service; the red "Book with …" bar (the screen's one red) goes to picking one of their services.
 struct BarberDetailView: View {
     let barber: Barber
 
     @Environment(AppRouter.self) private var router
+    /// Whether the name in the content has scrolled up under the navigation bar.
+    @State private var nameIsUnderBar = false
 
     private var reviews: [Review] {
         AppData.shop.reviews.filter { $0.barberID == barber.id }
@@ -13,62 +16,40 @@ struct BarberDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 28) {
-                BarberHeroCard(barber: barber)
-                bookButton
-                about
-                specialties
+            VStack(alignment: .leading, spacing: Theme.Space.section) {
+                VStack(alignment: .leading, spacing: Theme.Space.l) {
+                    BarberBand(barber: barber)
+                    BarberNameBlock(barber: barber)
+                        .menuTitleScrolledUnderBar($nameIsUnderBar)
+                }
+                if let url = barber.instagramURL, let handle = barber.instagramHandle {
+                    BarberInstagramRow(barberName: barber.name, handle: handle, url: url)
+                }
+                BarberAbout(barber: barber)
                 BarberMenuSection(barber: barber)
                 reviewsSection
             }
-            .padding(Theme.gutter)
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, Theme.Space.s)
+            .padding(.bottom, Theme.Space.xxl)
         }
+        .menuNavigationTitle(barber.name, showsInBar: nameIsUnderBar)
         .screenBackground()
-        .navigationTitle(barber.name)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    private var bookButton: some View {
-        Button {
-            router.startBooking(barberID: barber.id)
-        } label: {
-            Text("Book with \(barber.name)")
-        }
-        .buttonStyle(.primary)
-        .accessibilityHint("Next, pick one of their services")
-        .accessibilityIdentifier("bookBarberButton")
-    }
-
-    private var about: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader("About")
-            VStack(alignment: .leading, spacing: 14) {
-                Text(barber.bio)
-                    .font(.body)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let url = barber.instagramURL, let handle = barber.instagramHandle {
-                    Divider()
-                    BarberInstagramLink(barberName: barber.name, handle: handle, url: url)
-                }
+        .stickyBottomBar {
+            Button {
+                router.startBooking(barberID: barber.id)
+            } label: {
+                Text("Book with \(barber.name)")
             }
-            .card()
-        }
-    }
-
-    @ViewBuilder private var specialties: some View {
-        if !barber.specialties.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                SectionHeader("Specialties")
-                FlowingChips(items: barber.specialties)
-                    .card()
-            }
+            .buttonStyle(.primary)
+            .accessibilityHint("Next, pick one of their services")
+            .accessibilityIdentifier("bookBarberButton")
         }
     }
 
     @ViewBuilder private var reviewsSection: some View {
         if !reviews.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
                 SectionHeader("What clients say")
                 ForEach(reviews) { review in
                     ReviewCard(review: review)
@@ -78,60 +59,61 @@ struct BarberDetailView: View {
     }
 }
 
-// MARK: - Header
+// MARK: - Band and name
 
-/// Big monogram, name, title, rating and the favorite toggle on the promo blue.
-private struct BarberHeroCard: View {
+/// The barber's monogram as a full-width band, 140 pt tall (the owner's carries the "OWNER" tag),
+/// with the favorite button on its corner.
+private struct BarberBand: View {
     let barber: Barber
 
     var body: some View {
-        VStack(spacing: 14) {
-            MonogramTile(barber: barber, side: 104)
-            names
-            if let rating = barber.rating {
-                RatingLine(rating: rating, source: "Squire")
-                    .environment(\.surfaceTone, .bone)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(Theme.bone, in: Capsule())
+        Color.clear
+            .frame(maxWidth: .infinity)
+            .frame(height: 140)
+            .overlay {
+                GeometryReader { proxy in
+                    MonogramTile(barber: barber, size: proxy.size, cornerRadius: Theme.Radius.hero)
+                        // The band is decoration with a fixed height: its "OWNER" tag stops growing
+                        // before it would cover the letters. The kicker under it says it too.
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                }
             }
-            BarberFavoriteButton(barber: barber)
-                .padding(.top, 2)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.horizontal, 20)
-        .padding(.vertical, 28)
-        .background(Theme.promoGradient)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+            .overlay(alignment: .bottomTrailing) {
+                BarberFavoriteButton(barber: barber)
+                    .padding(Theme.Space.l)
+            }
     }
+}
 
-    private var names: some View {
-        VStack(spacing: 4) {
-            Text(barber.name.uppercased())
-                .textRole(.displayL)
-                .foregroundStyle(Color.white)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel(barber.name)
+/// Their title in mono, the name in Display XL, then how Squire lists them and their Squire rating
+/// (nothing for barbers without one: never "0 reviews").
+private struct BarberNameBlock: View {
+    let barber: Barber
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Kicker(barber.title)
+                .accessibilityLabel(barber.title.menuSpokenList)
+            MenuTitleText(barber.name, role: .displayXL)
+                .foregroundStyle(Theme.bone)
                 .accessibilityAddTraits(.isHeader)
-            Text(barber.title)
-                .font(.headline)
-                .foregroundStyle(Color.white.opacity(0.88))
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            if barber.listedName != barber.name {
-                Text("Listed as \(barber.listedName) on Squire")
-                    .font(.footnote)
-                    .foregroundStyle(Color.white.opacity(0.75))
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                if barber.listedName != barber.name {
+                    Text("Listed as \(barber.listedName) on Squire")
+                        .textRole(.monoTag)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let rating = barber.rating {
+                    RatingLine(rating: rating, source: "Squire")
+                }
             }
         }
     }
 }
 
-/// "Favorite" / "Remove favorite", with a heart. The favorite barber shows
-/// on Home and first wherever the client picks a barber.
+/// A 44 pt bone circle with an ink heart, filled when this is the client's barber. The favorite
+/// shows on Home and first wherever the client picks a barber.
 private struct BarberFavoriteButton: View {
     let barber: Barber
     @Environment(Favorites.self) private var favorites
@@ -140,100 +122,159 @@ private struct BarberFavoriteButton: View {
         favorites.isFavorite(barber.id)
     }
 
-    private var title: String {
-        isFavorite ? "Remove favorite" : "Favorite"
-    }
-
-    private var symbol: String {
-        isFavorite ? Symbol.favoriteFilled : Symbol.favorite
-    }
-
-    private var hint: String {
-        isFavorite
-            ? "\(barber.name) stops being your barber"
-            : "Makes \(barber.name) your barber, shown first when you book"
-    }
-
     var body: some View {
         Button {
             favorites.toggle(barber.id)
         } label: {
-            Label(title, systemImage: symbol)
-                .font(.subheadline.weight(.bold))
-                .foregroundStyle(isFavorite ? Theme.ink : Color.white)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 10)
-                .frame(minHeight: 44)
-                .background(Capsule().fill(isFavorite ? Theme.bone : Color.white.opacity(0.16)))
-                .overlay(Capsule().strokeBorder(Color.white.opacity(isFavorite ? 0 : 0.35)))
-                .contentShape(Capsule())
+            Image(systemName: isFavorite ? Symbol.favoriteFilled : Symbol.favorite)
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundStyle(Theme.ink)
+                .frame(width: Theme.minimumTapSize, height: Theme.minimumTapSize)
+                .background(Theme.bone, in: Circle())
+                // Keeps the circle's edge visible on the bone tiles too.
+                .overlay(Circle().strokeBorder(Theme.ink.opacity(0.16)))
+                .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+                .contentShape(Circle())
         }
         .buttonStyle(.pressable)
-        .accessibilityHint(hint)
+        .accessibilityLabel(isFavorite ? "Remove favorite" : "Favorite")
+        .accessibilityHint(
+            isFavorite
+                ? "\(barber.name) stops being your barber"
+                : "Makes \(barber.name) your barber, shown first when you book"
+        )
         .accessibilityIdentifier("favoriteButton")
         .sensoryFeedback(.selection, trigger: isFavorite)
     }
 }
 
-/// The barber's own Instagram account.
-private struct BarberInstagramLink: View {
+// MARK: - Instagram
+
+/// The barber's own Instagram account, opened outside the app (Instagram's app if it's installed).
+/// One tap target.
+private struct BarberInstagramRow: View {
     let barberName: String
     let handle: String
     let url: URL
-    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 40
 
-    /// Read as written: handles can contain underscores, which Markdown would eat.
+    @Environment(AppRouter.self) private var router
+    @ScaledMetric(relativeTo: .title3) private var iconSide: CGFloat = 44
+
+    /// Shown as written: handles can contain underscores, which Markdown would eat.
     private var handleText: String { "@" + handle }
 
-    private var accessibilityText: String { "\(barberName) on Instagram, \(handleText)" }
-
     var body: some View {
-        Link(destination: url) {
-            HStack(spacing: 12) {
+        Button {
+            router.openOutside(url)
+        } label: {
+            HStack(spacing: Theme.Space.l) {
                 Image(systemName: Symbol.instagram)
-                    .font(.body.weight(.semibold))
-                    // The glyph stops growing with the circle, so it stays inside.
-                    .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                    .foregroundStyle(Theme.electric)
-                    .frame(width: min(iconSize, 56), height: min(iconSize, 56))
-                    .background(Theme.ink4, in: Circle())
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.ink)
+                    .frame(width: min(iconSide, 60), height: min(iconSide, 60))
+                    .background(Theme.bone, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                 VStack(alignment: .leading, spacing: 2) {
+                    Kicker("\(barberName) on Instagram")
                     Text(verbatim: handleText)
-                        .font(.headline)
-                        .foregroundStyle(Theme.electric)
-                    Text("\(barberName) on Instagram")
-                        .font(.footnote)
-                        .foregroundStyle(Theme.smoke)
+                        .font(BrandFont.condensedExtraBold.font(size: 21, relativeTo: .title3))
+                        .foregroundStyle(Theme.bone)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
-                Spacer(minLength: 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: Symbol.external)
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(Theme.electric)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Theme.bone)
             }
-            .contentShape(Rectangle())
+            .card()
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(accessibilityText)
+        .accessibilityLabel("\(barberName) on Instagram, \(handleText)")
         .accessibilityHint("Opens Instagram")
         .accessibilityIdentifier("barberInstagram")
     }
 }
 
+// MARK: - About
+
+/// The bio, then the specialties as one mono line (they aren't tappable, so they aren't chips).
+private struct BarberAbout: View {
+    let barber: Barber
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxl) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Kicker("About")
+                    .accessibilityAddTraits(.isHeader)
+                Text(barber.bio)
+                    .textRole(.body)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !barber.specialties.isEmpty {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Kicker("Specialties")
+                        .accessibilityAddTraits(.isHeader)
+                    specialties
+                        .textRole(.monoNumber)
+                        .foregroundStyle(Theme.bone)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(barber.specialties.joined(separator: ", "))
+                }
+            }
+        }
+    }
+
+    /// One line joined with " · ", or one specialty per line at accessibility text sizes, where
+    /// "COLOR & LIGHTENER" alone is wider than the screen and has to wrap.
+    @ViewBuilder private var specialties: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                ForEach(barber.specialties, id: \.self) { specialty in
+                    Text(specialty)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            Text(specialtiesLine)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "COLOR & LIGHTENER · PERMS · …", breaking only after a "·", never inside a specialty.
+    private var specialtiesLine: String {
+        barber.specialties
+            .map { $0.replacingOccurrences(of: " ", with: "\u{00A0}") }
+            .joined(separator: "\u{00A0}· ")
+    }
+}
+
 // MARK: - Menu
 
-/// Everything the barber offers, each row starting a booking with them.
+/// Everything the barber offers at their own prices, each row going straight to the calendar.
 private struct BarberMenuSection: View {
     let barber: Barber
     @Environment(AppRouter.self) private var router
     private let catalog = AppData.catalog
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let offerings = catalog.offerings(forBarber: barber.id)
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             SectionHeader("\(barber.name)'s menu")
-            ForEach(catalog.offerings(forBarber: barber.id)) { offering in
+            ForEach(offerings) { offering in
                 if let service = catalog.service(withID: offering.serviceID) {
                     row(service: service, offering: offering)
                 }
+            }
+            if offerings.isEmpty {
+                InfoCallout(
+                    title: "Nothing to book online yet",
+                    message: "\(barber.name) has no services on Squire right now. Call the shop at \(AppData.shop.phone.display)."
+                )
             }
         }
     }
@@ -251,76 +292,31 @@ private struct BarberMenuSection: View {
     }
 }
 
+/// An `ink3` row: the service and the barber's price, their length in mono, their note, a chevron.
 private struct BarberMenuRow: View {
     let service: Service
     let offering: Offering
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            ServiceIcon(symbol: service.symbol, size: 42)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(service.name)
-                    .font(.headline)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: Theme.Space.l) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                MenuNamePriceLine(name: service.name, price: offering.price.label)
                 Text(offering.durationLabel)
-                    .font(.subheadline)
+                    .textRole(.monoNumber)
                     .foregroundStyle(Theme.smoke)
                 if let note = offering.note {
                     Text(note)
-                        .font(.footnote)
+                        .textRole(.caption)
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
-                }
-                if stacksPrice {
-                    // Beside the button if they fit on one line, otherwise over it.
-                    ViewThatFits(in: .horizontal) {
-                        HStack(spacing: 10) {
-                            price
-                            bookCapsule
-                        }
-                        VStack(alignment: .leading, spacing: 6) {
-                            price
-                            bookCapsule
-                        }
-                    }
-                    .padding(.top, 4)
+                        .padding(.top, 2)
                 }
             }
-            Spacer(minLength: 8)
-            if !stacksPrice {
-                VStack(alignment: .trailing, spacing: 6) {
-                    price
-                        .multilineTextAlignment(.trailing)
-                    bookCapsule
-                }
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            MenuChevron()
         }
-        .card(padding: 14)
-        .contentShape(Rectangle())
-    }
-
-    /// At the largest text sizes the price moves under the name, so neither
-    /// has to break mid-word.
-    private var stacksPrice: Bool {
-        dynamicTypeSize.isAccessibilitySize
-    }
-
-    private var price: some View {
-        Text(offering.price.label)
-            .font(.headline)
-            .foregroundStyle(Theme.bone)
-            .fixedSize(horizontal: false, vertical: true)
-    }
-
-    private var bookCapsule: some View {
-        Text("Book")
-            .textRole(.buttonSmall)
-            .foregroundStyle(Theme.ink)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Theme.bone, in: Capsule())
+        .card()
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     static func accessibilityText(service: Service, offering: Offering) -> String {
