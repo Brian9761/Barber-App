@@ -51,19 +51,31 @@ struct ServiceDetailView: View {
 
     private var titles: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            HStack(spacing: Theme.Space.s) {
-                Kicker(service.category.title)
-                if service.id == MenuFeaturedService.id {
-                    MonoTag(text: MenuFeaturedService.tag, style: .bone)
-                        .accessibilityHidden(true)
+            if service.id == MenuFeaturedService.id {
+                // The tag beside the category, or under it with big text.
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Theme.Space.s) {
+                        Kicker(service.category.title)
+                        featuredTag
+                    }
+                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                        Kicker(service.category.title)
+                        featuredTag
+                    }
                 }
+            } else {
+                Kicker(service.category.title)
             }
-            Text(service.name)
-                .textRole(.displayL)
+            MenuTitleText(service.name, role: .displayL)
                 .foregroundStyle(Theme.bone)
-                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
         }
+    }
+
+    /// "THE WORKS", from VIP's own description. VoiceOver already hears it in the summary.
+    private var featuredTag: some View {
+        MonoTag(text: MenuFeaturedService.tag, style: .bone)
+            .accessibilityHidden(true)
     }
 
     // MARK: What's included
@@ -193,7 +205,7 @@ private struct ServiceStats: View {
                 ServiceStat(label: "Price", value: price, spoken: price.spokenRanges)
             }
             if !duration.isEmpty {
-                ServiceStat(label: "Time", value: Self.keepingUnits(duration), spoken: spokenDuration)
+                ServiceStat(label: "Time", value: duration.menuKeepingUnits, spoken: spokenDuration)
             }
             ServiceStat(label: barbers == 1 ? "Barber" : "Barbers", value: "\(barbers)", spoken: "\(barbers)")
         }
@@ -215,14 +227,6 @@ private struct ServiceStats: View {
         catalog.durationSummary(forService: service.id)
     }
 
-    /// Each number tied to its unit, so a narrow block breaks "1 hr 15 min" as "1 HR" / "15 MIN",
-    /// never "1 HR 15" / "MIN".
-    private static func keepingUnits(_ duration: String) -> String {
-        duration
-            .replacingOccurrences(of: " min", with: "\u{00A0}min")
-            .replacingOccurrences(of: " hr", with: "\u{00A0}hr")
-    }
-
     /// "45 minutes to 1 hour".
     private var spokenDuration: String {
         let minutes = catalog.offerings(forService: service.id).map(\.durationMinutes)
@@ -232,8 +236,9 @@ private struct ServiceStats: View {
     }
 }
 
-/// A label in mono over a value in Archivo Condensed on an `ink3` tile. The value wraps rather
-/// than being cut off ("45 MIN –" over "1 HR" in a narrow block).
+/// A label in mono over a value in Archivo Condensed on an `ink3` tile. The value wraps between
+/// words rather than being cut off ("45 MIN –" over "1 HR" in a narrow block), and a word wider
+/// than the block ("INCLUDED", a third of a 375 pt screen) shrinks a little instead of breaking.
 private struct ServiceStat: View {
     let label: String
     let value: String
@@ -244,11 +249,9 @@ private struct ServiceStat: View {
             Text(label)
                 .textRole(.monoTag)
                 .foregroundStyle(Theme.smoke)
-            Text(value)
-                .textRole(.price)
+            MenuTitleText(value, role: .price)
                 .textCase(.uppercase)
                 .foregroundStyle(Theme.bone)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(Theme.Space.l)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -287,7 +290,8 @@ private struct IncludedItem: View {
 
 /// One way to book the service, the same row as booking step 2: a 56 pt tile, the name with a line
 /// under it, the price and length on the right and a chevron. When the name and price can't share
-/// a line (big text, a long price like "Included with cut"), the price moves under the name. A
+/// a line (big text, a long price like "Included with cut"), the price moves under the name. At
+/// accessibility text sizes the tile moves above the text so the name keeps the full width. A
 /// barber's note runs full width below.
 private struct BookWithRow<Leading: View, Detail: View>: View {
     let name: String
@@ -297,6 +301,8 @@ private struct BookWithRow<Leading: View, Detail: View>: View {
     let note: String?
     let leading: Leading
     let detail: Detail
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(
         name: String,
@@ -318,18 +324,21 @@ private struct BookWithRow<Leading: View, Detail: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack(spacing: 14) {
-                leading
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: 0) {
-                        nameBlock
-                        Spacer(minLength: Theme.Space.l)
-                        priceBlock(isStacked: false)
+            HStack(spacing: Theme.Space.l) {
+                mainLayout {
+                    leading
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 0) {
+                            nameBlock
+                            Spacer(minLength: Theme.Space.l)
+                            priceBlock(isStacked: false)
+                        }
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            nameBlock
+                            priceBlock(isStacked: true)
+                        }
                     }
-                    VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                        nameBlock
-                        priceBlock(isStacked: true)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 MenuChevron()
@@ -345,6 +354,12 @@ private struct BookWithRow<Leading: View, Detail: View>: View {
         .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
+    private var mainLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Space.l))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+    }
+
     private var nameBlock: some View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: Theme.Space.xs) {
@@ -355,6 +370,8 @@ private struct BookWithRow<Leading: View, Detail: View>: View {
                 if isFavorite {
                     Image(systemName: Symbol.favoriteFilled)
                         .font(.caption)
+                        // Grows a little with the text, never enough to squeeze the name.
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                         .foregroundStyle(Theme.bone)
                         .accessibilityHidden(true)
                 }
