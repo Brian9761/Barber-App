@@ -1,144 +1,310 @@
 import SwiftUI
 
-/// The Services tab: the whole menu by category, searchable, with each
-/// service's price range and length.
+/// The Services tab: the shop's real menu, every service in the data's categories, each with its
+/// price range and length across the barbers who offer it. Searchable, with a row of jump chips that
+/// scroll to a category. Tapping a service pushes its page.
+///
+/// No red on this screen: the raised Book button is its only red.
 struct ServicesView: View {
     @State private var query = ""
     /// Popped back to the menu when the Services tab is tapped again.
     @State private var path = NavigationPath()
+    /// Goes up when the tab is tapped again while the menu itself is showing: back to the top.
+    @State private var scrollToTop = 0
     private let catalog = AppData.catalog
 
-    private var results: [Service] {
-        catalog.search(query)
+    var body: some View {
+        let results = catalog.search(query)
+        NavigationStack(path: $path) {
+            ServicesMenu(results: results, isSearching: isSearching, scrollToTop: scrollToTop)
+                .overlay {
+                    if results.isEmpty {
+                        noResults
+                    }
+                }
+                .searchable(text: $query, prompt: "Search services")
+                // The native large title (Archivo, from NavigationBarAppearance) sits above the search
+                // field, which is where search belongs; it folds into the bar as the menu scrolls.
+                .navigationTitle("Services")
+                .navigationBarTitleDisplayMode(.large)
+                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide() }
+                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide() }
+        }
+        .onTabReselect {
+            if path.isEmpty {
+                scrollToTop += 1
+            } else {
+                path = NavigationPath()
+            }
+        }
     }
 
-    /// Whether the client has typed something to search for. Spaces alone
-    /// still show the whole menu.
+    /// Whether the client has typed something to search for. Spaces alone still show the whole menu.
     private var isSearching: Bool {
         !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    var body: some View {
-        NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 28) {
-                    if !isSearching {
-                        ServicesHero()
-                    }
-                    ForEach(catalog.categories) { category in
-                        ServiceCategorySection(
-                            category: category,
-                            services: results.filter { $0.category == category }
-                        )
-                    }
-                    if !results.isEmpty {
-                        footnote
-                    }
-                }
-                .padding(Theme.gutter)
+    private var noResults: some View {
+        EmptyStateView(
+            title: "Not on the menu",
+            symbol: Symbol.services,
+            message: "Nothing matches “\(query.trimmingCharacters(in: .whitespacesAndNewlines))”. The shop can tell you if they do it."
+        ) {
+            CallButton {
+                Text("Call \(AppData.shop.phone.display)")
             }
-            .screenBackground()
-            .overlay {
-                if results.isEmpty {
-                    ContentUnavailableView.search(text: query)
-                }
-            }
-            .searchable(text: $query, prompt: "Search services")
-            .navigationTitle("Services")
-            .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide() }
-            .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide() }
+            .buttonStyle(.secondary)
         }
-        .onTabReselect { path = NavigationPath() }
-    }
-
-    private var footnote: some View {
-        Text("Prices are from the shop's booking menu and can differ by barber. Squire shows your barber's price before you confirm.")
-            .font(.footnote)
-            .foregroundStyle(Theme.smoke)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// "Every cut, every price".
-private struct ServicesHero: View {
+/// What a jump chip or a reselected tab scrolls to.
+private enum ServicesMenuAnchor: Hashable {
+    case top
+    case category(ServiceCategory)
+}
+
+/// The menu itself: the kicker, the jump chips and a section per category.
+private struct ServicesMenu: View {
+    let results: [Service]
+    let isSearching: Bool
+    let scrollToTop: Int
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// VoiceOver follows a jump to the section's header.
+    @AccessibilityFocusState private var focusedCategory: ServiceCategory?
+    private let catalog = AppData.catalog
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("EVERY CUT, EVERY PRICE")
-                    .textRole(.displayS)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    Kicker(kicker)
+                        .padding(.horizontal, Theme.gutter)
+                        .padding(.top, Theme.Space.xs)
+                        .id(ServicesMenuAnchor.top)
+                    if !isSearching {
+                        jumpChips(proxy)
+                            .padding(.top, Theme.Space.s)
+                    }
+                    VStack(alignment: .leading, spacing: Theme.Space.section) {
+                        ForEach(catalog.categories) { category in
+                            let services = results.filter { $0.category == category }
+                            if !services.isEmpty {
+                                section(category, services: services)
+                                    .id(ServicesMenuAnchor.category(category))
+                            }
+                        }
+                        if !results.isEmpty {
+                            Text("Prices are from the shop's booking menu and can differ by barber.")
+                                .textRole(.caption)
+                                .foregroundStyle(Theme.smoke)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.top, isSearching ? Theme.Space.l : Theme.Space.xl)
+                    .padding(.bottom, Theme.Space.xxl)
+                }
+            }
+            .scrollDismissesKeyboard(.immediately)
+            .screenBackground()
+            .onChange(of: scrollToTop) {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
+                    proxy.scrollTo(ServicesMenuAnchor.top, anchor: .top)
+                }
+            }
+        }
+    }
+
+    /// "The menu · 12 services", or "3 of 12 services" while searching (set in capitals).
+    private var kicker: String {
+        let total = catalog.services.count
+        guard isSearching else { return "The menu · \(total) services" }
+        return "\(results.count) of \(total) services"
+    }
+
+    // MARK: Jump chips
+
+    /// One chip per category. They scroll the menu; they don't filter it, so none is ever selected.
+    private func jumpChips(_ proxy: ScrollViewProxy) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: Theme.Space.s) {
+                ForEach(catalog.categories) { category in
+                    FilterChip(title: category.title, isSelected: false) {
+                        jump(to: category, proxy: proxy)
+                    }
+                    .accessibilityHint("Jumps to \(category.title)")
+                    .accessibilityIdentifier("jump-\(category.id)")
+                }
+            }
+        }
+        .contentMargins(.horizontal, Theme.gutter, for: .scrollContent)
+    }
+
+    private func jump(to category: ServiceCategory, proxy: ScrollViewProxy) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.35)) {
+            proxy.scrollTo(ServicesMenuAnchor.category(category), anchor: .top)
+        }
+        focusedCategory = category
+    }
+
+    // MARK: Sections
+
+    private func section(_ category: ServiceCategory, services: [Service]) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
+                Text(category.title)
+                    .textRole(.displayM)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Prices straight from the shop's booking menu. Pick one to see each barber's price.")
-                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(Self.count(services.count))
+                    .textRole(.monoTag)
                     .foregroundStyle(Theme.smoke)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-        .card(padding: 0)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Every cut, every price. Prices straight from the shop's booking menu. Pick one to see each barber's price.")
-    }
-}
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(category.title), \(Self.count(services.count))")
+            .accessibilityAddTraits(.isHeader)
+            .accessibilityFocused($focusedCategory, equals: category)
 
-/// One category's services, under a title with the category's icon.
-private struct ServiceCategorySection: View {
-    let category: ServiceCategory
-    let services: [Service]
-
-    var body: some View {
-        if !services.isEmpty {
-            VStack(alignment: .leading, spacing: 12) {
-                ServiceCategoryHeader(category: category)
-                VStack(spacing: 10) {
-                    ForEach(services) { service in
-                        ServiceLink(service: service)
-                    }
+            VStack(spacing: Theme.Space.m) {
+                ForEach(services) { service in
+                    ServiceMenuLink(service: service)
                 }
             }
         }
     }
-}
 
-/// The section title look (heavy condensed caps) with the category's icon.
-private struct ServiceCategoryHeader: View {
-    let category: ServiceCategory
-
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: category.symbol)
-                .font(.headline.weight(.semibold))
-                .foregroundStyle(Theme.smoke)
-            Text(category.title.uppercased())
-                .textRole(.displayS)
-                .foregroundStyle(Theme.bone)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(category.title)
-        .accessibilityAddTraits(.isHeader)
+    /// "3 services", "1 service".
+    private static func count(_ count: Int) -> String {
+        count == 1 ? "1 service" : "\(count) services"
     }
 }
 
+// MARK: - Rows
+
 /// A service card that opens the service's page.
-private struct ServiceLink: View {
+private struct ServiceMenuLink: View {
     let service: Service
 
     var body: some View {
         NavigationLink(value: service) {
-            ServiceRow(service: service)
-                .card(padding: 14)
-                .contentShape(Rectangle())
+            ServiceMenuCard(service: service)
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(ServiceRow.accessibilityText(for: service))
+        .accessibilityLabel(accessibilityText)
         .accessibilityHint("Shows each barber's price")
         .accessibilityIdentifier("service-\(service.id)")
+    }
+
+    private var accessibilityText: String {
+        var parts = [ServiceRow.accessibilityText(for: service)]
+        if service.id == MenuFeaturedService.id {
+            parts.append(MenuFeaturedService.tag)
+        }
+        parts.append(service.summary)
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// An `ink3` card (bone for the featured service): the service's symbol on a 56 pt tile, its name,
+/// the length range in mono with the price range across from it, its description in two lines,
+/// and a chevron.
+/// At accessibility text sizes the tile moves above the text so the name keeps the full width.
+private struct ServiceMenuCard: View {
+    let service: Service
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    private let catalog = AppData.catalog
+
+    private var isFeatured: Bool { service.id == MenuFeaturedService.id }
+    private var tone: SurfaceTone { isFeatured ? .bone : .ink }
+
+    var body: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        HStack(spacing: Theme.Space.l) {
+            mainLayout {
+                ServiceIcon(symbol: service.symbol, size: 56)
+                details
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            MenuChevron()
+        }
+        .padding(Theme.Space.cardPadding)
+        .frame(maxWidth: .infinity, minHeight: 88, alignment: .leading)
+        .background(isFeatured ? Theme.bone : Theme.ink3, in: shape)
+        .environment(\.surfaceTone, tone)
+        .contentShape(shape)
+    }
+
+    private var mainLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Space.l))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            if isFeatured {
+                MonoTag(text: MenuFeaturedService.tag, style: .ink)
+                    .padding(.bottom, 2)
+            }
+            Text(service.name)
+                .textRole(.displayS)
+                .foregroundStyle(tone.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            ServiceLengthAndPrice(
+                duration: catalog.durationSummary(forService: service.id),
+                price: catalog.priceSummary(forService: service.id)
+            )
+            Text(service.summary)
+                .textRole(.caption)
+                .foregroundStyle(tone.secondary)
+                .lineLimit(2)
+                .padding(.top, 2)
+        }
+    }
+}
+
+/// The length range in mono on the left and the price range on the right, on one line under the
+/// name, so every card has the same shape whatever the name's length ("MILITARY HAIRCUT" and
+/// "Included with cut" both fit at 375 pt). With big text the price moves under the length.
+private struct ServiceLengthAndPrice: View {
+    let duration: String
+    let price: String
+
+    @Environment(\.surfaceTone) private var tone
+
+    var body: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                durationText
+                    .lineLimit(1)
+                Spacer(minLength: Theme.Space.m)
+                priceText
+                    .lineLimit(1)
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                durationText
+                    .fixedSize(horizontal: false, vertical: true)
+                priceText
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var durationText: some View {
+        Text(duration)
+            .textRole(.monoNumber)
+            .foregroundStyle(tone.secondary)
+            .accessibilityLabel(duration.spokenRanges)
+    }
+
+    private var priceText: some View {
+        Text(price)
+            .textRole(.price)
+            .foregroundStyle(tone.primary)
+            .accessibilityLabel(price.spokenRanges)
     }
 }
