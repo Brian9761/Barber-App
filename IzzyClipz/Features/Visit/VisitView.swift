@@ -652,11 +652,12 @@ private struct VisitLinksSection: View {
             subject: Text(shop.fullName),
             message: Text("\(shop.fullName), \(shop.address.singleLine)")
         ) {
+            // No trailing arrow: it opens the share sheet, not a page.
             VisitLinkRow(
                 symbol: Symbol.share,
                 title: "Share the shop",
                 detail: "Send \(shop.name) to a friend",
-                trailingSymbol: Symbol.chevron
+                trailingSymbol: nil
             )
         }
         .buttonStyle(.pressable)
@@ -707,13 +708,13 @@ private struct VisitLinksSection: View {
     }
 }
 
-/// An icon tile, a title over a detail line, and a trailing arrow (↗ for pages outside the app,
-/// › for the app's own screens).
+/// An icon tile, a title over a detail line, and a trailing arrow (↗ for web pages, › for the
+/// app's own screens).
 private struct VisitLinkRow: View {
     let symbol: String
     let title: String
     let detail: String
-    var trailingSymbol: String = Symbol.external
+    var trailingSymbol: String? = Symbol.external
 
     var body: some View {
         HStack(spacing: Theme.Space.l) {
@@ -729,10 +730,12 @@ private struct VisitLinkRow: View {
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: Theme.Space.s)
-            Image(systemName: trailingSymbol)
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.smoke)
-                .accessibilityHidden(true)
+            if let trailingSymbol {
+                Image(systemName: trailingSymbol)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Theme.smoke)
+                    .accessibilityHidden(true)
+            }
         }
         .padding(Theme.Space.m)
         .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
