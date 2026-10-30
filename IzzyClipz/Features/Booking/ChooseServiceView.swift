@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Step 2 when the barber was picked first (from Home or their profile):
-/// everything they offer, with their own prices and lengths.
+/// Step 2 when the barber was picked first (from Home, the Services tab or their profile): the
+/// barber shows as step 1, done, then everything they offer with their own prices and lengths.
+/// Tapping a service goes straight to the calendar. No red here.
 struct ChooseServiceView: View {
     let barber: Barber
     @Environment(Favorites.self) private var favorites
@@ -9,17 +10,15 @@ struct ChooseServiceView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                VStack(alignment: .leading, spacing: 16) {
-                    StepHeader(
-                        step: 2,
-                        of: 4,
-                        stepName: "Service",
-                        title: "Pick a service",
-                        subtitle: "Everything \(barber.name) offers, with their prices and lengths."
-                    )
-                    ChooseServiceBarberCard(barber: barber, isFavorite: favorites.isFavorite(barber.id))
-                }
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                ChooseServiceBarberCard(barber: barber, isFavorite: favorites.isFavorite(barber.id))
+
+                BookingStepTitle(
+                    step: 2,
+                    name: "Service",
+                    title: "Pick a service",
+                    subtitle: "Everything \(barber.name) offers, with their own prices and lengths."
+                )
 
                 if sections.isEmpty {
                     InfoCallout(
@@ -28,8 +27,8 @@ struct ChooseServiceView: View {
                     )
                 } else {
                     ForEach(sections) { section in
-                        VStack(alignment: .leading, spacing: 12) {
-                            SectionHeader(section.category.title)
+                        VStack(alignment: .leading, spacing: Theme.Space.m) {
+                            BookingSectionLabel(title: section.category.title, symbol: section.category.symbol)
                             ForEach(section.offerings) { offering in
                                 ChooseServiceOfferingLink(offering: offering, service: catalog.service(withID: offering.serviceID))
                             }
@@ -37,11 +36,12 @@ struct ChooseServiceView: View {
                     }
                 }
             }
-            .padding(Theme.gutter)
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, Theme.Space.s)
+            .padding(.bottom, Theme.Space.xxl)
         }
         .screenBackground()
-        .navigationTitle(barber.name)
-        .navigationBarTitleDisplayMode(.inline)
+        .bookingStepChrome(step: 2, name: "Service", title: barber.name)
     }
 
     /// The barber's offerings, grouped by menu category, in menu order.
@@ -61,19 +61,21 @@ private struct ChooseServiceSection: Identifiable {
     var id: String { category.id }
 }
 
-/// The barber this booking is with: avatar, name, title and rating.
+/// Step 1, already done: the barber this booking is with.
 private struct ChooseServiceBarberCard: View {
     let barber: Barber
     let isFavorite: Bool
 
     var body: some View {
-        HStack(spacing: 16) {
-            MonogramTile(barber: barber, side: 60)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+        HStack(spacing: 14) {
+            MonogramTile(barber: barber, side: 56)
+            VStack(alignment: .leading, spacing: 3) {
+                MonoTag(text: "Barber", style: .bone, symbol: Symbol.checkmark)
+                HStack(spacing: Theme.Space.xs) {
                     Text(barber.name)
                         .textRole(.displayS)
                         .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
                     if isFavorite {
                         Image(systemName: Symbol.favoriteFilled)
                             .font(.subheadline)
@@ -81,66 +83,67 @@ private struct ChooseServiceBarberCard: View {
                             .accessibilityHidden(true)
                     }
                 }
-                Text(barber.title)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.smoke)
                 if let rating = barber.rating {
                     RatingLine(rating: rating, source: "Squire")
+                } else {
+                    Text(barber.title)
+                        .textRole(.monoNumber)
+                        .foregroundStyle(Theme.smoke)
                 }
             }
             Spacer(minLength: 0)
         }
-        .card()
+        .card(padding: Theme.Space.cardPadding)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
     }
 
     private var accessibilityText: String {
-        var parts = ["Booking with \(barber.name)" + (isFavorite ? ", your barber" : ""), barber.title]
+        var parts = ["Barber picked: \(barber.name)" + (isFavorite ? ", your barber" : "")]
         if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5, \(rating.countLabel) on Squire")
+            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel) on Squire")
+        } else {
+            parts.append(barber.title)
         }
         return parts.joined(separator: ", ")
     }
 }
 
-/// One of the barber's services: icon, name, length and their price.
+/// One of the barber's services: its symbol, name, length, the barber's note and their price.
 private struct ChooseServiceOfferingLink: View {
     let offering: Offering
     let service: Service?
 
     var body: some View {
         NavigationLink(value: BookingStep.chooseTime(.offering(offering))) {
-            HStack(alignment: .top, spacing: 14) {
-                ServiceIcon(symbol: service?.symbol ?? Symbol.services, size: 44)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(serviceName)
-                        .font(.headline)
-                        .foregroundStyle(Theme.bone)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(offering.durationLabel)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.smoke)
-                    if let note = offering.note {
-                        Text(note)
-                            .font(.footnote)
-                            .foregroundStyle(Theme.smoke)
-                            .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                HStack(spacing: 14) {
+                    ServiceIcon(symbol: service?.symbol ?? Symbol.services, size: 48)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: Theme.Space.m) {
+                            nameBlock
+                            Spacer(minLength: Theme.Space.s)
+                            price(isStacked: false)
+                        }
+                        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                            nameBlock
+                            price(isStacked: true)
+                        }
                     }
+                    Image(systemName: Symbol.chevron)
+                        .font(.footnote.weight(.bold))
+                        .foregroundStyle(Theme.smoke)
+                        .accessibilityHidden(true)
                 }
-                Spacer(minLength: 8)
-                Text(offering.price.label)
-                    .font(.headline)
-                    .foregroundStyle(Theme.bone)
-                    .multilineTextAlignment(.trailing)
-                Image(systemName: Symbol.chevron)
-                    .font(.footnote.weight(.bold))
-                    .foregroundStyle(Theme.smoke)
-                    .padding(.top, 3)
-                    .accessibilityHidden(true)
+                if let note = offering.note {
+                    Text(note)
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .card(padding: 14)
-            .contentShape(Rectangle())
+            .card(padding: Theme.Space.cardPadding)
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
         .accessibilityLabel(accessibilityText)
@@ -148,12 +151,34 @@ private struct ChooseServiceOfferingLink: View {
         .accessibilityIdentifier("barberService-\(offering.id)")
     }
 
+    private var nameBlock: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(serviceName)
+                .textRole(.displayS)
+                .foregroundStyle(Theme.bone)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(offering.durationLabel)
+                .textRole(.monoNumber)
+                .foregroundStyle(Theme.smoke)
+        }
+    }
+
+    /// Beside the name it stays on one line; under it, a long price ("Included with cut") wraps.
+    private func price(isStacked: Bool) -> some View {
+        Text(offering.price.label)
+            .textRole(.price)
+            .foregroundStyle(Theme.bone)
+            .lineLimit(isStacked ? nil : 1)
+            .fixedSize(horizontal: false, vertical: true)
+            .multilineTextAlignment(isStacked ? .leading : .trailing)
+    }
+
     private var serviceName: String {
         service?.name ?? "Appointment"
     }
 
     private var accessibilityText: String {
-        var parts = [serviceName, offering.price.label, DurationText.spoken(minutes: offering.durationMinutes)]
+        var parts = [serviceName, offering.price.label.spokenRanges, DurationText.spoken(minutes: offering.durationMinutes)]
         if let note = offering.note { parts.append(note) }
         return parts.joined(separator: ", ")
     }

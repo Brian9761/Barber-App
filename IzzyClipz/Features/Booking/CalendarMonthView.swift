@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// One month of the booking calendar: the month's name with previous and next
-/// buttons, the weekday initials, and a Sunday-first grid of days.
+/// One month of the booking calendar on an `ink2` card with a hairline: "OCTOBER 2026" with
+/// previous and next buttons, the weekday initials, and a Sunday-first grid of days.
 ///
-/// Only days that can be booked are tappable. Today has a royal blue ring and
-/// the selected day is filled red.
+/// Only days that can be booked are tappable; the rest are bone at 40% (still findable). Today has
+/// a bone ring. The selected day is a bone disc with ink, bold digits, never red (red is for the
+/// Continue button). There are no "has openings" dots: the app knows the shop's hours, not the
+/// barbers' calendars.
 struct CalendarMonthView: View {
     let page: MonthPage
     let calendar: BookingCalendar
@@ -23,7 +25,8 @@ struct CalendarMonthView: View {
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
 
     var body: some View {
-        VStack(spacing: 10) {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        VStack(spacing: Theme.Space.xxs) {
             header
             weekdayRow
             // A new identity per month, so changing months cross-fades the
@@ -34,19 +37,20 @@ struct CalendarMonthView: View {
                     .transition(AnyTransition.opacity)
             }
         }
-        .padding(.vertical, 6)
-        .card(padding: 8)
+        .padding(6)
+        .background(Theme.ink2, in: shape)
+        .overlay(shape.strokeBorder(Theme.line))
     }
 
     private var header: some View {
-        HStack(spacing: 6) {
-            Text(page.title)
-                .textRole(.displayS)
-                .foregroundStyle(Theme.bone)
+        HStack(spacing: 0) {
+            title
+                .textRole(.displayM)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(page.title)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("calendarMonthTitle")
-            Spacer(minLength: 8)
+            Spacer(minLength: Theme.Space.s)
             CalendarMonthArrowButton(
                 symbol: Symbol.back,
                 label: "Previous month",
@@ -62,7 +66,18 @@ struct CalendarMonthView: View {
                 action: onNext
             )
         }
-        .padding(.leading, 8)
+        .padding(.leading, 10)
+    }
+
+    /// "OCTOBER" in bone and "2026" in smoke.
+    private var title: Text {
+        let year = String(page.year)
+        let suffix = " \(year)"
+        guard page.title.hasSuffix(suffix) else {
+            return Text(page.title).foregroundStyle(Theme.bone)
+        }
+        let month = String(page.title.dropLast(suffix.count))
+        return Text("\(Text(month).foregroundStyle(Theme.bone)) \(Text(year).foregroundStyle(Theme.smoke))")
     }
 
     private var weekdayRow: some View {
@@ -71,14 +86,14 @@ struct CalendarMonthView: View {
                 Text(verbatim: Self.weekdayInitials[index])
                     .textRole(.monoTag)
                     .foregroundStyle(Theme.smoke)
-                    .frame(maxWidth: .infinity)
+                    .frame(maxWidth: .infinity, minHeight: 18)
             }
         }
         .accessibilityHidden(true)
     }
 
     private var dayGrid: some View {
-        LazyVGrid(columns: columns, spacing: 4) {
+        LazyVGrid(columns: columns, spacing: 0) {
             ForEach(0..<page.leadingBlanks, id: \.self) { _ in
                 Color.clear
                     .frame(height: 1)
@@ -127,7 +142,7 @@ struct CalendarMonthView: View {
     }
 }
 
-/// A round previous/next month button.
+/// A previous/next month chevron: bone, or bone at 40% when there's no month that way. 44 pt.
 private struct CalendarMonthArrowButton: View {
     let symbol: String
     let label: String
@@ -140,9 +155,8 @@ private struct CalendarMonthArrowButton: View {
             Image(systemName: symbol)
                 .font(.body.weight(.bold))
                 .foregroundStyle(isEnabled ? Theme.bone : Theme.boneDisabled)
-                .frame(width: 44, height: 44)
-                .background(isEnabled ? Theme.ink4 : Color.clear, in: Circle())
-                .contentShape(Circle())
+                .frame(minWidth: Theme.minimumTapSize, minHeight: Theme.minimumTapSize)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
         .disabled(!isEnabled)
@@ -151,7 +165,7 @@ private struct CalendarMonthArrowButton: View {
     }
 }
 
-/// One day on the grid.
+/// One day on the grid: at least 44 pt tall, as wide as a seventh of the card.
 private struct CalendarMonthDayCell: View {
     let day: CalendarDay
     let isBookable: Bool
@@ -163,13 +177,14 @@ private struct CalendarMonthDayCell: View {
     var body: some View {
         Button(action: action) {
             Text(verbatim: String(day.day))
-                .font(.body.weight(isSelected || isToday ? .bold : .semibold))
-                .monospacedDigit()
+                .font(font)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
                 .foregroundStyle(textColor)
-                .frame(maxWidth: .infinity, minHeight: 46)
-                .background { selectionCircle }
+                .padding(.vertical, Theme.Space.xxs)
+                .frame(maxWidth: .infinity, minHeight: Theme.minimumTapSize)
+                // A circle inscribed in the cell, about 40 pt at the default size.
+                .background { selectionDisc }
                 .overlay { todayRing }
                 .contentShape(Rectangle())
         }
@@ -180,6 +195,12 @@ private struct CalendarMonthDayCell: View {
         .accessibilityIdentifier("day-\(day.id)")
     }
 
+    /// Tabular digits, so the columns line up; bold for today and the selected day.
+    private var font: Font {
+        let face: BrandFont = isSelected || isToday ? .bold : (isBookable ? .semiBold : .medium)
+        return face.font(size: 16, relativeTo: .body).monospacedDigit()
+    }
+
     /// Selection is bone with ink, never red. Days that can't be booked are bone at 40%.
     private var textColor: Color {
         if isSelected { return Theme.ink }
@@ -187,12 +208,12 @@ private struct CalendarMonthDayCell: View {
         return Theme.bone
     }
 
-    @ViewBuilder private var selectionCircle: some View {
+    @ViewBuilder private var selectionDisc: some View {
         if isSelected {
             Circle()
                 .fill(Theme.bone)
-                .padding(1)
-                .transition(AnyTransition.scale(scale: 0.6).combined(with: .opacity))
+                .padding(2)
+                .transition(AnyTransition.opacity)
         }
     }
 

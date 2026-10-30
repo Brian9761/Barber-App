@@ -3,8 +3,14 @@ import SwiftUI
 /// The Book tab. Booking takes four steps: a service, a barber, a day and
 /// time on the app's calendar, then a review that hands off to Squire, the
 /// shop's booking system, to confirm the real slot.
+///
+/// Step 1 (this screen): the client's saved appointments, then the menu.
+/// Steps 1 and 2 move on as soon as something is tapped; only the calendar
+/// has a Continue button, because only there is the choice in two parts.
+/// No red here: the tab bar's Book button is the screen's one red.
 struct BookView: View {
     @Environment(AppRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let topID = "bookTop"
 
@@ -24,10 +30,14 @@ struct BookView: View {
                     // Just saved: the new appointment is at the top.
                     proxy.scrollTo(Self.topID, anchor: .top)
                 }
+                .onTabReselect {
+                    withAnimation(reduceMotion ? nil : .snappy) {
+                        proxy.scrollTo(Self.topID, anchor: .top)
+                    }
+                }
             }
             .screenBackground()
-            .navigationTitle("Book")
-            .navigationBarTitleDisplayMode(.inline)
+            .bookingStepChrome(step: 1, name: "Service", title: "Book")
             .navigationDestination(for: BookingStep.self) { step in
                 BookStepDestination(step: step)
                     .barberPolePushRide()
@@ -36,7 +46,7 @@ struct BookView: View {
     }
 }
 
-/// Step 1: saved appointments first, then the menu.
+/// Step 1: saved appointments first, then the menu by category, then other ways to book.
 private struct BookStartContent: View {
     let now: Date
 
@@ -44,27 +54,29 @@ private struct BookStartContent: View {
     private let catalog = AppData.catalog
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .leading, spacing: Theme.Space.section) {
             let upcoming = appointments.upcoming.filter { $0.isUpcoming(at: now) }
             if !upcoming.isEmpty {
                 BookAppointmentsSection(appointments: upcoming)
             }
 
-            StepHeader(
-                step: 1,
-                of: 4,
-                stepName: "Service",
-                title: "Pick a service",
-                subtitle: "Prices and lengths come straight from the shop's booking menu."
-            )
-
-            ForEach(catalog.categories) { category in
-                BookCategorySection(category: category)
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                BookingStepTitle(
+                    step: 1,
+                    name: "Service",
+                    title: "Pick a service",
+                    subtitle: "Prices and lengths come straight from the shop's booking menu."
+                )
+                ForEach(catalog.categories) { category in
+                    BookCategorySection(category: category)
+                }
             }
 
             BookOtherWays()
         }
-        .padding(Theme.gutter)
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, Theme.Space.s)
+        .padding(.bottom, Theme.Space.xxl)
     }
 }
 
@@ -79,25 +91,25 @@ private struct BookStepDestination: View {
             if let service = catalog.service(withID: serviceID) {
                 ChooseBarberView(service: service)
             } else {
-                BookStepUnavailableView(title: "Service unavailable")
+                BookStepUnavailableView(title: "Service unavailable", step: 2, name: "Barber")
             }
         case .chooseService(let barberID):
             if let barber = catalog.barber(withID: barberID) {
                 ChooseServiceView(barber: barber)
             } else {
-                BookStepUnavailableView(title: "Barber unavailable")
+                BookStepUnavailableView(title: "Barber unavailable", step: 2, name: "Service")
             }
         case .chooseTime(let choice):
             if catalog.service(withID: choice.serviceID) != nil {
                 ChooseTimeView(choice: choice)
             } else {
-                BookStepUnavailableView(title: "Service unavailable")
+                BookStepUnavailableView(title: "Service unavailable", step: 3, name: "Time")
             }
         case .review(let plan):
             if catalog.service(withID: plan.choice.serviceID) != nil {
                 BookingReviewView(plan: plan)
             } else {
-                BookStepUnavailableView(title: "Service unavailable")
+                BookStepUnavailableView(title: "Service unavailable", step: 4, name: "Review")
             }
         }
     }
@@ -106,6 +118,8 @@ private struct BookStepDestination: View {
 /// Shown if a link points at a service or barber that's no longer on the menu.
 private struct BookStepUnavailableView: View {
     let title: String
+    let step: Int
+    let name: String
 
     var body: some View {
         EmptyStateView(
@@ -119,15 +133,17 @@ private struct BookStepUnavailableView: View {
             .buttonStyle(.secondary)
         }
         .screenBackground()
+        .bookingStepChrome(step: step, name: name, title: title)
     }
 }
 
-/// "Your appointments": everything saved that hasn't happened yet.
+/// "Your appointments": everything saved that hasn't happened yet, as tickets. The soonest one is
+/// the "Next appointment".
 private struct BookAppointmentsSection: View {
     let appointments: [Appointment]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
             SectionHeader("Your appointments")
             ForEach(appointments) { appointment in
                 UpcomingAppointmentCard(
@@ -139,23 +155,20 @@ private struct BookAppointmentsSection: View {
     }
 }
 
-/// One category of the menu, e.g. "Haircuts", with a row per service.
+/// One category of the menu, e.g. "Haircuts", with a row per service. Each row goes straight to
+/// step 2.
 private struct BookCategorySection: View {
     let category: ServiceCategory
     private let catalog = AppData.catalog
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeader(category.title) {
-                Image(systemName: category.symbol)
-                    .foregroundStyle(Theme.smoke)
-                    .accessibilityHidden(true)
-            }
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            BookingSectionLabel(title: category.title, symbol: category.symbol)
             ForEach(catalog.services(in: category)) { service in
                 NavigationLink(value: BookingStep.chooseBarber(serviceID: service.id)) {
                     ServiceRow(service: service)
-                        .card(padding: 14)
-                        .contentShape(Rectangle())
+                        .card(padding: Theme.Space.cardPadding)
+                        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
                 }
                 .buttonStyle(.pressable)
                 .accessibilityLabel(ServiceRow.accessibilityText(for: service))
@@ -166,33 +179,45 @@ private struct BookCategorySection: View {
     }
 }
 
-/// Squire's full booking page and the phone, for anything the menu above
-/// doesn't cover.
+/// Squire's full booking page and the phone, for anything the menu above doesn't cover.
 private struct BookOtherWays: View {
     @Environment(AppRouter.self) private var router
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
             Text("Looking for something else?")
-                .textRole(.headline)
+                .textRole(.callout)
                 .foregroundStyle(Theme.bone)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
 
             Button {
                 router.openSquire(.anything, plan: nil)
             } label: {
-                Label("Browse everything on Squire", systemImage: Symbol.external)
+                Label("Browse all on Squire", systemImage: Symbol.external)
+                    .labelStyle(BookTrailingIconLabelStyle())
             }
             .buttonStyle(.tertiary)
+            .accessibilityLabel("Browse all on Squire")
             .accessibilityHint("Opens Squire, the shop's booking system")
             .accessibilityIdentifier("browseSquireButton")
 
             CallButton {
-                Label("Prefer to call? \(AppData.shop.phone.display)", systemImage: Symbol.call)
+                Label("Call \(AppData.shop.phone.display)", systemImage: Symbol.call)
             }
             .buttonStyle(.tertiary)
             .accessibilityIdentifier("bookCallButton")
         }
-        .padding(.top, 4)
+    }
+}
+
+/// The title, then its symbol ("BROWSE ALL ON SQUIRE ↗"): the arrow says where the button goes.
+private struct BookTrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: Theme.Space.s) {
+            configuration.title
+            configuration.icon
+                .accessibilityHidden(true)
+        }
     }
 }
