@@ -140,6 +140,7 @@ struct HomeHero: View {
         }
         .accessibilityAction(.default, openGallery)
         .accessibilityHint("Opens the gallery")
+        .accessibilityIdentifier("homeHeroPhotos")
     }
 
     /// "Textured crop with a fade" on the left, "1 / 6" on the right.
@@ -249,6 +250,7 @@ struct HomeBookSection: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, Theme.Space.xxs)
             .accessibilityLabel(parts.map(\.spokenRanges).joined(separator: ". "))
+            .accessibilityIdentifier("homeWalkIns")
     }
 }
 
