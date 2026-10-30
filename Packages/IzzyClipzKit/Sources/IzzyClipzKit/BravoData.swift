@@ -6,7 +6,9 @@ import Foundation
 // descriptions; they make no claims Bravo doesn't.
 //
 // Each product's `id` is its Shopify handle, so it doubles as the store link
-// (bravohairgel.com/products/<id>) and the key for live prices.
+// (bravohairgel.com/products/<id>) and the key for live prices. Its
+// `variantID` is the Shopify variant a cart link adds (bravohairgel.com/cart/
+// <variantID>:<quantity>), from the same feed, checked October 30, 2026.
 
 extension ProductCatalog {
     public static let bravo = ProductCatalog(
@@ -20,11 +22,13 @@ extension ProductCatalog {
             ],
             storeURL: URL(string: "https://bravohairgel.com/")!,
             shippingNote: "Free shipping on U.S. orders $64+",
+            freeShippingThreshold: Price(cents: 6400),
             phone: nil
         ),
         products: [
             Product(
                 id: "blue-bravo-hair-gel-16oz",
+                variantID: 44210083561649,
                 name: "Blue Hair Gel",
                 size: "16 oz",
                 category: .gels,
@@ -35,6 +39,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "white-bravo-hair-gel-16oz",
+                variantID: 44210087166129,
                 name: "White Hair Gel",
                 size: "16 oz",
                 category: .gels,
@@ -45,6 +50,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "bravo-onyx-hair-gel",
+                variantID: 45716306821297,
                 name: "Onyx Hair Gel",
                 size: "16 oz",
                 category: .gels,
@@ -61,6 +67,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "blue-bravo-hair-gel-4oz",
+                variantID: 44210076909745,
                 name: "Blue Hair Gel",
                 size: "4 oz",
                 category: .gels,
@@ -70,6 +77,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "white-bravo-hair-gel-4oz",
+                variantID: 44210085462193,
                 name: "White Hair Gel",
                 size: "4 oz",
                 category: .gels,
@@ -79,6 +87,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "bravo-matte-clay",
+                variantID: 43628496945329,
                 name: "Matte Clay",
                 category: .styling,
                 price: Price(cents: 1799),
@@ -94,6 +103,8 @@ extension ProductCatalog {
             ),
             Product(
                 id: "bravo-texture-powder",
+                // "SINGLE", not the 12-count display box.
+                variantID: 46751008653489,
                 name: "Texture Powder",
                 category: .styling,
                 price: Price(cents: 1899),
@@ -108,6 +119,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "bravo-blue-pomade",
+                variantID: 44209408409777,
                 name: "Blue Pomade",
                 category: .styling,
                 price: Price(cents: 1799),
@@ -122,6 +134,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "bravo-after-shave",
+                variantID: 45716306395313,
                 name: "After-Shave Spray",
                 category: .grooming,
                 price: Price(cents: 1299),
@@ -136,6 +149,7 @@ extension ProductCatalog {
             ),
             Product(
                 id: "bravo-chapstick-3-pack",
+                variantID: 46396389916849,
                 name: "Mint Lip Balm",
                 size: "3 pack",
                 category: .grooming,

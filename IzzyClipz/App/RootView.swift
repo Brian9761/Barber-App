@@ -8,6 +8,7 @@ import SwiftUI
 /// time, through the router.
 struct RootView: View {
     @Environment(AppRouter.self) private var router
+    @Environment(BagStore.self) private var bag
     /// How many times each tab has been tapped again while selected, for `onTabReselect`.
     @State private var reselections: [AppTab: Int] = [:]
     /// The home indicator's inset (without the keyboard), which places the floating bar.
@@ -46,6 +47,17 @@ struct RootView: View {
                 .tint(Theme.bone)
                 .presentationBackground(Theme.ink2)
         }
+        // Asked once Bravo's checkout closes: the app can't see whether the order went through.
+        .alert("Did you finish checking out?", isPresented: $router.asksAboutCheckout) {
+            Button("Yes, empty my bag") {
+                router.answerCheckoutPrompt(finished: true, bag: bag)
+            }
+            Button("Not yet", role: .cancel) {
+                router.answerCheckoutPrompt(finished: false, bag: bag)
+            }
+        } message: {
+            Text("The app can't tell whether your order went through on bravohairgel.com.")
+        }
     }
 
     @ViewBuilder private func tabRoot(_ tab: AppTab) -> some View {
@@ -70,6 +82,10 @@ struct RootView: View {
             ReminderSettingsView()
         case .addToCalendar(let appointment):
             AddToCalendarSheet(appointment: appointment)
+        case .bag:
+            BagView()
+        case .checkout(let url):
+            WebSheet(url: url)
         }
     }
 

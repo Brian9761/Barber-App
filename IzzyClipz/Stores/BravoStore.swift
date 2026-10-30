@@ -31,6 +31,12 @@ final class BravoStore {
         livePrices[product.id]?.isAvailable == false
     }
 
+    /// The Shopify variant a cart link adds: the one whose live price is shown,
+    /// or the bundled one until the store answers (or if its feed leaves it out).
+    func variantID(for product: Product) -> Int64 {
+        livePrices[product.id]?.variantID ?? product.variantID
+    }
+
     /// Fetches current prices, at most once an hour.
     func refresh() async {
         guard !LaunchOptions.isUITesting, !isChecking, let url = Self.feedURL else { return }
