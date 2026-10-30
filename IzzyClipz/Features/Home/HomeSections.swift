@@ -44,6 +44,9 @@ struct HomeHero: View {
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
             LiveStatusPill(isOverPhoto: true)
+                // One line on the photo: the longest status ("Closed · opens 10 AM tomorrow") still
+                // fits at xxxLarge. VoiceOver reads it in full.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 .padding(Theme.Space.l)
                 // Swipes that start on the pill still turn the page.
                 .allowsHitTesting(false)
@@ -403,7 +406,7 @@ struct HomeCrewCard: View {
 
     var body: some View {
         // Wide enough at the largest sizes for "Flowxbori" on one line.
-        let cardWidth = min(width, 240)
+        let cardWidth = min(width, 260)
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
         VStack(alignment: .leading, spacing: 0) {
             MonogramTile(barber: barber, size: CGSize(width: cardWidth, height: 66), cornerRadius: 0)
@@ -467,6 +470,7 @@ private struct HomeBarberMeta: View {
 struct HomeFavoriteBarberCard: View {
     let barber: Barber
     @Environment(AppRouter.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
@@ -497,8 +501,12 @@ struct HomeFavoriteBarberCard: View {
     }
 
     private var profileLink: some View {
-        NavigationLink(value: barber) {
-            HStack(spacing: 14) {
+        // The tile over the name at accessibility sizes, so a long name keeps the full width.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Space.m))
+            : AnyLayout(HStackLayout(spacing: 14))
+        return NavigationLink(value: barber) {
+            layout {
                 MonogramTile(barber: barber, side: 56)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(barber.name)
@@ -584,25 +592,28 @@ struct HomeReviewsCard: View {
             }
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 ForEach(ratings, id: \.source) { sourced in
-                    score(sourced)
+                    score(sourced, wraps: true)
                 }
             }
         }
     }
 
-    private func score(_ sourced: SourcedRating) -> some View {
+    /// One site's score. Side by side it keeps its natural width (so `ViewThatFits` can tell
+    /// whether both fit); stacked, the source wraps at the largest text sizes.
+    private func score(_ sourced: SourcedRating, wraps: Bool = false) -> some View {
         HStack(alignment: .center, spacing: Theme.Space.xs) {
             Text(sourced.rating.averageLabel)
                 .textRole(.priceL)
                 .foregroundStyle(Theme.ink)
+                .fixedSize()
             VStack(alignment: .leading, spacing: 3) {
                 RatingStars(average: sourced.rating.average, size: 11, color: Theme.ink)
                 Text("\(sourced.rating.count) on \(sourced.source)")
                     .textRole(.monoNumber)
                     .foregroundStyle(Theme.smokeDark)
+                    .fixedSize(horizontal: !wraps, vertical: true)
             }
         }
-        .fixedSize()
     }
 
     private func quote(_ review: Review) -> some View {

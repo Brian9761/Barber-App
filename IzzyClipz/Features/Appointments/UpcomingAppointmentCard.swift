@@ -76,7 +76,7 @@ struct UpcomingAppointmentCard: View {
                 }
                 .accessibilityIdentifier("appointmentDirections")
             }
-            Section("To change or cancel, call the shop") {
+            Section("To change or cancel") {
                 Button {
                     openURL(shop.phone.callURL) { accepted in
                         if !accepted { showsNumber = true }
@@ -120,6 +120,8 @@ struct UpcomingAppointmentCard: View {
         }
         .buttonStyle(.textLink(color: Theme.bone))
         .padding(.leading, 4)
+        // Several tickets can be stacked (Book step 1): say which one this is for.
+        .accessibilityHint("\(withLine), \(longDay)")
         .accessibilityIdentifier("appointmentAddToCalendar")
     }
 
@@ -138,12 +140,17 @@ struct UpcomingAppointmentCard: View {
         return "\(appointment.serviceName) with \(who)"
     }
 
+    /// "Friday, October 30 at 2:30 PM".
+    private var longDay: String {
+        let day = calendar.longLabel(for: calendar.day(containing: appointment.start))
+        return "\(day) at \(calendar.timeLabel(for: appointment.start))"
+    }
+
     /// "Next appointment, Friday, October 30 at 2:30 PM, Haircut with Carlos, $45, 45 minutes".
     private var accessibilitySummary: String {
-        let day = calendar.longLabel(for: calendar.day(containing: appointment.start))
-        return [
+        [
             isNext ? "Next appointment" : "Upcoming appointment",
-            "\(day) at \(calendar.timeLabel(for: appointment.start))",
+            longDay,
             withLine,
             appointment.priceLabel.spokenRanges,
             DurationText.spoken(minutes: appointment.durationMinutes),
