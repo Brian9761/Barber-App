@@ -22,7 +22,13 @@ struct ServicesView: View {
                         noResults
                     }
                 }
-                .searchable(text: $query, prompt: "Search services")
+                // Under the title, as on iOS 17 and 18, also on iOS 26 (whose automatic placement
+                // can move it to the bottom, where the floating tab bar is).
+                .searchable(
+                    text: $query,
+                    placement: .navigationBarDrawer(displayMode: .automatic),
+                    prompt: "Search services"
+                )
                 // The native large title (Archivo, from NavigationBarAppearance) sits above the search
                 // field, which is where search belongs; it folds into the bar as the menu scrolls.
                 .navigationTitle("Services")
@@ -153,15 +159,17 @@ private struct ServicesMenu: View {
 
     private func section(_ category: ServiceCategory, services: [Service]) -> some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
-            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
-                Text(category.title)
-                    .textRole(.displayM)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(Self.count(services.count))
-                    .textRole(.monoTag)
-                    .foregroundStyle(Theme.smoke)
+            // The count beside the title, or under it once the two don't fit side by side.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
+                    categoryTitle(category)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    categoryCount(services.count)
+                }
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    categoryTitle(category)
+                    categoryCount(services.count)
+                }
             }
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(category.title), \(Self.count(services.count))")
@@ -174,6 +182,18 @@ private struct ServicesMenu: View {
                 }
             }
         }
+    }
+
+    private func categoryTitle(_ category: ServiceCategory) -> some View {
+        MenuTitleText(category.title, role: .displayM)
+            .foregroundStyle(Theme.bone)
+    }
+
+    private func categoryCount(_ count: Int) -> some View {
+        Text(Self.count(count))
+            .textRole(.monoTag)
+            .foregroundStyle(Theme.smoke)
+            .lineLimit(1)
     }
 
     /// "3 services", "1 service".
@@ -250,10 +270,8 @@ private struct ServiceMenuCard: View {
                 MonoTag(text: MenuFeaturedService.tag, style: .ink)
                     .padding(.bottom, 2)
             }
-            Text(service.name)
-                .textRole(.displayS)
+            MenuTitleText(service.name, role: .displayS)
                 .foregroundStyle(tone.primary)
-                .fixedSize(horizontal: false, vertical: true)
             ServiceLengthAndPrice(
                 duration: catalog.durationSummary(forService: service.id),
                 price: catalog.priceSummary(forService: service.id)
@@ -295,7 +313,7 @@ private struct ServiceLengthAndPrice: View {
     }
 
     private var durationText: some View {
-        Text(duration)
+        Text(duration.menuKeepingUnits)
             .textRole(.monoNumber)
             .foregroundStyle(tone.secondary)
             .accessibilityLabel(duration.spokenRanges)
