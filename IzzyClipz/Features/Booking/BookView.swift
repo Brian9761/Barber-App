@@ -30,6 +30,7 @@ struct BookView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: BookingStep.self) { step in
                 BookStepDestination(step: step)
+                    .barberPolePushRide()
             }
         }
     }

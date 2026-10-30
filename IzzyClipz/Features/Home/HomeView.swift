@@ -9,14 +9,17 @@ struct HomeView: View {
 
         NavigationStack(path: $router.homePath) {
             HomeScreen()
-                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0) }
-                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0) }
+                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide() }
+                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide() }
                 .navigationDestination(for: HomeRoute.self) { route in
-                    switch route {
-                    case .gallery: GalleryView()
-                    case .team: TeamView()
-                    case .reviews: ReviewsView()
+                    Group {
+                        switch route {
+                        case .gallery: GalleryView()
+                        case .team: TeamView()
+                        case .reviews: ReviewsView()
+                        }
                     }
+                    .barberPolePushRide()
                 }
         }
     }

@@ -5,16 +5,21 @@ import UIKit
 /// The Visit tab: where the shop is, when it's open, what to know before
 /// coming in, and what clients say.
 struct VisitView: View {
+    /// Popped back to Visit when the Visit tab is tapped again.
+    @State private var path = NavigationPath()
+
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             VisitScreen()
                 .navigationDestination(for: VisitRoute.self) { route in
                     switch route {
                     case .reviews:
                         ReviewsView()
+                            .barberPolePushRide()
                     }
                 }
         }
+        .onTabReselect { path = NavigationPath() }
     }
 
     /// "1.0.0 (1)", from the app's Info.plist.

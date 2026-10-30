@@ -10,6 +10,8 @@ struct ChooseTimeView: View {
 
     @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
+    /// Every tab stays alive, so coming back to the Book tab doesn't fire `onAppear`.
+    @Environment(\.isSelectedTab) private var isSelectedTab
     @State private var now: Date
     @State private var selectedDay: CalendarDay?
     @State private var selectedSlot: TimeSlot?
@@ -75,6 +77,9 @@ struct ChooseTimeView: View {
         .onAppear(perform: refresh)
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { refresh() }
+        }
+        .onChange(of: isSelectedTab) { _, isSelected in
+            if isSelected { refresh() }
         }
         // Keeps today's times honest while the client lingers on the calendar.
         .task {

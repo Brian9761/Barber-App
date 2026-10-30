@@ -4,9 +4,11 @@ import SwiftUI
 /// sells on bravohairgel.com, by category.
 struct ShopView: View {
     private let catalog = AppData.products
+    /// Popped back to the shop when the Shop tab is tapped again.
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 32) {
                     ShopPartnerHeader()
@@ -28,8 +30,10 @@ struct ShopView: View {
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(for: Product.self) { product in
                 ProductDetailView(product: product)
+                    .barberPolePushRide()
             }
         }
+        .onTabReselect { path = NavigationPath() }
     }
 
     private var footnote: some View {

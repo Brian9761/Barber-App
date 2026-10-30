@@ -4,6 +4,8 @@ import SwiftUI
 /// service's price range and length.
 struct ServicesView: View {
     @State private var query = ""
+    /// Popped back to the menu when the Services tab is tapped again.
+    @State private var path = NavigationPath()
     private let catalog = AppData.catalog
 
     private var results: [Service] {
@@ -17,7 +19,7 @@ struct ServicesView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     if !isSearching {
@@ -44,9 +46,10 @@ struct ServicesView: View {
             .searchable(text: $query, prompt: "Search services")
             .navigationTitle("Services")
             .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: Service.self) { ServiceDetailView(service: $0) }
-            .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0) }
+            .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide() }
+            .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide() }
         }
+        .onTabReselect { path = NavigationPath() }
     }
 
     private var footnote: some View {
