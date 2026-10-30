@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Step 4: everything the client picked, and the hand-off to Squire, where
-/// the real slot is confirmed.
+/// Step 4: the pick on a bone ticket, and the hand-off to Squire, the shop's booking system, where
+/// the real slot is confirmed. The Squire link carries the barber and the service, not the time,
+/// so the hand-off card says exactly what to pick there. The screen's one red is "Confirm on
+/// Squire".
 struct BookingReviewView: View {
     let plan: BookingPlan
 
@@ -19,45 +21,57 @@ struct BookingReviewView: View {
             }
         }
         .screenBackground()
-        .navigationTitle("Review")
-        .navigationBarTitleDisplayMode(.inline)
+        .bookingStepChrome(step: 4, name: "Review", title: "Review")
     }
 
     private func content(now: Date) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            StepHeader(
-                step: 4,
-                of: 4,
-                stepName: "Review",
-                title: "Review & confirm",
-                subtitle: "Check the details, then confirm your time on Squire."
-            )
+        VStack(alignment: .leading, spacing: Theme.Space.xxl) {
+            BookingStepTitle(step: 4, name: "Review", title: "Review & confirm")
 
-            BookingReviewSummary(plan: plan)
+            VStack(alignment: .leading, spacing: Theme.Space.m) {
+                BookingTicket(
+                    kicker: "Your pick",
+                    start: plan.start,
+                    serviceName: plan.choice.serviceName,
+                    withBarber: BookingFlowCopy.withBarber(plan.choice),
+                    priceLabel: plan.choice.priceLabel,
+                    durationMinutes: plan.choice.durationMinutes
+                )
+                if let note = plan.choice.note {
+                    Text(note)
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
 
             if isTooSoon(now: now) {
                 BookingReviewSoonWarning(timeLabel: timeLabel, hasPassed: plan.start <= now, onPickAnother: pickAnotherTime)
             }
 
-            InfoCallout(title: "Last step: confirm on Squire", message: calloutMessage, symbol: Symbol.calendarClock)
+            BookingReviewHandoff(instruction: instruction, timeZoneNote: BookingFlowCopy.timeZoneNote(at: plan.start))
 
-            Button {
-                router.openSquire(plan.choice.request, plan: plan)
-            } label: {
-                Text("Confirm on Squire")
+            VStack(spacing: Theme.Space.s) {
+                Button {
+                    router.openSquire(plan.choice.request, plan: plan)
+                } label: {
+                    Text("Confirm on Squire")
+                }
+                .buttonStyle(.primary(trailingSymbol: Symbol.external, drips: true))
+                .accessibilityHint("Opens Squire, the shop's booking system")
+                .accessibilityIdentifier("confirmOnSquireButton")
+
+                Text("After you confirm, come back here to save it.")
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.primary(trailingSymbol: Symbol.external, drips: true))
-            .accessibilityHint("Opens Squire, the shop's booking system")
-            .accessibilityIdentifier("confirmOnSquireButton")
-
-            Text("After you confirm, come back here to save it on your phone.")
-                .font(.footnote)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .center)
-                .multilineTextAlignment(.center)
         }
-        .padding(Theme.gutter)
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, Theme.Space.s)
+        .padding(.bottom, Theme.Space.xxl)
     }
 
     private func isTooSoon(now: Date) -> Bool {
@@ -72,18 +86,17 @@ struct BookingReviewView: View {
         calendar.timeLabel(for: plan.start)
     }
 
-    /// What to do on Squire, in plain words.
-    private var calloutMessage: String {
+    /// What to do on Squire, in plain words: "Squire opens with Carlos and Haircut picked. Choose
+    /// Thu, Oct 29 at 2:30 PM, or the closest open time."
+    private var instruction: String {
         let choice = plan.choice
         let opens: String
         if choice.barberID == nil {
-            opens = "It opens with \(choice.serviceName) already picked, with whoever's free first."
+            opens = "Squire opens with \(choice.serviceName) picked, for whoever's free first."
         } else {
-            opens = "It opens with \(choice.barberName) and \(choice.serviceName) already picked."
+            opens = "Squire opens with \(choice.barberName) and \(choice.serviceName) picked."
         }
-        let message = "Squire is the shop's booking system. \(opens) Choose \(dayLabel) at \(timeLabel), or the closest open time, and confirm with your name and number."
-        guard let zone = BookingFlowCopy.timeZoneNote(at: plan.start) else { return message }
-        return "\(message) \(zone)"
+        return "\(opens) Choose \(dayLabel) at \(timeLabel), or the closest open time."
     }
 
     /// Back to the calendar to choose again.
@@ -93,93 +106,56 @@ struct BookingReviewView: View {
     }
 }
 
-/// Service, barber, day, time, price and length, one per row.
-private struct BookingReviewSummary: View {
-    let plan: BookingPlan
-    private let calendar = AppData.bookingCalendar
+/// "LAST STEP · ON SQUIRE": what Squire opens with and what to pick there. The time isn't held
+/// anywhere until it's confirmed on Squire, and the card says so.
+private struct BookingReviewHandoff: View {
+    let instruction: String
+    let timeZoneNote: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            BookingReviewRow(title: "Service", value: plan.choice.serviceName)
-            Divider()
-            BookingReviewRow(title: "Barber", value: plan.choice.barberName)
-            Divider()
-            BookingReviewRow(title: "Day", value: calendar.shortLabel(for: calendar.day(containing: plan.start)))
-            Divider()
-            BookingReviewRow(title: "Time", value: calendar.timeLabel(for: plan.start))
-            Divider()
-            BookingReviewRow(title: "Price", value: plan.choice.priceLabel, valueColor: Theme.bone)
-            Divider()
-            BookingReviewRow(title: "Length", value: plan.choice.durationLabel)
-            if let note = plan.choice.note {
-                Text(note)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.smoke)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 12)
-            }
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Kicker("Last step · on Squire")
+            Text(instruction)
+                .textRole(.callout)
+                .foregroundStyle(Theme.bone)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(detail)
+                .textRole(.body)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .card()
+        .card(padding: Theme.Space.xl)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var detail: String {
+        let base = "Squire is the shop's booking system. Nothing is booked until you confirm there with your name and number."
+        guard let timeZoneNote else { return base }
+        return "\(base) \(timeZoneNote)"
     }
 }
 
-/// "Service ........ Haircut", stacking at large text sizes.
-private struct BookingReviewRow: View {
-    let title: String
-    let value: String
-    var valueColor: Color = Theme.bone
-
-    var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                titleText
-                Spacer(minLength: 12)
-                valueText
-                    .multilineTextAlignment(.trailing)
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                titleText
-                valueText
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .padding(.vertical, 12)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title), \(value)")
-    }
-
-    private var titleText: some View {
-        Text(title)
-            .font(.body)
-            .foregroundStyle(Theme.smoke)
-    }
-
-    private var valueText: some View {
-        Text(value)
-            .font(.body.weight(.semibold))
-            .foregroundStyle(valueColor)
-    }
-}
-
-/// The picked time is in the past or about to be.
+/// The picked time has passed or is about to: an `ink3` card with the caution icon and a bone
+/// "Pick another time" button.
 private struct BookingReviewSoonWarning: View {
     let timeLabel: String
     let hasPassed: Bool
     let onPickAnother: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            HStack(alignment: .top, spacing: Theme.Space.l) {
                 Image(systemName: Symbol.warning)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(Theme.caution)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(hasPassed ? "That time has passed" : "That time is coming up fast")
-                        .font(.subheadline.weight(.bold))
+                        .textRole(.callout)
                         .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(message)
-                        .font(.subheadline)
+                        .textRole(.body)
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -188,15 +164,12 @@ private struct BookingReviewSoonWarning: View {
             .accessibilityElement(children: .combine)
 
             Button(action: onPickAnother) {
-                Label("Pick Another Time", systemImage: Symbol.calendar)
+                Text("Pick another time")
             }
             .buttonStyle(.secondary)
             .accessibilityIdentifier("pickAnotherTimeButton")
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.caution.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.caution.opacity(0.35)))
+        .card(padding: Theme.Space.xl)
     }
 
     private var message: String {
@@ -232,39 +205,5 @@ enum BookingFlowCopy {
         let shopOffset = AppData.shop.timeZone.secondsFromGMT(for: date)
         guard TimeZone.current.secondsFromGMT(for: date) != shopOffset else { return nil }
         return "Times are in Oceanside time (Pacific)."
-    }
-}
-
-/// What's being booked: the service icon and name, who with, how long, and
-/// the price in red.
-struct BookingChoiceCard: View {
-    let choice: BookingChoice
-
-    var body: some View {
-        HStack(spacing: 14) {
-            ServiceIcon(symbol: symbol, size: 48)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(choice.serviceName)
-                    .font(.headline)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(BookingFlowCopy.withBarber(choice)) · \(choice.durationLabel)")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.smoke)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Text(choice.priceLabel)
-                .font(.headline)
-                .foregroundStyle(Theme.bone)
-                .multilineTextAlignment(.trailing)
-        }
-        .card(padding: 14)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(choice.serviceName) \(BookingFlowCopy.withBarber(choice)), \(choice.priceLabel), \(choice.durationLabel)")
-    }
-
-    private var symbol: String {
-        AppData.catalog.service(withID: choice.serviceID)?.symbol ?? Symbol.services
     }
 }
