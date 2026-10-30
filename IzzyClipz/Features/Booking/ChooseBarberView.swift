@@ -11,14 +11,14 @@ struct ChooseBarberView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                StepHeader(step: 2, of: 4, title: "Pick your barber", subtitle: subtitle)
+                StepHeader(step: 2, of: 4, stepName: "Barber", title: "Pick your barber", subtitle: subtitle)
                     .padding(.bottom, 4)
 
                 if let option = catalog.firstAvailableOption(forService: service.id) {
                     ChooseBarberFirstAvailableLink(option: option)
                     Text("Or choose your barber")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.secondaryText)
+                        .foregroundStyle(Theme.smoke)
                         .padding(.top, 4)
                         .accessibilityAddTraits(.isHeader)
                 }

@@ -51,7 +51,7 @@ struct ServiceDetailView: View {
             }
             Text("Next, you'll pick a day and time. Squire confirms the real opening when you book.")
                 .font(.footnote)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 4)
         }
@@ -101,7 +101,7 @@ private struct ServiceDetailHeader: View {
             titles
             Text(service.summary)
                 .font(.body)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             chips
         }
@@ -110,14 +110,10 @@ private struct ServiceDetailHeader: View {
 
     private var titles: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(service.category.title.uppercased())
-                .font(.caption.weight(.bold))
-                .tracking(1.5)
-                .foregroundStyle(Theme.red)
-                .accessibilityLabel(service.category.title)
+            Kicker(service.category.title)
             Text(service.name.uppercased())
-                .font(.display(.largeTitle))
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayL)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(service.name)
                 .accessibilityAddTraits(.isHeader)
@@ -159,7 +155,7 @@ private struct ServiceDetailHeader: View {
     }
 }
 
-/// A bold capsule: red for the price, light blue for the rest.
+/// A bold capsule: bone for the price, ink for the rest. (The screen's red is its Book button.)
 private struct DetailChip: View {
     let text: String
     let symbol: String?
@@ -174,10 +170,10 @@ private struct DetailChip: View {
             Text(text)
         }
         .font(.subheadline.weight(.bold))
-        .foregroundStyle(isPrice ? Color.white : Theme.blue)
+        .foregroundStyle(isPrice ? Theme.ink : Theme.bone)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(Capsule().fill(isPrice ? Theme.red : Theme.tint))
+        .background(Capsule().fill(isPrice ? Theme.bone : Theme.ink4))
         .accessibilityElement(children: .combine)
     }
 }
@@ -189,11 +185,11 @@ private struct IncludedItem: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: Symbol.included)
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
                 .accessibilityHidden(true)
             Text(text)
                 .font(.body)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

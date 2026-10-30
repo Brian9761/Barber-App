@@ -60,60 +60,98 @@ struct DirectionsButton<Label: View>: View {
     }
 }
 
-/// An icon-over-label tile for quick actions.
-struct ActionTile: View {
-    let title: String
-    let symbol: String
-    /// Symbols differ in height; a shared frame keeps the labels in line.
-    @ScaledMetric(relativeTo: .title3) private var iconSize: CGFloat = 40
+/// The storefront photo with "DIRECTIONS" and the address over an ink fade, and a bone disc with
+/// the location glyph. The text sits only where the fade is at least 75% ink.
+struct DirectionsTile: View {
+    private let address = AppData.shop.address
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Theme.blue)
-                .frame(width: iconSize, height: iconSize)
-                .background(Theme.tint, in: Circle())
-            Text(title)
-                .font(.footnote.weight(.semibold))
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Image(systemName: Symbol.directions)
+                .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Theme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+                .frame(width: 30, height: 30)
+                .background(Theme.bone, in: Circle())
+                .accessibilityHidden(true)
+            Spacer(minLength: Theme.Space.l)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Directions")
+                    .textRole(.buttonSmall)
+                    .foregroundStyle(Theme.bone)
+                Text(address.streetLine)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 6)
-        .frame(maxWidth: .infinity, minHeight: 84)
-        .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.surface)
-                .shadow(color: Theme.shadow, radius: 10, y: 3)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(Theme.stroke))
-        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .padding(Theme.Space.l)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+        .background {
+            ZStack {
+                FillImage(name: Asset.storefront)
+                LinearGradient(
+                    stops: [
+                        .init(color: Theme.ink.opacity(0.15), location: 0),
+                        .init(color: Theme.ink.opacity(0.80), location: 0.5),
+                        .init(color: Theme.ink.opacity(0.88), location: 1),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .accessibilityHidden(true)
+        }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
     }
 }
 
-/// Call, directions and Instagram, side by side, or stacked at large text sizes.
-struct QuickActions: View {
+/// "Call" and the shop's number on an ink tile with an electric phone icon.
+struct CallTile: View {
     var body: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) { tiles }
-            VStack(spacing: 12) { tiles }
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Image(systemName: Symbol.call)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.white)
+                .frame(width: 32, height: 32)
+                .background(Theme.electric, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .accessibilityHidden(true)
+            Spacer(minLength: Theme.Space.l)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Call")
+                    .textRole(.buttonSmall)
+                    .foregroundStyle(Theme.bone)
+                Text(AppData.shop.phone.display)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
+                    .monospacedDigit()
+            }
         }
+        .padding(Theme.Space.l)
+        .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
+        .background(Theme.ink3, in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
     }
+}
 
-    @ViewBuilder private var tiles: some View {
-        CallButton { ActionTile(title: "Call", symbol: Symbol.call) }
-            .buttonStyle(.pressable)
-            .accessibilityIdentifier("callButton")
-        DirectionsButton { ActionTile(title: "Directions", symbol: Symbol.directions) }
-            .buttonStyle(.pressable)
-            .accessibilityIdentifier("directionsButton")
-        Link(destination: AppData.shop.instagramURL) {
-            ActionTile(title: "Instagram", symbol: Symbol.instagram)
+/// Home's quick actions: Directions and Call side by side, stacked at the largest text sizes.
+/// (Instagram has its own card.)
+struct QuickActions: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        let layout = dynamicTypeSize >= .xxxLarge
+            ? AnyLayout(VStackLayout(spacing: Theme.Space.s))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: Theme.Space.s))
+        layout {
+            DirectionsButton { DirectionsTile() }
+                .buttonStyle(.pressable)
+                .accessibilityIdentifier("directionsButton")
+            CallButton { CallTile() }
+                .buttonStyle(.pressable)
+                .accessibilityIdentifier("callButton")
         }
-        .buttonStyle(.pressable)
-        .accessibilityLabel("\(AppData.shop.name) on Instagram")
-        .accessibilityIdentifier("instagramButton")
+        // Both tiles as tall as the taller one.
+        .fixedSize(horizontal: false, vertical: true)
     }
 }

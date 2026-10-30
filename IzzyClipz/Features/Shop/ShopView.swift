@@ -4,9 +4,11 @@ import SwiftUI
 /// sells on bravohairgel.com, by category.
 struct ShopView: View {
     private let catalog = AppData.products
+    /// Popped back to the shop when the Shop tab is tapped again.
+    @State private var path = NavigationPath()
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 32) {
                     ShopPartnerHeader()
@@ -28,14 +30,16 @@ struct ShopView: View {
             .navigationBarTitleDisplayMode(.large)
             .navigationDestination(for: Product.self) { product in
                 ProductDetailView(product: product)
+                    .barberPolePushRide()
             }
         }
+        .onTabReselect { path = NavigationPath() }
     }
 
     private var footnote: some View {
         Text(BravoShopCopy.finePrint)
             .font(.footnote)
-            .foregroundStyle(Theme.secondaryText)
+            .foregroundStyle(Theme.smoke)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, Theme.gutter)
@@ -44,7 +48,7 @@ struct ShopView: View {
 
 // MARK: - Partner header
 
-/// Royal blue to navy card: "Proud Bravo partner", Bravo's logo and tagline,
+/// Bravo's promo-gradient card: "Proud Bravo partner", Bravo's logo and tagline,
 /// why the shop uses it, shipping, and a link to the whole store.
 private struct ShopPartnerHeader: View {
     @Environment(AppRouter.self) private var router
@@ -63,27 +67,21 @@ private struct ShopPartnerHeader: View {
         .padding(.top, 28)
         .padding(.bottom, 20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { backdrop }
-        .overlay(alignment: .top) {
-            StripeBand(stripeWidth: 8)
-                .frame(height: 6)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-        .shadow(color: Theme.blueDeep.opacity(0.28), radius: 16, y: 8)
+        .background(Theme.promoGradient)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     private var partnerLabel: some View {
         HStack(spacing: 6) {
             Image(systemName: Symbol.partner)
                 .font(.subheadline.weight(.bold))
-            Text("PROUD \(sponsor.name.uppercased()) PARTNER")
-                .font(.caption.weight(.heavy))
-                .tracking(1.6)
+            Text("Proud \(sponsor.name) partner")
+                .textRole(.monoTag)
         }
-        .foregroundStyle(Color.white)
+        .foregroundStyle(Theme.ink)
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
-        .background(Theme.red, in: Capsule())
+        .background(Theme.bone, in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Proud \(sponsor.name) partner")
     }
@@ -102,7 +100,7 @@ private struct ShopPartnerHeader: View {
     private var copy: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(sponsor.tagline)
-                .font(.title3.weight(.bold))
+                .textRole(.displayS)
                 .foregroundStyle(Color.white)
                 .fixedSize(horizontal: false, vertical: true)
             Text(BravoShopCopy.partnerLine)
@@ -142,13 +140,6 @@ private struct ShopPartnerHeader: View {
         .buttonStyle(.secondary)
         .accessibilityHint("Opens \(BravoShopCopy.storeHost)")
         .accessibilityIdentifier("shopAllBravo")
-    }
-
-    private var backdrop: some View {
-        ZStack {
-            Theme.heroGradient
-            StripeTexture(opacity: 0.08)
-        }
     }
 }
 
@@ -258,7 +249,7 @@ private struct ShopAboutSponsor: View {
                     ForEach(Array(sponsor.about.enumerated()), id: \.offset) { item in
                         Text(item.element)
                             .font(.subheadline)
-                            .foregroundStyle(Theme.ink)
+                            .foregroundStyle(Theme.bone)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }

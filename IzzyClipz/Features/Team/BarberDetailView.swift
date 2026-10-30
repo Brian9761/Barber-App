@@ -32,7 +32,7 @@ struct BarberDetailView: View {
         Button {
             router.startBooking(barberID: barber.id)
         } label: {
-            Label("Book with \(barber.name)", systemImage: Symbol.book)
+            Text("Book with \(barber.name)")
         }
         .buttonStyle(.primary)
         .accessibilityHint("Next, pick one of their services")
@@ -45,7 +45,7 @@ struct BarberDetailView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text(barber.bio)
                     .font(.body)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 if let url = barber.instagramURL, let handle = barber.instagramHandle {
                     Divider()
@@ -80,19 +80,20 @@ struct BarberDetailView: View {
 
 // MARK: - Header
 
-/// Big avatar, name, title, rating and the favorite toggle on royal blue.
+/// Big monogram, name, title, rating and the favorite toggle on the promo blue.
 private struct BarberHeroCard: View {
     let barber: Barber
 
     var body: some View {
         VStack(spacing: 14) {
-            BarberAvatar(barber: barber, size: 104)
+            MonogramTile(barber: barber, side: 104)
             names
             if let rating = barber.rating {
                 RatingLine(rating: rating, source: "Squire")
+                    .environment(\.surfaceTone, .bone)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.white, in: Capsule())
+                    .background(Theme.bone, in: Capsule())
             }
             BarberFavoriteButton(barber: barber)
                 .padding(.top, 2)
@@ -100,20 +101,14 @@ private struct BarberHeroCard: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 20)
         .padding(.vertical, 28)
-        .background {
-            ZStack {
-                Theme.heroGradient
-                StripeTexture(opacity: 0.07)
-            }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-        .shadow(color: Theme.blueDeep.opacity(0.22), radius: 16, y: 8)
+        .background(Theme.promoGradient)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     private var names: some View {
         VStack(spacing: 4) {
             Text(barber.name.uppercased())
-                .font(.display(.largeTitle))
+                .textRole(.displayL)
                 .foregroundStyle(Color.white)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -165,11 +160,11 @@ private struct BarberFavoriteButton: View {
         } label: {
             Label(title, systemImage: symbol)
                 .font(.subheadline.weight(.bold))
-                .foregroundStyle(isFavorite ? Theme.red : Color.white)
+                .foregroundStyle(isFavorite ? Theme.ink : Color.white)
                 .padding(.horizontal, 18)
                 .padding(.vertical, 10)
                 .frame(minHeight: 44)
-                .background(Capsule().fill(isFavorite ? Color.white : Color.white.opacity(0.16)))
+                .background(Capsule().fill(isFavorite ? Theme.bone : Color.white.opacity(0.16)))
                 .overlay(Capsule().strokeBorder(Color.white.opacity(isFavorite ? 0 : 0.35)))
                 .contentShape(Capsule())
         }
@@ -199,21 +194,21 @@ private struct BarberInstagramLink: View {
                     .font(.body.weight(.semibold))
                     // The glyph stops growing with the circle, so it stays inside.
                     .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.electric)
                     .frame(width: min(iconSize, 56), height: min(iconSize, 56))
-                    .background(Theme.tint, in: Circle())
+                    .background(Theme.ink4, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
                     Text(verbatim: handleText)
                         .font(.headline)
-                        .foregroundStyle(Theme.blue)
+                        .foregroundStyle(Theme.electric)
                     Text("\(barberName) on Instagram")
                         .font(.footnote)
-                        .foregroundStyle(Theme.secondaryText)
+                        .foregroundStyle(Theme.smoke)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: Symbol.external)
                     .font(.footnote.weight(.bold))
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.electric)
             }
             .contentShape(Rectangle())
         }
@@ -267,15 +262,15 @@ private struct BarberMenuRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(service.name)
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(offering.durationLabel)
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                 if let note = offering.note {
                     Text(note)
                         .font(.footnote)
-                        .foregroundStyle(Theme.secondaryText)
+                        .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if stacksPrice {
@@ -315,17 +310,17 @@ private struct BarberMenuRow: View {
     private var price: some View {
         Text(offering.price.label)
             .font(.headline)
-            .foregroundStyle(Theme.red)
+            .foregroundStyle(Theme.bone)
             .fixedSize(horizontal: false, vertical: true)
     }
 
     private var bookCapsule: some View {
         Text("Book")
-            .font(.footnote.weight(.bold))
-            .foregroundStyle(Color.white)
+            .textRole(.buttonSmall)
+            .foregroundStyle(Theme.ink)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
-            .background(Theme.red, in: Capsule())
+            .background(Theme.bone, in: Capsule())
     }
 
     static func accessibilityText(service: Service, offering: Offering) -> String {

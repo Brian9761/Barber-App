@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// A saved appointment on a royal blue card, with Add to Calendar and
+/// A saved appointment on a bone card, like a ticket, with Add to Calendar and
 /// directions at hand.
 ///
 /// It's the client's own note of a Squire booking, so "Remove" only takes it
@@ -24,9 +24,7 @@ struct UpcomingAppointmentCard: View {
             }
             actions
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background { cardBackground }
+        .boneCard(padding: 18)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("upcomingAppointment")
         .confirmationDialog("Remove this appointment?", isPresented: $isConfirmingRemoval, titleVisibility: .visible) {
@@ -45,10 +43,7 @@ struct UpcomingAppointmentCard: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(isNext ? "NEXT APPOINTMENT" : "UPCOMING")
-                .font(.caption.weight(.bold))
-                .tracking(1.5)
-                .foregroundStyle(Color.white.opacity(0.8))
+            Kicker(isNext ? "Next appointment" : "Upcoming")
             // The day over the time. A long date breaks after the comma, never
             // inside "Oct 30", and the time stays on one line, shrinking a
             // little at the largest sizes, so AM/PM stays with it.
@@ -59,15 +54,15 @@ struct UpcomingAppointmentCard: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .font(.display(.title))
-            .foregroundStyle(.white)
+            .textRole(.displayM)
+            .foregroundStyle(Theme.ink)
             Text(withLine)
-                .font(.headline)
-                .foregroundStyle(.white)
+                .textRole(.callout)
+                .foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
             Text("\(appointment.priceLabel) · \(appointment.durationLabel)")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.white.opacity(0.8))
+                .textRole(.monoNumber)
+                .foregroundStyle(Theme.smokeDark)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilitySummary)
@@ -94,7 +89,7 @@ struct UpcomingAppointmentCard: View {
         } label: {
             Image(systemName: Symbol.more)
                 .font(.title2)
-                .foregroundStyle(.white)
+                .foregroundStyle(Theme.ink)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -125,15 +120,6 @@ struct UpcomingAppointmentCard: View {
         .accessibilityIdentifier("appointmentDirections")
     }
 
-    private var cardBackground: some View {
-        ZStack {
-            Theme.heroGradient
-            StripeTexture(opacity: 0.07)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-        .shadow(color: Theme.blueDeep.opacity(0.28), radius: 14, y: 6)
-    }
-
     // MARK: Text
 
     /// "Haircut with Carlos".
@@ -152,20 +138,19 @@ struct UpcomingAppointmentCard: View {
     }
 }
 
-/// A small white-outlined capsule for the card's actions.
+/// A small ink-outlined capsule for the card's actions.
 private struct UpcomingAppointmentActionLabel: View {
     let title: String
     let symbol: String
 
     var body: some View {
         Label(title, systemImage: symbol)
-            .font(.subheadline.weight(.semibold))
-            .foregroundStyle(.white)
+            .textRole(.callout)
+            .foregroundStyle(Theme.ink)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .frame(minHeight: 44)
-            .background(Color.white.opacity(0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(Color.white.opacity(0.6), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(Theme.ink.opacity(0.5), lineWidth: 1))
             .contentShape(Capsule())
     }
 }

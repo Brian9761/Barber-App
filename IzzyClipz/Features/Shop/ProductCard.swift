@@ -21,7 +21,7 @@ struct ProductCard: View {
         }
         .frame(maxHeight: .infinity, alignment: .top)
         .card(padding: 12)
-        .contentShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     private var photo: some View {
@@ -38,20 +38,17 @@ struct ProductCard: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: 3) {
             if showsCategory {
-                Text(product.category.title.uppercased())
-                    .font(.caption2.weight(.heavy))
-                    .tracking(1.2)
-                    .foregroundStyle(Theme.red)
+                Kicker(product.category.title)
             }
             Text(product.name)
-                .font(.headline)
-                .foregroundStyle(Theme.ink)
+                .textRole(.callout)
+                .foregroundStyle(Theme.bone)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             if let size = product.size {
                 Text(size)
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .textRole(.monoNumber)
+                    .foregroundStyle(Theme.smoke)
             }
         }
     }
@@ -69,17 +66,16 @@ struct ProductCard: View {
     }
 
     private var price: some View {
-        Text(bravo.price(for: product).label)
-            .font(.title3.weight(.heavy))
-            .foregroundStyle(Theme.red)
+        PriceText(bravo.price(for: product).label)
+            .foregroundStyle(Theme.bone)
     }
 
     private var arrow: some View {
         Image(systemName: Symbol.chevron)
             .font(.caption.weight(.heavy))
-            .foregroundStyle(Theme.blue)
+            .foregroundStyle(Theme.bone)
             .frame(width: 28, height: 28)
-            .background(Theme.tint, in: Circle())
+            .background(Theme.ink4, in: Circle())
             .accessibilityHidden(true)
     }
 
@@ -98,6 +94,7 @@ struct ProductCard: View {
 }
 
 /// A product's photo on white, kept square whatever the image's shape.
+/// (The photos are studio shots on white, so the tile is white to match.)
 struct ProductPhoto: View {
     let product: Product
     var cornerRadius: CGFloat = 14
@@ -105,7 +102,7 @@ struct ProductPhoto: View {
     var inset: CGFloat = 6
 
     var body: some View {
-        Theme.surface
+        Color.white
             .aspectRatio(1, contentMode: .fit)
             .overlay {
                 Image(product.imageName)
@@ -121,12 +118,7 @@ struct ProductPhoto: View {
 /// product's label or a note next to it says so instead.
 struct ProductSoldOutBadge: View {
     var body: some View {
-        Text("Sold out")
-            .font(.caption.weight(.heavy))
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Theme.ink.opacity(0.85), in: Capsule())
+        MonoTag(text: "Sold out", style: .ink)
             .accessibilityHidden(true)
     }
 }

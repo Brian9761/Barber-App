@@ -18,7 +18,7 @@ struct GalleryView: View {
             VStack(alignment: .leading, spacing: 24) {
                 Text("Work from the barbers at \(AppData.shop.name). Tap a photo to see it up close.")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
                 grid
                 actions
@@ -59,13 +59,14 @@ struct GalleryView: View {
             } label: {
                 Label("Book an Appointment", systemImage: Symbol.book)
             }
-            .buttonStyle(.primary)
+            // The gallery has no red: the Book button in the tab bar is one tap away.
+            .buttonStyle(.secondary)
             .accessibilityIdentifier("galleryBookButton")
 
             Link(destination: AppData.shop.instagramURL) {
                 Label("More cuts on Instagram", systemImage: Symbol.instagram)
             }
-            .buttonStyle(.secondary)
+            .buttonStyle(.tertiary)
             .accessibilityLabel("More cuts on \(AppData.shop.name)'s Instagram")
             .accessibilityIdentifier("galleryInstagramButton")
         }
@@ -81,8 +82,8 @@ private struct GalleryPhotoTile: View {
         FillImage(name: photo.assetName)
             .aspectRatio(0.8, contentMode: .fit)
             .clipShape(shape)
-            .overlay(shape.strokeBorder(Theme.stroke))
-            .shadow(color: Theme.shadow, radius: 10, y: 4)
+            .overlay(shape.strokeBorder(Theme.line))
+            .shadow(color: Color.black.opacity(0.35), radius: 10, y: 4)
             .contentShape(shape)
     }
 }

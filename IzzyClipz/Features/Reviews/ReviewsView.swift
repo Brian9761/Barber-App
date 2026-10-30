@@ -40,7 +40,7 @@ struct ReviewsView: View {
             if shop.ratings.contains(where: { $0.url != nil }) {
                 Text("Tap a rating to read the reviews on that site.")
                     .font(.footnote)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -100,20 +100,20 @@ private struct ReviewsYourTurnSection: View {
             SectionHeader("Your turn")
             Text("Had a good cut? A few words on Google mean a lot to the team.")
                 .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button(action: onLeaveReview) {
-                Label("Leave a review on Google", systemImage: Symbol.writeReview)
+                Text("Leave a review on Google")
             }
-            .buttonStyle(.primary)
+            .buttonStyle(.primary(trailingSymbol: Symbol.external))
             .accessibilityHint("Opens Google's review form")
             .accessibilityIdentifier("leaveReviewButton")
 
             Button(action: onReadMore) {
                 Label("Read more on Google", systemImage: Symbol.external)
             }
-            .buttonStyle(.secondary)
+            .buttonStyle(.tertiary)
             .accessibilityHint("Opens the shop's Google Maps page")
             .accessibilityIdentifier("readGoogleReviewsButton")
         }

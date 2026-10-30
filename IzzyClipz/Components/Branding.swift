@@ -1,58 +1,9 @@
 import SwiftUI
 
-/// Diagonal barber-pole stripes: red, white, blue, white.
-struct StripeBand: View {
-    var stripeWidth: CGFloat = 9
-    var colors: [Color] = [Theme.red, .white, Theme.blue, .white]
+// MARK: - Logo and mascot
 
-    var body: some View {
-        Canvas { context, size in
-            let rise = size.height
-            var x = -rise
-            var index = 0
-            while x < size.width + rise {
-                var stripe = Path()
-                stripe.move(to: CGPoint(x: x, y: size.height))
-                stripe.addLine(to: CGPoint(x: x + rise, y: 0))
-                stripe.addLine(to: CGPoint(x: x + rise + stripeWidth, y: 0))
-                stripe.addLine(to: CGPoint(x: x + stripeWidth, y: size.height))
-                stripe.closeSubpath()
-                context.fill(stripe, with: .color(colors[index % colors.count]))
-                x += stripeWidth
-                index += 1
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-/// Faint diagonal stripes for laying over dark brand backgrounds.
-struct StripeTexture: View {
-    var opacity: Double = 0.07
-
-    var body: some View {
-        Canvas { context, size in
-            let spacing: CGFloat = 26
-            let width: CGFloat = 10
-            var x = -size.height
-            while x < size.width {
-                var stripe = Path()
-                stripe.move(to: CGPoint(x: x, y: size.height))
-                stripe.addLine(to: CGPoint(x: x + size.height, y: 0))
-                stripe.addLine(to: CGPoint(x: x + size.height + width, y: 0))
-                stripe.addLine(to: CGPoint(x: x + width, y: size.height))
-                stripe.closeSubpath()
-                context.fill(stripe, with: .color(.white.opacity(opacity)))
-                x += spacing
-            }
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
-/// The shop's official logo (barber-pole mascot and "Izzy Clipz" wordmark),
-/// with a transparent background.
+/// The shop's official logo (barber-pole mascot and "Izzy Clipz" wordmark), with a transparent
+/// background. Its blue letters vanish on ink, so on the dark canvas use `LogoSticker`.
 struct LogoImage: View {
     var body: some View {
         Image(Asset.logo)
@@ -62,7 +13,8 @@ struct LogoImage: View {
     }
 }
 
-/// Just the barber-pole mascot from the logo.
+/// Just the barber-pole mascot from the logo, uncropped. Prefer `MascotSticker`: the cut-out has
+/// stray letter fragments along its right edge.
 struct MascotImage: View {
     var body: some View {
         Image(Asset.mascot)
@@ -72,247 +24,223 @@ struct MascotImage: View {
     }
 }
 
-/// The official logo on a white rounded badge, for placing over photos and
-/// brand colors.
-struct LogoBadge: View {
-    var height: CGFloat = 92
+/// The official logo on a white sticker, slapped on at a slight angle: on the dark canvas the
+/// logo always sits on white. Rounded corners, a few points of white around the art and the
+/// sticker shadow.
+///
+///     LogoSticker(width: 120)                       // Visit's hero, bottom-left
+///     LogoSticker(width: 72, rotation: .degrees(7)) // the corner of a card
+struct LogoSticker: View {
+    /// The sticker's width, white border included.
+    var width: CGFloat = 120
+    var rotation: Angle = .degrees(-6)
 
     var body: some View {
+        let border = max(4, width * 0.045)
         LogoImage()
-            .frame(height: height)
-            .padding(.horizontal, height * 0.18)
-            .padding(.vertical, height * 0.12)
-            .background(
-                RoundedRectangle(cornerRadius: height * 0.24, style: .continuous)
-                    .fill(.white)
-                    .shadow(color: .black.opacity(0.22), radius: 14, y: 6)
-            )
+            .frame(width: width - 2 * border)
+            .padding(border)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.Radius.sticker * width / 120, style: .continuous))
+            .rotationEffect(rotation)
+            .shadow(color: .black.opacity(0.55), radius: 9, y: 8)
     }
 }
 
-/// A monogram with a barber-pole ring. The team has no headshots, so
-/// initials stand in rather than stock photos.
-struct BarberAvatar: View {
+/// The mascot's head in a bone circle with a white ring, tilted like a sticker (46 pt in the Home
+/// header, 32 pt in the compact one). Decorative: hidden from VoiceOver.
+struct MascotSticker: View {
+    var size: CGFloat = 46
+
+    var body: some View {
+        Image(Asset.mascot)
+            .resizable()
+            .scaledToFit()
+            // The head crop from the spec: the art at 1.96 × the circle, nudged up and left so the
+            // stray letter fragments on the cut-out's right edge stay outside the circle.
+            .frame(width: size * 1.96)
+            .offset(x: -0.565 * size, y: -0.30 * size)
+            .frame(width: size, height: size, alignment: .topLeading)
+            .background(Theme.bone)
+            .clipShape(Circle())
+            .padding(size > 40 ? 2.5 : 2)
+            .background(Color.white, in: Circle())
+            .rotationEffect(.degrees(-8))
+            .shadow(color: .black.opacity(0.55), radius: size > 40 ? 7 : 5, y: size > 40 ? 6 : 4)
+            .accessibilityHidden(true)
+    }
+}
+
+/// "IZZY CLIPZ" in Archivo Expanded Black: "IZZY" in bone and "CLIPZ" in hot red, one of the only
+/// two places hot red text is allowed. VoiceOver reads the shop's name.
+struct Wordmark: View {
+    var isCompact = false
+
+    var body: some View {
+        Text("\(Text("Izzy ").foregroundStyle(Theme.bone))\(Text("Clipz").foregroundStyle(Theme.hotRed))")
+            .textRole(isCompact ? .wordmarkCompact : .wordmark)
+            .lineLimit(1)
+            .accessibilityLabel(AppData.shop.name)
+    }
+}
+
+// MARK: - Monograms
+
+/// A barber's tile. There are no headshots, so each barber gets two letters of their name in
+/// Archivo ExtraCondensed Black on a fill picked by their place on the team: bone, blue, ink4,
+/// bone, blue, and around again. No red (red is for actions) and no stripes (the stripes belong to
+/// the pole). The owner's wide tiles carry an "OWNER" tag. Decorative: the row or card around it
+/// says who it is.
+///
+///     MonogramTile(barber: izzy, size: CGSize(width: 116, height: 66))
+///     MonogramTile(barber: carlos, side: 56)
+struct MonogramTile: View {
     let barber: Barber
-    var size: CGFloat = 56
+    var size = CGSize(width: 56, height: 56)
+    /// `nil` scales the radius with the tile.
+    var cornerRadius: CGFloat?
 
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(LinearGradient(
-                    colors: [Theme.blueBright, Theme.blue, Theme.blueDeep],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ))
-            Text(barber.initials)
-                .font(.system(size: size * 0.36, weight: .heavy).width(.condensed))
-                .foregroundStyle(.white)
-        }
-        .frame(width: size, height: size)
-        .padding(max(2, size * 0.05))
-        .background(
-            Circle().fill(
-                AngularGradient(
-                    gradient: Gradient(colors: [Theme.red, .white, Theme.blue, .white, Theme.red]),
-                    center: .center
-                )
-            )
-        )
-        .overlay(Circle().strokeBorder(Theme.stroke))
-        .accessibilityHidden(true)
+    init(barber: Barber, size: CGSize, cornerRadius: CGFloat? = nil) {
+        self.barber = barber
+        self.size = size
+        self.cornerRadius = cornerRadius
     }
-}
 
-/// Five stars, with halves.
-struct RatingStars: View {
-    let average: Double
-    var size: CGFloat = 12
+    /// A square tile.
+    init(barber: Barber, side: CGFloat, cornerRadius: CGFloat? = nil) {
+        self.init(barber: barber, size: CGSize(width: side, height: side), cornerRadius: cornerRadius)
+    }
+
+    /// The first two letters of the name clients know: IZ, CA, FL, CR, JU.
+    static func letters(for barber: Barber) -> String {
+        String(barber.name.prefix(2)).uppercased()
+    }
 
     var body: some View {
-        HStack(spacing: 2) {
-            ForEach(0..<5, id: \.self) { index in
-                Image(systemName: symbol(forStar: index))
-                    .font(.system(size: size, weight: .bold))
+        let palette = MonogramPalette(teamIndex: AppData.catalog.barbers.firstIndex(where: { $0.id == barber.id }) ?? 0)
+        let shape = RoundedRectangle(cornerRadius: cornerRadius ?? min(size.width, size.height) * 0.27, style: .continuous)
+        let letterSize = min(size.height * 0.76, size.width * 0.8)
+        Text(Self.letters(for: barber))
+            .font(BrandFont.extraCondensedBlack.font(fixedSize: letterSize))
+            .tracking(-0.01 * letterSize)
+            .foregroundStyle(palette.letters)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .frame(width: size.width, height: size.height)
+            .background(palette.fill, in: shape)
+            .overlay(alignment: .topLeading) {
+                if barber.isOwner && size.width >= 96 {
+                    MonoTag(text: "Owner", style: palette.isLight ? .ink : .bone)
+                        .padding(7)
+                }
             }
-        }
-        .foregroundStyle(Theme.star)
-        .accessibilityHidden(true)
-    }
-
-    private func symbol(forStar index: Int) -> String {
-        let remaining = average - Double(index)
-        if remaining >= 0.75 { return Symbol.starFilled }
-        if remaining >= 0.25 { return Symbol.starHalf }
-        return Symbol.starEmpty
+            .clipShape(shape)
+            .accessibilityHidden(true)
     }
 }
 
-/// "★★★★★ 5.0 · 92 reviews".
-struct RatingLine: View {
-    let rating: Rating
-    var source: String?
+/// The fill and letter colors for a place on the team (art direction §11).
+private struct MonogramPalette {
+    let fill: AnyShapeStyle
+    let letters: Color
+    let isLight: Bool
 
-    var body: some View {
-        HStack(spacing: 6) {
-            RatingStars(average: rating.average)
-            Text("\(rating.averageLabel) · \(rating.countLabel)")
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(Theme.secondaryText)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var accessibilityText: String {
-        let base = "Rated \(rating.averageLabel) out of 5, \(rating.countLabel)"
-        guard let source else { return base }
-        return "\(base) on \(source)"
-    }
-}
-
-/// "Open now · Closes 7 PM", kept current every minute.
-struct LiveStatusPill: View {
-    /// Use on photos and brand colors; off, it suits white cards.
-    var onDark = true
-
-    var body: some View {
-        TimelineView(.everyMinute) { context in
-            StatusPill(summary: AppData.clock.summary(at: context.date), onDark: onDark)
+    init(teamIndex: Int) {
+        let blueToRoyal = LinearGradient(colors: [Theme.blue, Theme.royal], startPoint: .topLeading, endPoint: .bottomTrailing)
+        switch teamIndex % 5 {
+        case 0, 3:
+            fill = AnyShapeStyle(Theme.bone)
+            letters = Theme.ink
+            isLight = true
+        case 2:
+            fill = AnyShapeStyle(Theme.ink4)
+            letters = Theme.bone
+            isLight = false
+        default:
+            fill = AnyShapeStyle(blueToRoyal)
+            letters = Theme.bone
+            isLight = false
         }
     }
 }
 
+extension Barber {
+    /// Whether their title on Squire says they own the shop.
+    var isOwner: Bool {
+        title.localizedCaseInsensitiveContains("owner")
+    }
+}
+
+// MARK: - Open status
+
+/// The shop's open status in one wording everywhere: "OPEN · TIL 7 PM", "CLOSING SOON · TIL 7 PM",
+/// "OPENING SOON · 10 AM", "CLOSED · OPENS 10 AM TOMORROW". Computed from the regular hours.
+struct ShopStatusLine: Equatable {
+    let text: String
+    let tone: StatusSummary.Tone
+    let accessibilityLabel: String
+
+    init(at date: Date, clock: ShopClock = AppData.clock) {
+        let summary = clock.summary(at: date)
+        tone = summary.tone
+        switch clock.status(at: date) {
+        case .open(let closesAt):
+            let time = clock.timeLabel(for: closesAt)
+            let headline = summary.tone == .changingSoon ? "Closing soon" : "Open"
+            text = "\(headline) · til \(time)"
+            accessibilityLabel = "\(summary.tone == .changingSoon ? "Closing soon" : "Open now"), until \(time)"
+        case .closed(let opensAt?) where summary.tone == .changingSoon:
+            let time = clock.timeLabel(for: opensAt)
+            text = "Opening soon · \(time)"
+            accessibilityLabel = "Opening soon, at \(time)"
+        case .closed:
+            text = "\(summary.headline) · \(summary.detail)"
+            accessibilityLabel = summary.accessibilityLabel
+        }
+    }
+}
+
+/// The open-status pill: a status dot and the status in mono. On the ink canvas it's an `ink3`
+/// capsule; over a photo it's frosted ink (solid with Reduce Transparency).
 struct StatusPill: View {
-    let summary: StatusSummary
-    var onDark = true
+    let status: ShopStatusLine
+    var isOverPhoto = false
 
     var body: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(Theme.color(for: summary.tone))
-                .frame(width: 9, height: 9)
-                .overlay(Circle().strokeBorder(.white.opacity(onDark ? 0.9 : 0), lineWidth: 1.5))
-            Text("\(Text(summary.headline).fontWeight(.bold).foregroundStyle(onDark ? Color.white : Theme.ink)) · \(summary.detail)")
-                .foregroundStyle(onDark ? Color.white.opacity(0.85) : Theme.secondaryText)
+                .fill(Theme.color(for: status.tone))
+                .frame(width: 8, height: 8)
+                .padding(3)
+                .background(Theme.color(for: status.tone).opacity(0.22), in: Circle())
+            Text(status.text)
+                .textRole(.monoTag)
+                .foregroundStyle(Theme.bone)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
-        .font(.subheadline)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(
-            Capsule().fill(onDark ? Color.black.opacity(0.32) : Theme.surface)
-        )
-        .overlay(Capsule().strokeBorder(onDark ? Color.white.opacity(0.22) : Theme.stroke))
+        .padding(.leading, 8)
+        .padding(.trailing, 12)
+        .frame(minHeight: 30)
+        .background {
+            if isOverPhoto {
+                InkMaterial(shape: Capsule(), tint: 0.9)
+            } else {
+                Capsule().fill(Theme.ink3)
+            }
+        }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(summary.accessibilityLabel)
+        .accessibilityLabel(status.accessibilityLabel)
         .accessibilityIdentifier("shopStatus")
     }
 }
 
-/// A large condensed section title with an optional trailing control.
-struct SectionHeader<Trailing: View>: View {
-    let title: String
-    let trailing: Trailing
-
-    init(_ title: String, @ViewBuilder trailing: () -> Trailing) {
-        self.title = title
-        self.trailing = trailing()
-    }
+/// `StatusPill`, kept current every minute.
+struct LiveStatusPill: View {
+    var isOverPhoto = false
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            HStack(spacing: 8) {
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Theme.red)
-                    .frame(width: 4, height: 18)
-                    .accessibilityHidden(true)
-                Text(title.uppercased())
-                    .font(.display(.title2))
-                    .foregroundStyle(Theme.ink)
-                    .accessibilityAddTraits(.isHeader)
-            }
-            Spacer(minLength: 12)
-            trailing
-                .font(.subheadline.weight(.semibold))
-                .tint(Theme.blue)
+        TimelineView(.everyMinute) { context in
+            StatusPill(status: ShopStatusLine(at: context.date), isOverPhoto: isOverPhoto)
         }
-    }
-}
-
-extension SectionHeader where Trailing == EmptyView {
-    init(_ title: String) {
-        self.init(title) { EmptyView() }
-    }
-}
-
-/// A rounded tag, e.g. for specialties.
-struct Chip: View {
-    let text: String
-
-    var body: some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Theme.blue)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Theme.tint, in: Capsule())
-    }
-}
-
-/// The rounded square icon used for a service.
-struct ServiceIcon: View {
-    let symbol: String
-    var size: CGFloat = 44
-
-    var body: some View {
-        Image(systemName: symbol)
-            .font(.system(size: size * 0.42, weight: .semibold))
-            .foregroundStyle(.white)
-            .frame(width: size, height: size)
-            .background(
-                LinearGradient(colors: [Theme.blueBright, Theme.blue], startPoint: .topLeading, endPoint: .bottomTrailing),
-                in: RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
-            )
-            .accessibilityHidden(true)
-    }
-}
-
-/// "STEP 3 OF 4" over a big title, for the booking flow.
-struct StepHeader: View {
-    let step: Int
-    let total: Int
-    let title: String
-    let subtitle: String
-
-    init(step: Int, of total: Int = 4, title: String, subtitle: String) {
-        self.step = step
-        self.total = total
-        self.title = title
-        self.subtitle = subtitle
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 6) {
-                ForEach(1...max(total, 1), id: \.self) { index in
-                    Capsule()
-                        .fill(index <= step ? Theme.red : Theme.ink.opacity(0.12))
-                        .frame(width: index == step ? 26 : 12, height: 5)
-                }
-            }
-            .accessibilityHidden(true)
-            Text("STEP \(step) OF \(total)")
-                .font(.caption.weight(.bold))
-                .tracking(1.5)
-                .foregroundStyle(Theme.red)
-            Text(title.uppercased())
-                .font(.display(.title))
-                .foregroundStyle(Theme.ink)
-            Text(subtitle)
-                .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
     }
 }

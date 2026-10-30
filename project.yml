@@ -54,7 +54,19 @@ targets:
         UILaunchScreen:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo
-        UIUserInterfaceStyle: Light
+        UIUserInterfaceStyle: Dark
+        UIAppFonts:
+          - ArchivoExtraCondensed-Black.ttf
+          - ArchivoCondensed-ExtraBold.ttf
+          - ArchivoExpanded-Black.ttf
+          - ArchivoExpanded-ExtraBold.ttf
+          - Archivo-Regular.ttf
+          - Archivo-Medium.ttf
+          - Archivo-SemiBold.ttf
+          - Archivo-Bold.ttf
+          - SpaceMono-Regular.ttf
+          - SpaceMono-Bold.ttf
+          - RubikWetPaint-Regular.ttf
         UIRequiredDeviceCapabilities:
           - arm64
         UISupportedInterfaceOrientations:

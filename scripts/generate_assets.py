@@ -6,15 +6,19 @@ reproduces the catalog:
 
   Logo              the official logo with its white background removed (PNG with alpha)
   LogoMascot        just the barber-pole mascot, cut out of the logo (PNG with alpha)
-  LaunchLogo        the transparent logo at 260 pt wide (@1x, @2x, @3x)
+  LaunchLogo        the logo on a white rounded sticker, 260 pt wide, tilted a few degrees,
+                    with a soft shadow (@1x, @2x, @3x): the launch screen is ink, and the
+                    logo's blue letters vanish on black
   AppIcon           1024 x 1024, no alpha: the logo on white over a barber-stripe band
-  AccentColor, BrandRed, BrandBlue, LaunchBackground      brand colors
+  AccentColor, BrandRed, BrandBlue, LaunchBackground      Street Drip colors (drip red,
+                    royal blue, ink)
   Bravo-<handle>    Bravo product photos, square on white      (needs --bravo-json)
   BravoLogo         Bravo's wordmark as a template image       (needs --bravo-json)
   Gallery1...6, Storefront   shop photos                       (needs --photos)
 
     python3 scripts/generate_assets.py --logo LOGO.jpg
     python3 scripts/generate_assets.py --logo LOGO.jpg --bravo-json products.json --photos DIR
+    python3 scripts/generate_assets.py --launch-only
 
 LOGO is the logo from izzyclipzbarbershop.net (the 1500 x 1150 JPEG on white).
 products.json is https://bravohairgel.com/products.json; given it, the script
@@ -25,6 +29,11 @@ in any format Pillow reads.
     --icon A|B|C            which app icon design goes in the catalog (default A)
     --icon-candidates DIR   also writes all three designs and a comparison of them at 60 and 120 px
     --preview PNG           writes a contact sheet of everything generated
+    --launch-only           rebuilds only LaunchLogo (and the color sets) from the catalog's own
+                            Logo.png, leaving the logo, the mascot and the app icon untouched;
+                            needs no source artwork
+    --launch-tilt DEGREES   the launch sticker's tilt, counterclockwise when negative (default -5)
+    --launch-preview PNG    writes LaunchLogo@3x on the ink launch background, to check it by eye
 
 Requires Pillow and NumPy (`pip install Pillow numpy`).
 """
@@ -43,11 +52,14 @@ ROOT = Path(__file__).resolve().parent.parent
 CATALOG = ROOT / "IzzyClipz" / "Resources" / "Assets.xcassets"
 INFO = {"author": "xcode", "version": 1}
 
-# Brand colors, sampled from the logo (the red is the slightly brighter barber red the app uses).
+# Brand colors, sampled from the logo. RED, NAVY and WHITE draw the app icon, which stays as it is.
 RED = (200, 16, 46)        # #C8102E
-BLUE = (0, 48, 154)        # #00309A, the wordmark's royal blue
+BLUE = (0, 48, 154)        # #00309A, the wordmark's royal blue (Street Drip's `royal`)
 NAVY = (6, 26, 77)         # #061A4D
 WHITE = (255, 255, 255)
+# Street Drip colors for the color sets (the same values as Theme.swift).
+DRIP_RED = (215, 20, 28)   # #D7141C, the primary-action red
+INK = (11, 11, 12)         # #0B0B0C, the canvas and the launch screen
 
 # Cutting the logo out of its white background (values are 0-255 on the source JPEG).
 WHITE_MIN = 220            # min(R, G, B) at or above this counts as white
@@ -60,7 +72,8 @@ DETAIL_MAX = 0.0013        # enclosed white areas in the wordmark smaller than t
                            # image are drawn details (razor rivets, handle slashes) and stay white;
                            # bigger ones are background (letter counters)
 
-LAUNCH_WIDTH_PT = 260
+LAUNCH_WIDTH_PT = 260      # the sticker's width, white border included
+LAUNCH_TILT = -5           # degrees; negative tilts it counterclockwise, like a sticker slapped on
 
 # Bravo products shown in the app (Shopify handle -> which product photo is the cleanest packshot).
 BRAVO_PRODUCTS = {
@@ -275,6 +288,50 @@ def fit(image: Image.Image, width: int = None, height: int = None) -> Image.Imag
     scale = width / image.width if width else height / image.height
     size = (max(1, round(image.width * scale)), max(1, round(image.height * scale)))
     return image.resize(size, Image.Resampling.LANCZOS)
+
+
+# Launch logo ------------------------------------------------------------------------------------
+
+def rounded_rect_mask(size: tuple, radius: float, ss: int = 4) -> Image.Image:
+    """An anti-aliased rounded-rectangle mask (drawn `ss` times larger, then scaled down)."""
+    big = Image.new("L", (size[0] * ss, size[1] * ss), 0)
+    ImageDraw.Draw(big).rounded_rectangle((0, 0, size[0] * ss - 1, size[1] * ss - 1), radius=radius * ss, fill=255)
+    return big.resize(size, Image.Resampling.LANCZOS)
+
+
+def launch_sticker(logo: Image.Image, scale: int, tilt: float = LAUNCH_TILT) -> Image.Image:
+    """The logo on a white rounded sticker, `LAUNCH_WIDTH_PT` wide at `scale`, tilted by `tilt` degrees,
+    with the sticker shadow (0, 8, 18 pt, black 55%) below it.
+
+    The border and corner radius follow the app's `LogoSticker`: 4.5% of the width, and 14 pt of
+    radius per 120 pt of width. The canvas keeps the sticker centred (the shadow's room is equal on
+    every side), so the launch screen centres the sticker, not the sticker plus its shadow.
+    """
+    width = LAUNCH_WIDTH_PT * scale
+    border = round(LAUNCH_WIDTH_PT * 0.045 * scale)
+    radius = 14 * LAUNCH_WIDTH_PT / 120 * scale
+    art = fit(logo, width=width - 2 * border)
+    sticker = Image.new("RGBA", (width, art.height + 2 * border), WHITE + (0,))
+    sticker.putalpha(rounded_rect_mask(sticker.size, radius))
+    sticker.alpha_composite(art, (border, border))
+
+    # Rotated premultiplied, so the white edge doesn't pick up a dark fringe from the transparent pixels.
+    turned = sticker.convert("RGBa").rotate(-tilt, resample=Image.Resampling.BICUBIC, expand=True).convert("RGBA")
+    blur, drop = 9 * scale, 8 * scale
+    margin = 3 * blur + drop
+    canvas = Image.new("RGBA", (turned.width + 2 * margin, turned.height + 2 * margin), INK + (0,))
+    shadow = Image.new("RGBA", turned.size, (0, 0, 0, 0))
+    shadow.putalpha(turned.getchannel("A").point(lambda v: round(v * 0.55)))
+    canvas.alpha_composite(shadow, (margin, margin + drop))
+    canvas = Image.merge("RGBA", (*canvas.split()[:3], canvas.getchannel("A").filter(ImageFilter.GaussianBlur(blur))))
+    canvas.alpha_composite(turned, (margin, margin))
+    return canvas
+
+
+def make_launch_logo(logo: Image.Image, tilt: float) -> dict:
+    launch = {f"{s}x": launch_sticker(logo, s, tilt) for s in (1, 2, 3)}
+    image_set("LaunchLogo", launch)
+    return launch
 
 
 # App icon designs -------------------------------------------------------------------------------
@@ -510,7 +567,7 @@ def write_preview(path: Path, logo, mascot, launch, icon, bravo: dict) -> None:
         ("LogoMascot", tile(None, mascot, (300, 450))),
         ("LogoMascot on BrandBlue", tile(BLUE, mascot, (300, 450))),
         ("LogoMascot on navy", tile(NAVY, mascot, (300, 450))),
-        ("LaunchLogo@3x on white", tile(WHITE, launch, (560, 450))),
+        ("LaunchLogo@3x on ink", tile(INK, launch, (560, 450))),
         ("AppIcon", tile(wallpaper, icon_shape, (450, 450))),
     ]
     tiles += [(name, tile(WHITE, image, (300, 300))) for name, image in bravo.items() if name != "BravoLogo"]
@@ -544,23 +601,32 @@ def main() -> None:
     parser.add_argument("--icon", choices=sorted(ICON_DESIGNS), default="A", help="app icon design (default A)")
     parser.add_argument("--icon-candidates", type=Path, help="folder for all icon designs and compare.png")
     parser.add_argument("--preview", type=Path, help="contact sheet PNG of everything generated")
+    parser.add_argument("--launch-only", action="store_true",
+                        help="rebuild only LaunchLogo (and the color sets) from the catalog's Logo.png")
+    parser.add_argument("--launch-tilt", type=float, default=LAUNCH_TILT,
+                        help=f"the launch sticker's tilt in degrees (default {LAUNCH_TILT})")
+    parser.add_argument("--launch-preview", type=Path, help="LaunchLogo@3x on the ink launch background, as a PNG")
     args = parser.parse_args()
     if args.preview and not args.logo:
         parser.error("--preview needs --logo")
+    if args.launch_only and (args.logo or args.bravo_json or args.photos):
+        parser.error("--launch-only rebuilds LaunchLogo alone; leave out --logo, --bravo-json and --photos")
 
     write_json(CATALOG / "Contents.json", {"info": INFO})
-    color_set("AccentColor", RED)
-    color_set("BrandRed", RED)
+    color_set("AccentColor", DRIP_RED)
+    color_set("BrandRed", DRIP_RED)
     color_set("BrandBlue", BLUE)
-    color_set("LaunchBackground", WHITE)
+    color_set("LaunchBackground", INK)
 
-    if args.logo:
+    launch = None
+    if args.launch_only:
+        launch = make_launch_logo(Image.open(CATALOG / "Logo.imageset" / "Logo.png").convert("RGBA"), args.launch_tilt)
+    elif args.logo:
         full, figure = cut_out_logo(Image.open(args.logo))
         logo, mascot = trim(full), trim(figure)
         image_set("Logo", {None: logo})
         image_set("LogoMascot", {None: mascot})
-        launch = {f"{s}x": fit(logo, width=LAUNCH_WIDTH_PT * s) for s in (1, 2, 3)}
-        image_set("LaunchLogo", launch)
+        launch = make_launch_logo(logo, args.launch_tilt)
 
         icons = {name: design(logo, mascot) for name, design in ICON_DESIGNS.items()}
         folder = CATALOG / "AppIcon.appiconset"
@@ -587,6 +653,10 @@ def main() -> None:
 
     if args.preview:
         write_preview(args.preview, logo, mascot, launch["3x"], icons[args.icon], bravo)
+    if args.launch_preview and launch:
+        backdrop = Image.new("RGBA", (launch["3x"].width + 240, launch["3x"].height + 240), INK + (255,))
+        paste_center(backdrop, launch["3x"], (backdrop.width / 2, backdrop.height / 2))
+        backdrop.convert("RGB").save(args.launch_preview)
 
     print(f"Wrote {CATALOG.relative_to(ROOT)}")
 

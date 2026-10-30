@@ -37,7 +37,7 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
         controller.eventStore = store
         controller.event = event
         controller.editViewDelegate = context.coordinator
-        controller.view.tintColor = UIColor(Theme.red)
+        controller.view.tintColor = UIColor(Theme.bone)
         return controller
     }
 

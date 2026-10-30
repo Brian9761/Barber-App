@@ -14,6 +14,7 @@ struct ChooseServiceView: View {
                     StepHeader(
                         step: 2,
                         of: 4,
+                        stepName: "Service",
                         title: "Pick a service",
                         subtitle: "Everything \(barber.name) offers, with their prices and lengths."
                     )
@@ -67,22 +68,22 @@ private struct ChooseServiceBarberCard: View {
 
     var body: some View {
         HStack(spacing: 16) {
-            BarberAvatar(barber: barber, size: 60)
+            MonogramTile(barber: barber, side: 60)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(barber.name)
-                        .font(.display(.title2))
-                        .foregroundStyle(Theme.ink)
+                        .textRole(.displayS)
+                        .foregroundStyle(Theme.bone)
                     if isFavorite {
                         Image(systemName: Symbol.favoriteFilled)
                             .font(.subheadline)
-                            .foregroundStyle(Theme.red)
+                            .foregroundStyle(Theme.bone)
                             .accessibilityHidden(true)
                     }
                 }
                 Text(barber.title)
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                 if let rating = barber.rating {
                     RatingLine(rating: rating, source: "Squire")
                 }
@@ -115,26 +116,26 @@ private struct ChooseServiceOfferingLink: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(serviceName)
                         .font(.headline)
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(Theme.bone)
                         .fixedSize(horizontal: false, vertical: true)
                     Text(offering.durationLabel)
                         .font(.subheadline)
-                        .foregroundStyle(Theme.secondaryText)
+                        .foregroundStyle(Theme.smoke)
                     if let note = offering.note {
                         Text(note)
                             .font(.footnote)
-                            .foregroundStyle(Theme.secondaryText)
+                            .foregroundStyle(Theme.smoke)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer(minLength: 8)
                 Text(offering.price.label)
                     .font(.headline)
-                    .foregroundStyle(Theme.red)
+                    .foregroundStyle(Theme.bone)
                     .multilineTextAlignment(.trailing)
                 Image(systemName: Symbol.chevron)
                     .font(.footnote.weight(.bold))
-                    .foregroundStyle(Theme.tertiaryText)
+                    .foregroundStyle(Theme.smoke)
                     .padding(.top, 3)
                     .accessibilityHidden(true)
             }
