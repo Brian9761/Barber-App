@@ -1,34 +1,47 @@
 import SwiftUI
 import UIKit
 
-/// "Time for a fresh cut" reminder settings, shown in a sheet: on or off,
-/// how often, and when the last cut was.
+/// "Keep it fresh": the cut-reminder settings, in a sheet from the bell. On or off, how often, when
+/// the last cut was, and when the next nudge comes.
+///
+/// No red here: nothing on this sheet is a primary action. Selection is bone, switches are electric
+/// and the one warning (notifications off) is caution yellow.
 struct ReminderSettingsView: View {
     @Environment(ReminderStore.self) private var store
     @Environment(\.dismiss) private var dismiss
+    @State private var isScrolled = false
+    @State private var titleIsUnderBar = false
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    ReminderSettingsHeader(isOn: store.isEnabled)
-                    ReminderToggleCard()
-                    if store.permission == .denied {
-                        ReminderPermissionCard()
-                            .transition(AnyTransition.opacity)
+            GeometryReader { _ in
+                ScrollView {
+                    VStack(spacing: Theme.Space.xxl) {
+                        ReminderSettingsHeader()
+                            .pageScrolledUnderBar($titleIsUnderBar)
+                        ReminderToggleCard()
+                        if store.permission == .denied {
+                            ReminderPermissionCard()
+                                .transition(AnyTransition.opacity)
+                        }
+                        if store.isEnabled {
+                            ReminderScheduleSection()
+                                .transition(AnyTransition.opacity)
+                        }
                     }
-                    if store.isEnabled {
-                        ReminderScheduleSection()
-                            .transition(AnyTransition.opacity)
-                    }
+                    .padding(.horizontal, Theme.gutter)
+                    .padding(.top, Theme.Space.xs)
+                    .padding(.bottom, Theme.Space.xxl)
+                    .animation(.easeInOut(duration: 0.25), value: store.isEnabled)
+                    .animation(.easeInOut(duration: 0.25), value: store.permission)
+                    .pageScrolled($isScrolled)
                 }
-                .padding(Theme.gutter)
-                .animation(.easeInOut(duration: 0.25), value: store.isEnabled)
-                .animation(.easeInOut(duration: 0.25), value: store.permission)
             }
-            .screenBackground()
-            .navigationTitle("Cut Reminders")
-            .navigationBarTitleDisplayMode(.inline)
+            .coordinateSpace(.named(PageBar.space))
+            .background(Theme.ink2.ignoresSafeArea())
+            // The title is in the content ("Cut reminders" over "Keep it fresh"); the bar holds
+            // Done, and the name once the title has scrolled away.
+            .pageBar(title: "Cut reminders", showsTitle: titleIsUnderBar, isScrolled: isScrolled, background: Theme.ink2)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Done") { dismiss() }
@@ -41,37 +54,32 @@ struct ReminderSettingsView: View {
     }
 }
 
-/// The bell badge, title and a line on how reminders work.
+/// A still barber pole, the kicker, "KEEP IT FRESH" and how reminders work.
 private struct ReminderSettingsHeader: View {
-    let isOn: Bool
-    @ScaledMetric(relativeTo: .largeTitle) private var badgeSize: CGFloat = 72
-
     var body: some View {
-        VStack(spacing: 12) {
-            // Bone, not red: the reminders sheet has no primary action, so it has no red.
-            Image(systemName: isOn ? Symbol.remindersOn : Symbol.reminders)
-                .font(.system(size: badgeSize * 0.42, weight: .semibold))
-                .foregroundStyle(Theme.ink)
-                .frame(width: badgeSize, height: badgeSize)
-                .background(Theme.bone, in: Circle())
-                .accessibilityHidden(true)
-            Text("KEEP IT FRESH")
-                .textRole(.displayM)
-                .foregroundStyle(Theme.bone)
-                .accessibilityLabel("Keep it fresh")
-                .accessibilityAddTraits(.isHeader)
+        VStack(spacing: Theme.Space.m) {
+            BarberPole(phase: 0)
+                .frame(width: 18, height: 48)
+                .padding(.bottom, Theme.Space.xs)
+            VStack(spacing: Theme.Space.xxs) {
+                Kicker("Cut reminders")
+                Text("Keep it fresh")
+                    .textRole(.displayL)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+            }
             Text("Get a nudge at 10 AM when it's time for your next cut. Reminders are set on this iPhone only.")
-                .font(.subheadline)
+                .textRole(.body)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
-        .padding(.top, 8)
     }
 }
 
-/// The main switch.
+/// The main switch, on an ink card, tinted electric.
 private struct ReminderToggleCard: View {
     @Environment(ReminderStore.self) private var store
 
@@ -80,19 +88,19 @@ private struct ReminderToggleCard: View {
             get: { store.isEnabled },
             set: { store.setEnabled($0) }
         )) {
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 Text("Remind me to book")
-                    .font(.headline)
+                    .textRole(.headline)
                     .foregroundStyle(Theme.bone)
                 Text(detail)
-                    .font(.subheadline)
+                    .textRole(.body)
                     .foregroundStyle(Theme.smoke)
             }
             .fixedSize(horizontal: false, vertical: true)
         }
         .tint(Theme.electric)
         .accessibilityIdentifier("remindersToggle")
-        .card()
+        .card(padding: Theme.Space.xl)
     }
 
     private var detail: String {
@@ -102,23 +110,24 @@ private struct ReminderToggleCard: View {
     }
 }
 
-/// Shown when the system won't let the app send notifications.
+/// Shown when the system won't let the app send notifications: a caution icon and a bone button
+/// to the app's notification settings.
 private struct ReminderPermissionCard: View {
     @Environment(\.openURL) private var openURL
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: Symbol.remindersOff)
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.bone)
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            HStack(alignment: .top, spacing: Theme.Space.l) {
+                Image(systemName: Symbol.warning)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Theme.caution)
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text("Notifications are off for \(AppData.shop.name)")
-                        .font(.headline)
+                        .textRole(.headline)
                         .foregroundStyle(Theme.bone)
                     Text("Allow notifications in Settings to get cut reminders.")
-                        .font(.subheadline)
+                        .textRole(.body)
                         .foregroundStyle(Theme.smoke)
                 }
                 .fixedSize(horizontal: false, vertical: true)
@@ -131,144 +140,189 @@ private struct ReminderPermissionCard: View {
                     openURL(url)
                 }
             } label: {
-                Label("Open Settings", systemImage: Symbol.external)
+                HStack(spacing: 6) {
+                    Text("Open Settings")
+                    Image(systemName: Symbol.external)
+                        .font(.system(size: 13, weight: .heavy))
+                        .accessibilityHidden(true)
+                }
             }
             .buttonStyle(.secondary)
             .accessibilityIdentifier("openSettingsButton")
         }
-        .card()
+        .card(padding: Theme.Space.xl)
     }
 }
 
 /// How often, the last cut, and when the next reminder is.
 private struct ReminderScheduleSection: View {
     @Environment(ReminderStore.self) private var store
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var justCutCount = 0
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeader("Schedule")
-            VStack(alignment: .leading, spacing: 16) {
-                intervalRow
-                Divider()
-                lastCutRow
-                justCutButton
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                intervalPicker
+                Rectangle()
+                    .fill(Theme.line)
+                    .frame(height: 1)
+                    .accessibilityHidden(true)
+                lastCut
             }
-            .card()
+            .card(padding: Theme.Space.xl)
             ReminderNextCard()
         }
         .sensoryFeedback(.success, trigger: justCutCount)
     }
 
-    /// The label and menu side by side, or stacked at large text sizes.
-    private var intervalRow: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                intervalLabel
-                Spacer(minLength: 8)
-                intervalPicker
-            }
-            VStack(alignment: .leading, spacing: 6) {
-                intervalLabel
-                intervalPicker
-            }
-        }
-    }
-
-    /// VoiceOver hears this from the menu's own label instead.
-    private var intervalLabel: some View {
-        Text("Remind me every")
-            .font(.body)
-            .foregroundStyle(Theme.bone)
-            .accessibilityHidden(true)
-    }
-
+    /// "REMIND ME EVERY … 3 WEEKS" over five chips, 2 to 6 weeks, the picked one in bone.
     private var intervalPicker: some View {
-        Picker("Remind me every", selection: Binding(
-            get: { store.intervalWeeks },
-            set: { store.setInterval(weeks: $0) }
-        )) {
-            ForEach(ReminderPlanner.intervalChoices, id: \.self) { weeks in
-                Text("\(weeks) weeks").tag(weeks)
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            // Each chip says its own value to VoiceOver.
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                    Kicker("Remind me every")
+                    Spacer(minLength: Theme.Space.s)
+                    pickedInterval
+                }
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Kicker("Remind me every")
+                    pickedInterval
+                }
             }
+            .accessibilityHidden(true)
+            HStack(spacing: Theme.Space.s) {
+                ForEach(ReminderPlanner.intervalChoices, id: \.self) { weeks in
+                    intervalChip(weeks)
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Remind me every")
+            .accessibilityIdentifier("reminderIntervalPicker")
         }
-        .pickerStyle(.menu)
-        .labelsHidden()
-        .tint(Theme.electric)
-        .accessibilityIdentifier("reminderIntervalPicker")
     }
 
-    private var lastCutRow: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            DatePicker(
-                "Last cut",
-                selection: Binding(get: { store.lastCut }, set: { store.setLastCut($0) }),
-                in: ...Date(),
-                displayedComponents: .date
-            )
-            .font(.body)
+    private var pickedInterval: some View {
+        Text(Self.weeks(store.intervalWeeks))
+            .textRole(.monoNumber)
             .foregroundStyle(Theme.bone)
-            .tint(Theme.electric)
-            .accessibilityIdentifier("lastCutPicker")
+    }
+
+    private func intervalChip(_ weeks: Int) -> some View {
+        let isSelected = weeks == store.intervalWeeks
+        return Button {
+            store.setInterval(weeks: weeks)
+        } label: {
+            HStack(spacing: 4) {
+                // More than color: a check (when there's room), bold type and the selected trait.
+                if isSelected && !dynamicTypeSize.isAccessibilitySize {
+                    Image(systemName: Symbol.checkmark)
+                        .font(.system(size: 11, weight: .heavy))
+                        .accessibilityHidden(true)
+                }
+                Text("\(weeks)")
+            }
+        }
+        .buttonStyle(ReminderChipStyle(isSelected: isSelected))
+        .accessibilityLabel(Self.weeks(weeks))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier("reminderInterval-\(weeks)")
+    }
+
+    private var lastCut: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Theme.Space.l) {
+                    Kicker("Last cut")
+                    Spacer(minLength: Theme.Space.s)
+                    lastCutPicker
+                }
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Kicker("Last cut")
+                    lastCutPicker
+                }
+            }
             Text("Updates on its own after an appointment you saved in the app.")
-                .font(.footnote)
+                .textRole(.caption)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
+            Button {
+                store.setLastCut(Date())
+                justCutCount += 1
+                UIAccessibility.post(notification: .announcement, argument: "Last cut set to today")
+            } label: {
+                Label("I just got a cut", systemImage: Symbol.checkmark)
+            }
+            .buttonStyle(.compact)
+            .accessibilityIdentifier("justGotCutButton")
         }
     }
 
-    private var justCutButton: some View {
-        Button {
-            store.setLastCut(Date())
-            justCutCount += 1
-            UIAccessibility.post(notification: .announcement, argument: "Last cut set to today")
-        } label: {
-            Label("I just got a cut", systemImage: Symbol.checkmark)
-        }
-        .buttonStyle(.secondary)
-        .accessibilityIdentifier("justGotCutButton")
+    private var lastCutPicker: some View {
+        DatePicker(
+            "Last cut",
+            selection: Binding(get: { store.lastCut }, set: { store.setLastCut($0) }),
+            in: ...Date(),
+            displayedComponents: .date
+        )
+        .labelsHidden()
+        .tint(Theme.electric)
+        .accessibilityIdentifier("lastCutPicker")
+    }
+
+    /// "3 weeks".
+    static func weeks(_ count: Int) -> String {
+        count == 1 ? "1 week" : "\(count) weeks"
     }
 }
 
-/// When the next reminder will show up.
+/// A week chip on the ink3 card: `ink4` with a bone number, or bone with a bold ink number when
+/// picked (selection is never red). 44 pt tall; the five share the card's width.
+private struct ReminderChipStyle: ButtonStyle {
+    let isSelected: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
+        return configuration.label
+            .font((isSelected ? BrandFont.bold : BrandFont.semiBold).font(size: 15, relativeTo: .subheadline).monospacedDigit())
+            .foregroundStyle(isSelected ? Theme.ink : Theme.bone)
+            .lineLimit(1)
+            .padding(.horizontal, Theme.Space.s)
+            .frame(maxWidth: .infinity, minHeight: Theme.minimumTapSize)
+            .background(isSelected ? Theme.bone : (configuration.isPressed ? Theme.line : Theme.ink4), in: shape)
+            .contentShape(shape)
+    }
+}
+
+/// When the next reminder will show up, on a bone card: the day in Display M, the time in mono.
+/// While it's being scheduled, the pole spins in its place.
 private struct ReminderNextCard: View {
     @Environment(ReminderStore.self) private var store
-    @ScaledMetric(relativeTo: .body) private var iconSize: CGFloat = 40
 
     var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            Image(systemName: Symbol.calendar)
-                .font(.body.weight(.semibold))
-                // The glyph stops growing with the circle, so it stays inside.
-                .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                .foregroundStyle(Theme.electric)
-                .frame(width: min(iconSize, 56), height: min(iconSize, 56))
-                .background(Theme.ink4, in: Circle())
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Next reminder")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.smoke)
-                nextDate
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Kicker("Next reminder")
+            if let next = store.nextReminder {
+                // The reminder fires at 10 AM on this iPhone's own clock, so it's shown in the
+                // phone's time zone and format rather than the shop's.
+                Text(next.date, format: .dateTime.weekday(.wide).month(.wide).day())
+                    .textRole(.displayM)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(next.date, format: .dateTime.hour().minute())
+                    .textRole(.monoNumber)
+                    .foregroundStyle(Theme.smokeDark)
+            } else {
+                HStack(spacing: Theme.Space.m) {
+                    BarberPoleSpinner(size: CGSize(width: 12, height: 36), label: "Scheduling")
+                    Text("Scheduling…")
+                        .textRole(.callout)
+                        .foregroundStyle(Theme.smokeDark)
+                        .accessibilityHidden(true)
+                }
             }
-            .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
         }
-        .card()
+        .boneCard(padding: Theme.Space.xl)
         .accessibilityElement(children: .combine)
-    }
-
-    /// The reminder fires at 10 AM on this iPhone's own clock, so it's shown
-    /// in the phone's time zone and format rather than the shop's.
-    @ViewBuilder private var nextDate: some View {
-        if let next = store.nextReminder {
-            Text(next.date, format: .dateTime.weekday(.wide).month(.wide).day().hour().minute())
-                .font(.headline)
-                .foregroundStyle(Theme.bone)
-        } else {
-            Text("Scheduling…")
-                .font(.headline)
-                .foregroundStyle(Theme.smoke)
-        }
     }
 }
