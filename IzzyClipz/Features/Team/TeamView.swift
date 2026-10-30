@@ -1,108 +1,124 @@
 import SwiftUI
 
-/// Everyone on the team, pushed from Home ("Meet everyone"). Home's stack
-/// shows the barber pages, so this screen has no stack of its own.
+/// The crew, pushed from Home ("All 5 barbers"). Home's stack shows the barber pages, so this
+/// screen has no stack of its own. One full-width row per barber, in team order. No red here.
 struct TeamView: View {
     @Environment(Favorites.self) private var favorites
+    /// Whether the title in the content has scrolled up under the navigation bar.
+    @State private var titleIsUnderBar = false
     private let catalog = AppData.catalog
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Every barber sets their own menu and prices. Tap one to see theirs and book with them.")
-                    .font(.body)
-                    .foregroundStyle(Theme.smoke)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 4)
-
-                ForEach(catalog.barbers) { barber in
-                    TeamBarberLink(barber: barber, isFavorite: favorites.isFavorite(barber.id))
+            VStack(alignment: .leading, spacing: Theme.Space.xxl) {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    ScreenHeader(kicker: "\(catalog.barbers.count) barbers", title: "The crew")
+                        .menuTitleScrolledUnderBar($titleIsUnderBar)
+                    Text("Every barber sets their own menu and prices.")
+                        .textRole(.body)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                VStack(spacing: Theme.Space.m) {
+                    ForEach(catalog.barbers) { barber in
+                        TeamBarberLink(barber: barber, isFavorite: favorites.isFavorite(barber.id))
+                    }
                 }
             }
-            .padding(Theme.gutter)
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, Theme.Space.s)
+            .padding(.bottom, Theme.Space.xxl)
         }
+        .menuNavigationTitle("The crew", showsInBar: titleIsUnderBar)
         .screenBackground()
-        .navigationTitle("The Team")
-        .navigationBarTitleDisplayMode(.large)
     }
 }
 
-/// A barber's card, opening their page.
+/// A barber's row, opening their page.
 private struct TeamBarberLink: View {
     let barber: Barber
     let isFavorite: Bool
 
     var body: some View {
         NavigationLink(value: barber) {
-            TeamBarberCard(barber: barber, isFavorite: isFavorite)
+            TeamBarberRow(barber: barber, isFavorite: isFavorite)
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(TeamBarberCard.accessibilityText(for: barber, isFavorite: isFavorite))
+        .accessibilityLabel(TeamBarberRow.accessibilityText(for: barber, isFavorite: isFavorite))
         .accessibilityHint("Opens their profile")
         .accessibilityIdentifier("barber-\(barber.id)")
     }
 }
 
-private struct TeamBarberCard: View {
+/// An `ink3` row: the 72 pt monogram, the name, their title, their Squire rating if they have one
+/// and their haircut price, all in mono, and a chevron. At accessibility text sizes the monogram
+/// moves above the text so the name keeps the full width.
+private struct TeamBarberRow: View {
     let barber: Barber
     let isFavorite: Bool
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
-            MonogramTile(barber: barber, side: 64)
-            details
-                // Take the whole row so the chips wrap only when they have to.
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: Symbol.chevron)
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(Theme.smoke)
-                .padding(.top, 4)
-                .accessibilityHidden(true)
+        HStack(spacing: Theme.Space.l) {
+            mainLayout {
+                MonogramTile(barber: barber, side: 72)
+                details
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            MenuChevron()
         }
-        .card()
-        .contentShape(Rectangle())
+        .padding(Theme.Space.cardPadding)
+        .frame(maxWidth: .infinity, minHeight: 96, alignment: .leading)
+        .background(Theme.ink3, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+    }
+
+    private var mainLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Space.l))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 14))
     }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
                 Text(barber.name)
-                    .font(.title3.weight(.bold))
+                    .textRole(.displayS)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 if isFavorite {
                     Image(systemName: Symbol.favoriteFilled)
-                        .font(.footnote)
+                        .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Theme.bone)
                         .accessibilityHidden(true)
                 }
             }
             Text(barber.title)
-                .font(.subheadline)
+                .textRole(.monoTag)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             if let rating = barber.rating {
-                RatingLine(rating: rating, source: "Squire")
+                RatingLine(rating: rating)
             }
-            if let haircut = TeamBarberCard.haircutPrice(for: barber) {
-                Text("Haircut \(haircut)")
-                    .font(.subheadline.weight(.bold))
+            if let haircut = Self.haircutLine(for: barber) {
+                Text(haircut)
+                    .textRole(.monoNumber)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            FlowingChips(items: barber.specialties)
-                .padding(.top, 2)
         }
     }
 
-    /// "$35", or "$35–$40" for a barber with more than one haircut on their menu.
-    /// `nil` when they don't offer haircuts.
-    static func haircutPrice(for barber: Barber) -> String? {
+    /// "Haircut $45", or "Haircut from $35" for a barber with more than one haircut price on their
+    /// menu. `nil` when they don't offer haircuts.
+    static func haircutLine(for barber: Barber) -> String? {
         let prices = AppData.catalog.offerings(forBarber: barber.id)
             .filter { $0.serviceID == "haircut" }
             .map(\.price)
-        guard !prices.isEmpty else { return nil }
-        return Price.summary(of: prices)
+        guard let lowest = prices.min() else { return nil }
+        let hasRange = Set(prices.map(\.cents)).count > 1 || lowest.kind == .startingAt
+        return hasRange ? "Haircut from \(Price.currencyString(cents: lowest.cents))" : "Haircut \(lowest.label)"
     }
 
     static func accessibilityText(for barber: Barber, isFavorite: Bool) -> String {
@@ -110,11 +126,8 @@ private struct TeamBarberCard: View {
         if let rating = barber.rating {
             parts.append("rated \(rating.averageLabel) out of 5, \(rating.countLabel) on Squire")
         }
-        if let haircut = haircutPrice(for: barber) {
-            parts.append("haircut \(haircut.replacingOccurrences(of: "–", with: " to "))")
-        }
-        if !barber.specialties.isEmpty {
-            parts.append(barber.specialties.joined(separator: ", "))
+        if let haircut = haircutLine(for: barber) {
+            parts.append(haircut)
         }
         return parts.joined(separator: ", ")
     }
