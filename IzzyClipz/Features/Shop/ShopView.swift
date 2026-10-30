@@ -1,261 +1,569 @@
 import SwiftUI
 
-/// The Shop tab: Bravo, the shop's product partner, and the products it
-/// sells on bravohairgel.com, by category.
+/// The Shop tab: Bravo, the shop's product partner, and the products it sells on bravohairgel.com.
+///
+/// Top to bottom: "THE SHOP" with the bag button (its red count badge is this screen's one red),
+/// Bravo's logo and "PROUD BRAVO PARTNER", a still bone band with Bravo's free-shipping line, one
+/// featured card (Blue Hair Gel 16 oz) in the promo gradient with the gel drip, then every other
+/// item in a two-column grid with a "+" to add it to the bag. An item that comes in several sizes
+/// has one tile; the size is picked on its page. Last, Bravo in its own words and a link to its
+/// whole store.
+///
+/// Once the big title has scrolled under the navigation bar, the bar shows "Shop" and a bag button
+/// (bone, no badge), so the bag stays one tap away from anywhere on the page.
 struct ShopView: View {
     private let catalog = AppData.products
     /// Popped back to the shop when the Shop tab is tapped again.
     @State private var path = NavigationPath()
+    /// The navigation bar's bottom edge, in global coordinates.
+    @State private var barBottom: CGFloat = 0
+    /// Whether "THE SHOP" and its bag button have scrolled under the navigation bar.
+    @State private var headerIsUnderBar = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let topID = "shopTop"
+
+    /// The one featured card: the first featured product (Blue Hair Gel 16 oz), as its item's lead size.
+    private var featured: Product? {
+        catalog.featured.first.map { catalog.lead(for: $0) }
+    }
+
+    /// Every other item once, the other featured ones first, in catalog order.
+    private var gridProducts: [Product] {
+        let others = catalog.leadProducts.filter { $0.id != featured?.id }
+        return others.filter(\.isFeatured) + others.filter { !$0.isFeatured }
+    }
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 32) {
-                    ShopPartnerHeader()
-                        .padding(.horizontal, Theme.gutter)
-                    if !catalog.featured.isEmpty {
-                        ShopFeaturedSection(products: catalog.featured)
+            ScrollViewReader { scroller in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ShopHeader(barBottom: barBottom, isUnderBar: $headerIsUnderBar)
+                            .padding(.horizontal, Theme.gutter)
+                            .padding(.top, Theme.Space.xs)
+                            .id(Self.topID)
+                        ShopShippingBand()
+                            .padding(.top, Theme.Space.l)
+                        if let featured {
+                            ShopFeaturedCard(product: featured)
+                                .padding(.horizontal, Theme.gutter)
+                                .padding(.top, Theme.Space.s)
+                        }
+                        ShopProductGrid(products: gridProducts)
+                            .padding(.horizontal, Theme.gutter)
+                            .padding(.top, Theme.Space.xl)
+                        ShopAboutSponsor()
+                            .padding(.horizontal, Theme.gutter)
+                            .padding(.top, Theme.Space.section + Theme.Space.s)
                     }
-                    ForEach(catalog.categories) { category in
-                        ShopCategorySection(category: category, products: catalog.products(in: category))
-                    }
-                    ShopAboutSponsor()
-                    footnote
+                    .padding(.bottom, Theme.Space.section)
                 }
-                .padding(.top, 8)
-                .padding(.bottom, 32)
-            }
-            .screenBackground()
-            .navigationTitle("Shop")
-            .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(for: Product.self) { product in
-                ProductDetailView(product: product)
-                    .barberPolePushRide()
+                .shopMeasuresBarBottom($barBottom)
+                .screenBackground()
+                .modifier(ShopRootBar(showsInBar: headerIsUnderBar))
+                .navigationDestination(for: Product.self) { product in
+                    ProductDetailView(product: product)
+                        .barberPolePushRide()
+                }
+                .onTabReselect {
+                    if path.isEmpty {
+                        withAnimation(reduceMotion ? nil : .smooth) {
+                            scroller.scrollTo(Self.topID, anchor: .top)
+                        }
+                    } else {
+                        path = NavigationPath()
+                    }
+                }
             }
         }
-        .onTabReselect { path = NavigationPath() }
-    }
-
-    private var footnote: some View {
-        Text(BravoShopCopy.finePrint)
-            .font(.footnote)
-            .foregroundStyle(Theme.smoke)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, Theme.gutter)
     }
 }
 
-// MARK: - Partner header
+/// The Shop's navigation bar: inline and empty while "THE SHOP" is on screen (so "Shop" never sits
+/// right above "THE SHOP"), then "Shop" and the bag once it has scrolled under. The bar stays native;
+/// "Shop" is also the back button's title on a product page.
+private struct ShopRootBar: ViewModifier {
+    let showsInBar: Bool
 
-/// Bravo's promo-gradient card: "Proud Bravo partner", Bravo's logo and tagline,
-/// why the shop uses it, shipping, and a link to the whole store.
-private struct ShopPartnerHeader: View {
-    @Environment(AppRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func body(content: Content) -> some View {
+        content
+            .navigationTitle("Shop")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    // Set like the system's inline title (NavigationBarAppearance), which this replaces.
+                    Text("Shop")
+                        .font(BrandFont.condensedExtraBold.font(size: 19, relativeTo: .headline))
+                        .foregroundStyle(Theme.bone)
+                        .lineLimit(1)
+                        // The bar has a fixed height.
+                        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+                        .opacity(showsInBar ? 1 : 0)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: showsInBar)
+                        .accessibilityHidden(!showsInBar)
+                        .accessibilityAddTraits(.isHeader)
+                }
+                if showsInBar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ShopToolbarBagButton(identifier: "shopBarBagButton")
+                    }
+                }
+            }
+    }
+}
+
+// MARK: - Header
+
+/// "THE SHOP" with the bag button, and Bravo's logo with "PROUD BRAVO PARTNER" under it.
+private struct ShopHeader: View {
+    let barBottom: CGFloat
+    @Binding var isUnderBar: Bool
+
     private let sponsor = AppData.products.sponsor
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            partnerLabel
-            logo
-            copy
-            shippingNote
-            shopAllButton
-                .padding(.top, 2)
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            ScreenHeader(title: "The shop") {
+                ShopBagButton()
+                    .padding(.top, Theme.Space.s)
+            }
+            .shopScrolledUnderBar(barBottom: barBottom, $isUnderBar)
+            partnerLine
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 28)
-        .padding(.bottom, 20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.promoGradient)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
-    private var partnerLabel: some View {
-        HStack(spacing: 6) {
-            Image(systemName: Symbol.partner)
-                .font(.subheadline.weight(.bold))
+    /// Bravo's logo | PROUD BRAVO PARTNER.
+    private var partnerLine: some View {
+        HStack(spacing: Theme.Space.m) {
+            Image(BravoShopCopy.logoAsset)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(height: 20)
+                .foregroundStyle(Theme.bone)
+            Rectangle()
+                .fill(Theme.line)
+                .frame(width: 1, height: 16)
             Text("Proud \(sponsor.name) partner")
                 .textRole(.monoTag)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .foregroundStyle(Theme.ink)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(Theme.bone, in: Capsule())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Proud \(sponsor.name) partner")
     }
+}
 
-    private var logo: some View {
-        Image(BravoShopCopy.logoAsset)
-            .renderingMode(.template)
-            .resizable()
-            .scaledToFit()
-            .foregroundStyle(Color.white)
-            .frame(maxWidth: 230, alignment: .leading)
-            .accessibilityLabel("\(sponsor.name) Professional Grooming")
-            .accessibilityAddTraits(.isHeader)
-    }
+/// The 44 pt bag button with the count on a red badge: the Shop's one red. The badge bumps when
+/// something goes in the bag (not with Reduce Motion). Opens the bag sheet.
+private struct ShopBagButton: View {
+    @Environment(BagStore.self) private var bag
+    @Environment(AppRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var bumps = 0
 
-    private var copy: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(sponsor.tagline)
-                .textRole(.displayS)
-                .foregroundStyle(Color.white)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(BravoShopCopy.partnerLine)
-                .font(.subheadline)
-                .foregroundStyle(Color.white.opacity(0.88))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var shippingNote: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: Symbol.shipping)
-                .font(.subheadline.weight(.semibold))
-                .accessibilityHidden(true)
-            Text(sponsor.shippingNote)
-                .font(.subheadline.weight(.semibold))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .foregroundStyle(Color.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color.white.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .accessibilityElement(children: .combine)
-    }
-
-    private var shopAllButton: some View {
+    var body: some View {
         Button {
-            router.openWeb(AppData.products.storeURL)
+            router.openBag()
         } label: {
-            HStack(spacing: 8) {
-                Text("Shop all \(sponsor.name) products")
-                Image(systemName: Symbol.external)
-                    .font(.subheadline.weight(.bold))
+            Image(systemName: Symbol.shop)
+        }
+        .buttonStyle(.icon)
+        .accessibilityLabel("Bag")
+        .accessibilityValue(bag.isEmpty ? "Empty" : ShopBagFeedback.itemCount(bag.count))
+        .accessibilityHint("Shows what's in your bag")
+        .accessibilityIdentifier("shopBagButton")
+        .overlay(alignment: .topTrailing) {
+            if !bag.isEmpty {
+                badge
+                    .keyframeAnimator(initialValue: 1.0, trigger: bumps) { content, scale in
+                        content.scaleEffect(scale)
+                    } keyframes: { _ in
+                        CubicKeyframe(1.25, duration: 0.12)
+                        SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
+                    }
+                    .offset(x: 5, y: -5)
+                    .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
         }
-        .buttonStyle(.secondary)
-        .accessibilityHint("Opens \(BravoShopCopy.storeHost)")
-        .accessibilityIdentifier("shopAllBravo")
+        .onChange(of: bag.count) { old, new in
+            if new > old, !reduceMotion {
+                bumps += 1
+            }
+        }
+    }
+
+    private var badge: some View {
+        Text(ShopBagFeedback.badgeText(bag.count))
+            .font(BrandFont.monoBold.font(size: 11, relativeTo: .caption2))
+            .monospacedDigit()
+            .foregroundStyle(Color.white)
+            .lineLimit(1)
+            .padding(.horizontal, 5)
+            .frame(minWidth: 21, minHeight: 21)
+            .background(Theme.dripRed, in: Capsule())
+            // An ink ring keeps the badge's edge clear of the button under it.
+            .overlay(Capsule().strokeBorder(Theme.ink, lineWidth: 2))
+            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+    }
+}
+
+// MARK: - Free shipping
+
+/// Bravo's free-shipping line on a still bone band, full bleed and tilted 2° like a strip of tape.
+/// It doesn't move: a ticker that can't be paused fails WCAG 2.2.2 and runs the battery down.
+private struct ShopShippingBand: View {
+    private let note = AppData.products.sponsor.shippingNote
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+            Image(systemName: Symbol.shipping)
+                .font(.system(size: 13, weight: .bold))
+                .accessibilityHidden(true)
+            Text(note)
+                .textRole(.monoNumber)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(Theme.ink)
+        .padding(.horizontal, Theme.gutter)
+        .padding(.vertical, Theme.Space.m)
+        .frame(maxWidth: .infinity, minHeight: 34)
+        .background {
+            // Wider than the screen, so the tilt never shows a corner.
+            Theme.bone
+                .padding(.horizontal, -32)
+        }
+        .rotationEffect(.degrees(-2))
+        // Room for the tilt above and below.
+        .padding(.vertical, Theme.Space.l)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(note)
     }
 }
 
 // MARK: - Featured
 
-/// "Featured": Bravo's featured products in a row that scrolls
-/// sideways, snapping to each card.
-private struct ShopFeaturedSection: View {
-    let products: [Product]
-    @ScaledMetric(relativeTo: .body) private var cardWidth: CGFloat = 200
+/// The featured product in the promo gradient: the electric gel drip along the top, "FEATURED ·
+/// BRAVO", the name, the sizes, the price, a bone "+ ADD" and the jar in a white disc that bleeds
+/// off the right edge. At accessibility text sizes the disc moves above the text.
+///
+/// The card is a link to the product, and "+ ADD" is a sibling button laid over it (never inside
+/// the link's label). To put the button exactly where the card leaves room for it at every text
+/// size, a second, invisible copy of the card's text is laid over the first with only the button
+/// showing.
+private struct ShopFeaturedCard: View {
+    let product: Product
+
+    @Environment(BravoStore.self) private var bravo
+    @Environment(BagStore.self) private var bag
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var justAdded = false
+    @State private var addCount = 0
+
+    private let sponsor = AppData.products.sponsor
+    private static let discSize: CGFloat = 170
+    /// How much of the disc hangs off the card's right edge.
+    private static let discBleed: CGFloat = 34
+    /// The room the text leaves for the disc.
+    private static let discReserve: CGFloat = discSize - discBleed + 10
+    /// Clears the longest drip and its droplet.
+    private static let topInset: CGFloat = DripEdge.depth(of: DripEdge.gelCard, band: 5) + 8
+
+    private var isLargeText: Bool { dynamicTypeSize.isAccessibilitySize }
+    private var isSoldOut: Bool { bravo.isSoldOut(product) }
+    private var otherSizes: [String] { BravoShopCopy.otherSizes(of: product) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            SectionHeader("Featured")
-                .padding(.horizontal, Theme.gutter)
-            ScrollView(.horizontal) {
-                cards
+        ZStack {
+            NavigationLink(value: product) {
+                face(isGhost: false)
             }
-            .scrollIndicators(.hidden)
-            .contentMargins(.horizontal, Theme.gutter, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Featured: " + ProductCard.accessibilityText(
+                for: product,
+                price: bravo.price(for: product),
+                isSoldOut: isSoldOut,
+                otherSizes: otherSizes
+            ))
+            .accessibilityHint(otherSizes.isEmpty ? "Shows details" : "Shows details and sizes")
+            .accessibilityIdentifier("product-\(product.id)")
+
+            face(isGhost: true)
+        }
+        .sensoryFeedback(.success, trigger: addCount)
+        .task(id: addCount) {
+            guard addCount > 0 else { return }
+            do {
+                try await Task.sleep(for: .seconds(1.2))
+                justAdded = false
+            } catch {
+                // Tapped again: the newer tap's task resets it.
+            }
+        }
+        .onDisappear { justAdded = false }
+    }
+
+    /// The card's text column. `isGhost` hides everything but the add button, which only the ghost shows.
+    private func face(isGhost: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if isLargeText {
+                disc(side: 120)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .padding(.bottom, Theme.Space.l)
+                    .shopGhost(isGhost)
+            }
+            HStack(spacing: Theme.Space.s) {
+                Text("Featured · \(sponsor.name)")
+                    .textRole(.monoTag)
+                    .foregroundStyle(Color.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                if isSoldOut {
+                    MonoTag(text: "Sold out", style: .bone)
+                }
+            }
+            .shopGhost(isGhost)
+            Text(product.name)
+                .textRole(.displayM)
+                .foregroundStyle(Color.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, Theme.Space.xs)
+                .shopGhost(isGhost)
+            if let sizeLine {
+                Text(sizeLine)
+                    .textRole(.monoNumber)
+                    .foregroundStyle(Color.white)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, Theme.Space.xs)
+                    .shopGhost(isGhost)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: Theme.Space.l) {
+                    price.shopGhost(isGhost)
+                    addButton.shopGhost(!isGhost)
+                }
+                VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                    price.shopGhost(isGhost)
+                    addButton.shopGhost(!isGhost)
+                }
+            }
+            .padding(.top, Theme.Space.l)
+        }
+        .padding(.leading, 20)
+        .padding(.trailing, isLargeText ? 20 : Self.discReserve)
+        .padding(.top, Self.topInset)
+        .padding(.bottom, Theme.Space.xl)
+        .frame(maxWidth: .infinity, minHeight: 186, alignment: .topLeading)
+        .background {
+            if !isGhost {
+                background
+            }
         }
     }
 
-    private var cards: some View {
-        HStack(alignment: .top, spacing: 14) {
-            ForEach(products) { product in
-                ShopProductLink(product: product, identifier: "featured-\(product.id)", showsCategory: true)
-                    .frame(width: min(cardWidth, 290))
+    /// "16 OZ · ALSO IN 4 OZ".
+    private var sizeLine: String? {
+        let parts = [product.size, otherSizes.isEmpty ? nil : "also in \(otherSizes.joined(separator: ", "))"]
+        let line = parts.compactMap { $0 }.joined(separator: " · ")
+        return line.isEmpty ? nil : line
+    }
+
+    private var price: some View {
+        Text(bravo.price(for: product).label)
+            .textRole(.priceL)
+            .foregroundStyle(Color.white)
+            .lineLimit(1)
+    }
+
+    private var addButton: some View {
+        Button {
+            guard bag.add(product) else { return }
+            ShopBagFeedback.announceAdded(product)
+            addCount += 1
+            justAdded = true
+        } label: {
+            HStack(spacing: Theme.Space.xs) {
+                Image(systemName: justAdded ? Symbol.checkmark : Symbol.add)
+                    .font(.system(size: 13, weight: .heavy))
+                    .contentTransition(.symbolEffect(.replace))
+                    .accessibilityHidden(true)
+                Text(justAdded ? "Added" : "Add")
             }
+            .animation(reduceMotion ? nil : .snappy(duration: 0.2), value: justAdded)
         }
-        .scrollTargetLayout()
-        // Every card as tall as the tallest one.
-        .fixedSize(horizontal: false, vertical: true)
-        // Room for the cards' shadows.
-        .padding(.vertical, 14)
+        .buttonStyle(.compact)
+        .disabled(!bag.canAdd(product) && !justAdded)
+        .accessibilityLabel("Add \(product.name) to bag")
+        .accessibilityValue(otherSizes.isEmpty ? "" : (product.size ?? ""))
+        .accessibilityIdentifier("quickAdd-\(product.id)")
+    }
+
+    private var background: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        return Theme.promoGradient
+            .overlay(alignment: .trailing) {
+                if !isLargeText {
+                    disc(side: Self.discSize)
+                        .offset(x: Self.discBleed, y: Theme.Space.s)
+                }
+            }
+            .overlay(alignment: .top) {
+                DripEdge(drips: DripEdge.gelCard, band: 5)
+                    .fill(Theme.electric)
+                    .frame(height: DripEdge.depth(of: DripEdge.gelCard, band: 5))
+                    .accessibilityHidden(true)
+            }
+            .clipShape(shape)
+    }
+
+    /// The jar in a white disc, tilted like a sticker.
+    private func disc(side: CGFloat) -> some View {
+        Image(product.imageName)
+            .resizable()
+            .scaledToFit()
+            .padding(side * 0.04)
+            .frame(width: side, height: side)
+            .background(Color.white)
+            .clipShape(Circle())
+            .rotationEffect(.degrees(-8))
+            .shadow(color: .black.opacity(0.35), radius: 13, x: -12, y: 10)
+            .accessibilityHidden(true)
     }
 }
 
-// MARK: - Categories
+private extension View {
+    /// In the ghost copy of a card (laid over the real card to place its button), takes the same
+    /// room but shows nothing, lets taps through to the card and stays out of VoiceOver.
+    @ViewBuilder
+    func shopGhost(_ isGhost: Bool) -> some View {
+        if isGhost {
+            hidden()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        } else {
+            self
+        }
+    }
+}
 
-/// One category's products in a two-column grid (one column at the largest
-/// text sizes).
-private struct ShopCategorySection: View {
-    let category: ProductCategory
+// MARK: - Grid
+
+/// Every other item in two columns (one at accessibility text sizes), cards in a row as tall as the
+/// tallest so their prices line up.
+private struct ShopProductGrid: View {
     let products: [Product]
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private var columns: [GridItem] {
-        let count = dynamicTypeSize.isAccessibilitySize ? 1 : 2
-        return Array(repeating: GridItem(.flexible(), spacing: 14, alignment: .top), count: count)
+    private var columns: Int {
+        dynamicTypeSize.isAccessibilitySize ? 1 : 2
+    }
+
+    private var rows: [[Product]] {
+        stride(from: 0, to: products.count, by: columns).map { start in
+            Array(products[start..<min(start + columns, products.count)])
+        }
     }
 
     var body: some View {
-        if !products.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionHeader(category.title)
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
-                    ForEach(products) { product in
-                        ShopProductLink(product: product, identifier: "product-\(product.id)")
+        VStack(spacing: Theme.Space.xl + Theme.Space.xxs) {
+            ForEach(rows, id: \.self) { row in
+                HStack(alignment: .top, spacing: Theme.Space.l) {
+                    ForEach(row) { product in
+                        ShopProductTile(product: product)
+                            .frame(maxWidth: .infinity)
+                    }
+                    if row.count < columns {
+                        Color.clear
+                            .frame(maxWidth: .infinity)
+                            .accessibilityHidden(true)
                     }
                 }
+                // Each card as tall as the tallest in its row.
+                .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, Theme.gutter)
         }
     }
 }
 
-/// A product card that opens the product's page.
-private struct ShopProductLink: View {
+/// A product card that opens the product's page, with the "+" laid over its photo as a sibling.
+private struct ShopProductTile: View {
     let product: Product
-    let identifier: String
-    var showsCategory = false
 
     @Environment(BravoStore.self) private var bravo
 
+    private var otherSizes: [String] { BravoShopCopy.otherSizes(of: product) }
+
     var body: some View {
         NavigationLink(value: product) {
-            ProductCard(product: product, showsCategory: showsCategory)
+            ProductCard(product: product, sizeCount: otherSizes.count + 1)
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Shows details and where to buy")
-        .accessibilityIdentifier(identifier)
-    }
-
-    private var accessibilityText: String {
-        ProductCard.accessibilityText(
+        .accessibilityLabel(ProductCard.accessibilityText(
             for: product,
             price: bravo.price(for: product),
-            isSoldOut: bravo.isSoldOut(product)
-        )
+            isSoldOut: bravo.isSoldOut(product),
+            otherSizes: otherSizes
+        ))
+        .accessibilityHint(otherSizes.isEmpty ? "Shows details" : "Shows details and sizes")
+        .accessibilityIdentifier("product-\(product.id)")
+        .overlay(alignment: .top) {
+            // The photo's frame (full width, the same shape, at the top), so the "+" lands on its corner.
+            Color.clear
+                .aspectRatio(ProductCard.photoAspectRatio, contentMode: .fit)
+                .overlay(alignment: .bottomTrailing) {
+                    ShopQuickAddButton(product: product)
+                        .padding(Theme.Space.xxs)
+                }
+        }
     }
 }
 
 // MARK: - About
 
-/// Bravo in its own words: who runs it and how its products are made.
+/// Bravo in its own words, a link to its whole store, and who sells and ships.
 private struct ShopAboutSponsor: View {
-    private let sponsor = AppData.products.sponsor
+    @Environment(AppRouter.self) private var router
+    private let catalog = AppData.products
 
     var body: some View {
-        if !sponsor.about.isEmpty {
-            VStack(alignment: .leading, spacing: 14) {
-                SectionHeader("About \(sponsor.name)")
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(sponsor.about.enumerated()), id: \.offset) { item in
-                        Text(item.element)
-                            .font(.subheadline)
-                            .foregroundStyle(Theme.bone)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+        VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
+            SectionHeader("About \(catalog.sponsor.name)")
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
+                Text(catalog.sponsor.tagline)
+                    .textRole(.displayS)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(Array(catalog.sponsor.about.enumerated()), id: \.offset) { item in
+                    Text(item.element)
+                        .textRole(.body)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .card()
             }
-            .padding(.horizontal, Theme.gutter)
+            .card(padding: Theme.Space.xl)
+            Button {
+                router.openWeb(catalog.storeURL)
+            } label: {
+                HStack(spacing: Theme.Space.s) {
+                    // "SHOP ALL ON BRAVOHAIRGEL.COM" would wrap at 375 and 393 pt; the hint names the site.
+                    Text("Shop all \(catalog.sponsor.name) products")
+                    Image(systemName: Symbol.external)
+                        .font(.system(size: 14, weight: .bold))
+                        .accessibilityHidden(true)
+                }
+            }
+            .buttonStyle(.secondary)
+            .accessibilityHint("Opens \(BravoShopCopy.storeHost)")
+            .accessibilityIdentifier("shopAllBravo")
+            Text(BravoShopCopy.finePrint)
+                .textRole(.caption)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
