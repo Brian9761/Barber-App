@@ -2,15 +2,20 @@ import SwiftUI
 
 /// Step 3: the day and start time, on the app's own calendar.
 ///
-/// The calendar knows the shop's hours, not each barber's bookings, so it
-/// offers every start time that fits before closing. Squire confirms the
-/// real opening in the last step. Everything is in the shop's time zone.
+/// The calendar knows the shop's hours, not each barber's bookings, so it offers every start time
+/// that fits before closing (from `BookingCalendar`, never a hard-coded list) and shows no "taken"
+/// times. Squire confirms the real opening in the last step. Everything is in the shop's time zone.
+///
+/// The screen's one red is the Continue bar pinned above the tab bar; it stays `ink3` until a time
+/// is picked. The picked day and time are bone, never red.
 struct ChooseTimeView: View {
     let choice: BookingChoice
 
     @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
-    /// Every tab stays alive, so coming back to the Book tab doesn't fire `onAppear`.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Every tab stays alive in the tab container, so coming back to the Book tab doesn't fire
+    /// `onAppear`: this does.
     @Environment(\.isSelectedTab) private var isSelectedTab
     @State private var now: Date
     @State private var selectedDay: CalendarDay?
@@ -22,6 +27,10 @@ struct ChooseTimeView: View {
     @State private var dayPickCount = 0
     /// Why the picked time went away, when the clock took it.
     @State private var expiredNote: String?
+    /// Between `onAppear` and `onDisappear`: not covered by the review. (A tab switch doesn't make
+    /// it disappear; `isSelectedTab` covers that.) The clock only catches up while it's seen, so
+    /// VoiceOver never hears about a dropped time on another screen.
+    @State private var isOnScreen = false
 
     private let calendar = AppData.bookingCalendar
 
@@ -38,17 +47,13 @@ struct ChooseTimeView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                StepHeader(
-                    step: 3,
-                    of: 4,
-                    stepName: "Time",
-                    title: "Pick a day & time",
-                    subtitle: "Choose a day, then a start time that suits you."
-                )
-                BookingChoiceCard(choice: choice)
+            VStack(alignment: .leading, spacing: Theme.Space.xxl) {
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    BookingStepTitle(step: 3, name: "Time", title: "Pick a time")
+                    ChooseTimeChoiceSummary(choice: choice)
+                }
                 monthCalendar
-                ChooseTimeDayCard(
+                ChooseTimeTimes(
                     calendar: calendar,
                     notice: expiredNote,
                     day: selectedDay,
@@ -59,37 +64,47 @@ struct ChooseTimeView: View {
                     onSelect: selectSlot
                 )
                 Text(footnote)
-                    .font(.footnote)
+                    .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(Theme.gutter)
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, Theme.Space.s)
+            .padding(.bottom, Theme.Space.xl)
         }
         .screenBackground()
-        .navigationTitle("Day & Time")
-        .navigationBarTitleDisplayMode(.inline)
+        .bookingStepChrome(step: 3, name: "Time", title: "Day & Time")
         .stickyBottomBar {
             ChooseTimeContinueBar(
-                subtitle: selectedSlot.map { calendar.dateTimeLabel(for: $0.start) },
+                summary: continueSummary,
+                spokenSummary: selectedSlot.map { calendar.dateTimeLabel(for: $0.start) },
                 onContinue: continueToReview
             )
         }
-        .onAppear(perform: refresh)
+        .onAppear {
+            isOnScreen = true
+            refresh()
+        }
+        .onDisappear {
+            isOnScreen = false
+        }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { refresh() }
+            if phase == .active, isOnScreen, isSelectedTab { refresh() }
         }
         .onChange(of: isSelectedTab) { _, isSelected in
-            if isSelected { refresh() }
+            if isSelected, isOnScreen { refresh() }
         }
-        // Keeps today's times honest while the client lingers on the calendar.
-        .task {
+        // Keeps today's times honest while the client lingers on the calendar. Restarted when the
+        // Book tab comes back; stopped while another tab is showing.
+        .task(id: isSelectedTab) {
+            guard isSelectedTab else { return }
             while true {
                 do {
                     try await Task.sleep(for: .seconds(60))
                 } catch {
                     return
                 }
-                refresh()
+                if isOnScreen { refresh() }
             }
         }
         .sensoryFeedback(.selection, trigger: dayPickCount)
@@ -137,6 +152,12 @@ struct ChooseTimeView: View {
         return pages.firstIndex { $0.id == displayedMonthID } ?? 0
     }
 
+    /// "Thu, Oct 29 · 2:30 PM" for the Continue bar, or `nil` before a time is picked.
+    private var continueSummary: String? {
+        guard let slot = selectedSlot else { return nil }
+        return "\(calendar.shortLabel(for: calendar.day(containing: slot.start))) · \(slot.label)"
+    }
+
     private var footnote: String {
         let hours = "These are the shop's hours. Squire shows \(BookingFlowCopy.barberPossessive(choice)) real openings in the last step."
         // Checked on the day being looked at, which may be across a daylight
@@ -152,18 +173,23 @@ struct ChooseTimeView: View {
         MonthPage(year: day.year, month: day.month).id
     }
 
+    /// Small, quick changes; none with Reduce Motion.
+    private var selectionAnimation: Animation? {
+        reduceMotion ? nil : .snappy
+    }
+
     // MARK: Actions
 
     private func showMonth(at index: Int, in pages: [MonthPage]) {
         guard pages.indices.contains(index) else { return }
-        withAnimation(.snappy) {
+        withAnimation(selectionAnimation) {
             displayedMonthID = pages[index].id
         }
     }
 
     private func selectDay(_ day: CalendarDay) {
         guard day != selectedDay else { return }
-        withAnimation(.snappy) {
+        withAnimation(selectionAnimation) {
             selectedDay = day
             // A time on another day doesn't carry over.
             selectedSlot = nil
@@ -173,7 +199,7 @@ struct ChooseTimeView: View {
     }
 
     private func selectSlot(_ slot: TimeSlot) {
-        withAnimation(.snappy) {
+        withAnimation(selectionAnimation) {
             selectedSlot = slot
             expiredNote = nil
         }
@@ -188,9 +214,9 @@ struct ChooseTimeView: View {
         router.bookingPath.append(.review(BookingPlan(choice: choice, start: slot.start)))
     }
 
-    /// Catches up with the clock, e.g. after the app was in the background or
-    /// the client came back from the review: a day or time that's no longer
-    /// offered is dropped, and the first open day is picked if needed.
+    /// Catches up with the clock, e.g. after the app was in the background, the client came back
+    /// from the review or from another tab: a day or time that's no longer offered is dropped, and
+    /// the first open day is picked if needed.
     private func refresh() {
         let current = Date()
         let droppedSlot = selectedSlot
@@ -235,6 +261,30 @@ struct ChooseTimeView: View {
     }
 }
 
+// MARK: - What's being booked
+
+/// "Haircut · $45" over "with Carlos · 45 min", under the title (never beside it, where it collides
+/// with the title one size step up).
+private struct ChooseTimeChoiceSummary: View {
+    let choice: BookingChoice
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("\(choice.serviceName) · \(choice.priceLabel)")
+                .textRole(.callout)
+                .foregroundStyle(Theme.bone)
+            Text("\(BookingFlowCopy.withBarber(choice)) · \(choice.durationLabel)")
+                .textRole(.body)
+                .foregroundStyle(Theme.smoke)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(choice.serviceName) \(BookingFlowCopy.withBarber(choice)), \(choice.priceLabel.spokenRanges), \(choice.durationLabel.spokenRanges)"
+        )
+    }
+}
+
 // MARK: - Times for the selected day
 
 /// The start times in one part of the day.
@@ -245,9 +295,10 @@ private struct ChooseTimeSlotGroup: Identifiable {
     var id: String { part.id }
 }
 
-/// The selected day's name and hours, then its start times grouped into
-/// morning, afternoon and evening.
-private struct ChooseTimeDayCard: View {
+/// The selected day's name and hours, then its start times under a mono heading for each part of
+/// the day. Every time comes from `BookingCalendar.slots`; there are no "taken" times, because the
+/// app can't see the barbers' calendars.
+private struct ChooseTimeTimes: View {
     let calendar: BookingCalendar
     /// Why the picked time went away, if it did.
     let notice: String?
@@ -259,7 +310,7 @@ private struct ChooseTimeDayCard: View {
     let onSelect: (TimeSlot) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: Theme.Space.xl) {
             if let notice {
                 ChooseTimeExpiredNote(text: notice)
             }
@@ -268,33 +319,27 @@ private struct ChooseTimeDayCard: View {
             }
             let slots = currentSlots
             if slots.isEmpty {
-                ChooseTimeEmptyMessage(text: emptyText)
-                if day == nil {
-                    CallButton {
-                        Label("Call \(AppData.shop.phone.display)", systemImage: Symbol.call)
-                    }
-                    .buttonStyle(.secondary)
-                }
+                ChooseTimeEmptyMessage(text: emptyText, offersCall: day == nil)
             } else {
                 ForEach(groups(of: slots)) { group in
                     ChooseTimeGroupView(group: group, selectedSlot: selectedSlot, onSelect: onSelect)
                 }
             }
         }
-        .card()
     }
 
     private func dayHeader(_ day: CalendarDay) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             Text(calendar.longLabel(for: day))
                 .textRole(.displayS)
                 .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("selectedDayLabel")
-            Label(hoursText(for: day), systemImage: Symbol.clock)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.electric)
+            Text(hoursText(for: day))
+                .textRole(.monoNumber)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -310,10 +355,10 @@ private struct ChooseTimeDayCard: View {
         }
     }
 
-    /// "Open 10 AM – 7 PM", or "Closed".
+    /// "Shop hours 10 AM – 7 PM", or "Closed".
     private func hoursText(for day: CalendarDay) -> String {
         guard let hours = calendar.clock.schedule.hours(on: day.weekday) else { return "Closed" }
-        return "Open \(hours.label)"
+        return "Shop hours \(hours.label)"
     }
 
     private var emptyText: String {
@@ -325,7 +370,7 @@ private struct ChooseTimeDayCard: View {
             return "Pick a day above to see its times."
         case .noTimesLeft:
             if day == today {
-                return "That's it for today. Pick another day for more times."
+                return "That's it for today. Pick another day."
             }
             return "Nothing fits on this day. Pick another day."
         case .closed:
@@ -344,62 +389,68 @@ private struct ChooseTimeExpiredNote: View {
     let text: String
 
     var body: some View {
-        Label {
+        HStack(alignment: .top, spacing: Theme.Space.m) {
+            Image(systemName: Symbol.warning)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Theme.caution)
+                .accessibilityHidden(true)
             Text(text)
+                .textRole(.callout)
                 .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
-        } icon: {
-            Image(systemName: Symbol.warning)
-                .foregroundStyle(Theme.caution)
+            Spacer(minLength: 0)
         }
-        .font(.footnote.weight(.semibold))
+        .card(padding: Theme.Space.cardPadding)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("slotExpiredNote")
     }
 }
 
-/// A friendly note when the day has no times.
+/// A day with no times: an `ink3` card with the calendar symbol, and the shop's number when there's
+/// nothing in the whole booking window.
 private struct ChooseTimeEmptyMessage: View {
     let text: String
+    let offersCall: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: Symbol.calendar)
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(Theme.electric)
-                .accessibilityHidden(true)
-            Text(text)
-                .font(.subheadline)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            HStack(alignment: .top, spacing: Theme.Space.l) {
+                Image(systemName: Symbol.calendar)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Theme.bone)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.ink4, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+                    .accessibilityHidden(true)
+                Text(text)
+                    .textRole(.body)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+            if offersCall {
+                CallButton {
+                    Label("Call the shop", systemImage: Symbol.call)
+                }
+                .buttonStyle(.secondary)
+            }
         }
-        .padding(14)
-        .background(Theme.ink4, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .accessibilityElement(children: .combine)
+        .card()
     }
 }
 
-/// "Morning" and its time chips.
+/// "☀ AFTERNOON ———" and its time chips: as many columns as fit (5 on most phones at the default
+/// size, fewer as text grows).
 private struct ChooseTimeGroupView: View {
     let group: ChooseTimeSlotGroup
     let selectedSlot: TimeSlot?
     let onSelect: (TimeSlot) -> Void
-    @ScaledMetric(relativeTo: .subheadline) private var chipMinWidth: CGFloat = 92
+    @ScaledMetric(relativeTo: .subheadline) private var chipMinWidth: CGFloat = 64
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label {
-                Text(group.part.title)
-                    .foregroundStyle(Theme.bone)
-            } icon: {
-                Image(systemName: Symbol.symbol(for: group.part))
-                    .foregroundStyle(Theme.electric)
-            }
-            .font(.subheadline.weight(.bold))
-            .accessibilityAddTraits(.isHeader)
-
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: chipMinWidth), spacing: 10)], spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            BookingSectionLabel(title: group.part.title, symbol: Symbol.symbol(for: group.part))
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: chipMinWidth), spacing: Theme.Space.s)], spacing: Theme.Space.s) {
                 ForEach(group.slots) { slot in
                     ChooseTimeChip(slot: slot, isSelected: slot == selectedSlot) {
                         onSelect(slot)
@@ -410,7 +461,8 @@ private struct ChooseTimeGroupView: View {
     }
 }
 
-/// One start time. Selected, it's bone with ink, bold text (selection is never red).
+/// One start time: "2:30" (the heading above says morning, afternoon or evening; VoiceOver hears
+/// "2:30 PM"). Selected, it's bone with ink, bold text and the selected trait, never red.
 private struct ChooseTimeChip: View {
     let slot: TimeSlot
     let isSelected: Bool
@@ -418,36 +470,66 @@ private struct ChooseTimeChip: View {
 
     var body: some View {
         Button(action: action) {
-            Text(verbatim: slot.label)
+            Text(verbatim: slot.clockLabel)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(ChipButtonStyle(isSelected: isSelected, cornerRadius: Theme.Radius.chip, minHeight: 44))
+        .buttonStyle(ChipButtonStyle(isSelected: isSelected, cornerRadius: Theme.Radius.chip, minHeight: Theme.minimumTapSize))
         .accessibilityLabel(slot.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("time-\(slot.id)")
     }
 }
 
+private extension TimeSlot {
+    /// "2:30", "10:00": the 12-hour clock without AM or PM.
+    var clockLabel: String {
+        let hour = time.hour % 12 == 0 ? 12 : time.hour % 12
+        let minute = time.minute < 10 ? "0\(time.minute)" : "\(time.minute)"
+        return "\(hour):\(minute)"
+    }
+}
+
 // MARK: - Continue
 
-/// The red Continue button pinned above the tab bar (`stickyBottomBar`), with the picked time under its label.
+/// The red Continue bar pinned above the tab bar (`stickyBottomBar`): "CONTINUE", the picked day
+/// and time in mono, and the arrow square. When the three don't fit on one line (a small phone,
+/// bigger text) the time moves under "CONTINUE". Until a time is picked it's `ink3`, not red.
 private struct ChooseTimeContinueBar: View {
-    /// "Thu, Oct 30 at 2:30 PM", or `nil` before a time is picked.
-    let subtitle: String?
+    /// "Thu, Oct 29 · 2:30 PM", or `nil` before a time is picked.
+    let summary: String?
+    /// "Thu, Oct 29 at 2:30 PM".
+    let spokenSummary: String?
     let onContinue: () -> Void
 
     var body: some View {
         Button(action: onContinue) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Continue")
-                Text(subtitle ?? "Pick a time to continue")
-                    .textRole(.monoTag)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Theme.Space.l) {
+                    Text("Continue")
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    detail
+                        .lineLimit(1)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Continue")
+                    detail
+                }
             }
         }
         .buttonStyle(.primary)
-        .disabled(subtitle == nil)
+        .disabled(summary == nil)
+        .accessibilityLabel("Continue")
+        .accessibilityValue(spokenSummary ?? "Pick a time first")
         .accessibilityIdentifier("continueToReview")
+    }
+
+    private var detail: some View {
+        // Full white on red (5.24:1), from the button style.
+        Text(summary ?? "Pick a time")
+            .textRole(.monoTag)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
