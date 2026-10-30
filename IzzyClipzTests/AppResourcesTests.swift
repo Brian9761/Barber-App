@@ -42,7 +42,7 @@ final class AppResourcesTests: XCTestCase {
     func testInfoPlist() throws {
         let info = try XCTUnwrap(Bundle.main.infoDictionary)
         XCTAssertEqual(info["CFBundleDisplayName"] as? String, "Izzy Clipz")
-        XCTAssertEqual(info["UIUserInterfaceStyle"] as? String, "Light")
+        XCTAssertEqual(info["UIUserInterfaceStyle"] as? String, "Dark")
         XCTAssertEqual(info["ITSAppUsesNonExemptEncryption"] as? Bool, false)
         let launch = try XCTUnwrap(info["UILaunchScreen"] as? [String: Any])
         XCTAssertEqual(launch["UIColorName"] as? String, "LaunchBackground")

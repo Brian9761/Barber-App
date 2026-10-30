@@ -203,7 +203,7 @@ final class DemoTour: XCTestCase {
     }
 
     private func tab(_ name: String) {
-        let button = app.tabBars.buttons[name]
+        let button = app.buttons["tab.\(name.lowercased())"]
         guard button.waitForExistence(timeout: 5) else {
             note("Missing tab \(name)")
             return

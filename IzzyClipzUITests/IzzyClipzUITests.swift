@@ -536,7 +536,7 @@ final class IzzyClipzUITests: XCTestCase {
     }
 
     private func openTab(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
-        let tab = app.tabBars.buttons[name]
+        let tab = app.buttons["tab.\(name.lowercased())"]
         XCTAssertTrue(tab.waitForExistence(timeout: 5), "Missing tab \(name)", file: file, line: line)
         tab.tap()
     }

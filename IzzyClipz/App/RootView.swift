@@ -13,6 +13,8 @@ struct RootView: View {
     @State private var reselections: [AppTab: Int] = [:]
     /// The home indicator's inset (without the keyboard), which places the floating bar.
     @State private var bottomInset: CGFloat = 0
+    /// The bar steps aside while typing (the Services search), rather than riding on the keyboard.
+    @State private var isKeyboardVisible = false
 
     var body: some View {
         @Bindable var router = router
@@ -21,15 +23,26 @@ struct RootView: View {
             tabRoot(tab)
                 // Bone, not red, for back buttons and plain buttons: red is each screen's main action.
                 .tint(Theme.bone)
-                .safeAreaPadding(.bottom, StreetTabBar.contentReserve(for: tab, safeAreaBottom: bottomInset))
+                .safeAreaPadding(.bottom, isKeyboardVisible ? 0 : StreetTabBar.contentReserve(for: tab, safeAreaBottom: bottomInset))
                 .environment(\.tabReselection, reselections[tab, default: 0])
         }
         .overlay(alignment: .bottom) {
             StreetTabBar(selection: $router.selectedTab, safeAreaBottom: bottomInset) { tab in
                 reselect(tab)
             }
-            // Pinned to the bottom of the screen, under the keyboard when one is up.
-            .ignoresSafeArea(edges: .bottom)
+            // The overlay ends where the safe area does, above the home indicator, and
+            // `ignoresSafeArea` doesn't reach past it (on iOS 26 the bar sat 34 pt too high). Moving
+            // the bar down by the measured inset puts it, and the scrim under it, on the screen's edge.
+            .offset(y: bottomInset)
+            .opacity(isKeyboardVisible ? 0 : 1)
+            .allowsHitTesting(!isKeyboardVisible)
+            .accessibilityHidden(isKeyboardVisible)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            isKeyboardVisible = true
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            isKeyboardVisible = false
         }
         .background {
             GeometryReader { proxy in
