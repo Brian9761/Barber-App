@@ -12,6 +12,9 @@ import SwiftUI
 struct BagView: View {
     @Environment(BagStore.self) private var bag
     @Environment(\.dismiss) private var dismiss
+    /// Opens full height: at half height only the meter and part of one line would show. It can be
+    /// dragged down to half.
+    @State private var detent = PresentationDetent.large
 
     var body: some View {
         VStack(spacing: 0) {
@@ -23,22 +26,23 @@ struct BagView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.medium, .large], selection: $detent)
         .presentationDragIndicator(.visible)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("bagSheet")
     }
 
-    /// "YOUR BAG", "3 ITEMS" and the close button.
+    /// "YOUR BAG", "3 ITEMS" and the close button. Empty, only the close button: the empty state
+    /// below has its own title.
     private var header: some View {
         HStack(alignment: .center, spacing: Theme.Space.l) {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text("Your bag")
-                    .textRole(.displayM)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityAddTraits(.isHeader)
                 if !bag.isEmpty {
+                    Text("Your bag")
+                        .textRole(.displayM)
+                        .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
                     Text(ShopBagFeedback.itemCount(bag.count))
                         .textRole(.monoNumber)
                         .foregroundStyle(Theme.smoke)
