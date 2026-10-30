@@ -49,7 +49,7 @@ private struct HomeScreen: View {
             }
         }
         // A transparent bar in the dark scheme, so the status bar and the bell
-        // read white over the navy hero and the navy scrim.
+        // read light over the hero photo and the ink scrim.
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarBackground(Color.clear, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
@@ -66,6 +66,8 @@ private struct HomeContent: View {
 
             VStack(alignment: .leading, spacing: 32) {
                 HomeActions()
+                InstagramCard()
+                    .padding(.horizontal, Theme.gutter)
                 HomePopularSection()
                 HomeBravoBanner()
                     .padding(.horizontal, Theme.gutter)
@@ -76,8 +78,7 @@ private struct HomeContent: View {
                     .padding(.horizontal, Theme.gutter)
             }
             .padding(.top, 24)
-            // Room for the last card to clear the tab bar.
-            .padding(.bottom, 40)
+            .padding(.bottom, Theme.Space.xxl)
         }
     }
 }
@@ -91,11 +92,11 @@ private struct RemindersButton: View {
         Button {
             router.showReminders()
         } label: {
-            // A plain white bell reads on the navy hero and scrim. No circle of
-            // its own: newer iOS versions draw one around toolbar buttons.
+            // A plain bone bell reads on the hero's scrim. No circle of its
+            // own: newer iOS versions draw one around toolbar buttons.
             Image(systemName: reminders.isEnabled ? Symbol.remindersOn : Symbol.reminders)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(Theme.bone)
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
         }
@@ -123,9 +124,9 @@ private struct BarScrim: View {
             let scrolled = max(0, -proxy.frame(in: .named(scrollSpace)).minY)
             LinearGradient(
                 stops: [
-                    .init(color: Theme.blueDeep, location: 0),
-                    .init(color: Theme.blueDeep.opacity(0.92), location: 0.75),
-                    .init(color: Theme.blueDeep.opacity(0), location: 1),
+                    .init(color: Theme.ink, location: 0),
+                    .init(color: Theme.ink.opacity(0.92), location: 0.75),
+                    .init(color: Theme.ink.opacity(0), location: 1),
                 ],
                 startPoint: .top,
                 endPoint: .bottom

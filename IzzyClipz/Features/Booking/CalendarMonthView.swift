@@ -41,8 +41,8 @@ struct CalendarMonthView: View {
     private var header: some View {
         HStack(spacing: 6) {
             Text(page.title)
-                .font(.display(.title2))
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayS)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("calendarMonthTitle")
@@ -69,8 +69,8 @@ struct CalendarMonthView: View {
         LazyVGrid(columns: columns, spacing: 0) {
             ForEach(0..<7, id: \.self) { index in
                 Text(verbatim: Self.weekdayInitials[index])
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Theme.secondaryText)
+                    .textRole(.monoTag)
+                    .foregroundStyle(Theme.smoke)
                     .frame(maxWidth: .infinity)
             }
         }
@@ -139,9 +139,9 @@ private struct CalendarMonthArrowButton: View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.body.weight(.bold))
-                .foregroundStyle(isEnabled ? Theme.blue : Theme.tertiaryText)
+                .foregroundStyle(isEnabled ? Theme.bone : Theme.boneDisabled)
                 .frame(width: 44, height: 44)
-                .background(isEnabled ? Theme.tint : Theme.ink.opacity(0.04), in: Circle())
+                .background(isEnabled ? Theme.ink4 : Color.clear, in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.pressable)
@@ -180,18 +180,18 @@ private struct CalendarMonthDayCell: View {
         .accessibilityIdentifier("day-\(day.id)")
     }
 
+    /// Selection is bone with ink, never red. Days that can't be booked are bone at 40%.
     private var textColor: Color {
-        if isSelected { return .white }
-        if !isBookable { return Theme.tertiaryText }
-        return isToday ? Theme.blue : Theme.ink
+        if isSelected { return Theme.ink }
+        if !isBookable { return Theme.boneDisabled }
+        return Theme.bone
     }
 
     @ViewBuilder private var selectionCircle: some View {
         if isSelected {
             Circle()
-                .fill(Theme.red)
+                .fill(Theme.bone)
                 .padding(1)
-                .shadow(color: Theme.red.opacity(0.32), radius: 6, y: 3)
                 .transition(AnyTransition.scale(scale: 0.6).combined(with: .opacity))
         }
     }
@@ -199,7 +199,7 @@ private struct CalendarMonthDayCell: View {
     @ViewBuilder private var todayRing: some View {
         if isToday && !isSelected {
             Circle()
-                .strokeBorder(Theme.blue, lineWidth: 2)
+                .strokeBorder(Theme.bone, lineWidth: 2)
                 .padding(2)
         }
     }

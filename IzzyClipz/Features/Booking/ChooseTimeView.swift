@@ -40,6 +40,7 @@ struct ChooseTimeView: View {
                 StepHeader(
                     step: 3,
                     of: 4,
+                    stepName: "Time",
                     title: "Pick a day & time",
                     subtitle: "Choose a day, then a start time that suits you."
                 )
@@ -57,7 +58,7 @@ struct ChooseTimeView: View {
                 )
                 Text(footnote)
                     .font(.footnote)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(Theme.gutter)
@@ -65,7 +66,7 @@ struct ChooseTimeView: View {
         .screenBackground()
         .navigationTitle("Day & Time")
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .bottom) {
+        .stickyBottomBar {
             ChooseTimeContinueBar(
                 subtitle: selectedSlot.map { calendar.dateTimeLabel(for: $0.start) },
                 onContinue: continueToReview
@@ -281,14 +282,14 @@ private struct ChooseTimeDayCard: View {
     private func dayHeader(_ day: CalendarDay) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(calendar.longLabel(for: day))
-                .font(.display(.title3))
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayS)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("selectedDayLabel")
             Label(hoursText(for: day), systemImage: Symbol.clock)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
         }
     }
 
@@ -340,11 +341,11 @@ private struct ChooseTimeExpiredNote: View {
     var body: some View {
         Label {
             Text(text)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
         } icon: {
             Image(systemName: Symbol.warning)
-                .foregroundStyle(Theme.soon)
+                .foregroundStyle(Theme.caution)
         }
         .font(.footnote.weight(.semibold))
         .accessibilityElement(children: .combine)
@@ -360,16 +361,16 @@ private struct ChooseTimeEmptyMessage: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: Symbol.calendar)
                 .font(.title3.weight(.semibold))
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
                 .accessibilityHidden(true)
             Text(text)
                 .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }
         .padding(14)
-        .background(Theme.tint, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(Theme.ink4, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -385,10 +386,10 @@ private struct ChooseTimeGroupView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label {
                 Text(group.part.title)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
             } icon: {
                 Image(systemName: Symbol.symbol(for: group.part))
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.electric)
             }
             .font(.subheadline.weight(.bold))
             .accessibilityAddTraits(.isHeader)
@@ -404,7 +405,7 @@ private struct ChooseTimeGroupView: View {
     }
 }
 
-/// One start time. Selected, it's filled royal blue.
+/// One start time. Selected, it's bone with ink, bold text (selection is never red).
 private struct ChooseTimeChip: View {
     let slot: TimeSlot
     let isSelected: Bool
@@ -413,25 +414,11 @@ private struct ChooseTimeChip: View {
     var body: some View {
         Button(action: action) {
             Text(verbatim: slot.label)
-                .font(.subheadline.weight(.semibold))
-                .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .foregroundStyle(isSelected ? Color.white : Theme.ink)
-                .padding(.horizontal, 8)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .background(
-                    isSelected ? Theme.blue : Theme.surface,
-                    in: RoundedRectangle(cornerRadius: 12, style: .continuous)
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(isSelected ? Theme.blue : Theme.ink.opacity(0.14), lineWidth: 1)
-                )
-                .shadow(color: isSelected ? Theme.blue.opacity(0.28) : Color.clear, radius: 6, y: 3)
-                .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.pressable)
+        .buttonStyle(ChipButtonStyle(isSelected: isSelected, cornerRadius: Theme.Radius.chip, minHeight: 44))
         .accessibilityLabel(slot.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
         .accessibilityIdentifier("time-\(slot.id)")
@@ -440,7 +427,7 @@ private struct ChooseTimeChip: View {
 
 // MARK: - Continue
 
-/// The bar pinned above the tab bar: "Continue", with the picked time under it.
+/// The red Continue button pinned above the tab bar (`stickyBottomBar`), with the picked time under its label.
 private struct ChooseTimeContinueBar: View {
     /// "Thu, Oct 30 at 2:30 PM", or `nil` before a time is picked.
     let subtitle: String?
@@ -448,23 +435,14 @@ private struct ChooseTimeContinueBar: View {
 
     var body: some View {
         Button(action: onContinue) {
-            VStack(spacing: 2) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text("Continue")
                 Text(subtitle ?? "Pick a time to continue")
-                    .font(.footnote.weight(.semibold))
-                    .opacity(0.9)
+                    .textRole(.monoTag)
             }
         }
         .buttonStyle(.primary)
         .disabled(subtitle == nil)
         .accessibilityIdentifier("continueToReview")
-        .padding(.horizontal, Theme.gutter)
-        .padding(.top, 12)
-        .padding(.bottom, 10)
-        .frame(maxWidth: .infinity)
-        .background(.regularMaterial)
-        .overlay(alignment: .top) {
-            Divider()
-        }
     }
 }

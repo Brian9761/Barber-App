@@ -5,7 +5,7 @@ import SwiftUI
 
 // MARK: - Hero
 
-/// Full-bleed photo under a royal blue to navy wash, with the shop's logo,
+/// Full-bleed photo under an ink scrim, with the shop's logo on a sticker,
 /// where it is, and whether it's open right now.
 struct HomeHero: View {
     /// Height of the status and navigation bars the hero runs under.
@@ -15,25 +15,24 @@ struct HomeHero: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            LogoBadge(height: 112)
+            LogoSticker(width: 168, rotation: .degrees(-4))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(shop.fullName)
                 .accessibilityAddTraits(.isHeader)
 
             VStack(spacing: 6) {
-                Text("BARBERSHOP · \(shop.address.city.uppercased()), \(shop.address.state)")
-                    .font(.caption.weight(.heavy))
-                    .tracking(2.4)
-                    .foregroundStyle(Color.white.opacity(0.85))
+                Text("Barbershop · \(shop.address.city), \(shop.address.state)")
+                    .textRole(.monoTag)
+                    .foregroundStyle(Theme.bone)
                     .accessibilityLabel("Barbershop in \(shop.address.city), \(shop.address.state)")
                 Text(shop.tagline)
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(Color.white)
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
             }
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
 
-            LiveStatusPill(onDark: true)
+            LiveStatusPill(isOverPhoto: true)
         }
         .padding(.horizontal, Theme.gutter)
         // Clear the bars when large text makes the hero grow.
@@ -42,13 +41,9 @@ struct HomeHero: View {
         .frame(maxWidth: .infinity)
         .frame(minHeight: 440, alignment: .bottom)
         .background { HomeHeroBackdrop() }
-        .overlay(alignment: .bottom) {
-            StripeBand(stripeWidth: 10)
-                .frame(height: 8)
-        }
-        // Navy, not the light page, shows when pulling down past the top.
+        // Ink shows when pulling down past the top.
         .background(alignment: .top) {
-            Theme.blueDeep
+            Theme.ink
                 .frame(height: 600)
                 .offset(y: -600)
                 .accessibilityHidden(true)
@@ -59,18 +54,10 @@ struct HomeHero: View {
 private struct HomeHeroBackdrop: View {
     var body: some View {
         ZStack {
-            FillImage(name: Asset.hero)
-            LinearGradient(
-                stops: [
-                    .init(color: Theme.blueDeep.opacity(0.78), location: 0),
-                    .init(color: Theme.blue.opacity(0.45), location: 0.32),
-                    .init(color: Theme.blueDeep.opacity(0.88), location: 0.68),
-                    .init(color: Theme.blueDeep, location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            StripeTexture(opacity: 0.06)
+            FillImage(name: Asset.hero, anchor: FillImage.editorial)
+            PhotoScrim()
+            // The logo and copy sit above the scrim's bottom band, so they get a fuller wash.
+            Theme.ink.opacity(0.55)
         }
         .accessibilityHidden(true)
     }
@@ -113,9 +100,9 @@ struct HomeActions: View {
         Button {
             router.startBooking()
         } label: {
-            Label("Book an Appointment", systemImage: Symbol.book)
+            Text("Book an appointment")
         }
-        .buttonStyle(.primary)
+        .buttonStyle(.primary(drips: true))
         .accessibilityIdentifier("homeBookButton")
     }
 }
@@ -130,12 +117,12 @@ struct HomeFavoriteBarberCard: View {
             HStack(spacing: 6) {
                 Image(systemName: Symbol.favoriteFilled)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(Theme.red)
+                    .foregroundStyle(Theme.bone)
                     .accessibilityHidden(true)
                 // UI tests look for this exact text.
                 Text("Your barber")
-                    .font(.subheadline.weight(.bold))
-                    .foregroundStyle(Theme.secondaryText)
+                    .textRole(.callout)
+                    .foregroundStyle(Theme.smoke)
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 12) {
@@ -155,14 +142,14 @@ struct HomeFavoriteBarberCard: View {
     private var profileLink: some View {
         NavigationLink(value: barber) {
             HStack(spacing: 14) {
-                BarberAvatar(barber: barber, size: 52)
+                MonogramTile(barber: barber, side: 52)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(barber.name)
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(Theme.ink)
+                        .textRole(.displayS)
+                        .foregroundStyle(Theme.bone)
                     Text(barber.title)
-                        .font(.subheadline)
-                        .foregroundStyle(Theme.secondaryText)
+                        .textRole(.monoTag)
+                        .foregroundStyle(Theme.smoke)
                 }
                 .multilineTextAlignment(.leading)
             }
@@ -177,10 +164,7 @@ struct HomeFavoriteBarberCard: View {
         Button {
             router.startBooking(barberID: barber.id)
         } label: {
-            // Padded so the capsule is a comfortable 44 points tall.
             Text("Book")
-                .padding(.horizontal, 6)
-                .frame(minHeight: 28)
         }
         .buttonStyle(.compact)
         .accessibilityLabel("Book with \(barber.name)")
@@ -228,7 +212,7 @@ struct HomePopularSection: View {
     }
 }
 
-/// A white card with the service's icon, name, price in red and length.
+/// An ink card with the service's icon, name, price and length.
 struct HomePopularCard: View {
     let service: Service
     /// Wider with larger text, so names don't break mid-word.
@@ -240,29 +224,22 @@ struct HomePopularCard: View {
                 .padding(.bottom, 8)
             Spacer(minLength: 0)
             Text(service.name)
-                .font(.headline)
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayS)
+                .foregroundStyle(Theme.bone)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-            Text(AppData.catalog.priceSummary(forService: service.id))
-                .font(.title3.weight(.heavy))
-                .foregroundStyle(Theme.red)
-                .fixedSize(horizontal: false, vertical: true)
+            PriceText(AppData.catalog.priceSummary(forService: service.id))
+                .foregroundStyle(Theme.bone)
             Text(AppData.catalog.durationSummary(forService: service.id))
-                .font(.footnote)
-                .foregroundStyle(Theme.secondaryText)
+                .textRole(.monoNumber)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .frame(width: min(width, 300), alignment: .leading)
         .frame(minHeight: 184, maxHeight: .infinity, alignment: .topLeading)
-        .background {
-            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
-                .fill(Theme.surface)
-                .shadow(color: Theme.shadow, radius: 12, y: 4)
-        }
-        .overlay(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous).strokeBorder(Theme.stroke))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+        .background(Theme.ink3, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 }
 
@@ -299,10 +276,9 @@ struct HomeBravoBanner: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background { backdrop }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
-        .shadow(color: Theme.blueDeep.opacity(0.25), radius: 14, y: 6)
-        .contentShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+        .background(Theme.promoGradient)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
     }
 
     @ViewBuilder private var productTile: some View {
@@ -326,17 +302,16 @@ struct HomeBravoBanner: View {
                     .font(.caption.weight(.bold))
                 // Wraps on narrow screens and at large text sizes rather than
                 // cutting off the partner's name.
-                Text("PROUD \(sponsor.name.uppercased()) PARTNER")
-                    .font(.caption.weight(.heavy))
-                    .tracking(1.2)
+                Text("Proud \(sponsor.name) partner")
+                    .textRole(.monoTag)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .foregroundStyle(Color.white.opacity(0.9))
             Text(sponsor.fullName)
-                .font(.display(.title2))
+                .textRole(.displayM)
                 .foregroundStyle(Color.white)
             Text("The gels, clay and pomade we trust in the chair.")
-                .font(.subheadline)
+                .textRole(.body)
                 .foregroundStyle(Color.white.opacity(0.85))
                 .fixedSize(horizontal: false, vertical: true)
             shopCapsule
@@ -352,22 +327,11 @@ struct HomeBravoBanner: View {
             Image(systemName: Symbol.chevron)
                 .font(.caption.weight(.heavy))
         }
-        .font(.subheadline.weight(.bold))
-        .foregroundStyle(Theme.red)
+        .textRole(.buttonSmall)
+        .foregroundStyle(Theme.ink)
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color.white, in: Capsule())
-    }
-
-    private var backdrop: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Theme.blueDeep, Theme.blue],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            StripeTexture(opacity: 0.07)
-        }
+        .background(Theme.bone, in: Capsule())
     }
 
     private var accessibilityText: String {
@@ -421,15 +385,15 @@ struct HomeTeamMember: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            BarberAvatar(barber: barber, size: 68)
+            MonogramTile(barber: barber, side: 68)
                 .overlay(alignment: .bottomTrailing) {
                     if isFavorite {
                         favoriteBadge
                     }
                 }
             Text(barber.name)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Theme.ink)
+                .textRole(.callout)
+                .foregroundStyle(Theme.bone)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -440,10 +404,10 @@ struct HomeTeamMember: View {
     private var favoriteBadge: some View {
         Image(systemName: Symbol.favoriteFilled)
             .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(Color.white)
+            .foregroundStyle(Theme.ink)
             .frame(width: 24, height: 24)
-            .background(Theme.red, in: Circle())
-            .overlay(Circle().strokeBorder(Color.white, lineWidth: 2))
+            .background(Theme.bone, in: Circle())
+            .overlay(Circle().strokeBorder(Theme.ink, lineWidth: 2))
             .accessibilityHidden(true)
     }
 }
@@ -464,10 +428,9 @@ struct HomeFreshCutsSection: View {
                 HStack(spacing: 12) {
                     ForEach(GalleryPhoto.allCases) { photo in
                         NavigationLink(value: HomeRoute.gallery) {
-                            FillImage(name: photo.assetName)
+                            FillImage(name: photo.assetName, anchor: FillImage.editorial)
                                 .frame(width: 150, height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                .shadow(color: Theme.shadow, radius: 10, y: 4)
+                                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
                         }
                         .buttonStyle(.pressable)
                         .accessibilityLabel(photo.caption)
@@ -504,7 +467,7 @@ struct HomeReviewsSection: View {
             })
 
             ForEach(Array(shop.reviews.prefix(2))) { review in
-                ReviewCard(review: review)
+                ReviewCard(review: review, lineLimit: 3)
             }
         }
         .padding(.horizontal, Theme.gutter)

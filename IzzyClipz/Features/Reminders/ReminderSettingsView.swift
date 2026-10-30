@@ -48,21 +48,21 @@ private struct ReminderSettingsHeader: View {
 
     var body: some View {
         VStack(spacing: 12) {
+            // Bone, not red: the reminders sheet has no primary action, so it has no red.
             Image(systemName: isOn ? Symbol.remindersOn : Symbol.reminders)
                 .font(.system(size: badgeSize * 0.42, weight: .semibold))
-                .foregroundStyle(Color.white)
+                .foregroundStyle(Theme.ink)
                 .frame(width: badgeSize, height: badgeSize)
-                .background(Theme.redGradient, in: Circle())
-                .shadow(color: Theme.red.opacity(0.3), radius: 10, y: 5)
+                .background(Theme.bone, in: Circle())
                 .accessibilityHidden(true)
             Text("KEEP IT FRESH")
-                .font(.display(.title))
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayM)
+                .foregroundStyle(Theme.bone)
                 .accessibilityLabel("Keep it fresh")
                 .accessibilityAddTraits(.isHeader)
             Text("Get a nudge at 10 AM when it's time for your next cut. Reminders are set on this iPhone only.")
                 .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(.center)
@@ -83,14 +83,14 @@ private struct ReminderToggleCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Remind me to book")
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                 Text(detail)
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
             }
             .fixedSize(horizontal: false, vertical: true)
         }
-        .tint(Theme.red)
+        .tint(Theme.electric)
         .accessibilityIdentifier("remindersToggle")
         .card()
     }
@@ -111,15 +111,15 @@ private struct ReminderPermissionCard: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: Symbol.remindersOff)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.red)
+                    .foregroundStyle(Theme.bone)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Notifications are off for \(AppData.shop.name)")
                         .font(.headline)
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(Theme.bone)
                     Text("Allow notifications in Settings to get cut reminders.")
                         .font(.subheadline)
-                        .foregroundStyle(Theme.secondaryText)
+                        .foregroundStyle(Theme.smoke)
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -179,7 +179,7 @@ private struct ReminderScheduleSection: View {
     private var intervalLabel: some View {
         Text("Remind me every")
             .font(.body)
-            .foregroundStyle(Theme.ink)
+            .foregroundStyle(Theme.bone)
             .accessibilityHidden(true)
     }
 
@@ -194,7 +194,7 @@ private struct ReminderScheduleSection: View {
         }
         .pickerStyle(.menu)
         .labelsHidden()
-        .tint(Theme.blue)
+        .tint(Theme.electric)
         .accessibilityIdentifier("reminderIntervalPicker")
     }
 
@@ -207,12 +207,12 @@ private struct ReminderScheduleSection: View {
                 displayedComponents: .date
             )
             .font(.body)
-            .foregroundStyle(Theme.ink)
-            .tint(Theme.red)
+            .foregroundStyle(Theme.bone)
+            .tint(Theme.electric)
             .accessibilityIdentifier("lastCutPicker")
             Text("Updates on its own after an appointment you saved in the app.")
                 .font(.footnote)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -241,14 +241,14 @@ private struct ReminderNextCard: View {
                 .font(.body.weight(.semibold))
                 // The glyph stops growing with the circle, so it stays inside.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
                 .frame(width: min(iconSize, 56), height: min(iconSize, 56))
-                .background(Theme.tint, in: Circle())
+                .background(Theme.ink4, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Next reminder")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                 nextDate
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -264,11 +264,11 @@ private struct ReminderNextCard: View {
         if let next = store.nextReminder {
             Text(next.date, format: .dateTime.weekday(.wide).month(.wide).day().hour().minute())
                 .font(.headline)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.bone)
         } else {
             Text("Scheduling…")
                 .font(.headline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
         }
     }
 }

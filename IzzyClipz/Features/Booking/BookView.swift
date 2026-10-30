@@ -52,6 +52,7 @@ private struct BookStartContent: View {
             StepHeader(
                 step: 1,
                 of: 4,
+                stepName: "Service",
                 title: "Pick a service",
                 subtitle: "Prices and lengths come straight from the shop's booking menu."
             )
@@ -106,11 +107,16 @@ private struct BookStepUnavailableView: View {
     let title: String
 
     var body: some View {
-        ContentUnavailableView(
-            title,
-            systemImage: Symbol.info,
-            description: Text("It may have changed since you last opened the app. Go back and pick again, or call the shop at \(AppData.shop.phone.display).")
-        )
+        EmptyStateView(
+            title: title,
+            symbol: Symbol.info,
+            message: "It may have changed since you last opened the app. Go back and pick again, or call the shop."
+        ) {
+            CallButton {
+                Text("Call \(AppData.shop.phone.display)")
+            }
+            .buttonStyle(.secondary)
+        }
         .screenBackground()
     }
 }
@@ -141,7 +147,7 @@ private struct BookCategorySection: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeader(category.title) {
                 Image(systemName: category.symbol)
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.smoke)
                     .accessibilityHidden(true)
             }
             ForEach(catalog.services(in: category)) { service in
@@ -167,8 +173,8 @@ private struct BookOtherWays: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Looking for something else?")
-                .font(.headline)
-                .foregroundStyle(Theme.ink)
+                .textRole(.headline)
+                .foregroundStyle(Theme.bone)
                 .accessibilityAddTraits(.isHeader)
 
             Button {
@@ -176,14 +182,14 @@ private struct BookOtherWays: View {
             } label: {
                 Label("Browse everything on Squire", systemImage: Symbol.external)
             }
-            .buttonStyle(.secondary)
+            .buttonStyle(.tertiary)
             .accessibilityHint("Opens Squire, the shop's booking system")
             .accessibilityIdentifier("browseSquireButton")
 
             CallButton {
                 Label("Prefer to call? \(AppData.shop.phone.display)", systemImage: Symbol.call)
             }
-            .buttonStyle(.secondary)
+            .buttonStyle(.tertiary)
             .accessibilityIdentifier("bookCallButton")
         }
         .padding(.top, 4)

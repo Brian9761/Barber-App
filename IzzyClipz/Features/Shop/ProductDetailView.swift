@@ -53,7 +53,7 @@ struct ProductDetailView: View {
     private var summary: some View {
         Text(product.summary)
             .font(.body)
-            .foregroundStyle(Theme.ink)
+            .foregroundStyle(Theme.bone)
             .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -62,13 +62,9 @@ struct ProductDetailView: View {
             Button {
                 router.openWeb(catalog.url(for: product))
             } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: Symbol.buy)
-                        .accessibilityHidden(true)
-                    Text(buyTitle)
-                }
+                Text(buyTitle)
             }
-            .buttonStyle(.primary)
+            .buttonStyle(.primary(trailingSymbol: Symbol.external))
             .accessibilityHint("Opens \(product.name) on \(BravoShopCopy.storeHost)")
             .accessibilityIdentifier("buyProductButton")
 
@@ -82,7 +78,7 @@ struct ProductDetailView: View {
                         .accessibilityHidden(true)
                 }
             }
-            .buttonStyle(.secondary)
+            .buttonStyle(.tertiary)
             .accessibilityHint("Opens \(BravoShopCopy.storeHost)")
             .accessibilityIdentifier("productShopAllBravo")
         }
@@ -97,7 +93,7 @@ struct ProductDetailView: View {
     private var finePrint: some View {
         Text(BravoShopCopy.finePrint)
             .font(.footnote)
-            .foregroundStyle(Theme.secondaryText)
+            .foregroundStyle(Theme.smoke)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -116,11 +112,11 @@ private struct ProductDetailHeading: View {
             Text("\(sponsor.name.uppercased()) · \(product.category.title.uppercased())")
                 .font(.caption.weight(.heavy))
                 .tracking(1.5)
-                .foregroundStyle(Theme.red)
+                .foregroundStyle(Theme.bone)
                 .accessibilityLabel("\(sponsor.name), \(product.category.title)")
             Text(product.name.uppercased())
-                .font(.display(.largeTitle))
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayL)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityLabel(product.name)
                 .accessibilityAddTraits(.isHeader)
@@ -135,8 +131,8 @@ private struct ProductDetailHeading: View {
     private var priceLine: some View {
         HStack(alignment: .center, spacing: 10) {
             Text(price.label)
-                .font(.display(.title))
-                .foregroundStyle(Theme.red)
+                .textRole(.displayM)
+                .foregroundStyle(Theme.bone)
             if let size = product.size {
                 Chip(text: size)
             }
@@ -158,7 +154,7 @@ private struct ProductDetailHeading: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .font(.subheadline.weight(.semibold))
-        .foregroundStyle(Theme.red)
+        .foregroundStyle(Theme.bone)
         .accessibilityElement(children: .combine)
     }
 }
@@ -185,11 +181,11 @@ private struct ProductHighlights: View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Image(systemName: Symbol.included)
                 .font(.body.weight(.semibold))
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
                 .accessibilityHidden(true)
             Text(highlight)
                 .font(.body)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

@@ -52,33 +52,31 @@ struct ServicesView: View {
     private var footnote: some View {
         Text("Prices are from the shop's booking menu and can differ by barber. Squire shows your barber's price before you confirm.")
             .font(.footnote)
-            .foregroundStyle(Theme.secondaryText)
+            .foregroundStyle(Theme.smoke)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// "Every cut, every price", under a barber-pole band.
+/// "Every cut, every price".
 private struct ServicesHero: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            StripeBand(stripeWidth: 10)
-                .frame(height: 10)
             VStack(alignment: .leading, spacing: 6) {
                 Text("EVERY CUT, EVERY PRICE")
-                    .font(.display(.title2))
-                    .foregroundStyle(Theme.ink)
+                    .textRole(.displayS)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Prices straight from the shop's booking menu. Pick one to see each barber's price.")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .card(padding: 0)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Every cut, every price. Prices straight from the shop's booking menu. Pick one to see each barber's price.")
@@ -104,21 +102,18 @@ private struct ServiceCategorySection: View {
     }
 }
 
-/// The section title look (red bar, heavy condensed caps) with the category's icon.
+/// The section title look (heavy condensed caps) with the category's icon.
 private struct ServiceCategoryHeader: View {
     let category: ServiceCategory
 
     var body: some View {
         HStack(spacing: 10) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Theme.red)
-                .frame(width: 4, height: 18)
             Image(systemName: category.symbol)
                 .font(.headline.weight(.semibold))
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.smoke)
             Text(category.title.uppercased())
-                .font(.display(.title2))
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayS)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
         }

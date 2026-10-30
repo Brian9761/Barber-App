@@ -28,6 +28,7 @@ struct BookingReviewView: View {
             StepHeader(
                 step: 4,
                 of: 4,
+                stepName: "Review",
                 title: "Review & confirm",
                 subtitle: "Check the details, then confirm your time on Squire."
             )
@@ -43,15 +44,15 @@ struct BookingReviewView: View {
             Button {
                 router.openSquire(plan.choice.request, plan: plan)
             } label: {
-                Label("Confirm on Squire", systemImage: Symbol.external)
+                Text("Confirm on Squire")
             }
-            .buttonStyle(.primary)
+            .buttonStyle(.primary(trailingSymbol: Symbol.external, drips: true))
             .accessibilityHint("Opens Squire, the shop's booking system")
             .accessibilityIdentifier("confirmOnSquireButton")
 
             Text("After you confirm, come back here to save it on your phone.")
                 .font(.footnote)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .multilineTextAlignment(.center)
@@ -107,13 +108,13 @@ private struct BookingReviewSummary: View {
             Divider()
             BookingReviewRow(title: "Time", value: calendar.timeLabel(for: plan.start))
             Divider()
-            BookingReviewRow(title: "Price", value: plan.choice.priceLabel, valueColor: Theme.red)
+            BookingReviewRow(title: "Price", value: plan.choice.priceLabel, valueColor: Theme.bone)
             Divider()
             BookingReviewRow(title: "Length", value: plan.choice.durationLabel)
             if let note = plan.choice.note {
                 Text(note)
                     .font(.footnote)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 12)
             }
@@ -126,7 +127,7 @@ private struct BookingReviewSummary: View {
 private struct BookingReviewRow: View {
     let title: String
     let value: String
-    var valueColor: Color = Theme.ink
+    var valueColor: Color = Theme.bone
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
@@ -150,7 +151,7 @@ private struct BookingReviewRow: View {
     private var titleText: some View {
         Text(title)
             .font(.body)
-            .foregroundStyle(Theme.secondaryText)
+            .foregroundStyle(Theme.smoke)
     }
 
     private var valueText: some View {
@@ -171,15 +172,15 @@ private struct BookingReviewSoonWarning: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: Symbol.warning)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(Theme.soon)
+                    .foregroundStyle(Theme.caution)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(hasPassed ? "That time has passed" : "That time is coming up fast")
                         .font(.subheadline.weight(.bold))
-                        .foregroundStyle(Theme.ink)
+                        .foregroundStyle(Theme.bone)
                     Text(message)
                         .font(.subheadline)
-                        .foregroundStyle(Theme.secondaryText)
+                        .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -194,8 +195,8 @@ private struct BookingReviewSoonWarning: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.soon.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.soon.opacity(0.35)))
+        .background(Theme.caution.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.caution.opacity(0.35)))
     }
 
     private var message: String {
@@ -245,17 +246,17 @@ struct BookingChoiceCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(choice.serviceName)
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(BookingFlowCopy.withBarber(choice)) · \(choice.durationLabel)")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 8)
             Text(choice.priceLabel)
                 .font(.headline)
-                .foregroundStyle(Theme.red)
+                .foregroundStyle(Theme.bone)
                 .multilineTextAlignment(.trailing)
         }
         .card(padding: 14)

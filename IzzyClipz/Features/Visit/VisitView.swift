@@ -48,8 +48,7 @@ private struct VisitScreen: View {
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, 8)
-            // Room for the footer to clear the tab bar.
-            .padding(.bottom, 40)
+            .padding(.bottom, Theme.Space.xxl)
         }
         .screenBackground()
         .navigationTitle("Visit")
@@ -62,7 +61,7 @@ private struct VisitScreen: View {
 /// A map of the block with the shop pinned. Tapping it offers directions.
 private struct VisitMapCard: View {
     private let shop = AppData.shop
-    private let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+    private let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
 
     private var coordinate: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: shop.coordinate.latitude, longitude: shop.coordinate.longitude)
@@ -87,25 +86,25 @@ private struct VisitMapCard: View {
             interactionModes: []
         ) {
             Marker(shop.name, systemImage: Symbol.services, coordinate: coordinate)
-                .tint(Theme.red)
+                .tint(Theme.electric)
         }
         .mapStyle(.standard(pointsOfInterest: .excludingAll))
         // The whole card is one button; the map itself shouldn't take touches.
         .allowsHitTesting(false)
         .frame(height: 220)
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Theme.stroke))
-        .shadow(color: Theme.shadow, radius: 12, y: 4)
+        .overlay(shape.strokeBorder(Theme.line))
+        .shadow(color: Color.black.opacity(0.35), radius: 12, y: 4)
     }
 
+    /// Bone, not red: the Directions button under the address is this screen's red.
     private var directionsBadge: some View {
         Label("Directions", systemImage: Symbol.directions)
-            .font(.subheadline.weight(.bold))
-            .foregroundStyle(Color.white)
+            .textRole(.buttonSmall)
+            .foregroundStyle(Theme.ink)
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
-            .background(Theme.redGradient, in: Capsule())
-            .shadow(color: Theme.red.opacity(0.3), radius: 8, y: 4)
+            .background(Theme.bone, in: Capsule())
             .padding(12)
     }
 }
@@ -145,9 +144,9 @@ private struct VisitAddressCard: View {
     private var pin: some View {
         Image(systemName: Symbol.location)
             .font(.body.weight(.semibold))
-            .foregroundStyle(Theme.blue)
+            .foregroundStyle(Theme.electric)
             .frame(width: iconSize, height: iconSize)
-            .background(Theme.tint, in: Circle())
+            .background(Theme.ink4, in: Circle())
             .accessibilityHidden(true)
     }
 
@@ -155,13 +154,13 @@ private struct VisitAddressCard: View {
         VStack(alignment: .leading, spacing: 3) {
             Text(shop.fullName)
                 .font(.headline)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.bone)
             Text(shop.address.streetLine)
                 .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
             Text(shop.address.cityLine)
                 .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
         }
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .combine)
@@ -178,9 +177,9 @@ private struct VisitAddressCard: View {
                 Button(action: copyAddress) {
                     Image(systemName: showsCopied ? Symbol.checkmark : Symbol.copy)
                         .font(.body.weight(.semibold))
-                        .foregroundStyle(Theme.blue)
+                        .foregroundStyle(Theme.electric)
                         .frame(width: iconSize, height: iconSize)
-                        .background(Theme.tint, in: Circle())
+                        .background(Theme.ink4, in: Circle())
                         .contentShape(Circle())
                 }
                 .buttonStyle(.pressable)
@@ -210,9 +209,9 @@ private struct VisitAddressCard: View {
 
     @ViewBuilder private var actionButtons: some View {
         DirectionsButton {
-            Label("Directions", systemImage: Symbol.directions)
+            Text("Directions")
         }
-        .buttonStyle(.primary)
+        .buttonStyle(.primary(trailingSymbol: Symbol.directions))
         .accessibilityIdentifier("visitDirectionsButton")
 
         CallButton {
@@ -237,14 +236,14 @@ private struct VisitHoursSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             SectionHeader("Hours")
-            LiveStatusPill(onDark: false)
+            LiveStatusPill()
             // Re-checked every minute so "today" moves on at midnight.
             TimelineView(.everyMinute) { context in
                 VisitHoursCard(today: AppData.clock.weekday(of: context.date))
             }
             Text("Hours are in Pacific time and may change on holidays. Walk-ins are welcome any time we're open.")
                 .font(.footnote)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
@@ -267,7 +266,7 @@ private struct VisitHoursCard: View {
     }
 }
 
-/// "Monday · 10 AM – 7 PM"; today's row is tinted, with a red "Today" chip.
+/// "Monday · 10 AM – 7 PM"; today's row is tinted, with a bone "Today" tag.
 private struct VisitHoursRow: View {
     let day: Weekday
     let hours: OpeningHours?
@@ -291,7 +290,7 @@ private struct VisitHoursRow: View {
         .background {
             if isToday {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Theme.tint)
+                    .fill(Theme.ink4)
             }
         }
         .accessibilityElement(children: .ignore)
@@ -304,7 +303,7 @@ private struct VisitHoursRow: View {
             Text(day.name)
                 .font(.body)
                 .fontWeight(isToday ? .bold : .regular)
-                .foregroundStyle(Theme.ink)
+                .foregroundStyle(Theme.bone)
             if isToday {
                 todayChip
             }
@@ -315,17 +314,12 @@ private struct VisitHoursRow: View {
         Text(hours?.label ?? "Closed")
             .font(.body)
             .fontWeight(isToday ? .bold : .regular)
-            .foregroundStyle(isToday ? Theme.blue : Theme.secondaryText)
+            .foregroundStyle(isToday ? Theme.bone : Theme.smoke)
+            .monospacedDigit()
     }
 
     private var todayChip: some View {
-        Text("TODAY")
-            .font(.caption2.weight(.heavy))
-            .tracking(0.8)
-            .foregroundStyle(Color.white)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(Theme.red, in: Capsule())
+        MonoTag(text: "Today", style: .bone)
     }
 
     /// "Today, Tuesday: 10 AM to 7 PM". Spelled out, since a dash between
@@ -368,18 +362,18 @@ private struct VisitInfoRow: View {
                 .font(.body.weight(.semibold))
                 // The glyph stops growing with the circle, so it stays inside.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
                 // Capped, so large text keeps the room for the words.
                 .frame(width: min(iconSize, 56), height: min(iconSize, 56))
-                .background(Theme.tint, in: Circle())
+                .background(Theme.ink4, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                 Text(items.joined(separator: " · "))
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 0)
@@ -404,7 +398,7 @@ private struct VisitShopSection: View {
                     ForEach(shop.about, id: \.self) { paragraph in
                         Text(paragraph)
                             .font(.body)
-                            .foregroundStyle(Theme.ink)
+                            .foregroundStyle(Theme.bone)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -414,10 +408,10 @@ private struct VisitShopSection: View {
     }
 }
 
-/// The storefront photo over a strip of barber-pole stripes.
+/// The storefront photo, and what to look for.
 private struct VisitStorefrontCard: View {
     private let shop = AppData.shop
-    private let shape = RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+    private let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -426,25 +420,23 @@ private struct VisitStorefrontCard: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("The \(shop.name) storefront at \(shop.address.street), with the shop's sign over the windows")
                 .accessibilityAddTraits(.isImage)
-            StripeBand(stripeWidth: 8)
-                .frame(height: 8)
             VStack(alignment: .leading, spacing: 3) {
                 Text("Look for the \(shop.name) sign")
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                 Text("\(shop.address.streetLine), \(shop.address.city)")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
             }
             .fixedSize(horizontal: false, vertical: true)
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
         }
-        .background(Theme.surface)
+        .background(Theme.ink3)
         .clipShape(shape)
-        .overlay(shape.strokeBorder(Theme.stroke))
-        .shadow(color: Theme.shadow, radius: 12, y: 4)
+        .overlay(shape.strokeBorder(Theme.line))
+        .shadow(color: Color.black.opacity(0.35), radius: 12, y: 4)
     }
 }
 
@@ -475,8 +467,8 @@ private struct VisitReviewsSection: View {
             } label: {
                 Label("Leave a review on Google", systemImage: Symbol.writeReview)
             }
-            // Blue: Directions is this screen's main action.
-            .buttonStyle(.blue)
+            // Not red: Directions is this screen's main action.
+            .buttonStyle(.tertiary)
             .accessibilityHint("Opens Google's review form")
             .accessibilityIdentifier("leaveReviewButton")
         }
@@ -562,25 +554,25 @@ private struct VisitLinkRow: View {
                 .font(.body.weight(.semibold))
                 // The glyph stops growing with the circle, so it stays inside.
                 .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
                 // Capped, so large text keeps the room for the words.
                 .frame(width: min(iconSize, 56), height: min(iconSize, 56))
-                .background(Theme.tint, in: Circle())
+                .background(Theme.ink4, in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                 Text(detail)
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
             }
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 8)
             Image(systemName: trailingSymbol)
                 .font(.footnote.weight(.bold))
-                .foregroundStyle(Theme.blue)
+                .foregroundStyle(Theme.electric)
                 .accessibilityHidden(true)
         }
         .padding(.horizontal, 12)
@@ -595,14 +587,13 @@ private struct VisitLinkRow: View {
 private struct VisitFooter: View {
     var body: some View {
         VStack(spacing: 10) {
-            MascotImage()
-                .frame(height: 48)
+            MascotSticker(size: 44)
             Text("Appointments are confirmed on Squire, the shop's booking system.")
                 .fixedSize(horizontal: false, vertical: true)
             Text("Version \(VisitView.appVersion)")
         }
         .font(.footnote)
-        .foregroundStyle(Theme.secondaryText)
+        .foregroundStyle(Theme.smoke)
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .padding(.top, 4)

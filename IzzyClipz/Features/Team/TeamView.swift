@@ -11,7 +11,7 @@ struct TeamView: View {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Every barber sets their own menu and prices. Tap one to see theirs and book with them.")
                     .font(.body)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 4)
 
@@ -49,13 +49,13 @@ private struct TeamBarberCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
-            BarberAvatar(barber: barber, size: 64)
+            MonogramTile(barber: barber, side: 64)
             details
                 // Take the whole row so the chips wrap only when they have to.
                 .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: Symbol.chevron)
                 .font(.footnote.weight(.bold))
-                .foregroundStyle(Theme.tertiaryText)
+                .foregroundStyle(Theme.smoke)
                 .padding(.top, 4)
                 .accessibilityHidden(true)
         }
@@ -68,18 +68,18 @@ private struct TeamBarberCard: View {
             HStack(spacing: 6) {
                 Text(barber.name)
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 if isFavorite {
                     Image(systemName: Symbol.favoriteFilled)
                         .font(.footnote)
-                        .foregroundStyle(Theme.red)
+                        .foregroundStyle(Theme.bone)
                         .accessibilityHidden(true)
                 }
             }
             Text(barber.title)
                 .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             if let rating = barber.rating {
                 RatingLine(rating: rating, source: "Squire")
@@ -87,7 +87,7 @@ private struct TeamBarberCard: View {
             if let haircut = TeamBarberCard.haircutPrice(for: barber) {
                 Text("Haircut \(haircut)")
                     .font(.subheadline.weight(.bold))
-                    .foregroundStyle(Theme.red)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }
             FlowingChips(items: barber.specialties)

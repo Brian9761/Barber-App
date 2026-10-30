@@ -83,10 +83,10 @@ struct ConfirmBookingSheet: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text("Day and time")
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                 Text(pickedTimeText)
                     .font(.footnote)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
                 DatePicker(
                     "Day and time",
@@ -95,24 +95,24 @@ struct ConfirmBookingSheet: View {
                     displayedComponents: [.date, .hourAndMinute]
                 )
                 .labelsHidden()
-                .tint(Theme.red)
+                .tint(Theme.electric)
                 .environment(\.timeZone, AppData.shop.timeZone)
                 .accessibilityIdentifier("appointmentDatePicker")
                 if isOutsideOpeningHours {
                     Label {
                         Text("The shop isn't open then. Check the day and time Squire gave you.")
-                            .foregroundStyle(Theme.ink)
+                            .foregroundStyle(Theme.bone)
                             .fixedSize(horizontal: false, vertical: true)
                     } icon: {
                         Image(systemName: Symbol.warning)
-                            .foregroundStyle(Theme.soon)
+                            .foregroundStyle(Theme.caution)
                     }
                     .font(.footnote.weight(.semibold))
                 }
                 if let zone = BookingFlowCopy.timeZoneNote(at: start) {
                     Text(zone)
                         .font(.footnote)
-                        .foregroundStyle(Theme.secondaryText)
+                        .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -122,10 +122,10 @@ struct ConfirmBookingSheet: View {
             Toggle(isOn: $remind) {
                 Text("Remind me the day before and an hour before")
                     .font(.body)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .tint(Theme.red)
+            .tint(Theme.electric)
             .accessibilityIdentifier("remindMeToggle")
         }
         .card()
@@ -136,7 +136,7 @@ struct ConfirmBookingSheet: View {
             Button(action: save) {
                 Text("Save Appointment")
             }
-            .buttonStyle(.primary)
+            .buttonStyle(.primary(trailingSymbol: nil))
             .accessibilityIdentifier("saveAppointmentButton")
 
             Button {
@@ -144,7 +144,7 @@ struct ConfirmBookingSheet: View {
             } label: {
                 Text("I didn't book")
                     .font(.headline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
                     .frame(maxWidth: .infinity, minHeight: 44)
                     .contentShape(Rectangle())
             }
@@ -157,7 +157,7 @@ struct ConfirmBookingSheet: View {
             } label: {
                 Label("Open Squire again", systemImage: Symbol.external)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.electric)
                     .frame(minHeight: 44)
                     .contentShape(Rectangle())
             }
@@ -195,26 +195,19 @@ struct ConfirmBookingSheet: View {
     }
 }
 
-/// The calendar badge and "Did you book it?".
+/// A still barber pole and "Did you book it?". (The sheet's one red is Save appointment.)
 private struct ConfirmBookingHeader: View {
-    @ScaledMetric(relativeTo: .largeTitle) private var badgeSize: CGFloat = 72
-
     var body: some View {
         VStack(spacing: 12) {
-            Image(systemName: Symbol.calendarClock)
-                .font(.system(size: badgeSize * 0.42, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: badgeSize, height: badgeSize)
-                .background(Theme.redGradient, in: Circle())
-                .shadow(color: Theme.red.opacity(0.3), radius: 10, y: 5)
-                .accessibilityHidden(true)
+            BarberPole(phase: 0)
+                .frame(width: 22, height: 58)
             Text("Did you book it?")
-                .font(.display(.largeTitle))
-                .foregroundStyle(Theme.ink)
+                .textRole(.displayL)
+                .foregroundStyle(Theme.bone)
                 .accessibilityAddTraits(.isHeader)
             Text("Save your appointment to see it on Home and get a reminder.")
                 .font(.subheadline)
-                .foregroundStyle(Theme.secondaryText)
+                .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .multilineTextAlignment(.center)
@@ -241,27 +234,24 @@ private struct ConfirmBookingSuccess: View {
                     .font(.system(size: badgeSize * 0.42, weight: .heavy))
                     .foregroundStyle(.white)
                     .frame(width: badgeSize, height: badgeSize)
-                    .background(Theme.open, in: Circle())
-                    .shadow(color: Theme.open.opacity(0.3), radius: 10, y: 5)
+                    .background(Theme.go, in: Circle())
+                    .shadow(color: Theme.go.opacity(0.3), radius: 10, y: 5)
                     .accessibilityHidden(true)
                 Text("You're all set")
-                    .font(.display(.largeTitle))
-                    .foregroundStyle(Theme.ink)
+                    .textRole(.displayL)
+                    .foregroundStyle(Theme.bone)
                     .accessibilityAddTraits(.isHeader)
-                StripeBand(stripeWidth: 7)
-                    .frame(width: 72, height: 6)
-                    .clipShape(Capsule())
                 Text(calendar.dateTimeLabel(for: appointment.start))
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(Theme.red)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(appointment.serviceName) \(BookingFlowCopy.withBarber(for: appointment))")
                     .font(.headline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(appointment.priceLabel) · \(appointment.durationLabel)")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.secondaryText)
+                    .foregroundStyle(Theme.smoke)
             }
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
@@ -274,13 +264,13 @@ private struct ConfirmBookingSuccess: View {
                 Button(action: onAddToCalendar) {
                     Label("Add to Calendar", systemImage: Symbol.calendarAdd)
                 }
-                .buttonStyle(.blue)
+                .buttonStyle(.secondary)
                 .accessibilityIdentifier("addToCalendarButton")
 
                 Button(action: onDone) {
                     Text("Done")
                 }
-                .buttonStyle(.secondary)
+                .buttonStyle(.tertiary)
                 .accessibilityIdentifier("confirmDoneButton")
             }
         }
@@ -293,7 +283,7 @@ private struct ConfirmBookingSuccess: View {
             } else if let text = reminderText {
                 Label(text, systemImage: Symbol.remindersOn)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.blue)
+                    .foregroundStyle(Theme.electric)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity)
             }
@@ -322,11 +312,11 @@ private struct ConfirmBookingNotificationsOff: View {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: Symbol.remindersOff)
                     .font(.headline)
-                    .foregroundStyle(Theme.soon)
+                    .foregroundStyle(Theme.caution)
                     .accessibilityHidden(true)
                 Text("Notifications are off for \(AppData.shop.name), so reminders can't come through. You can turn them on in Settings.")
                     .font(.subheadline)
-                    .foregroundStyle(Theme.ink)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .accessibilityElement(children: .combine)
@@ -334,7 +324,7 @@ private struct ConfirmBookingNotificationsOff: View {
                 Link(destination: url) {
                     Text("Open Settings")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.blue)
+                        .foregroundStyle(Theme.electric)
                         .frame(minHeight: 44)
                 }
                 .accessibilityIdentifier("openSettingsButton")
@@ -342,6 +332,6 @@ private struct ConfirmBookingNotificationsOff: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.soon.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(Theme.caution.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }
