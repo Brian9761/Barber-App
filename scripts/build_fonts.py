@@ -1,5 +1,33 @@
-# Builds the static Archivo instances the Street Drip design uses from Google's variable Archivo[wdth,wght].ttf,
-# and copies Space Mono and Rubik Wet Paint as they are. usage: python3 -I make-fonts-street-drip.py <srcdir> <outdir>
+#!/usr/bin/env python3
+"""Builds the app's fonts (IzzyClipz/Resources/Fonts) for the Street Drip design.
+
+Archivo comes from Google as one variable font; iOS registers static files, so this cuts the
+eight static instances the app uses out of it (each with its own PostScript name, which is what
+the app looks fonts up by), and copies Space Mono and Rubik Wet Paint as they are:
+
+  ArchivoExtraCondensed-Black   width 62,  weight 900   display type, 24 pt and up
+  ArchivoCondensed-ExtraBold    width 75,  weight 800   small display type, prices, the Instagram handle
+  ArchivoExpanded-Black         width 125, weight 900   the wordmark
+  ArchivoExpanded-ExtraBold     width 125, weight 800   button labels
+  Archivo-Regular/Medium/SemiBold/Bold                  body, captions, names, tab labels
+  SpaceMono-Regular, SpaceMono-Bold                     tags and numbers
+  RubikWetPaint-Regular                                 the one dripping word
+
+All three families are under the SIL Open Font License with no Reserved Font Names, so renamed
+static instances are allowed; their license files sit next to the fonts.
+
+    python3 -I scripts/build_fonts.py SRCDIR IzzyClipz/Resources/Fonts
+
+SRCDIR holds the files from github.com/google/fonts, renamed with their folder as a prefix:
+
+  archivo__Archivo[wdth,wght].ttf          ofl/archivo/Archivo[wdth,wght].ttf
+  spacemono__SpaceMono-Regular.ttf         ofl/spacemono/SpaceMono-Regular.ttf
+  spacemono__SpaceMono-Bold.ttf            ofl/spacemono/SpaceMono-Bold.ttf
+  rubikwetpaint__RubikWetPaint-Regular.ttf ofl/rubikwetpaint/RubikWetPaint-Regular.ttf
+
+Every file must also be listed under UIAppFonts in project.yml and IzzyClipz/Info.plist, and
+in `BrandFont` (IzzyClipz/Theme/Typography.swift). Requires fontTools (`pip install fonttools`).
+"""
 import sys, shutil
 from fontTools.ttLib import TTFont
 from fontTools.varLib import instancer
