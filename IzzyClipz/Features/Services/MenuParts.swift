@@ -161,9 +161,14 @@ struct MenuTitleText: View {
     }
 }
 
-// MARK: - Lengths
+// MARK: - Lengths and lists
 
 extension String {
+    /// "Owner · Barber" as "Owner, Barber", so VoiceOver pauses instead of reading the dot.
+    var menuSpokenList: String {
+        replacingOccurrences(of: " · ", with: ", ")
+    }
+
     /// A length with each number tied to its unit, so a narrow line breaks "1 hr 15 min" as
     /// "1 HR" / "15 MIN", never "1 HR 15" / "MIN".
     var menuKeepingUnits: String {

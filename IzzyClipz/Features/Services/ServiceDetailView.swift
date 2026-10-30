@@ -111,12 +111,22 @@ struct ServiceDetailView: View {
                     offeringButton(offering, barber: barber)
                 }
             }
-            Text("Next, you'll pick a day and time. Squire confirms the real opening.")
+            Text(bookingNote(offerings))
                 .textRole(.caption)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, Theme.Space.xxs)
         }
+    }
+
+    /// What happens next, after "Only Izzy offers VIP." when one barber does it all (as on step 2).
+    private func bookingNote(_ offerings: [Offering]) -> String {
+        let next = "Next, you'll pick a day and time. Squire confirms the real opening."
+        let barberIDs = Set(offerings.map(\.barberID))
+        guard barberIDs.count == 1, let id = barberIDs.first, let barber = catalog.barber(withID: id) else {
+            return next
+        }
+        return "Only \(barber.name) offers \(service.name). \(next)"
     }
 
     private func firstAvailableButton(_ option: FirstAvailableOption) -> some View {

@@ -86,6 +86,7 @@ private struct ServicesMenu: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Kicker(kicker)
+                        .accessibilityLabel(kicker.menuSpokenList)
                         .padding(.horizontal, Theme.gutter)
                         .padding(.top, Theme.Space.xs)
                         .id(ServicesMenuAnchor.top)

@@ -93,6 +93,7 @@ private struct BarberNameBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             Kicker(barber.title)
+                .accessibilityLabel(barber.title.menuSpokenList)
             MenuTitleText(barber.name, role: .displayXL)
                 .foregroundStyle(Theme.bone)
                 .accessibilityAddTraits(.isHeader)

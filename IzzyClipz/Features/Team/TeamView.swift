@@ -120,7 +120,7 @@ private struct TeamBarberRow: View {
     }
 
     static func accessibilityText(for barber: Barber, isFavorite: Bool) -> String {
-        var parts = [barber.name + (isFavorite ? ", your barber" : ""), barber.title]
+        var parts = [barber.name + (isFavorite ? ", your barber" : ""), barber.title.menuSpokenList]
         if let rating = barber.rating {
             parts.append("rated \(rating.averageLabel) out of 5, \(rating.countLabel) on Squire")
         }
