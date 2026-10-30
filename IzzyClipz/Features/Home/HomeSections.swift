@@ -1,98 +1,231 @@
 import SwiftUI
 
-// The sections of the Home tab, top to bottom. Names start with "Home" so
-// they can't clash with other screens' views.
+// The sections of the Home tab, top to bottom. Names start with "Home" so they can't clash with
+// other screens' views.
 
 // MARK: - Hero
 
-/// Full-bleed photo under an ink scrim, with the shop's logo on a sticker,
-/// where it is, and whether it's open right now.
+/// The shop's six cuts as a photo pager you swipe through (no autoplay), with the open status on
+/// top and "FRESH / OUT THE CHAIR." over an ink band at the bottom. Each photo's real caption and a
+/// "3 / 6" counter sit under it, on the canvas. Tapping a photo, or the ↗ button, opens the Gallery.
+///
+/// Text sits only on the band, which is 82% ink under the type (bone on it is 10:1 or better over
+/// any photo); the faces stay clear above it.
 struct HomeHero: View {
-    /// Height of the status and navigation bars the hero runs under.
-    let topInset: CGFloat
+    /// The pager's minimum height: it grows with the headline at large text sizes.
+    let height: CGFloat
 
-    private let shop = AppData.shop
+    @Environment(AppRouter.self) private var router
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// The photo on screen, kept in step with the pager.
+    @State private var page: GalleryPhoto? = HomeHero.photos.first
+
+    /// The cuts, the textured crop first (it's the strongest opener). The storefront isn't here:
+    /// it's on the Directions tile and the Visit tab.
+    static let photos: [GalleryPhoto] = [.texturedCrop, .curls, .blueColor, .fullBeard, .fadeAndBeard, .classicBeard]
+
+    /// `min(282, 0.32 × screen height)`: 213 pt on a 667 pt iPhone SE, 270 on an 844 pt iPhone,
+    /// 282 from 882 pt up.
+    static func height(forScreenHeight screenHeight: CGFloat) -> CGFloat {
+        min(282, (screenHeight * 0.32).rounded())
+    }
 
     var body: some View {
-        VStack(spacing: 14) {
-            LogoSticker(width: 168, rotation: .degrees(-4))
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(shop.fullName)
-                .accessibilityAddTraits(.isHeader)
-
-            VStack(spacing: 6) {
-                Text("Barbershop · \(shop.address.city), \(shop.address.state)")
-                    .textRole(.monoTag)
-                    .foregroundStyle(Theme.bone)
-                    .accessibilityLabel("Barbershop in \(shop.address.city), \(shop.address.state)")
-                Text(shop.tagline)
-                    .textRole(.headline)
-                    .foregroundStyle(Theme.bone)
-            }
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-
-            LiveStatusPill(isOverPhoto: true)
-        }
-        .padding(.horizontal, Theme.gutter)
-        // Clear the bars when large text makes the hero grow.
-        .padding(.top, topInset + 16)
-        .padding(.bottom, 36)
-        .frame(maxWidth: .infinity)
-        .frame(minHeight: 440, alignment: .bottom)
-        .background { HomeHeroBackdrop() }
-        // Ink shows when pulling down past the top.
-        .background(alignment: .top) {
-            Theme.ink
-                .frame(height: 600)
-                .offset(y: -600)
-                .accessibilityHidden(true)
+        let current = page ?? Self.photos[0]
+        let index = Self.photos.firstIndex(of: current) ?? 0
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            card
+            caption(for: current, index: index)
         }
     }
-}
 
-private struct HomeHeroBackdrop: View {
-    var body: some View {
-        ZStack {
-            FillImage(name: Asset.hero, anchor: FillImage.editorial)
-            PhotoScrim()
-            // The logo and copy sit above the scrim's bottom band, so they get a fuller wash.
-            Theme.ink.opacity(0.55)
+    // MARK: Card
+
+    private var card: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            LiveStatusPill(isOverPhoto: true)
+                // One line on the photo: the longest status ("Closed · opens 10 AM tomorrow") still
+                // fits at xxxLarge. VoiceOver reads it in full.
+                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                .padding(Theme.Space.l)
+                // Swipes that start on the pill still turn the page.
+                .allowsHitTesting(false)
+            Spacer(minLength: Theme.Space.xxl)
+            HStack(alignment: .bottom, spacing: Theme.Space.l) {
+                headline
+                    .allowsHitTesting(false)
+                Spacer(minLength: 0)
+                galleryButton
+            }
+            .padding(.leading, Theme.Space.xl)
+            .padding(.trailing, 14)
+            .padding(.bottom, 14)
+            .background(alignment: .top) { band }
         }
+        // `idealHeight` too: inside the vertical scroll view nothing proposes a height, and without
+        // it the spacer wouldn't push the headline down to the bottom of the photo.
+        .frame(maxWidth: .infinity, minHeight: height, idealHeight: height, alignment: .topLeading)
+        .background { pager }
+        .background(Theme.ink3)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
+    }
+
+    /// The one drip word on Home, in bone (red stays for the Book button), over the hero line.
+    private var headline: some View {
+        // Rubik Wet Paint's drips hang 16 pt below its baseline, inside its own line box; pulling
+        // the next line up by a point leaves the 2–4 pt gap the spec asks for.
+        VStack(alignment: .leading, spacing: -1) {
+            Text("Fresh")
+                .textRole(.dripWord)
+            Text("Out the chair.")
+                .textRole(.displayL)
+        }
+        .foregroundStyle(Theme.bone)
+        .lineLimit(2)
+        .minimumScaleFactor(0.7)
+        .fixedSize(horizontal: false, vertical: true)
+        // A slogan, not information: VoiceOver gets the photos and the status instead.
         .accessibilityHidden(true)
     }
+
+    /// 82% ink behind the headline, fading in over the 40 pt above it.
+    private var band: some View {
+        let fade: CGFloat = 40
+        return VStack(spacing: 0) {
+            LinearGradient(colors: [Theme.ink.opacity(0), Theme.ink.opacity(0.82)], startPoint: .top, endPoint: .bottom)
+                .frame(height: fade)
+            Theme.ink.opacity(0.82)
+        }
+        .padding(.top, -fade)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private var galleryButton: some View {
+        NavigationLink(value: HomeRoute.gallery) {
+            Image(systemName: Symbol.external)
+        }
+        .buttonStyle(IconButtonStyle(fill: Theme.bone, foreground: Theme.ink))
+        .accessibilityLabel("See all photos")
+        .accessibilityHint("Opens the gallery")
+        .accessibilityIdentifier("seeAllPhotos")
+    }
+
+    private var pager: some View {
+        ScrollView(.horizontal) {
+            LazyHStack(spacing: 0) {
+                ForEach(Self.photos, id: \.self) { photo in
+                    FillImage(name: photo.assetName, anchor: photo.heroAnchor)
+                        .containerRelativeFrame(.horizontal)
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: openGallery)
+                }
+            }
+            .scrollTargetLayout()
+        }
+        .scrollTargetBehavior(.paging)
+        .scrollIndicators(.hidden)
+        .scrollPosition(id: $page)
+        // One adjustable element for VoiceOver: swipe up or down for the next photo, double-tap
+        // for the gallery.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Fresh cuts")
+        .accessibilityValue(accessibilityValue)
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: turnPage(by: 1)
+            case .decrement: turnPage(by: -1)
+            @unknown default: break
+            }
+        }
+        .accessibilityAction(.default, openGallery)
+        .accessibilityHint("Opens the gallery")
+        .accessibilityIdentifier("homeHeroPhotos")
+    }
+
+    /// "Textured crop with a fade" on the left, "1 / 6" on the right.
+    private func caption(for photo: GalleryPhoto, index: Int) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
+            Text(photo.caption)
+                .textRole(.monoTag)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+            Text("\(index + 1) / \(Self.photos.count)")
+                .textRole(.monoNumber)
+                .foregroundStyle(Theme.bone)
+                .fixedSize()
+        }
+        .padding(.horizontal, Theme.Space.xxs)
+        // The pager reads the same thing as its value.
+        .accessibilityHidden(true)
+    }
+
+    // MARK: Actions
+
+    private var accessibilityValue: String {
+        let current = page ?? Self.photos[0]
+        let index = Self.photos.firstIndex(of: current) ?? 0
+        return "Photo \(index + 1) of \(Self.photos.count), \(current.caption)"
+    }
+
+    private func turnPage(by step: Int) {
+        let index = Self.photos.firstIndex(of: page ?? Self.photos[0]) ?? 0
+        let next = min(max(index + step, 0), Self.photos.count - 1)
+        guard next != index else { return }
+        withAnimation(reduceMotion ? nil : .snappy) {
+            page = Self.photos[next]
+        }
+    }
+
+    private func openGallery() {
+        router.homePath.append(HomeRoute.gallery)
+    }
 }
 
-// MARK: - Book, quick actions, next appointment, favorite barber
+private extension GalleryPhoto {
+    /// Where to crop each portrait photo for the landscape hero, so the head and the fade line sit
+    /// in the clear top half, above the headline's band. Measured on each photo: the textured crop's
+    /// head is near the top of the frame, the lined-up beard's much lower.
+    var heroAnchor: UnitPoint {
+        let y: CGFloat
+        switch self {
+        case .texturedCrop: y = 0.1
+        case .curls: y = 0.27
+        case .blueColor: y = 0.35
+        case .fullBeard: y = 0.45
+        case .fadeAndBeard: y = 0.41
+        case .classicBeard: y = 0.30
+        }
+        return UnitPoint(x: 0.5, y: y)
+    }
+}
 
-/// The main call to action, contact shortcuts, the next saved appointment
-/// and the client's barber.
-struct HomeActions: View {
+// MARK: - Book, and the next appointment
+
+/// The screen's one red thing, "BOOK AN APPOINTMENT" with the logo's drips, then either the next
+/// saved appointment as a ticket or, with nothing booked, a mono line about walk-ins (not another
+/// booking card: the button above already does that job).
+struct HomeBookSection: View {
     @Environment(AppRouter.self) private var router
-    @Environment(Favorites.self) private var favorites
     @Environment(AppointmentStore.self) private var appointments
 
     var body: some View {
         let upcoming = appointments.upcoming
-        let favorite = favorites.barber
         // Re-checked every minute, so an appointment that's over drops off.
         TimelineView(.everyMinute) { context in
-            VStack(spacing: 24) {
-                VStack(spacing: 12) {
-                    bookButton
-                    QuickActions()
-                }
-                if let next = upcoming.first(where: { $0.isUpcoming(at: context.date) }) {
+            let next = upcoming.first { $0.isUpcoming(at: context.date) }
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                bookButton
+                if let next {
                     UpcomingAppointmentCard(appointment: next)
-                        // A new card when the next one changes, so an open
-                        // "Remove?" can't carry over to another appointment.
+                        // A new card when the next one changes, so an open "Remove?" can't carry
+                        // over to another appointment.
                         .id(next.id)
-                }
-                if let favorite {
-                    HomeFavoriteBarberCard(barber: favorite)
+                } else {
+                    walkInLine(at: context.date)
                 }
             }
-            .padding(.horizontal, Theme.gutter)
         }
     }
 
@@ -105,91 +238,46 @@ struct HomeActions: View {
         .buttonStyle(.primary(drips: true))
         .accessibilityIdentifier("homeBookButton")
     }
-}
 
-/// "Your barber", with their profile one tap away and a quick way to book them.
-struct HomeFavoriteBarberCard: View {
-    let barber: Barber
-    @Environment(AppRouter.self) private var router
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: Symbol.favoriteFilled)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(Theme.bone)
-                    .accessibilityHidden(true)
-                // UI tests look for this exact text.
-                Text("Your barber")
-                    .textRole(.callout)
-                    .foregroundStyle(Theme.smoke)
-            }
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: 12) {
-                    profileLink
-                    Spacer(minLength: 8)
-                    bookButton
-                }
-                VStack(alignment: .leading, spacing: 12) {
-                    profileLink
-                    bookButton
-                }
-            }
-        }
-        .card()
-    }
-
-    private var profileLink: some View {
-        NavigationLink(value: barber) {
-            HStack(spacing: 14) {
-                MonogramTile(barber: barber, side: 52)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(barber.name)
-                        .textRole(.displayS)
-                        .foregroundStyle(Theme.bone)
-                    Text(barber.title)
-                        .textRole(.monoTag)
-                        .foregroundStyle(Theme.smoke)
-                }
-                .multilineTextAlignment(.leading)
-            }
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.pressable)
-        .accessibilityLabel("\(barber.name), \(barber.title)")
-        .accessibilityHint("Opens their profile")
-    }
-
-    private var bookButton: some View {
-        Button {
-            router.startBooking(barberID: barber.id)
-        } label: {
-            Text("Book")
-        }
-        .buttonStyle(.compact)
-        .accessibilityLabel("Book with \(barber.name)")
+    /// "WALK-INS WELCOME · TODAY 10 AM – 7 PM", from the shop's highlights and regular hours.
+    private func walkInLine(at date: Date) -> some View {
+        let hours = AppData.clock.todayLabel(at: date)
+        let walkIns = AppData.shop.highlights.first { $0.localizedCaseInsensitiveContains("walk-in") }
+        let parts = [walkIns, hours].compactMap { $0 }
+        return Text(parts.joined(separator: " · "))
+            .textRole(.monoTag)
+            .foregroundStyle(Theme.smoke)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, Theme.Space.xxs)
+            .accessibilityLabel(parts.map(\.spokenRanges).joined(separator: ". "))
+            .accessibilityIdentifier("homeWalkIns")
     }
 }
 
 // MARK: - Popular services
 
+/// The menu's popular services in a row you swipe: icon, name, price range and length. Tapping one
+/// opens its page (what's included, who offers it at what price); a chevron, not a "+", because
+/// booking isn't a cart.
 struct HomePopularSection: View {
     @Environment(AppRouter.self) private var router
     private let services = AppData.catalog.popularServices
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
             SectionHeader("Popular") {
-                Button("All services") {
+                Button {
                     router.selectedTab = .services
+                } label: {
+                    HomeLinkLabel(title: "All services")
                 }
                 .accessibilityHint("Opens the Services tab")
                 .accessibilityIdentifier("allServicesButton")
             }
             .padding(.horizontal, Theme.gutter)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 12) {
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: Theme.Space.m) {
                     ForEach(services) { service in
                         NavigationLink(value: service) {
                             HomePopularCard(service: service)
@@ -204,54 +292,393 @@ struct HomePopularSection: View {
                 // Every card as tall as the tallest one.
                 .fixedSize(horizontal: false, vertical: true)
             }
+            .scrollIndicators(.hidden)
             .contentMargins(.horizontal, Theme.gutter, for: .scrollContent)
             .scrollTargetBehavior(.viewAligned)
-            // Lets the cards' shadows show past the carousel's edges.
-            .scrollClipDisabled()
         }
     }
 }
 
-/// An ink card with the service's icon, name, price and length.
+/// An ink card with the service's icon, name, price and length. VIP, "the works in one
+/// appointment", is the bone one, as on the Services tab.
 struct HomePopularCard: View {
     let service: Service
     /// Wider with larger text, so names don't break mid-word.
-    @ScaledMetric(relativeTo: .headline) private var width: CGFloat = 164
+    @ScaledMetric(relativeTo: .title3) private var width: CGFloat = 168
+
+    private var isTheWorks: Bool { service.id == "vip" }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            ServiceIcon(symbol: service.symbol, size: 46)
-                .padding(.bottom, 8)
-            Spacer(minLength: 0)
+        let primary = isTheWorks ? Theme.ink : Theme.bone
+        let secondary = isTheWorks ? Theme.smokeDark : Theme.smoke
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .top) {
+                Image(systemName: service.symbol)
+                    .font(.system(size: 21, weight: .semibold))
+                    .foregroundStyle(primary)
+                    .frame(width: 48, height: 48)
+                    .background(isTheWorks ? Theme.bone2 : Theme.ink4,
+                                in: RoundedRectangle(cornerRadius: Theme.Radius.thumbnail * 0.86, style: .continuous))
+                Spacer(minLength: Theme.Space.s)
+                Image(systemName: Symbol.chevron)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(secondary)
+                    .padding(.top, Theme.Space.xxs)
+            }
+            .accessibilityHidden(true)
+            Spacer(minLength: Theme.Space.l)
             Text(service.name)
                 .textRole(.displayS)
-                .foregroundStyle(Theme.bone)
+                .foregroundStyle(primary)
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             PriceText(AppData.catalog.priceSummary(forService: service.id))
-                .foregroundStyle(Theme.bone)
+                .foregroundStyle(primary)
+                .padding(.top, 2)
             Text(AppData.catalog.durationSummary(forService: service.id))
                 .textRole(.monoNumber)
-                .foregroundStyle(Theme.smoke)
+                .foregroundStyle(secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
+        }
+        .padding(Theme.Space.xl)
+        .frame(width: min(width, 300), alignment: .leading)
+        .frame(minHeight: 172, maxHeight: .infinity, alignment: .topLeading)
+        .background(isTheWorks ? Theme.bone : Theme.ink3, in: shape)
+        .contentShape(shape)
+    }
+}
+
+// MARK: - The crew
+
+/// "THE CREW": the client's barber first, on their own card with a Book button, then everyone else
+/// in a row you swipe. Each opens the barber's profile.
+struct HomeCrewSection: View {
+    @Environment(Favorites.self) private var favorites
+    private let barbers = AppData.catalog.barbers
+
+    var body: some View {
+        let favorite = favorites.barber
+        let crew = barbers.filter { $0.id != favorite?.id }
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            SectionHeader("The crew") {
+                NavigationLink(value: HomeRoute.team) {
+                    HomeLinkLabel(title: "All \(barbers.count) barbers")
+                }
+                .accessibilityHint("Opens the team")
+                .accessibilityIdentifier("meetTeamButton")
+            }
+            .padding(.horizontal, Theme.gutter)
+
+            if let favorite {
+                HomeFavoriteBarberCard(barber: favorite)
+                    .padding(.horizontal, Theme.gutter)
+            }
+
+            ScrollView(.horizontal) {
+                HStack(alignment: .top, spacing: Theme.Space.m) {
+                    ForEach(crew) { barber in
+                        NavigationLink(value: barber) {
+                            HomeCrewCard(barber: barber)
+                        }
+                        .buttonStyle(.pressable)
+                        .accessibilityLabel(HomeCrewCard.accessibilityText(for: barber))
+                        .accessibilityHint("Opens their profile")
+                        .accessibilityIdentifier("homeBarber-\(barber.id)")
+                    }
+                }
+                .scrollTargetLayout()
+                // Every card as tall as the tallest one.
+                .fixedSize(horizontal: false, vertical: true)
+            }
+            .scrollIndicators(.hidden)
+            .contentMargins(.horizontal, Theme.gutter, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+        }
+    }
+}
+
+/// A barber's card in the crew row: their monogram tile on top, then the name and the rating
+/// ("★ 5.0 · 92"), or "Barber" when Squire doesn't show one.
+struct HomeCrewCard: View {
+    let barber: Barber
+    /// About 2.9 cards show on a 390 pt screen, so the row clearly scrolls. Wider with larger text.
+    @ScaledMetric(relativeTo: .subheadline) private var width: CGFloat = 116
+
+    var body: some View {
+        // Wide enough at the largest sizes for "Flowxbori" on one line.
+        let cardWidth = min(width, 260)
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
+        VStack(alignment: .leading, spacing: 0) {
+            MonogramTile(barber: barber, size: CGSize(width: cardWidth, height: 66), cornerRadius: 0)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(barber.name)
+                    .textRole(.callout)
+                    .foregroundStyle(Theme.bone)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                HomeBarberMeta(barber: barber)
+            }
+            .padding(.horizontal, 11)
+            .padding(.top, Theme.Space.s)
+            .padding(.bottom, Theme.Space.m)
+        }
+        .frame(width: cardWidth, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(Theme.ink3)
+        .clipShape(shape)
+        .contentShape(shape)
+    }
+
+    /// "Izzy, Owner · Barber, rated 5.0 out of 5 from 92 reviews".
+    static func accessibilityText(for barber: Barber) -> String {
+        var parts = [barber.name, barber.title.replacingOccurrences(of: " · ", with: ", ")]
+        if let rating = barber.rating {
+            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel)")
+        }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// "★ 5.0 · 92" in mono, or the barber's title ("Barber") when there's no published rating. Never
+/// "0 reviews".
+private struct HomeBarberMeta: View {
+    let barber: Barber
+    @Environment(\.surfaceTone) private var tone
+
+    var body: some View {
+        if let rating = barber.rating {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Image(systemName: Symbol.starFilled)
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundStyle(tone.primary)
+                Text("\(rating.averageLabel) · \(rating.count)")
+                    .textRole(.monoNumber)
+                    .foregroundStyle(tone.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            Text(barber.title)
+                .textRole(.monoTag)
+                .foregroundStyle(tone.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
-        .frame(width: min(width, 300), alignment: .leading)
-        .frame(minHeight: 184, maxHeight: .infinity, alignment: .topLeading)
-        .background(Theme.ink3, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+    }
+}
+
+/// "YOUR BARBER": the client's favorite, with their profile one tap away and a quick way to book
+/// them (straight to their own menu).
+struct HomeFavoriteBarberCard: View {
+    let barber: Barber
+    @Environment(AppRouter.self) private var router
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.xs) {
+                Image(systemName: Symbol.favoriteFilled)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Theme.bone)
+                    .accessibilityHidden(true)
+                Text("Your barber")
+                    .textRole(.monoTag)
+                    .foregroundStyle(Theme.smoke)
+                    // UI tests look for this exact text; the role sets it in capitals.
+                    .accessibilityLabel("Your barber")
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: Theme.Space.l) {
+                    profileLink
+                    Spacer(minLength: Theme.Space.s)
+                    bookButton
+                }
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    profileLink
+                    bookButton
+                }
+            }
+        }
+        .card()
+    }
+
+    private var profileLink: some View {
+        // The tile over the name at accessibility sizes, so a long name keeps the full width.
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: Theme.Space.m))
+            : AnyLayout(HStackLayout(spacing: 14))
+        return NavigationLink(value: barber) {
+            layout {
+                MonogramTile(barber: barber, side: 56)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(barber.name)
+                        .textRole(.displayS)
+                        .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HomeBarberMeta(barber: barber)
+                }
+                .multilineTextAlignment(.leading)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("\(HomeCrewCard.accessibilityText(for: barber)), your barber")
+        .accessibilityHint("Opens their profile")
+        .accessibilityIdentifier("homeBarber-\(barber.id)")
+    }
+
+    private var bookButton: some View {
+        Button {
+            router.startBooking(barberID: barber.id)
+        } label: {
+            Text("Book")
+        }
+        .buttonStyle(.compact)
+        .accessibilityLabel("Book with \(barber.name)")
+        .accessibilityIdentifier("homeFavoriteBook")
+    }
+}
+
+/// A section header's trailing link: "All 5 barbers ›".
+private struct HomeLinkLabel: View {
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 3) {
+            Text(title)
+            Image(systemName: Symbol.chevron)
+                .font(.system(size: 12, weight: .bold))
+                .accessibilityHidden(true)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Reviews
+
+/// What clients say, on a bone card: the shop's score on Squire and on Google, then one review
+/// quoted as written (cut off at three lines) with its source. Opens the Reviews screen.
+struct HomeReviewsCard: View {
+    private let shop = AppData.shop
+
+    var body: some View {
+        NavigationLink(value: HomeRoute.reviews) {
+            VStack(alignment: .leading, spacing: Theme.Space.l) {
+                scores
+                if let review = shop.reviews.first {
+                    quote(review)
+                }
+            }
+            .boneCard(padding: Theme.Space.xl)
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel(accessibilityText)
+        .accessibilityHint("Opens all reviews")
+        .accessibilityIdentifier("seeAllReviews")
+    }
+
+    /// "5.0 ★★★★★ 115 ON SQUIRE | 4.9 ★★★★★ 59 ON GOOGLE", stacked when they don't fit side by side.
+    private var scores: some View {
+        let ratings = Array(shop.ratings.prefix(2))
+        return ViewThatFits(in: .horizontal) {
+            HStack(alignment: .center, spacing: Theme.Space.m) {
+                ForEach(Array(ratings.enumerated()), id: \.offset) { index, sourced in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(Theme.ink.opacity(0.15))
+                            .frame(width: 1, height: 34)
+                    }
+                    score(sourced)
+                }
+            }
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                ForEach(ratings, id: \.source) { sourced in
+                    score(sourced, wraps: true)
+                }
+            }
+        }
+    }
+
+    /// One site's score. Side by side it keeps its natural width (so `ViewThatFits` can tell
+    /// whether both fit); stacked, the source wraps at the largest text sizes.
+    private func score(_ sourced: SourcedRating, wraps: Bool = false) -> some View {
+        HStack(alignment: .center, spacing: Theme.Space.xs) {
+            Text(sourced.rating.averageLabel)
+                .textRole(.priceL)
+                .foregroundStyle(Theme.ink)
+                .fixedSize()
+            VStack(alignment: .leading, spacing: 3) {
+                RatingStars(average: sourced.rating.average, size: 11, color: Theme.ink)
+                Text("\(sourced.rating.count) on \(sourced.source)")
+                    .textRole(.monoNumber)
+                    .foregroundStyle(Theme.smokeDark)
+                    .fixedSize(horizontal: !wraps, vertical: true)
+            }
+        }
+    }
+
+    private func quote(_ review: Review) -> some View {
+        HStack(alignment: .top, spacing: Theme.Space.s) {
+            Image(systemName: Symbol.quote)
+                .font(.system(size: 16, weight: .black))
+                .foregroundStyle(Theme.ink)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text(review.text)
+                    .textRole(.quote)
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+                    Text(byline(for: review))
+                        .textRole(.monoTag)
+                        .foregroundStyle(Theme.smokeDark)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Image(systemName: Symbol.chevron)
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Theme.ink)
+                }
+            }
+        }
+    }
+
+    /// "Alex N. · Squire · on Carlos" (set in capitals). Only names a barber the data names.
+    private func byline(for review: Review) -> String {
+        let barber = review.barberID.flatMap { AppData.catalog.barber(withID: $0)?.name }
+        return [review.author, review.source, review.date, barber.map { "on \($0)" }]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
+    private var accessibilityText: String {
+        let scores = shop.ratings.prefix(2)
+            .map { "\($0.rating.averageLabel) out of 5 from \($0.rating.countLabel) on \($0.source)" }
+            .joined(separator: ", and ")
+        var text = "Reviews. Rated \(scores)."
+        if let review = shop.reviews.first {
+            let barber = review.barberID.flatMap { AppData.catalog.barber(withID: $0)?.name }
+            let about = barber.map { ", about \($0)" } ?? ""
+            text += " \(review.author) on \(review.source)\(about): \(review.text)"
+        }
+        return text
     }
 }
 
 // MARK: - Bravo
 
-/// The shop's Bravo partnership. Opens the Shop tab.
-struct HomeBravoBanner: View {
+/// The shop's Bravo partnership on the promo gradient, with the blue gel in a white disc bleeding
+/// off the corner. Opens the Shop tab. It says what's true (Bravo sponsors the shop and ships its
+/// own orders), not that the shop uses Bravo on clients.
+struct HomeBravoCard: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     private let sponsor = AppData.products.sponsor
-    private let imageName = AppData.products.featured.first?.imageName
+    private let jarImage = AppData.products.featured.first?.imageName
+    /// Bravo's wordmark, a template image tinted white here.
+    private static let logoAsset = "BravoLogo"
+    private static let jarSize: CGFloat = 112
 
     var body: some View {
         Button {
@@ -265,211 +692,69 @@ struct HomeBravoBanner: View {
         .accessibilityIdentifier("bravoBanner")
     }
 
-    private var card: some View {
-        // Side by side, or stacked when the text is very large.
-        let layout = dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 16))
-            : AnyLayout(HStackLayout(alignment: .center, spacing: 16))
-        return layout {
-            productTile
-            copy
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.promoGradient)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+    private var showsJar: Bool {
+        jarImage != nil && !dynamicTypeSize.isAccessibilitySize
     }
 
-    @ViewBuilder private var productTile: some View {
-        if let imageName {
-            Image(imageName)
+    private var card: some View {
+        let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+        return VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Image(Self.logoAsset)
+                .renderingMode(.template)
                 .resizable()
                 .scaledToFit()
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .padding(8)
-                .frame(width: 100, height: 100)
-                .background(Color.white, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .shadow(color: Color.black.opacity(0.22), radius: 8, y: 4)
+                .frame(height: 16)
+                .foregroundStyle(Color.white)
+                .accessibilityHidden(true)
+            Text("Proud \(sponsor.name) partner")
+                .textRole(.displayM)
+                .foregroundStyle(Color.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("Gels, clay and pomade, shipped by \(sponsor.name).")
+                .textRole(.body)
+                .foregroundStyle(Color.white)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: Theme.Space.xs) {
+                Text("Shop \(sponsor.name)")
+                    .textRole(.monoTag)
+                Image(systemName: Symbol.forward)
+                    .font(.system(size: 12, weight: .bold))
+            }
+            .foregroundStyle(Color.white)
+            .padding(.top, 2)
+        }
+        .multilineTextAlignment(.leading)
+        .padding(Theme.Space.xl)
+        // Clear of the jar on the right.
+        .padding(.trailing, showsJar ? Self.jarSize - 22 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(alignment: .topTrailing) {
+            if showsJar {
+                jar
+            }
+        }
+        .background(Theme.promoGradient)
+        .clipShape(shape)
+        .contentShape(shape)
+    }
+
+    @ViewBuilder private var jar: some View {
+        if let jarImage {
+            Image(jarImage)
+                .resizable()
+                .scaledToFill()
+                .scaleEffect(1.18)
+                .frame(width: Self.jarSize, height: Self.jarSize)
+                .background(Color.white)
+                .clipShape(Circle())
+                .rotationEffect(.degrees(-10))
+                .shadow(color: .black.opacity(0.35), radius: 14, x: -10, y: 10)
+                .offset(x: 14, y: -6)
                 .accessibilityHidden(true)
         }
     }
 
-    private var copy: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: Symbol.partner)
-                    .font(.caption.weight(.bold))
-                // Wraps on narrow screens and at large text sizes rather than
-                // cutting off the partner's name.
-                Text("Proud \(sponsor.name) partner")
-                    .textRole(.monoTag)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .foregroundStyle(Color.white.opacity(0.9))
-            Text(sponsor.fullName)
-                .textRole(.displayM)
-                .foregroundStyle(Color.white)
-            Text("The gels, clay and pomade we trust in the chair.")
-                .textRole(.body)
-                .foregroundStyle(Color.white.opacity(0.85))
-                .fixedSize(horizontal: false, vertical: true)
-            shopCapsule
-                .padding(.top, 4)
-        }
-        .multilineTextAlignment(.leading)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var shopCapsule: some View {
-        HStack(spacing: 6) {
-            Text("Shop \(sponsor.name)")
-            Image(systemName: Symbol.chevron)
-                .font(.caption.weight(.heavy))
-        }
-        .textRole(.buttonSmall)
-        .foregroundStyle(Theme.ink)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(Theme.bone, in: Capsule())
-    }
-
     private var accessibilityText: String {
-        "Proud \(sponsor.name) partner. \(sponsor.fullName): the gels, clay and pomade we trust in the chair. Shop \(sponsor.name)"
-    }
-}
-
-// MARK: - The team
-
-struct HomeTeamSection: View {
-    @Environment(Favorites.self) private var favorites
-    private let barbers = AppData.catalog.barbers
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeader("The Team") {
-                NavigationLink("Meet everyone", value: HomeRoute.team)
-                    .accessibilityIdentifier("meetTeamButton")
-            }
-            .padding(.horizontal, Theme.gutter)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(alignment: .top, spacing: 16) {
-                    ForEach(barbers) { barber in
-                        NavigationLink(value: barber) {
-                            HomeTeamMember(barber: barber, isFavorite: favorites.isFavorite(barber.id))
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel(accessibilityText(for: barber))
-                        .accessibilityHint("Opens their profile")
-                        .accessibilityIdentifier("homeBarber-\(barber.id)")
-                    }
-                }
-            }
-            .contentMargins(.horizontal, Theme.gutter, for: .scrollContent)
-            .scrollClipDisabled()
-        }
-    }
-
-    private func accessibilityText(for barber: Barber) -> String {
-        let base = "\(barber.name), \(barber.title)"
-        return favorites.isFavorite(barber.id) ? "\(base), your barber" : base
-    }
-}
-
-/// A barber's avatar and name, with a heart on the client's favorite.
-struct HomeTeamMember: View {
-    let barber: Barber
-    let isFavorite: Bool
-    @ScaledMetric(relativeTo: .subheadline) private var width: CGFloat = 84
-
-    var body: some View {
-        VStack(spacing: 8) {
-            MonogramTile(barber: barber, side: 68)
-                .overlay(alignment: .bottomTrailing) {
-                    if isFavorite {
-                        favoriteBadge
-                    }
-                }
-            Text(barber.name)
-                .textRole(.callout)
-                .foregroundStyle(Theme.bone)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(width: min(width, 160))
-        .contentShape(Rectangle())
-    }
-
-    private var favoriteBadge: some View {
-        Image(systemName: Symbol.favoriteFilled)
-            .font(.system(size: 11, weight: .bold))
-            .foregroundStyle(Theme.ink)
-            .frame(width: 24, height: 24)
-            .background(Theme.bone, in: Circle())
-            .overlay(Circle().strokeBorder(Theme.ink, lineWidth: 2))
-            .accessibilityHidden(true)
-    }
-}
-
-// MARK: - Fresh cuts
-
-struct HomeFreshCutsSection: View {
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeader("Fresh Cuts") {
-                NavigationLink("See all", value: HomeRoute.gallery)
-                    .accessibilityLabel("See all photos")
-                    .accessibilityIdentifier("seeAllPhotos")
-            }
-            .padding(.horizontal, Theme.gutter)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(GalleryPhoto.allCases) { photo in
-                        NavigationLink(value: HomeRoute.gallery) {
-                            FillImage(name: photo.assetName, anchor: FillImage.editorial)
-                                .frame(width: 150, height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
-                        }
-                        .buttonStyle(.pressable)
-                        .accessibilityLabel(photo.caption)
-                        .accessibilityHint("Opens the gallery")
-                    }
-                }
-                .scrollTargetLayout()
-            }
-            .contentMargins(.horizontal, Theme.gutter, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
-            .scrollClipDisabled()
-        }
-    }
-}
-
-// MARK: - Reviews
-
-struct HomeReviewsSection: View {
-    @Environment(AppRouter.self) private var router
-    private let shop = AppData.shop
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionHeader("Reviews") {
-                NavigationLink("See all", value: HomeRoute.reviews)
-                    .accessibilityLabel("See all reviews")
-                    .accessibilityIdentifier("seeAllReviews")
-            }
-
-            RatingSummary(ratings: shop.ratings, onOpen: { sourced in
-                if let url = sourced.url {
-                    router.openWeb(url)
-                }
-            })
-
-            ForEach(Array(shop.reviews.prefix(2))) { review in
-                ReviewCard(review: review, lineLimit: 3)
-            }
-        }
-        .padding(.horizontal, Theme.gutter)
+        "Proud \(sponsor.name) partner. Gels, clay and pomade, shipped by \(sponsor.name). Shop \(sponsor.name)"
     }
 }

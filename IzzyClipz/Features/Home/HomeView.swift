@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// The Home tab: the shop at a glance, and the quickest ways to book.
+/// The Home tab: the drop page. The shop's work up top, the way to book right under it, then the
+/// client's next appointment, the quick ways to reach the shop, the menu's favorites, the crew,
+/// what clients say, Instagram and Bravo.
 struct HomeView: View {
     @Environment(AppRouter.self) private var router
 
@@ -25,69 +27,112 @@ struct HomeView: View {
     }
 }
 
-/// The scrolling page, with the hero photo running under the status and
-/// navigation bars.
+/// The scrolling page under a pinned header. Home has no back button to keep, so its navigation bar
+/// is hidden and the shop's own header (mascot, wordmark, reminders bell) takes its place. Every
+/// screen pushed from here shows the native bar again, with its back button and swipe-back.
 private struct HomeScreen: View {
-    static let scrollSpace = "homeScroll"
+    private static let top = "homeTop"
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        GeometryReader { outer in
-            // The hero runs under the status and navigation bars, so the system
-            // can't tell when content scrolls beneath them. This reads how tall
-            // those bars are so the scrim below can cover them.
-            let barHeight = outer.safeAreaInsets.top
-            ScrollView {
-                HomeContent(topInset: barHeight)
-                    .overlay(alignment: .top) {
-                        BarScrim(height: barHeight, scrollSpace: HomeScreen.scrollSpace)
+        GeometryReader { proxy in
+            // The whole screen's height, bars and home indicator included: the hero is sized from
+            // it so a 375 × 667 iPhone SE still shows the Book button and a ticket above the tab bar.
+            let screenHeight = proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
+            ScrollViewReader { scroller in
+                ScrollView {
+                    HomeContent(heroHeight: HomeHero.height(forScreenHeight: screenHeight))
+                        .id(Self.top)
+                }
+                .onTabReselect {
+                    withAnimation(reduceMotion ? nil : .snappy) {
+                        scroller.scrollTo(Self.top, anchor: .top)
                     }
+                }
             }
-            .coordinateSpace(.named(HomeScreen.scrollSpace))
-            .ignoresSafeArea(.container, edges: .top)
+            // Content scrolls up under the header, which is frosted ink.
+            .safeAreaInset(edge: .top, spacing: 0) {
+                HomeHeader()
+            }
         }
         .screenBackground()
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                RemindersButton()
-            }
-        }
-        // A transparent bar in the dark scheme, so the status bar and the bell
-        // read light over the hero photo and the ink scrim.
-        .toolbarBackground(.visible, for: .navigationBar)
-        .toolbarBackground(Color.clear, for: .navigationBar)
-        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar(.hidden, for: .navigationBar)
     }
 }
 
-/// Everything on Home, top to bottom.
+/// Everything on Home, top to bottom (art direction §1.2): hero, Book, the next appointment, quick
+/// actions, popular services, the crew, reviews, Instagram, Bravo.
 private struct HomeContent: View {
-    let topInset: CGFloat
+    let heroHeight: CGFloat
 
     var body: some View {
-        VStack(spacing: 0) {
-            HomeHero(topInset: topInset)
-
-            VStack(alignment: .leading, spacing: 32) {
-                HomeActions()
-                InstagramCard()
-                    .padding(.horizontal, Theme.gutter)
-                HomePopularSection()
-                HomeBravoBanner()
-                    .padding(.horizontal, Theme.gutter)
-                HomeTeamSection()
-                HomeFreshCutsSection()
-                HomeReviewsSection()
-                WalkInCard()
-                    .padding(.horizontal, Theme.gutter)
+        VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
+                HomeHero(height: heroHeight)
+                HomeBookSection()
+                QuickActions()
             }
-            .padding(.top, 24)
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, Theme.Space.xxs)
+
+            VStack(alignment: .leading, spacing: Theme.Space.section) {
+                HomePopularSection()
+                HomeCrewSection()
+                VStack(spacing: 0) {
+                    HomeReviewsCard()
+                    // Room for the logo sticker that pokes out above the Instagram card.
+                    InstagramCard()
+                        .padding(.top, 28)
+                    HomeBravoCard()
+                        .padding(.top, Theme.Space.cardGap)
+                }
+                .padding(.horizontal, Theme.gutter)
+            }
+            .padding(.top, Theme.Space.section)
             .padding(.bottom, Theme.Space.xxl)
         }
     }
 }
 
-/// The bell in the top corner: cut reminder settings.
-private struct RemindersButton: View {
+// MARK: - Header
+
+/// The mascot sticker, "IZZY CLIPZ" and where the shop is, with the reminders bell on the right.
+/// Pinned over the content in frosted ink (solid ink2 with Reduce Transparency). It stops growing
+/// at xxLarge text so it never eats the screen; the bell shows the large content viewer above that.
+private struct HomeHeader: View {
+    private let shop = AppData.shop
+
+    var body: some View {
+        HStack(spacing: Theme.Space.l) {
+            MascotSticker(size: 44)
+            VStack(alignment: .leading, spacing: 3) {
+                Wordmark()
+                Text("Barbershop · \(shop.address.city), \(shop.address.state)")
+                    .textRole(.monoTag)
+                    .foregroundStyle(Theme.smoke)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(shop.name), barbershop in \(shop.address.city), \(shop.address.state)")
+            .accessibilityAddTraits(.isHeader)
+            Spacer(minLength: Theme.Space.s)
+            HomeRemindersButton()
+        }
+        .padding(.horizontal, Theme.gutter)
+        .padding(.top, Theme.Space.xxs)
+        .padding(.bottom, Theme.Space.s)
+        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
+        .background {
+            InkMaterial(shape: Rectangle(), tint: 0.9)
+                .ignoresSafeArea(edges: .top)
+        }
+    }
+}
+
+/// The bell: cut reminder settings. A 44 pt ink3 circle (it's in the content, not a toolbar).
+private struct HomeRemindersButton: View {
     @Environment(AppRouter.self) private var router
     @Environment(ReminderStore.self) private var reminders
 
@@ -95,50 +140,12 @@ private struct RemindersButton: View {
         Button {
             router.showReminders()
         } label: {
-            // A plain bone bell reads on the hero's scrim. No circle of its
-            // own: newer iOS versions draw one around toolbar buttons.
             Image(systemName: reminders.isEnabled ? Symbol.remindersOn : Symbol.reminders)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(Theme.bone)
-                .frame(width: 44, height: 44)
-                .contentShape(Rectangle())
         }
+        .buttonStyle(.icon)
         .accessibilityLabel("Cut reminders")
-        .accessibilityValue(stateText)
+        .accessibilityValue(reminders.isEnabled ? "On" : "Off")
+        .accessibilityShowsLargeContentViewer()
         .accessibilityIdentifier("remindersButton")
-    }
-
-    private var stateText: String {
-        reminders.isEnabled ? "On" : "Off"
-    }
-}
-
-/// Fades in behind the status and navigation bars as content scrolls under them.
-///
-/// Sits at the top of the scrolling content and is pushed down by exactly how
-/// far the content has scrolled, so it stays pinned to the top of the screen.
-/// Everything is derived from geometry while drawing; no state is updated.
-private struct BarScrim: View {
-    let height: CGFloat
-    let scrollSpace: String
-
-    var body: some View {
-        GeometryReader { proxy in
-            let scrolled = max(0, -proxy.frame(in: .named(scrollSpace)).minY)
-            LinearGradient(
-                stops: [
-                    .init(color: Theme.ink, location: 0),
-                    .init(color: Theme.ink.opacity(0.92), location: 0.75),
-                    .init(color: Theme.ink.opacity(0), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: height + 16)
-            .opacity(min(1, scrolled / 200))
-            .offset(y: scrolled)
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 }
