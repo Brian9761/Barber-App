@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 // MARK: - Buttons
 
@@ -355,32 +356,23 @@ struct FillImage: View {
     static let editorial = UnitPoint(x: 0.5, y: 0.2)
 
     var body: some View {
-        Color.clear
-            .alignmentGuide(.photoAnchorX) { $0.width * anchor.x }
-            .alignmentGuide(.photoAnchorY) { $0.height * anchor.y }
-            .overlay(alignment: Alignment(horizontal: .photoAnchorX, vertical: .photoAnchorY)) {
-                Image(name)
-                    .resizable()
-                    .scaledToFill()
-                    .alignmentGuide(.photoAnchorX) { $0.width * anchor.x }
-                    .alignmentGuide(.photoAnchorY) { $0.height * anchor.y }
-            }
-            .clipped()
+        GeometryReader { proxy in
+            let box = proxy.size
+            let size = Self.pixelSize(of: name) ?? box
+            // Scaled to cover the frame, then shifted so `anchor` on the photo meets `anchor` on the frame.
+            let scale = max(box.width / max(size.width, 1), box.height / max(size.height, 1))
+            let fitted = CGSize(width: size.width * scale, height: size.height * scale)
+            Image(name)
+                .resizable()
+                .frame(width: fitted.width, height: fitted.height)
+                .offset(x: (box.width - fitted.width) * anchor.x, y: (box.height - fitted.height) * anchor.y)
+        }
+        .clipped()
     }
-}
 
-private enum PhotoAnchorX: AlignmentID {
-    static func defaultValue(in dimensions: ViewDimensions) -> CGFloat { dimensions.width / 2 }
-}
-
-private enum PhotoAnchorY: AlignmentID {
-    static func defaultValue(in dimensions: ViewDimensions) -> CGFloat { dimensions.height / 2 }
-}
-
-private extension HorizontalAlignment {
-    static let photoAnchorX = HorizontalAlignment(PhotoAnchorX.self)
-}
-
-private extension VerticalAlignment {
-    static let photoAnchorY = VerticalAlignment(PhotoAnchorY.self)
+    /// The bundled image's size (UIKit caches named images, so this is cheap after the first look).
+    private static func pixelSize(of name: String) -> CGSize? {
+        guard let size = UIImage(named: name)?.size, size.width > 0, size.height > 0 else { return nil }
+        return size
+    }
 }

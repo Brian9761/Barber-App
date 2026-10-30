@@ -68,9 +68,14 @@ struct StreetTabBar: View {
     /// The raised Book button, ring included, and how far its top stands above the bar.
     static let raisedDiameter: CGFloat = 62
     static let raisedLift: CGFloat = 34
-    /// The Book button when Book is the selected tab: inside the bar, 5 pt from its top.
+    /// The Book button when Book is the selected tab: inside the bar, 4 pt from its top.
     static let settledDiameter: CGFloat = 40
-    static let settledTop: CGFloat = 5
+    static let settledTop: CGFloat = 4
+    /// Where the icons start inside the bar (the mini pole reaches 11 pt in, just above them).
+    static let iconTop: CGFloat = 10
+    /// The room above the "BOOK" label, so it clears the settled button (and sits a little lower
+    /// than the other labels, as the button above it is bigger).
+    static let bookLabelOffset: CGFloat = 33
     /// The mini pole's top above the bar's top edge (it reaches 11 pt into the bar).
     static let indicatorRise: CGFloat = 19
 
@@ -150,7 +155,7 @@ struct StreetTabBar: View {
                 if tab == .book {
                     // The round button sits here (see the overlay); its label always reads as active.
                     Color.clear
-                        .frame(width: 26, height: 26)
+                        .frame(width: 26, height: Self.bookLabelOffset)
                 } else {
                     Image(systemName: symbol)
                         .font(.system(size: 22, weight: isSelected ? .bold : .medium))
@@ -162,7 +167,7 @@ struct StreetTabBar: View {
                     .minimumScaleFactor(0.8)
             }
             .foregroundStyle(isSelected || tab == .book ? Theme.ink : Theme.smokeDark)
-            .padding(.top, 8)
+            .padding(.top, Self.iconTop)
             .frame(maxWidth: .infinity, minHeight: Self.barHeight, alignment: .top)
             .contentShape(Rectangle())
             .overlay(alignment: .top) {
