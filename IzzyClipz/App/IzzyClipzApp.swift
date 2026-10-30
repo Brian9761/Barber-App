@@ -13,6 +13,7 @@ struct IzzyClipzApp: App {
                 .environment(appDelegate.reminders)
                 .environment(appDelegate.appointments)
                 .environment(appDelegate.bravo)
+                .environment(appDelegate.bag)
                 .preferredColorScheme(.light)
                 .tint(Theme.red)
                 .task {

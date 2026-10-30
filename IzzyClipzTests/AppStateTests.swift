@@ -14,6 +14,27 @@ final class AppRouterTests: XCTestCase {
         BookingPlan(choice: .offering(try haircutWithCarlos()), start: start)
     }
 
+    private let checkoutURL = URL(string: "https://bravohairgel.com/cart/43628496945329:1")!
+
+    /// A bag with one Matte Clay in it, saved in a throwaway store.
+    private func bagWithClay() throws -> BagStore {
+        let suite = "AppRouterTests-\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defaults.removePersistentDomain(forName: suite)
+        let bag = BagStore(bravo: BravoStore(), defaults: defaults)
+        bag.add(try XCTUnwrap(AppData.products.product(withID: "bravo-matte-clay")))
+        return bag
+    }
+
+    /// Checks out from the bag sheet and closes Bravo's checkout, the way SwiftUI does.
+    private func checkOutFromTheBag(_ router: AppRouter) {
+        router.openBag()
+        router.checkOut(checkoutURL)
+        router.sheetDidDismiss()
+        router.sheet = nil
+        router.sheetDidDismiss()
+    }
+
     func testStartBookingFromScratchResetsTheFlow() {
         let router = AppRouter()
         router.bookingPath = [.chooseBarber(serviceID: "haircut")]
@@ -66,6 +87,8 @@ final class AppRouterTests: XCTestCase {
             ({ $0.openWeb(bravo) }, .web(bravo)),
             ({ $0.showReminders() }, .reminders),
             ({ $0.addToCalendar(appointment) }, .addToCalendar(appointment)),
+            ({ $0.openBag() }, .bag),
+            ({ $0.checkOut(self.checkoutURL) }, .checkout(checkoutURL)),
         ]
         for (open, sheet) in cases {
             let router = AppRouter()
@@ -188,8 +211,168 @@ final class AppRouterTests: XCTestCase {
             .web(AppData.products.storeURL),
             .web(AppData.shop.googleReviewURL),
             .addToCalendar(plan.appointment()),
+            .bag,
+            .checkout(checkoutURL),
+            .checkout(AppData.products.storeURL),
         ]
         XCTAssertEqual(Set(sheets.map(\.id)).count, sheets.count)
+        XCTAssertEqual(AppSheet.bag.id, "bag")
+        XCTAssertEqual(AppSheet.checkout(checkoutURL).id, "checkout/https://bravohairgel.com/cart/43628496945329:1")
+    }
+
+    // MARK: Bag and checkout
+
+    func testCheckingOutFromTheBagClosesItThenOpensBravo() {
+        let router = AppRouter()
+        router.openBag()
+        XCTAssertEqual(router.sheet, .bag)
+
+        // "Check out on Bravo": the bag closes first...
+        router.checkOut(checkoutURL)
+        XCTAssertNil(router.sheet)
+        XCTAssertFalse(router.asksAboutCheckout)
+
+        // ...and Bravo's checkout opens once it has gone.
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .checkout(checkoutURL))
+        XCTAssertFalse(router.asksAboutCheckout, "Nothing is asked while the checkout is open")
+    }
+
+    func testTappingCheckoutTwiceWhileTheBagClosesOpensItOnce() {
+        let router = AppRouter()
+        router.openBag()
+        router.checkOut(checkoutURL)
+        router.checkOut(checkoutURL)
+        XCTAssertNil(router.sheet, "Nothing is presented while the bag is still closing")
+
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .checkout(checkoutURL))
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertNil(router.sheet, "The checkout doesn't open a second time")
+        XCTAssertTrue(router.asksAboutCheckout)
+    }
+
+    func testClosingTheCheckoutAsksWhetherItWasFinished() {
+        let router = AppRouter()
+        checkOutFromTheBag(router)
+        XCTAssertNil(router.sheet)
+        XCTAssertTrue(router.asksAboutCheckout)
+    }
+
+    func testCheckingOutWithoutTheBagUpOpensBravoAtOnce() {
+        let router = AppRouter()
+        router.checkOut(checkoutURL)
+        XCTAssertEqual(router.sheet, .checkout(checkoutURL))
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertTrue(router.asksAboutCheckout)
+    }
+
+    func testFinishingCheckoutEmptiesTheBag() throws {
+        let router = AppRouter()
+        let bag = try bagWithClay()
+        checkOutFromTheBag(router)
+
+        router.answerCheckoutPrompt(finished: true, bag: bag)
+        XCTAssertFalse(router.asksAboutCheckout)
+        XCTAssertTrue(bag.isEmpty)
+        XCTAssertNil(router.sheet)
+    }
+
+    func testNotFinishedKeepsTheBag() throws {
+        let router = AppRouter()
+        let bag = try bagWithClay()
+        checkOutFromTheBag(router)
+
+        router.answerCheckoutPrompt(finished: false, bag: bag)
+        XCTAssertFalse(router.asksAboutCheckout)
+        XCTAssertEqual(bag.count, 1)
+        XCTAssertNil(router.sheet, "Nothing reopens on its own")
+
+        // The next checkout asks again.
+        router.openBag()
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertFalse(router.asksAboutCheckout, "Closing the bag itself asks nothing")
+        checkOutFromTheBag(router)
+        XCTAssertTrue(router.asksAboutCheckout)
+    }
+
+    func testClosingTheBagAsksNothing() {
+        let router = AppRouter()
+        router.openBag()
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertNil(router.sheet)
+        XCTAssertFalse(router.asksAboutCheckout)
+    }
+
+    func testCloseSheetCancelsAPendingCheckoutQuestion() {
+        // Closed on purpose while Bravo's checkout is up, e.g. a reminder tap starts booking.
+        let open = AppRouter()
+        open.checkOut(checkoutURL)
+        open.startBooking()
+        open.sheetDidDismiss()
+        XCTAssertNil(open.sheet)
+        XCTAssertFalse(open.asksAboutCheckout)
+
+        // Closed while the checkout was waiting for the bag to close.
+        let queued = AppRouter()
+        queued.openBag()
+        queued.checkOut(checkoutURL)
+        queued.closeSheet()
+        queued.sheetDidDismiss()
+        XCTAssertNil(queued.sheet)
+        XCTAssertFalse(queued.asksAboutCheckout)
+
+        // Closed after the question went up.
+        let asked = AppRouter()
+        checkOutFromTheBag(asked)
+        XCTAssertTrue(asked.asksAboutCheckout)
+        asked.closeSheet()
+        XCTAssertFalse(asked.asksAboutCheckout)
+    }
+
+    func testCheckoutClosedToOpenSomethingElseAsksNothing() {
+        let router = AppRouter()
+        router.checkOut(checkoutURL)
+        router.showReminders()
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .reminders)
+
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertNil(router.sheet)
+        XCTAssertFalse(router.asksAboutCheckout)
+    }
+
+    func testSquireStillAsksAboutTheBookingAfterACheckout() throws {
+        let router = AppRouter()
+        let bag = try bagWithClay()
+        checkOutFromTheBag(router)
+        router.answerCheckoutPrompt(finished: false, bag: bag)
+
+        let plan = try plan()
+        router.openSquire(plan.choice.request, plan: plan)
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .confirmBooking(plan))
+        XCTAssertFalse(router.asksAboutCheckout)
+    }
+
+    func testSquireOpenedOverTheBagStillAsksAboutTheBooking() throws {
+        let router = AppRouter()
+        let plan = try plan()
+        router.openBag()
+        router.openSquire(plan.choice.request, plan: plan)
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .squire(SquireHandoff(request: plan.choice.request, plan: plan)))
+
+        router.sheet = nil
+        router.sheetDidDismiss()
+        XCTAssertEqual(router.sheet, .confirmBooking(plan))
+        XCTAssertFalse(router.asksAboutCheckout)
     }
 }
 
