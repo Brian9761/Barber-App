@@ -4,17 +4,24 @@ import UIKit
 /// "Did you book it?", shown when Squire closes after the client picked a
 /// time in the app. Saving keeps the appointment on this iPhone: it shows on
 /// Home and in the Book tab, with optional reminders.
+///
+/// A still barber pole sits at the top. The form's one red is "Save appointment"; once saved, the
+/// form fades out, the pole spins once (not with Reduce Motion) and "BOOKED" appears in the drip
+/// face, the screen's only red text, over the ticket.
 struct ConfirmBookingSheet: View {
     let plan: BookingPlan
 
     @Environment(AppRouter.self) private var router
     @Environment(AppointmentStore.self) private var appointments
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var start: Date
     /// Fixed when the sheet opens, so the picker's limits don't drift.
     @State private var range: ClosedRange<Date>
     @State private var remind = true
     @State private var saved: Appointment?
+    /// The pole's stripe position; one period up when the appointment is saved.
+    @State private var poleSpin: Double = 0
 
     /// How far ahead an appointment can be saved.
     private static let maximumDaysAhead = 90
@@ -35,9 +42,11 @@ struct ConfirmBookingSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                // Overlapping, so the form and the success state cross-fade in place.
+        ScrollView {
+            VStack(spacing: Theme.Space.xl) {
+                BarberPole(phase: poleSpin)
+                    .frame(width: 22, height: 58)
+                // Overlapping, so the form and the saved state cross-fade in place.
                 ZStack(alignment: .top) {
                     if let saved {
                         ConfirmBookingSuccess(
@@ -47,19 +56,22 @@ struct ConfirmBookingSheet: View {
                             onAddToCalendar: { router.addToCalendar(saved) },
                             onDone: { dismiss() }
                         )
-                        .transition(AnyTransition.opacity.combined(with: .scale(scale: 0.96)))
+                        .transition(reduceMotion ? AnyTransition.opacity : AnyTransition.opacity.combined(with: .scale(scale: 0.96)))
                     } else {
                         form
                             .transition(AnyTransition.opacity)
                     }
                 }
-                .padding(Theme.gutter)
-                .accessibilityElement(children: .contain)
-                .accessibilityIdentifier("confirmBookingSheet")
             }
-            .screenBackground()
-            .navigationBarTitleDisplayMode(.inline)
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, Theme.Space.xxl)
+            .padding(.bottom, Theme.Space.xxl)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("confirmBookingSheet")
         }
+        .scrollBounceBehavior(.basedOnSize)
+        .presentationDetents([.large])
+        .presentationDragIndicator(saved == nil ? .hidden : .visible)
         // A pull on the form mustn't count as "I didn't book"; that button is the way out.
         .interactiveDismissDisabled(saved == nil)
         .sensoryFeedback(.success, trigger: saved != nil) { _, isSaved in
@@ -70,24 +82,31 @@ struct ConfirmBookingSheet: View {
     // MARK: Form
 
     private var form: some View {
-        VStack(spacing: 24) {
-            ConfirmBookingHeader()
-            BookingChoiceCard(choice: plan.choice)
+        VStack(spacing: Theme.Space.xxl) {
+            VStack(spacing: Theme.Space.s) {
+                Text("Did you book it?")
+                    .textRole(.displayL)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                Text("Save it to see it on Home and get a reminder.")
+                    .textRole(.body)
+                    .foregroundStyle(Theme.smoke)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+
+            ConfirmBookingChoiceRow(choice: plan.choice)
             details
             actions
         }
     }
 
     private var details: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Day and time")
-                    .font(.headline)
-                    .foregroundStyle(Theme.bone)
-                Text(pickedTimeText)
-                    .font(.footnote)
-                    .foregroundStyle(Theme.smoke)
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Kicker("Day and time")
                 DatePicker(
                     "Day and time",
                     selection: $start,
@@ -98,70 +117,79 @@ struct ConfirmBookingSheet: View {
                 .tint(Theme.electric)
                 .environment(\.timeZone, AppData.shop.timeZone)
                 .accessibilityIdentifier("appointmentDatePicker")
+                Text(pickedTimeText)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
+                    .fixedSize(horizontal: false, vertical: true)
                 if isOutsideOpeningHours {
-                    Label {
+                    HStack(alignment: .top, spacing: Theme.Space.s) {
+                        Image(systemName: Symbol.warning)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(Theme.caution)
+                            .accessibilityHidden(true)
                         Text("The shop isn't open then. Check the day and time Squire gave you.")
+                            .textRole(.callout)
                             .foregroundStyle(Theme.bone)
                             .fixedSize(horizontal: false, vertical: true)
-                    } icon: {
-                        Image(systemName: Symbol.warning)
-                            .foregroundStyle(Theme.caution)
                     }
-                    .font(.footnote.weight(.semibold))
+                    .accessibilityElement(children: .combine)
                 }
                 if let zone = BookingFlowCopy.timeZoneNote(at: start) {
                     Text(zone)
-                        .font(.footnote)
+                        .textRole(.caption)
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            Divider()
+            Rectangle()
+                .fill(Theme.line)
+                .frame(height: 1)
+                .accessibilityHidden(true)
 
             Toggle(isOn: $remind) {
                 Text("Remind me the day before and an hour before")
-                    .font(.body)
+                    .textRole(.body)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .tint(Theme.electric)
             .accessibilityIdentifier("remindMeToggle")
         }
-        .card()
+        .card(padding: Theme.Space.xl)
     }
 
     private var actions: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: Theme.Space.xxs) {
             Button(action: save) {
-                Text("Save Appointment")
+                Text("Save appointment")
             }
             .buttonStyle(.primary(trailingSymbol: nil))
             .accessibilityIdentifier("saveAppointmentButton")
+            .padding(.bottom, Theme.Space.xs)
 
             Button {
                 dismiss()
             } label: {
                 Text("I didn't book")
-                    .font(.headline)
-                    .foregroundStyle(Theme.smoke)
-                    .frame(maxWidth: .infinity, minHeight: 44)
-                    .contentShape(Rectangle())
+                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.pressable)
+            .buttonStyle(.textLink(color: Theme.bone))
             .accessibilityIdentifier("notBookedButton")
 
             Button {
                 // Comes back with the time as the client left it here.
                 router.openSquire(plan.choice.request, plan: BookingPlan(choice: plan.choice, start: start))
             } label: {
-                Label("Open Squire again", systemImage: Symbol.external)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.electric)
-                    .frame(minHeight: 44)
-                    .contentShape(Rectangle())
+                HStack(spacing: Theme.Space.xs) {
+                    Text("Open Squire again")
+                    Image(systemName: Symbol.external)
+                        .accessibilityHidden(true)
+                }
+                .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.pressable)
+            .buttonStyle(.textLink(color: Theme.electric))
+            .accessibilityLabel("Open Squire again")
             .accessibilityHint("Opens Squire, the shop's booking system")
             .accessibilityIdentifier("openSquireAgainButton")
         }
@@ -191,32 +219,49 @@ struct ConfirmBookingSheet: View {
         withAnimation(.snappy) {
             saved = appointment
         }
+        // One turn of the pole for "BOOKED". With Reduce Motion it stays still.
+        if !reduceMotion {
+            withAnimation(.easeInOut(duration: 0.9)) {
+                poleSpin += 1
+            }
+        }
         UIAccessibility.post(notification: .announcement, argument: "Appointment saved. You're all set.")
     }
 }
 
-/// A still barber pole and "Did you book it?". (The sheet's one red is Save appointment.)
-private struct ConfirmBookingHeader: View {
+/// What's being saved, on an `ink3` row: the barber's monogram (or the service's symbol for "first
+/// available"), "Haircut with Carlos", and the price and length in mono.
+private struct ConfirmBookingChoiceRow: View {
+    let choice: BookingChoice
+
     var body: some View {
-        VStack(spacing: 12) {
-            BarberPole(phase: 0)
-                .frame(width: 22, height: 58)
-            Text("Did you book it?")
-                .textRole(.displayL)
-                .foregroundStyle(Theme.bone)
-                .accessibilityAddTraits(.isHeader)
-            Text("Save your appointment to see it on Home and get a reminder.")
-                .font(.subheadline)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(spacing: 14) {
+            if let barber = choice.barberID.flatMap({ AppData.catalog.barber(withID: $0) }) {
+                MonogramTile(barber: barber, side: 48)
+            } else {
+                ServiceIcon(symbol: AppData.catalog.service(withID: choice.serviceID)?.symbol ?? Symbol.services, size: 48)
+            }
+            VStack(alignment: .leading, spacing: 3) {
+                Text("\(choice.serviceName) \(BookingFlowCopy.withBarber(choice))")
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("\(choice.priceLabel) · \(choice.durationLabel)")
+                    .textRole(.monoNumber)
+                    .foregroundStyle(Theme.smoke)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
-        .multilineTextAlignment(.center)
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
+        .card(padding: Theme.Space.cardPadding)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            "\(choice.serviceName) \(BookingFlowCopy.withBarber(choice)), \(choice.priceLabel.spokenRanges), \(choice.durationLabel.spokenRanges)"
+        )
     }
 }
 
-/// Shown once the appointment is saved.
+/// Shown once the appointment is saved: "BOOKED", the ticket, the reminders, Add to Calendar and Done.
 private struct ConfirmBookingSuccess: View {
     let appointment: Appointment
     let remind: Bool
@@ -224,53 +269,44 @@ private struct ConfirmBookingSuccess: View {
     let onAddToCalendar: () -> Void
     let onDone: () -> Void
 
-    @ScaledMetric(relativeTo: .largeTitle) private var badgeSize: CGFloat = 76
     private let calendar = AppData.bookingCalendar
 
     var body: some View {
-        VStack(spacing: 24) {
-            VStack(spacing: 12) {
-                Image(systemName: Symbol.checkmark)
-                    .font(.system(size: badgeSize * 0.42, weight: .heavy))
-                    .foregroundStyle(.white)
-                    .frame(width: badgeSize, height: badgeSize)
-                    .background(Theme.go, in: Circle())
-                    .shadow(color: Theme.go.opacity(0.3), radius: 10, y: 5)
-                    .accessibilityHidden(true)
-                Text("You're all set")
-                    .textRole(.displayL)
-                    .foregroundStyle(Theme.bone)
-                    .accessibilityAddTraits(.isHeader)
-                Text(calendar.dateTimeLabel(for: appointment.start))
-                    .font(.title3.weight(.bold))
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(appointment.serviceName) \(BookingFlowCopy.withBarber(for: appointment))")
-                    .font(.headline)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(appointment.priceLabel) · \(appointment.durationLabel)")
-                    .font(.subheadline)
-                    .foregroundStyle(Theme.smoke)
-            }
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
-            .padding(.top, 8)
-            .accessibilityElement(children: .combine)
+        VStack(spacing: Theme.Space.xxl) {
+            Text("Booked")
+                .textRole(.dripWord)
+                .foregroundStyle(Theme.hotRed)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                // The paint drips hang below the baseline.
+                .padding(.bottom, Theme.Space.xxs)
+                .accessibilityLabel("Booked. Appointment saved.")
+                .accessibilityAddTraits(.isHeader)
+
+            BookingTicket(
+                kicker: "Saved on this iPhone",
+                start: appointment.start,
+                serviceName: appointment.serviceName,
+                withBarber: BookingFlowCopy.withBarber(for: appointment),
+                priceLabel: appointment.priceLabel,
+                durationMinutes: appointment.durationMinutes
+            )
 
             reminderNote
 
-            VStack(spacing: 12) {
+            VStack(spacing: Theme.Space.xxs) {
                 Button(action: onAddToCalendar) {
                     Label("Add to Calendar", systemImage: Symbol.calendarAdd)
                 }
                 .buttonStyle(.secondary)
                 .accessibilityIdentifier("addToCalendarButton")
+                .padding(.bottom, Theme.Space.xs)
 
                 Button(action: onDone) {
                     Text("Done")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.tertiary)
+                .buttonStyle(.textLink(color: Theme.bone))
                 .accessibilityIdentifier("confirmDoneButton")
             }
         }
@@ -281,11 +317,17 @@ private struct ConfirmBookingSuccess: View {
             if notificationsOff {
                 ConfirmBookingNotificationsOff()
             } else if let text = reminderText {
-                Label(text, systemImage: Symbol.remindersOn)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Theme.electric)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
+                HStack(alignment: .top, spacing: Theme.Space.s) {
+                    Image(systemName: Symbol.remindersOn)
+                        .foregroundStyle(Theme.electric)
+                        .accessibilityHidden(true)
+                    Text(text)
+                        .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .textRole(.callout)
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
             }
         }
     }
@@ -305,17 +347,18 @@ private struct ConfirmBookingSuccess: View {
     }
 }
 
-/// Reminders were asked for, but notifications are off for the app.
+/// Reminders were asked for, but notifications are off for the app: an `ink3` card with the
+/// caution icon and a bone "Open Settings" button.
 private struct ConfirmBookingNotificationsOff: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 10) {
+        VStack(alignment: .leading, spacing: Theme.Space.l) {
+            HStack(alignment: .top, spacing: Theme.Space.m) {
                 Image(systemName: Symbol.remindersOff)
                     .font(.headline)
                     .foregroundStyle(Theme.caution)
                     .accessibilityHidden(true)
                 Text("Notifications are off for \(AppData.shop.name), so reminders can't come through. You can turn them on in Settings.")
-                    .font(.subheadline)
+                    .textRole(.body)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -323,15 +366,11 @@ private struct ConfirmBookingNotificationsOff: View {
             if let url = URL(string: UIApplication.openSettingsURLString) {
                 Link(destination: url) {
                     Text("Open Settings")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(Theme.electric)
-                        .frame(minHeight: 44)
                 }
+                .buttonStyle(.secondary)
                 .accessibilityIdentifier("openSettingsButton")
             }
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.caution.opacity(0.12), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .card(padding: Theme.Space.xl)
     }
 }
