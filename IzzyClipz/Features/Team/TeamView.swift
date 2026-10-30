@@ -83,10 +83,8 @@ private struct TeamBarberRow: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
-                Text(barber.name)
-                    .textRole(.displayS)
+                MenuTitleText(barber.name, role: .displayS)
                     .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
                 if isFavorite {
                     Image(systemName: Symbol.favoriteFilled)
                         .font(.system(size: 13, weight: .semibold))

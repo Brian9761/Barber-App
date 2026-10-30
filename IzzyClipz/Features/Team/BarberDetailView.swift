@@ -73,6 +73,9 @@ private struct BarberBand: View {
             .overlay {
                 GeometryReader { proxy in
                     MonogramTile(barber: barber, size: proxy.size, cornerRadius: Theme.Radius.hero)
+                        // The band is decoration with a fixed height: its "OWNER" tag stops growing
+                        // before it would cover the letters. The kicker under it says it too.
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                 }
             }
             .overlay(alignment: .bottomTrailing) {
@@ -90,8 +93,7 @@ private struct BarberNameBlock: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             Kicker(barber.title)
-            Text(barber.name)
-                .textRole(.displayXL)
+            MenuTitleText(barber.name, role: .displayXL)
                 .foregroundStyle(Theme.bone)
                 .accessibilityAddTraits(.isHeader)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
@@ -199,6 +201,8 @@ private struct BarberInstagramRow: View {
 private struct BarberAbout: View {
     let barber: Barber
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxl) {
             VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -213,14 +217,30 @@ private struct BarberAbout: View {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     Kicker("Specialties")
                         .accessibilityAddTraits(.isHeader)
-                    Text(specialtiesLine)
+                    specialties
                         .textRole(.monoNumber)
                         .foregroundStyle(Theme.bone)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityElement(children: .ignore)
                         .accessibilityLabel(barber.specialties.joined(separator: ", "))
                 }
             }
+        }
+    }
+
+    /// One line joined with " · ", or one specialty per line at accessibility text sizes, where
+    /// "COLOR & LIGHTENER" alone is wider than the screen and has to wrap.
+    @ViewBuilder private var specialties: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                ForEach(barber.specialties, id: \.self) { specialty in
+                    Text(specialty)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            Text(specialtiesLine)
+                .lineSpacing(3)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
