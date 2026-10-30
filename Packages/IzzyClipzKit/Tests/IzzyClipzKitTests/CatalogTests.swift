@@ -221,6 +221,24 @@ final class CatalogTests: XCTestCase {
         XCTAssertEqual(catalog.barber(withID: "flowxbori")?.initials, "F")
     }
 
+    func testMonogramsComeFromTheNameClientsKnow() {
+        XCTAssertEqual(catalog.barbers.map(\.monogram), ["IZ", "CA", "FL", "CR", "JU"])
+        XCTAssertEqual(Set(catalog.barbers.map(\.monogram)).count, catalog.barbers.count, "Every tile has its own letters")
+        // Carlos's initials are "CR"; his monogram isn't, so it can't be mistaken for Cristian's.
+        XCTAssertEqual(catalog.barber(withID: "carlos-rafael")?.initials, "CR")
+        XCTAssertEqual(catalog.barber(withID: "cristian-ceja")?.monogram, "CR")
+    }
+
+    func testMonogramsOfShortOrPaddedNames() {
+        func barber(_ name: String) -> Barber {
+            Barber(id: "x", name: name, listedName: name, title: "Barber", bio: "", specialties: [], rating: nil)
+        }
+        XCTAssertEqual(barber("Al").monogram, "AL")
+        XCTAssertEqual(barber("J").monogram, "J")
+        XCTAssertEqual(barber(" izzy ").monogram, "IZ")
+        XCTAssertEqual(barber("").monogram, "")
+    }
+
     func testOwnerIsListedFirst() {
         XCTAssertEqual(catalog.barbers.first?.id, "israel-flores")
     }

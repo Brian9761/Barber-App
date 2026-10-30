@@ -21,6 +21,10 @@ public enum ProductCategory: String, CaseIterable, Identifiable, Hashable, Senda
 public struct Product: Identifiable, Hashable, Sendable {
     /// The product's handle on the sponsor's Shopify store, e.g. "blue-bravo-hair-gel-16oz".
     public let id: String
+    /// The Shopify variant the app sells, e.g. 44210083561649. Cart links
+    /// (bravohairgel.com/cart/<variantID>:<quantity>) need it; the handle isn't enough.
+    /// The store's live feed may report a newer one.
+    public let variantID: Int64
     /// "Blue Hair Gel".
     public let name: String
     /// "16 oz", or `nil` when there's only one size.
@@ -38,6 +42,7 @@ public struct Product: Identifiable, Hashable, Sendable {
 
     public init(
         id: String,
+        variantID: Int64,
         name: String,
         size: String? = nil,
         category: ProductCategory,
@@ -48,6 +53,7 @@ public struct Product: Identifiable, Hashable, Sendable {
         isFeatured: Bool = false
     ) {
         self.id = id
+        self.variantID = variantID
         self.name = name
         self.size = size
         self.category = category
@@ -70,6 +76,9 @@ public struct Sponsor: Hashable, Sendable {
     /// The online store's home page, without tracking.
     public let storeURL: URL
     public let shippingNote: String
+    /// The order total from which the sponsor ships for free, e.g. $64. The
+    /// app's progress toward it is an estimate; the sponsor's checkout decides.
+    public let freeShippingThreshold: Price
     public let phone: PhoneNumber?
 
     public init(
@@ -79,6 +88,7 @@ public struct Sponsor: Hashable, Sendable {
         about: [String],
         storeURL: URL,
         shippingNote: String,
+        freeShippingThreshold: Price,
         phone: PhoneNumber? = nil
     ) {
         self.name = name
@@ -87,6 +97,7 @@ public struct Sponsor: Hashable, Sendable {
         self.about = about
         self.storeURL = storeURL
         self.shippingNote = shippingNote
+        self.freeShippingThreshold = freeShippingThreshold
         self.phone = phone
     }
 }
@@ -132,6 +143,60 @@ public struct ProductCatalog: Sendable {
         products.first { $0.id == id }
     }
 
+    // MARK: Sizes
+
+    /// One product per item, in catalog order: where an item comes in several
+    /// sizes (Blue Hair Gel 4 oz and 16 oz), only the size listed first stands
+    /// for it, so the Shop shows one tile and the size is picked on its page.
+    public var leadProducts: [Product] {
+        products.filter { isLead($0) }
+    }
+
+    public func leadProducts(in category: ProductCategory) -> [Product] {
+        leadProducts.filter { $0.category == category }
+    }
+
+    /// Every size of the same item, smallest first, e.g. [Blue Hair Gel 4 oz,
+    /// Blue Hair Gel 16 oz]. Just the product itself when it comes in one size.
+    ///
+    /// Products are the same item in different sizes when they share a name
+    /// and a category: Bravo lists each size as its own product.
+    public func sizes(of product: Product) -> [Product] {
+        let sizes = products.enumerated()
+            .filter { Self.isSameItem($0.element, product) }
+            .sorted { lhs, rhs in
+                switch (Self.sizeValue(lhs.element.size), Self.sizeValue(rhs.element.size)) {
+                case let (left?, right?) where left != right: return left < right
+                case (.some, nil): return true
+                case (nil, .some): return false
+                default: return lhs.offset < rhs.offset
+                }
+            }
+            .map(\.element)
+        return sizes.isEmpty ? [product] : sizes
+    }
+
+    /// The product that stands for this one's item on the Shop's grid.
+    public func lead(for product: Product) -> Product {
+        products.first { Self.isSameItem($0, product) } ?? product
+    }
+
+    private func isLead(_ product: Product) -> Bool {
+        lead(for: product).id == product.id
+    }
+
+    private static func isSameItem(_ lhs: Product, _ rhs: Product) -> Bool {
+        lhs.name == rhs.name && lhs.category == rhs.category
+    }
+
+    /// The number a size starts with, for ordering: "4 oz" -> 4, "16 oz" -> 16,
+    /// "3 pack" -> 3. `nil` without a size or a leading number.
+    static func sizeValue(_ size: String?) -> Double? {
+        guard let size else { return nil }
+        let number = size.prefix { $0.isASCII && ($0.isNumber || $0 == ".") }
+        return Double(number)
+    }
+
     // MARK: Links
 
     /// e.g. https://bravohairgel.com/products/blue-bravo-hair-gel-16oz?utm_source=izzyclipz-app&…
@@ -164,10 +229,17 @@ public struct ProductCatalog: Sendable {
         for (id, count) in Dictionary(grouping: products.map(\.id), by: { $0 }).mapValues(\.count) where count > 1 {
             problems.append("Duplicate product ID '\(id)'")
         }
+        for (variantID, count) in Dictionary(grouping: products.map(\.variantID), by: { $0 }).mapValues(\.count)
+        where count > 1 && variantID > 0 {
+            problems.append("Duplicate variant ID \(variantID)")
+        }
         if sponsor.storeURL.scheme != "https" || sponsor.storeURL.host == nil {
             problems.append("The store URL isn't an https link")
         }
         if products.isEmpty { problems.append("There are no products") }
+        if sponsor.freeShippingThreshold.kind != .fixed || sponsor.freeShippingThreshold.cents <= 0 {
+            problems.append("The free-shipping threshold needs an amount")
+        }
         if !products.isEmpty && featured.isEmpty { problems.append("No product is featured") }
 
         for product in products {
@@ -180,6 +252,7 @@ public struct ProductCatalog: Sendable {
             }
             if product.price.kind != .fixed || product.price.cents <= 0 { problems.append("Product '\(product.id)' needs a price") }
             if product.imageName.isEmpty { problems.append("Product '\(product.id)' has no image") }
+            if product.variantID <= 0 { problems.append("Product '\(product.id)' has no variant ID") }
             if let size = product.size, size.trimmingCharacters(in: .whitespaces).isEmpty {
                 problems.append("Product '\(product.id)' has an empty size")
             }
@@ -192,10 +265,14 @@ public struct ProductCatalog: Sendable {
 public struct LivePrice: Hashable, Sendable {
     public let cents: Int
     public let isAvailable: Bool
+    /// The Shopify variant whose price this is (the cheapest one), so a cart
+    /// link adds the item that was shown. `nil` when the feed didn't say.
+    public let variantID: Int64?
 
-    public init(cents: Int, isAvailable: Bool) {
+    public init(cents: Int, isAvailable: Bool, variantID: Int64? = nil) {
         self.cents = cents
         self.isAvailable = isAvailable
+        self.variantID = variantID
     }
 }
 
@@ -206,12 +283,15 @@ public enum ShopifyPrices {
         case notAProductList
     }
 
-    /// Parses a Shopify `/products.json` response: handle -> lowest variant price & whether any variant is available.
+    /// Parses a Shopify `/products.json` response: handle -> lowest variant price,
+    /// that variant's ID, and whether any variant is available.
     ///
     /// Prices are strings like "17.99"; they're turned into cents by hand, never
     /// through floating point. Variants without a readable, non-zero price are
     /// ignored, products left with no variants are skipped, and a variant
-    /// without an "available" flag counts as available.
+    /// without an "available" flag counts as available. When several variants
+    /// share the lowest price, the first one listed wins. A missing or
+    /// unreadable variant "id" leaves `variantID` empty rather than dropping the price.
     public static func parse(_ data: Data) throws -> [String: LivePrice] {
         let feed: Feed
         do {
@@ -223,8 +303,13 @@ public enum ShopifyPrices {
         var prices: [String: LivePrice] = [:]
         for product in feed.products.decodedValues() where prices[product.handle] == nil {
             let variants = product.variants.decodedValues()
-            guard let lowest = variants.map(\.cents).min() else { continue }
-            prices[product.handle] = LivePrice(cents: lowest, isAvailable: variants.contains(where: \.isAvailable))
+            // `min(by:)` keeps the first of equal elements.
+            guard let lowest = variants.min(by: { $0.cents < $1.cents }) else { continue }
+            prices[product.handle] = LivePrice(
+                cents: lowest.cents,
+                isAvailable: variants.contains(where: \.isAvailable),
+                variantID: lowest.id
+            )
         }
         return prices
     }
@@ -264,10 +349,12 @@ public enum ShopifyPrices {
     }
 
     private struct FeedVariant: Decodable {
+        let id: Int64?
         let cents: Int
         let isAvailable: Bool
 
         enum CodingKeys: String, CodingKey {
+            case id
             case price
             case available
         }
@@ -280,6 +367,8 @@ public enum ShopifyPrices {
             }
             self.cents = cents
             self.isAvailable = (try? container.decodeIfPresent(Bool.self, forKey: .available)) ?? true
+            let id = try? container.decodeIfPresent(Int64.self, forKey: .id)
+            self.id = id.flatMap { $0 > 0 ? $0 : nil }
         }
     }
 }

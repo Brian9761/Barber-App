@@ -158,6 +158,14 @@ public struct Barber: Identifiable, Hashable, Sendable {
             .filter { !$0.isEmpty }
         return words.prefix(2).compactMap { $0.first }.map { String($0).uppercased() }.joined()
     }
+
+    /// The two letters on the barber's monogram tile: the first two of the name
+    /// clients know them by, "Izzy" -> "IZ", "Cristian" -> "CR". Tiles use this,
+    /// not `initials`, which come from the listed name ("Carlos R." -> "CR") and
+    /// would put Cristian's letters on Carlos.
+    public var monogram: String {
+        String(name.trimmingCharacters(in: .whitespaces).prefix(2)).uppercased()
+    }
 }
 
 /// A specific barber's version of a service: the exact item on their Squire menu.

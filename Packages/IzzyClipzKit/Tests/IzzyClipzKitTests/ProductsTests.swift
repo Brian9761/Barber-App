@@ -53,6 +53,25 @@ final class ProductCatalogTests: XCTestCase {
         }
     }
 
+    func testBundledVariantIDs() {
+        // bravohairgel.com/products.json, October 30, 2026.
+        let expected: [String: Int64] = [
+            "blue-bravo-hair-gel-16oz": 44210083561649,
+            "white-bravo-hair-gel-16oz": 44210087166129,
+            "bravo-onyx-hair-gel": 45716306821297,
+            "bravo-matte-clay": 43628496945329,
+            "bravo-texture-powder": 46751008653489,
+            "bravo-blue-pomade": 44209408409777,
+            "bravo-after-shave": 45716306395313,
+            "bravo-chapstick-3-pack": 46396389916849,
+            "blue-bravo-hair-gel-4oz": 44210076909745,
+            "white-bravo-hair-gel-4oz": 44210085462193,
+        ]
+        XCTAssertEqual(Dictionary(uniqueKeysWithValues: catalog.products.map { ($0.id, $0.variantID) }), expected)
+        // Texture Powder's other variant is a $227.88 12-count display box.
+        XCTAssertNotEqual(catalog.product(withID: "bravo-texture-powder")?.variantID, 46751008686257)
+    }
+
     func testEveryProductIsComplete() {
         for product in catalog.products {
             XCTAssertEqual(product.imageName, "Bravo-" + product.id)
@@ -76,6 +95,80 @@ final class ProductCatalogTests: XCTestCase {
         XCTAssertEqual(catalog.products(in: .gels).count, 5)
         XCTAssertEqual(catalog.products(in: .styling).map(\.id), ["bravo-matte-clay", "bravo-texture-powder", "bravo-blue-pomade"])
         XCTAssertEqual(catalog.products(in: .grooming).map(\.id), ["bravo-after-shave", "bravo-chapstick-3-pack"])
+    }
+
+    // MARK: Sizes
+
+    func testSizesOfTheSameItemSmallestFirst() throws {
+        let blue16 = try XCTUnwrap(catalog.product(withID: "blue-bravo-hair-gel-16oz"))
+        let blue4 = try XCTUnwrap(catalog.product(withID: "blue-bravo-hair-gel-4oz"))
+        let white16 = try XCTUnwrap(catalog.product(withID: "white-bravo-hair-gel-16oz"))
+        XCTAssertEqual(catalog.sizes(of: blue16).map(\.id), ["blue-bravo-hair-gel-4oz", "blue-bravo-hair-gel-16oz"])
+        XCTAssertEqual(catalog.sizes(of: blue4), catalog.sizes(of: blue16))
+        XCTAssertEqual(catalog.sizes(of: white16).map(\.id), ["white-bravo-hair-gel-4oz", "white-bravo-hair-gel-16oz"])
+        XCTAssertEqual(catalog.sizes(of: blue16).map(\.size), ["4 oz", "16 oz"], "By number, not alphabetically")
+    }
+
+    func testOneSizeItemsAreOnTheirOwn() throws {
+        for id in ["bravo-onyx-hair-gel", "bravo-matte-clay", "bravo-chapstick-3-pack", "bravo-after-shave"] {
+            let product = try XCTUnwrap(catalog.product(withID: id))
+            XCTAssertEqual(catalog.sizes(of: product), [product], id)
+            XCTAssertEqual(catalog.lead(for: product), product, id)
+        }
+        // Onyx is a 16 oz gel too, but a different item.
+        let onyx = try XCTUnwrap(catalog.product(withID: "bravo-onyx-hair-gel"))
+        XCTAssertFalse(catalog.sizes(of: onyx).contains { $0.name != "Onyx Hair Gel" })
+    }
+
+    func testLeadProductsShowEachItemOnce() throws {
+        XCTAssertEqual(catalog.leadProducts.map(\.id), [
+            "blue-bravo-hair-gel-16oz",
+            "white-bravo-hair-gel-16oz",
+            "bravo-onyx-hair-gel",
+            "bravo-matte-clay",
+            "bravo-texture-powder",
+            "bravo-blue-pomade",
+            "bravo-after-shave",
+            "bravo-chapstick-3-pack",
+        ])
+        XCTAssertEqual(catalog.leadProducts(in: .gels).map(\.id), ["blue-bravo-hair-gel-16oz", "white-bravo-hair-gel-16oz", "bravo-onyx-hair-gel"])
+        XCTAssertEqual(catalog.leadProducts(in: .styling), catalog.products(in: .styling))
+        XCTAssertEqual(catalog.leadProducts(in: .grooming), catalog.products(in: .grooming))
+        // Every product is reachable from its lead's sizes.
+        for product in catalog.products {
+            let lead = catalog.lead(for: product)
+            XCTAssertTrue(catalog.leadProducts.contains(lead), product.id)
+            XCTAssertTrue(catalog.sizes(of: lead).contains(product), product.id)
+        }
+        let blue4 = try XCTUnwrap(catalog.product(withID: "blue-bravo-hair-gel-4oz"))
+        XCTAssertEqual(catalog.lead(for: blue4).id, "blue-bravo-hair-gel-16oz")
+    }
+
+    func testSizesOrderByNumberThenCatalogOrder() {
+        func item(_ id: String, _ size: String?, name: String = "Gel", category: ProductCategory = .gels) -> Product {
+            Product(id: id, variantID: 1, name: name, size: size, category: category, price: Price(cents: 100), summary: "S", highlights: ["1", "2", "3"])
+        }
+        let products = [
+            item("big", "32 oz"), item("none", nil), item("small", "2.5 oz"), item("odd", "jumbo"), item("mid", "8 oz"),
+            item("again", "8 oz"), item("clay", "4 oz", category: .styling), item("other", "1 oz", name: "Other"),
+        ]
+        let catalog = ProductCatalog(sponsor: ProductCatalog.bravo.sponsor, products: products)
+        XCTAssertEqual(catalog.sizes(of: products[0]).map(\.id), ["small", "mid", "again", "big", "none", "odd"])
+        XCTAssertEqual(catalog.leadProducts.map(\.id), ["big", "clay", "other"])
+        // A product the catalog doesn't have is its own only size.
+        let stranger = item("stranger", "4 oz", name: "Stranger")
+        XCTAssertEqual(catalog.sizes(of: stranger), [stranger])
+        XCTAssertEqual(catalog.lead(for: stranger), stranger)
+    }
+
+    func testSizeValues() {
+        XCTAssertEqual(ProductCatalog.sizeValue("4 oz"), 4)
+        XCTAssertEqual(ProductCatalog.sizeValue("16 oz"), 16)
+        XCTAssertEqual(ProductCatalog.sizeValue("3 pack"), 3)
+        XCTAssertEqual(ProductCatalog.sizeValue("2.5 oz"), 2.5)
+        XCTAssertNil(ProductCatalog.sizeValue(nil))
+        XCTAssertNil(ProductCatalog.sizeValue("jumbo"))
+        XCTAssertNil(ProductCatalog.sizeValue(""))
     }
 
     func testFeatured() {
@@ -136,6 +229,9 @@ final class ProductCatalogTests: XCTestCase {
         XCTAssertEqual(bravo.fullName, "Bravo Hair Gel")
         XCTAssertEqual(bravo.tagline, "Designed by professionals, for professionals.")
         XCTAssertEqual(bravo.shippingNote, "Free shipping on U.S. orders $64+")
+        XCTAssertEqual(bravo.freeShippingThreshold, Price(cents: 6400))
+        XCTAssertEqual(bravo.freeShippingThreshold.label, "$64")
+        XCTAssertTrue(bravo.shippingNote.contains(bravo.freeShippingThreshold.label + "+"), "The note and the threshold agree")
         XCTAssertNil(bravo.phone)
         XCTAssertEqual(bravo.about.count, 2)
         XCTAssertTrue(bravo.about[0].contains("Joana Davila"))
@@ -145,18 +241,19 @@ final class ProductCatalogTests: XCTestCase {
     // MARK: Validation
 
     func testValidationCatchesBrokenData() {
-        let fine = Product(id: "ok", name: "OK", category: .gels, price: Price(cents: 100), summary: "Fine.", highlights: ["a", "b", "c"], isFeatured: true)
+        let fine = Product(id: "ok", variantID: 1, name: "OK", category: .gels, price: Price(cents: 100), summary: "Fine.", highlights: ["a", "b", "c"], isFeatured: true)
         let broken = ProductCatalog(
             sponsor: Sponsor(
                 name: "X", fullName: "X", tagline: "", about: [],
-                storeURL: URL(string: "http://example.com/")!, shippingNote: ""
+                storeURL: URL(string: "http://example.com/")!, shippingNote: "",
+                freeShippingThreshold: Price(cents: 0)
             ),
             products: [
                 fine,
                 fine,
-                Product(id: "Bad Slug", name: " ", category: .gels, price: .includedWithCut, summary: "", highlights: ["a"]),
-                Product(id: "too-many", name: "Many", size: " ", category: .styling, price: Price(cents: 0), summary: "S", highlights: ["1", "2", "3", "4", "5", "6"]),
-                Product(id: "empty", name: "E", category: .styling, price: Price(cents: 100), summary: "S", highlights: ["1", "", "3"], imageName: ""),
+                Product(id: "Bad Slug", variantID: 0, name: " ", category: .gels, price: .includedWithCut, summary: "", highlights: ["a"]),
+                Product(id: "too-many", variantID: 7, name: "Many", size: " ", category: .styling, price: Price(cents: 0), summary: "S", highlights: ["1", "2", "3", "4", "5", "6"]),
+                Product(id: "empty", variantID: 7, name: "E", category: .styling, price: Price(cents: 100), summary: "S", highlights: ["1", "", "3"], imageName: ""),
             ]
         )
         let problems = broken.validationProblems()
@@ -172,18 +269,23 @@ final class ProductCatalogTests: XCTestCase {
         XCTAssertTrue(problems.contains("Product 'too-many' has an empty size"), "\(problems)")
         XCTAssertTrue(problems.contains("Product 'empty' has an empty highlight"), "\(problems)")
         XCTAssertTrue(problems.contains("Product 'empty' has no image"), "\(problems)")
+        XCTAssertTrue(problems.contains("Product 'Bad Slug' has no variant ID"), "\(problems)")
+        XCTAssertTrue(problems.contains("Duplicate variant ID 7"), "\(problems)")
+        XCTAssertTrue(problems.contains("Duplicate variant ID 1"), "\(problems)")
+        XCTAssertTrue(problems.contains("The free-shipping threshold needs an amount"), "\(problems)")
+        XCTAssertFalse(problems.contains("Duplicate variant ID 0"), "Missing IDs are reported once per product, not as duplicates")
         XCTAssertFalse(problems.contains { $0.contains("'ok'") && !$0.hasPrefix("Duplicate") }, "\(problems)")
     }
 
     func testValidationNeedsProductsAndAFeaturedOne() {
         let sponsor = catalog.sponsor
         XCTAssertEqual(ProductCatalog(sponsor: sponsor, products: []).validationProblems(), ["There are no products"])
-        let plain = Product(id: "a", name: "A", category: .gels, price: Price(cents: 100), summary: "S", highlights: ["1", "2", "3"])
+        let plain = Product(id: "a", variantID: 1, name: "A", category: .gels, price: Price(cents: 100), summary: "S", highlights: ["1", "2", "3"])
         XCTAssertEqual(ProductCatalog(sponsor: sponsor, products: [plain]).validationProblems(), ["No product is featured"])
     }
 
     func testImageNameDefaultsToTheHandle() {
-        let product = Product(id: "bravo-x", name: "X", category: .grooming, price: Price(cents: 100), summary: "S", highlights: ["1", "2", "3"])
+        let product = Product(id: "bravo-x", variantID: 1, name: "X", category: .grooming, price: Price(cents: 100), summary: "S", highlights: ["1", "2", "3"])
         XCTAssertEqual(product.imageName, "Bravo-bravo-x")
         XCTAssertNil(product.size)
         XCTAssertFalse(product.isFeatured)
@@ -246,6 +348,38 @@ final class ShopifyPricesTests: XCTestCase {
         ])
     }
 
+    func testKeepsTheShownVariantsID() throws {
+        let json = #"""
+        {"products": [
+            {"handle": "single", "variants": [{"id": 44210083561649, "price": "17.99", "available": true}]},
+            {"handle": "box-and-single", "variants": [
+                {"id": 2, "title": "Box", "price": "227.88", "available": true},
+                {"id": 3, "title": "Single", "price": "18.99", "available": true}
+            ]},
+            {"handle": "same-price", "variants": [{"id": 10, "price": "5.00"}, {"id": 11, "price": "5.00"}, {"id": 9, "price": "6.00"}]},
+            {"handle": "no-id", "variants": [{"price": "4.00", "available": true}]},
+            {"handle": "text-id", "variants": [{"id": "44210083561649", "price": "4.00"}]},
+            {"handle": "bad-ids", "variants": [{"id": -5, "price": "4.00"}, {"id": 0, "price": "4.50"}]},
+            {"handle": "fraction-id", "variants": [{"id": 1.5, "price": "4.00"}]},
+            {"handle": "cheapest-unreadable", "variants": [{"id": 20, "price": "oops"}, {"id": 21, "price": "9.00"}]},
+            {"handle": "cheapest-sold-out", "variants": [{"id": 30, "price": "3.00", "available": false}, {"id": 31, "price": "4.00", "available": true}]}
+        ]}
+        """#
+        let prices = try ShopifyPrices.parse(Data(json.utf8))
+        XCTAssertEqual(prices, [
+            "single": LivePrice(cents: 1799, isAvailable: true, variantID: 44210083561649),
+            "box-and-single": LivePrice(cents: 1899, isAvailable: true, variantID: 3),
+            "same-price": LivePrice(cents: 500, isAvailable: true, variantID: 10),
+            "no-id": LivePrice(cents: 400, isAvailable: true),
+            "text-id": LivePrice(cents: 400, isAvailable: true),
+            "bad-ids": LivePrice(cents: 400, isAvailable: true),
+            "fraction-id": LivePrice(cents: 400, isAvailable: true),
+            "cheapest-unreadable": LivePrice(cents: 900, isAvailable: true, variantID: 21),
+            // The price shown is the cheapest variant's, so its ID goes with it.
+            "cheapest-sold-out": LivePrice(cents: 300, isAvailable: true, variantID: 30),
+        ])
+    }
+
     func testEmptyFeed() throws {
         XCTAssertEqual(try ShopifyPrices.parse(Data(#"{"products": []}"#.utf8)), [:])
     }
@@ -262,10 +396,17 @@ final class ShopifyPricesTests: XCTestCase {
         let prices = try ShopifyPrices.parse(Data(bravoFeedFixture.utf8))
         XCTAssertEqual(prices.count, 15)
         for product in ProductCatalog.bravo.products {
-            XCTAssertEqual(prices[product.id], LivePrice(cents: product.price.cents, isAvailable: true), product.id)
+            XCTAssertEqual(
+                prices[product.id],
+                LivePrice(cents: product.price.cents, isAvailable: true, variantID: product.variantID),
+                product.id
+            )
         }
         // The single, not the 12-count display box.
         XCTAssertEqual(prices["bravo-texture-powder"]?.cents, 1899)
+        XCTAssertEqual(prices["bravo-texture-powder"]?.variantID, 46751008653489)
+        // Four variants at the same price: the first one listed.
+        XCTAssertEqual(prices["black-bravo-cutting-shears"]?.variantID, 46057881731249)
         XCTAssertEqual(prices["black-bravo-cutting-shears"]?.cents, 19999)
         XCTAssertEqual(prices["bravo-cutting-cape"]?.cents, 2099)
     }
