@@ -26,9 +26,12 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
   booking that went through instead of booking the client twice.
 - **Take payment**: the amount on the keypad (filled in from an
   appointment's fixed price), an optional note and receipt email, then
-  **Tap to Pay on iPhone**. The result screen says Paid, Declined,
-  Cancelled or what to check; only a payment Stripe confirms as
-  succeeded shows as paid. **Payments today** lists what came in.
+  **Tap to Pay on iPhone**. Cancel works until the card is read; from
+  then on the screen says Processing. The result screen says Paid,
+  Declined, Cancelled or what to check; only a payment Stripe confirms as
+  succeeded shows as paid. **Payments today** lists what came in. If the
+  app can't reach the server, Take payment says so, with Check again and
+  Practice in test mode.
 - **Products**: add, edit (photo from the library or the camera), hide or
   show in the customer app, delete.
 - **Settings**: server and Stripe status, Tap to Pay setup and "How to

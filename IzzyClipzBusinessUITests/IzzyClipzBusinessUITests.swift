@@ -435,6 +435,24 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         screenshot("O21-Offline")
     }
 
+    func testOfflineTakePaymentSaysWhyAndOffersTestMode() {
+        launch("-fake-offline")
+        openTab("Take payment")
+        let card = element("paymentsStatusUnknown")
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "Take payment kept saying it was checking")
+        XCTAssertTrue(app.staticTexts["We couldn't reach the server. Check your internet connection and try again."].exists)
+        screenshot("O22-Payments-Offline")
+        tap("checkStripeAgain")
+        XCTAssertTrue(card.waitForExistence(timeout: 10), "Still offline: the card says so again")
+        tap("startPractice")
+        XCTAssertTrue(element("testModeBanner").waitForExistence(timeout: 10))
+        enterAmount("500")
+        tap("tapToPayButton")
+        tap("simulateApprove")
+        XCTAssertTrue(waitForLabel(element("statusPaid"), containing: "Test payment approved"))
+        tap("paymentDone")
+    }
+
     // MARK: Helpers
 
     private func signIn(with key: String) {

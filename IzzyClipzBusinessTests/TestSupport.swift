@@ -51,6 +51,7 @@ final class ScriptedAPI: OwnerAPI {
     var completeHandler: ((String) async throws -> IzzyAPI.Payment)?
     var createPaymentHandler: ((IzzyAPI.NewPayment) async throws -> IzzyAPI.PaymentIntentCreated)?
     var uploadHandler: ((String, Data) async throws -> IzzyAPI.Product)?
+    var paymentsHandler: ((LocalDate) async throws -> [IzzyAPI.Payment])?
     private(set) var createdPayments = 0
 
     init(base: FakeOwnerAPI) {
@@ -93,7 +94,10 @@ final class ScriptedAPI: OwnerAPI {
         if let completeHandler { return try await completeHandler(id) }
         return try await base.completePayment(id: id)
     }
-    func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment] { try await base.payments(on: date) }
+    func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment] {
+        if let paymentsHandler { return try await paymentsHandler(date) }
+        return try await base.payments(on: date)
+    }
 }
 
 /// A fresh, empty UserDefaults for one test.

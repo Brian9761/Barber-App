@@ -62,7 +62,10 @@ struct PaymentProgressView: View {
                 ProgressView()
             }
         case .collecting:
-            if let pending = simulatedTap {
+            if checkout.isProcessing {
+                // The card was read (Apple's screen has closed): don't ask for it again.
+                processing
+            } else if let pending = simulatedTap {
                 SimulatedTapPanel(terminal: pending.0, amountCents: pending.1.amountCents)
             } else if case .preparing(let progress) = checkout.currentTerminal.state {
                 // Reconnecting before the card can be read (after the app was in the background).
@@ -87,9 +90,7 @@ struct PaymentProgressView: View {
                 }
             }
         case .confirming:
-            StatusBlock(symbol: "hourglass", title: "Processing", detail: "Checking the payment with Stripe. Keep the app open.", id: "statusProcessing") {
-                ProgressView()
-            }
+            processing
         case .succeeded(let receipt):
             StatusBlock(
                 symbol: "checkmark.circle.fill",
@@ -108,6 +109,13 @@ struct PaymentProgressView: View {
             StatusBlock(symbol: "questionmark.circle.fill", tint: .orange, title: "Check the payment", detail: message, id: "statusUnknown")
         case .notPaid(let message):
             StatusBlock(symbol: "exclamationmark.circle.fill", tint: .orange, title: "Not paid", detail: message, id: "statusNotPaid")
+        }
+    }
+
+    /// The same while Stripe authorizes the card and while the server checks it.
+    private var processing: some View {
+        StatusBlock(symbol: "hourglass", title: "Processing", detail: "Checking the payment with Stripe. Keep the app open.", id: "statusProcessing") {
+            ProgressView()
         }
     }
 
@@ -134,8 +142,9 @@ struct PaymentProgressView: View {
             case .editing, .creating, .confirming:
                 EmptyView()
             case .preparing, .collecting:
-                // Test mode's panel has its own "Customer cancels".
-                if simulatedTap == nil {
+                // Test mode's panel has its own "Customer cancels". Once the
+                // card is read, the payment can't be stopped.
+                if simulatedTap == nil, checkout.canCancel {
                     secondary("Cancel", id: "cancelPayment") { checkout.cancel() }
                 }
             case .succeeded:

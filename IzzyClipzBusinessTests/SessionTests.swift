@@ -119,6 +119,100 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(workspace?.checkout.mode, .checking)
     }
 
+    func testTakePaymentSaysWhyItCantCheckAfterAnOfflineLaunchAndChecksAgain() async throws {
+        let (model, _, server) = makeModel(savedKey: FakeServer.ownerKey)
+        server.options.offline = true
+        await model.start()
+        let workspace = try XCTUnwrap(model.workspace)
+        XCTAssertEqual(workspace.checkout.mode, .checking)
+        XCTAssertEqual(
+            workspace.paymentsStatusError, "We couldn't reach the server. Check your internet connection and try again.",
+            "Take payment says why instead of \"Checking card payments…\" for good"
+        )
+
+        // The network is back: opening Take payment checks again by itself.
+        server.options.offline = false
+        await workspace.recheckStatusIfNeeded()
+        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+        XCTAssertNil(workspace.paymentsStatusError)
+
+        // Once Stripe's status is known, opening Take payment doesn't ask the server again.
+        let checks = server.calls.filter { $0 == "ownerStatus" }.count
+        await workspace.recheckStatusIfNeeded()
+        XCTAssertEqual(server.calls.filter { $0 == "ownerStatus" }.count, checks)
+    }
+
+    func testTapToPayAfterAFailedCheckChecksAgain() async throws {
+        let (model, _, server) = makeModel(savedKey: FakeServer.ownerKey)
+        server.options.offline = true
+        await model.start()
+        let workspace = try XCTUnwrap(model.workspace)
+        let checkout = workspace.checkout
+        server.options.offline = false
+
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        XCTAssertEqual(checkout.phase, .editing)
+        XCTAssertEqual(checkout.validationMessage, "Still checking whether card payments are set up. Try again in a moment.")
+        let known = await eventually { checkout.mode != .checking }
+        XCTAssertTrue(known, "Tapping Tap to Pay on iPhone checked with the server again")
+        XCTAssertNil(workspace.paymentsStatusError)
+        XCTAssertNil(checkout.validationMessage, "\"Still checking…\" goes once the check is done")
+
+        // Trying again now starts the payment.
+        let reader = try XCTUnwrap(model.environment.terminal as? SimulatedPaymentTerminal)
+        checkout.charge()
+        let started = await eventually { checkout.phase == .collecting && reader.pendingTap != nil }
+        XCTAssertTrue(started, "Got \(checkout.phase)")
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(checkout.phase, .cancelled)
+    }
+
+    func testTapToPayWhileStillOfflineSaysWhyAndNotStillChecking() async throws {
+        let (model, _, server) = makeModel(savedKey: FakeServer.ownerKey)
+        server.options.offline = true
+        await model.start()
+        let workspace = try XCTUnwrap(model.workspace)
+        let checkout = workspace.checkout
+        let checks = server.calls.filter { $0 == "ownerStatus" }.count
+
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        XCTAssertEqual(checkout.validationMessage, CheckoutModel.stillCheckingMessage)
+        let checked = await eventually {
+            server.calls.filter { $0 == "ownerStatus" }.count == checks + 1 && !workspace.isCheckingStatus
+        }
+        XCTAssertTrue(checked, "Tapping Tap to Pay on iPhone checked with the server again")
+        XCTAssertEqual(checkout.mode, .checking)
+        XCTAssertEqual(workspace.paymentsStatusError, "We couldn't reach the server. Check your internet connection and try again.")
+        XCTAssertNil(checkout.validationMessage, "Only the card says why: not also \"Still checking…\"")
+        XCTAssertEqual(checkout.phase, .editing)
+    }
+
+    func testTapToPayDuringTheFirstCheckSaysStillCheckingUntilItsDone() async throws {
+        let (model, _, server) = makeModel(savedKey: FakeServer.ownerKey)
+        // A slow connection at launch: the first check takes a while.
+        server.options.latency = .milliseconds(800)
+        let launch = Task { await model.start() }
+        let checking = await eventually { model.workspace?.isCheckingStatus == true }
+        XCTAssertTrue(checking, "The check at launch is running")
+        let workspace = try XCTUnwrap(model.workspace)
+        let checkout = workspace.checkout
+
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        XCTAssertEqual(checkout.validationMessage, CheckoutModel.stillCheckingMessage)
+        let clearedEarly = await eventually(timeout: 0.2) { checkout.validationMessage == nil }
+        XCTAssertFalse(clearedEarly, "\"Still checking…\" stays while the check is still running")
+        XCTAssertTrue(workspace.isCheckingStatus)
+
+        await launch.value
+        XCTAssertEqual(checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+        XCTAssertNil(checkout.validationMessage, "Tap to Pay on iPhone works now")
+        XCTAssertEqual(server.calls.filter { $0 == "ownerStatus" }.count, 1, "No second check while the first one runs")
+    }
+
     func testSignOutForgetsTheKeyAndTheWorkspace() async throws {
         let (model, secrets, _) = makeModel(savedKey: FakeServer.ownerKey)
         await model.start()

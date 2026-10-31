@@ -62,7 +62,8 @@ final class CheckoutModel {
         case preparing
         /// Asking the server for a PaymentIntent.
         case creating
-        /// The Tap to Pay screen is up.
+        /// The Tap to Pay screen is up, then (once the card is read) Stripe
+        /// authorizes it: see `isProcessing`.
         case collecting
         /// The card was read; the server is checking with Stripe.
         case confirming
@@ -140,6 +141,13 @@ final class CheckoutModel {
 
     @ObservationIgnored private(set) var active: ActivePayment?
     @ObservationIgnored private var flowTask: Task<Void, Never>?
+    /// Reloading today's payments after one went through. Separate from the
+    /// payment itself, so the next payment can start while the list loads.
+    @ObservationIgnored private var paymentsTask: Task<Void, Never>?
+    /// Bumped by every load of today's payments. Loads can overlap (the
+    /// reloads after two quick payments, pull to refresh), so a slow answer
+    /// for an older load never replaces a newer one.
+    @ObservationIgnored private var paymentsGeneration = 0
     /// Telling Stripe about PaymentIntents given up on, one after another and
     /// never while the reader is busy with a payment (it does one thing at a time).
     @ObservationIgnored private var abandoning: Task<Void, Never>?
@@ -158,6 +166,9 @@ final class CheckoutModel {
     /// Called when a payment connected real Tap to Pay (the first time on
     /// this iPhone, that's its setup).
     @ObservationIgnored var onReaderConnected: (() -> Void)?
+    /// Called when Tap to Pay on iPhone is tapped before the server said
+    /// whether Stripe is set up, so the app checks again.
+    @ObservationIgnored var onStatusNeeded: (() -> Void)?
 
     init(
         api: any OwnerAPI,
@@ -206,6 +217,15 @@ final class CheckoutModel {
     /// Stripe's status from `GET /api/owner/me`.
     func update(stripe: IzzyAPI.StripeStatus?) {
         self.stripe = stripe
+    }
+
+    static let stillCheckingMessage = "Still checking whether card payments are set up. Try again in a moment."
+
+    /// A check of Stripe's status with the server finished, so "Still
+    /// checking…" is out of date: either a card on Take payment says what's
+    /// wrong, or Tap to Pay on iPhone works.
+    func statusCheckFinished() {
+        if validationMessage == Self.stillCheckingMessage { validationMessage = nil }
     }
 
     /// Switches to the simulated reader: nothing is sent to the server.
@@ -282,7 +302,9 @@ final class CheckoutModel {
             return
         }
         if case .checking = mode {
-            validationMessage = "Still checking whether card payments are set up. Try again in a moment."
+            validationMessage = Self.stillCheckingMessage
+            // The last check may have failed (offline at launch): check again now.
+            onStatusNeeded?()
             return
         }
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -338,14 +360,30 @@ final class CheckoutModel {
         }
     }
 
+    /// The card was read: Stripe is authorizing it, or the server is checking
+    /// it. The screen says Processing.
+    var isProcessing: Bool {
+        switch phase {
+        case .confirming: return true
+        case .collecting: return currentTerminal.state == .processing
+        default: return false
+        }
+    }
+
+    /// Whether Cancel can still stop the payment: while Tap to Pay gets ready
+    /// or waits for the card, not once the card is read.
+    var canCancel: Bool {
+        switch phase {
+        case .preparing: return true
+        case .collecting: return !isProcessing
+        default: return false
+        }
+    }
+
     /// Stops connecting or waiting for the card.
     func cancel() {
-        switch phase {
-        case .preparing, .collecting:
-            currentTerminal.cancel()
-        default:
-            break
-        }
+        guard canCancel else { return }
+        currentTerminal.cancel()
     }
 
     /// Back to the amount after a decline, cancellation or error. The same
@@ -381,9 +419,10 @@ final class CheckoutModel {
         }
     }
 
-    /// Waits for the running payment step, for tests.
+    /// Waits for the running payment step (and the list it reloads), for tests.
     func waitUntilSettled() async {
         await flowTask?.value
+        await paymentsTask?.value
     }
 
     private func run(_ request: IzzyAPI.NewPayment) async {
@@ -415,11 +454,13 @@ final class CheckoutModel {
         if let active, active.request == request, active.isPractice == isPractice {
             payment = active
         } else {
+            // Shows "Starting the payment" (no Cancel) while the old
+            // PaymentIntent is let go: Cancel couldn't stop that wait.
+            phase = .creating
             if let active {
                 discard(active)
                 await abandoning?.value
             }
-            phase = .creating
             if isPractice {
                 payment = ActivePayment(paymentIntentId: nil, clientSecret: "practice_\(UUID().uuidString)", request: request, isPractice: true)
             } else {
@@ -491,7 +532,9 @@ final class CheckoutModel {
                 if let appointmentId = recorded.appointmentId ?? payment.request.appointmentId {
                     onPaid?(appointmentId)
                 }
-                await loadPayments()
+                // Not awaited: the payment is done, and Tap to Pay must work
+                // for the next customer even while the list is slow to load.
+                paymentsTask = Task { await self.loadPayments() }
             } else if recorded.status == "processing" {
                 active?.needsCheck = true
                 phase = .outcomeUnknown("Stripe is still processing this payment. Check again in a moment before taking another payment.")
@@ -534,17 +577,21 @@ final class CheckoutModel {
     // MARK: Today's payments
 
     func loadPayments() async {
+        paymentsGeneration += 1
+        let requested = paymentsGeneration
         isLoadingPayments = true
-        defer { isLoadingPayments = false }
+        defer { if requested == paymentsGeneration { isLoadingPayments = false } }
         do {
             let today = shopTime.day(containing: clock())
             let payments = try await api.payments(on: today)
+            guard requested == paymentsGeneration else { return }
             // Only money that came in: PaymentIntents the customer never paid stay out.
             todaysPayments = payments.filter(\.isSucceeded).sorted { $0.createdAt > $1.createdAt }
             paymentsError = nil
         } catch is CancellationError {
             return
         } catch {
+            guard requested == paymentsGeneration else { return }
             paymentsError = Self.message(for: error)
         }
     }
@@ -562,7 +609,10 @@ final class CheckoutModel {
         let now = clock()
         var changed = false
         var recovered: [Int] = []
-        for (id, created) in pending.entries where id != active?.paymentIntentId {
+        // Oldest first, each looked at again just before it's checked: the
+        // payment on screen, or one it just finished meanwhile, isn't from earlier.
+        for (id, created) in pending.entries.sorted(by: { $0.value < $1.value }) {
+            guard pending.entries[id] != nil, id != active?.paymentIntentId else { continue }
             do {
                 let payment = try await api.completePayment(id: id)
                 if payment.isSucceeded || payment.status == "canceled" {

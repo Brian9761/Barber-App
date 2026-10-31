@@ -38,8 +38,10 @@ protocol PaymentTerminal: AnyObject {
     /// - Throws: `TerminalError`.
     func collect(amountCents: Int, clientSecret: String) async throws -> TerminalPaymentResult
 
-    /// Stops whatever the reader is doing (connecting or waiting for a card).
-    /// The running `prepare` or `collect` then throws `TerminalError.cancelled`.
+    /// Stops whatever the reader is doing (connecting, waiting for Stripe to
+    /// reconnect, looking up the payment or waiting for a card). The running
+    /// `prepare` or `collect` then throws `TerminalError.cancelled`. Once the
+    /// card is read (`.processing`), the payment can't be stopped.
     func cancel()
 
     /// Best effort: tells Stripe a PaymentIntent that was never charged won't
@@ -48,6 +50,27 @@ protocol PaymentTerminal: AnyObject {
 
     /// Disconnects and forgets the account's credentials (on sign out).
     func disconnect() async
+}
+
+/// Waiting for Stripe while it connects by itself (after the app was in the
+/// background), in a way Cancel can stop.
+enum ReaderWait {
+    /// Waits while `isConnecting()` is true, checking every `interval`, at
+    /// most `attempts` times (two minutes by default, Apple's longest
+    /// configuration). Stops as soon as `isCancelled()` is true, so the owner
+    /// never waits for Stripe after tapping Cancel.
+    @MainActor
+    static func whileConnecting(
+        _ isConnecting: () -> Bool,
+        unlessCancelled isCancelled: () -> Bool,
+        every interval: Duration = .milliseconds(250),
+        attempts: Int = 480
+    ) async {
+        for _ in 0..<attempts {
+            guard isConnecting(), !isCancelled() else { return }
+            try? await Task.sleep(for: interval)
+        }
+    }
 }
 
 /// Where a reader is.

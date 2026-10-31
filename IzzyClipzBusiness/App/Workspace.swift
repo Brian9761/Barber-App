@@ -74,6 +74,9 @@ final class Workspace {
         checkout.onReaderConnected = { [weak self] in
             self?.noteTapToPayConnected()
         }
+        checkout.onStatusNeeded = { [weak self] in
+            Task { await self?.recheckStatusIfNeeded() }
+        }
         #if canImport(StripeTerminal)
         if case .live = environment.backend {
             TerminalTokenProvider.shared.use { try await api.connectionToken() }
@@ -113,12 +116,30 @@ final class Workspace {
             ownerStatus = status
             statusError = nil
             checkout.update(stripe: status.stripe)
+            checkout.statusCheckFinished()
         } catch is CancellationError {
             return
         } catch {
             if case .unauthorized? = error as? APIError { keyWasRejected = true }
             statusError = AppModel.signInMessage(for: error)
+            checkout.statusCheckFinished()
         }
+    }
+
+    /// Why Take payment can't tell whether cards can be taken: the last check
+    /// with the server failed (say the iPhone was offline at launch). Nil
+    /// while a check is running or once Stripe's status is known.
+    var paymentsStatusError: String? {
+        guard case .checking = checkout.mode, !isCheckingStatus else { return nil }
+        return statusError
+    }
+
+    /// Checks the server again when Take payment still doesn't know whether
+    /// Stripe is set up and no check is running (Take payment opened, or
+    /// Tap to Pay on iPhone tapped, after a check that failed).
+    func recheckStatusIfNeeded() async {
+        guard case .checking = checkout.mode, !isCheckingStatus else { return }
+        await refreshStatus()
     }
 
     /// `GET /api/health`, for Settings.

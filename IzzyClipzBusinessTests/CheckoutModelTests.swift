@@ -221,6 +221,89 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(api.createdPayments, 1)
     }
 
+    func testTheNextPaymentStartsWhileTodaysPaymentsAreStillLoading() async {
+        // A slow shop connection: the payments list takes a while after each payment.
+        var listIsSlow = true
+        api.paymentsHandler = { @MainActor [api] day in
+            while listIsSlow { try await Task.sleep(for: .milliseconds(10)) }
+            return try await api!.base.payments(on: day)
+        }
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 3500)
+        checkout.charge()
+        let paid = await eventually { if case .succeeded = checkout.phase { return true } else { return false } }
+        XCTAssertTrue(paid, "Got \(checkout.phase)")
+        let loading = await eventually { checkout.isLoadingPayments }
+        XCTAssertTrue(loading, "The list is still loading")
+        checkout.reset()
+
+        // The next customer: Tap to Pay on iPhone starts their payment straight away.
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        let started = await eventually(timeout: 2) { checkout.phase != .editing }
+        XCTAssertTrue(started, "Tap to Pay on iPhone did nothing while the list was loading")
+        listIsSlow = false
+        await checkout.waitUntilSettled()
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(receipt.amountCents, 2000)
+        XCTAssertEqual(api.createdPayments, 2)
+        let loaded = await eventually { checkout.todaysPayments.contains { $0.amountCents == 2000 } }
+        XCTAssertTrue(loaded, "The list still shows the new payment once it loads")
+    }
+
+    func testALateListFromBeforeTheLastPaymentDoesntReplaceTheNewerOne() async {
+        await takeTwoPaymentsWhileTheFirstReloadAnswersLast { earlier in earlier }
+    }
+
+    func testALateListThatFailsDoesntPutAnErrorOverTheNewerOne() async {
+        await takeTwoPaymentsWhileTheFirstReloadAnswersLast { _ in throw APIError.offline }
+    }
+
+    /// Takes $35, then $20. The list reload after the $35 reads the server
+    /// straight away but answers (with `lateAnswer`) only after the reload
+    /// after the $20 is done, as when the Wi-Fi drops and the phone moves to
+    /// cellular. That late answer is out of date: the list keeps both payments.
+    private func takeTwoPaymentsWhileTheFirstReloadAnswersLast(
+        _ lateAnswer: @escaping ([IzzyAPI.Payment]) throws -> [IzzyAPI.Payment]
+    ) async {
+        var reloads = 0
+        var releaseFirst = false
+        var firstAnswered = false
+        api.paymentsHandler = { @MainActor [api] day in
+            reloads += 1
+            let reload = reloads
+            let payments = try await api!.base.payments(on: day)
+            guard reload == 1 else { return payments }
+            while !releaseFirst { try await Task.sleep(for: .milliseconds(10)) }
+            defer { firstAnswered = true }
+            return try lateAnswer(payments)
+        }
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 3500)
+        checkout.charge()
+        let firstReload = await eventually { reloads == 1 }
+        XCTAssertTrue(firstReload, "Got \(checkout.phase)")
+        checkout.reset()
+
+        await charge(checkout, cents: 2000)
+        guard case .succeeded = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(reloads, 2)
+        XCTAssertTrue(checkout.todaysPayments.contains { $0.amountCents == 3500 })
+        XCTAssertTrue(checkout.todaysPayments.contains { $0.amountCents == 2000 })
+        XCTAssertFalse(checkout.isLoadingPayments, "The newest list is in")
+
+        releaseFirst = true
+        let answered = await eventually { firstAnswered }
+        XCTAssertTrue(answered)
+        let replaced = await eventually(timeout: 0.3) {
+            !checkout.todaysPayments.contains { $0.amountCents == 2000 } || checkout.paymentsError != nil
+        }
+        XCTAssertFalse(replaced, "The late answer replaced the newer list: \(checkout.todaysPayments.map(\.amountCents)), \(checkout.paymentsError ?? "no error")")
+        XCTAssertTrue(checkout.todaysPayments.contains { $0.amountCents == 3500 })
+        XCTAssertNil(checkout.paymentsError)
+        XCTAssertFalse(checkout.isLoadingPayments)
+    }
+
     // MARK: Not configured
 
     func testStripeNotConfiguredExplainsAndOffersPractice() async {
@@ -302,6 +385,27 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(api.createdPayments, 0, "Nothing was created before the reader was ready")
     }
 
+    func testCancelBeforeTheCardIsReadStopsThePayment() async {
+        // The reader takes a moment before the card is read (Stripe looks the
+        // payment up, then the customer taps): Cancel works all that time.
+        terminal.stepDelay = .milliseconds(300)
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        let collecting = await eventually { checkout.phase == .collecting }
+        XCTAssertTrue(collecting, "Got \(checkout.phase)")
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(checkout.phase, .cancelled, "Cancel stopped the payment")
+        XCTAssertFalse(harness.server.payments.contains { $0.payment.isSucceeded && $0.payment.amountCents == 2000 }, "Nothing was charged")
+
+        // Trying again uses the same PaymentIntent and goes through.
+        checkout.tryAgain()
+        await checkout.waitUntilSettled()
+        guard case .succeeded = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(api.createdPayments, 1)
+    }
+
     // MARK: Entry
 
     func testAmountsOutsideTheServersRangeAreExplained() async {
@@ -381,6 +485,33 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertFalse(harness.server.payments.contains { $0.payment.isSucceeded && $0.payment.amountCents == 2000 })
     }
 
+    func testOnceTheCardIsReadTheScreenSaysProcessingAndCancelIsGone() async {
+        terminal = SimulatedPaymentTerminal(stepDelay: .milliseconds(300))
+        let server = harness.server
+        terminal.onApproved = { server.cardApproved(clientSecret: $0) }
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        let waiting = await eventually { self.terminal.pendingTap != nil }
+        XCTAssertTrue(waiting)
+        XCTAssertFalse(checkout.isProcessing, "Waiting for the card")
+        XCTAssertTrue(checkout.canCancel)
+
+        // The customer taps: the reader authorizes the card before the server checks it.
+        terminal.choose(.approve)
+        let processing = await eventually { checkout.isProcessing }
+        XCTAssertTrue(processing, "Got \(checkout.phase)")
+        XCTAssertEqual(checkout.phase, .collecting, "Still at the reader, before the server's check")
+        XCTAssertEqual(terminal.state, .processing)
+        XCTAssertFalse(checkout.canCancel, "No Cancel once the card is read")
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(receipt.amountCents, 2000)
+        XCTAssertFalse(checkout.isProcessing)
+        XCTAssertFalse(checkout.canCancel)
+    }
+
     // MARK: Payments today and recovery
 
     func testTodaysPaymentsListOnlyWhatSucceeded() async {
@@ -414,6 +545,47 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(paidAppointments, [andre.id])
         XCTAssertTrue(checkout.todaysPayments.contains { $0.id == created.paymentIntentId })
         XCTAssertEqual(checkout.recoveryNotice, "A $55.00 card payment from earlier went through and is now recorded. Don't charge it again.")
+    }
+
+    func testThePaymentJustTakenIsNeverReportedAsOneFromEarlier() async throws {
+        // An older PaymentIntent that was never charged: the app closed after its decline.
+        let older = try await harness.api.createPayment(.init(amountCents: 700))
+        pending.add(older.paymentIntentId, at: TestClock.now.addingTimeInterval(-600))
+        var checked: [String] = []
+        var olderIsSlow = true
+        api.completeHandler = { @MainActor [api] id in
+            checked.append(id)
+            if id == older.paymentIntentId {
+                while olderIsSlow { try await Task.sleep(for: .milliseconds(10)) }
+            }
+            return try await api!.base.completePayment(id: id)
+        }
+        let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        terminal.automaticOutcome = nil
+        let checkout = makeCheckout()
+        checkout.prefill(.init(appointment: andre, catalog: .izzyClipz))
+        checkout.charge()
+        let waiting = await eventually { self.terminal.pendingTap != nil }
+        XCTAssertTrue(waiting)
+        let current = try XCTUnwrap(checkout.active?.paymentIntentId)
+
+        // The app comes back to the foreground mid-payment (Notification Center was
+        // pulled down): it checks what's pending, and the older one is slow to answer.
+        let sync = Task { await checkout.syncPendingPayments() }
+        let checkingOlder = await eventually { checked == [older.paymentIntentId] }
+        XCTAssertTrue(checkingOlder, "Checked: \(checked)")
+
+        // Meanwhile the customer taps and this payment goes through.
+        terminal.choose(.approve)
+        await checkout.waitUntilSettled()
+        guard case .succeeded = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        olderIsSlow = false
+        await sync.value
+
+        XCTAssertNil(checkout.recoveryNotice, "The payment just taken isn't \"a card payment from earlier\"")
+        XCTAssertEqual(paidAppointments, [andre.id], "Marked paid once")
+        XCTAssertEqual(checked, [older.paymentIntentId, current], "The payment just taken was confirmed once, by itself")
+        XCTAssertNotNil(pending.entries[older.paymentIntentId], "Recent and not paid: still kept")
     }
 
     func testPendingPaymentsStoreOnlyIDsAndDates() {

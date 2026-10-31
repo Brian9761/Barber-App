@@ -41,7 +41,8 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
     /// The sheet's request, while one is up.
     private(set) var pendingTap: PendingTap?
     private var continuation: CheckedContinuation<Outcome, Never>?
-    /// Set by `cancel()` while preparing, so "Cancel" works there too.
+    /// Set by `cancel()`, so Cancel also works while preparing and before the
+    /// pretend card is read, like Stripe's reader.
     private var cancelRequested = false
 
     /// How many times `collect` ran, and with which client secrets.
@@ -71,6 +72,7 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
     }
 
     func collect(amountCents: Int, clientSecret: String) async throws -> TerminalPaymentResult {
+        cancelRequested = false
         if state != .ready {
             try await prepare(locationId: "simulated")
         }
@@ -79,7 +81,7 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
         let outcome: Outcome
         if let automaticOutcome {
             try? await pause()
-            outcome = automaticOutcome
+            outcome = cancelRequested ? .customerCancels : automaticOutcome
         } else {
             outcome = await withTaskCancellationHandler {
                 await withCheckedContinuation { continuation in
@@ -115,7 +117,9 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
     }
 
     func cancel() {
-        if case .preparing = state { cancelRequested = true }
+        // Like Stripe's reader: once the card is read, the payment goes on.
+        guard state != .processing else { return }
+        cancelRequested = true
         choose(.customerCancels)
     }
 
