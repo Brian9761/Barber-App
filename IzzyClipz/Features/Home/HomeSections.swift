@@ -214,12 +214,13 @@ struct HomeBookSection: View {
         let upcoming = appointments.upcoming
         // Re-checked every minute, so an appointment that's over drops off.
         TimelineView(.everyMinute) { context in
-            let next = upcoming.first { $0.isUpcoming(at: context.date) && $0.status == .booked }
+            // The next one that's on, or one the shop cancelled, so the client hears about it.
+            let next = upcoming.first { $0.isUpcoming(at: context.date) && ($0.status == .booked || $0.isCancelledByShop) }
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 bookButton
                 if let next {
-                    AppointmentSummaryCard(appointment: next)
-                        // A new card when the next one changes, so an open "Remove?" can't carry
+                    AppointmentCard(appointment: next, isNext: true)
+                        // A new card when the next one changes, so an open "Cancel?" can't carry
                         // over to another appointment.
                         .id(next.id)
                 } else {

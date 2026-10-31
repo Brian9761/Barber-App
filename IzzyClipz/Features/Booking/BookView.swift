@@ -117,20 +117,42 @@ private struct BookStepUnavailableView: View {
     }
 }
 
-/// "Your appointments": everything that hasn't ended yet, soonest first.
+/// "Your appointments": everything that hasn't ended yet, soonest first (cancelled ones too, so a
+/// cancellation by the shop isn't missed), then the last 30 days' under "Past". Pull to refresh
+/// checks them all with the shop.
 private struct BookAppointmentsSection: View {
     let now: Date
     @Environment(AppointmentStore.self) private var store
 
     var body: some View {
-        let upcoming = store.upcoming.filter { $0.isUpcoming(at: now) }
-        if !upcoming.isEmpty {
+        let upcoming = store.appointments.filter { $0.isUpcoming(at: now) }
+        let past = store.appointments.filter { !$0.isUpcoming(at: now) }.reversed().prefix(5)
+        if !upcoming.isEmpty || !past.isEmpty {
             VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
                 SectionHeader("Your appointments")
+                if let error = store.refreshError {
+                    StaleDataNote(text: "Couldn't check for changes. \(error.userMessage)")
+                }
+                if upcoming.isEmpty {
+                    Text("Nothing booked right now.")
+                        .textRole(.body)
+                        .foregroundStyle(Theme.smoke)
+                }
                 ForEach(upcoming) { saved in
-                    AppointmentSummaryCard(appointment: saved)
+                    AppointmentCard(appointment: saved, isNext: saved.id == store.next?.id)
+                }
+                if !past.isEmpty {
+                    Text("Past")
+                        .textRole(.headline)
+                        .foregroundStyle(Theme.bone)
+                        .padding(.top, Theme.Space.s)
+                        .accessibilityAddTraits(.isHeader)
+                    ForEach(Array(past)) { saved in
+                        AppointmentCard(appointment: saved)
+                    }
                 }
             }
+            .accessibilityIdentifier("yourAppointments")
         }
     }
 }
