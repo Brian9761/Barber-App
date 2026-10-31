@@ -64,6 +64,24 @@ struct DirectionsButton<Label: View>: View {
 /// the location glyph. The text sits only where the fade is at least 75% ink.
 struct DirectionsTile: View {
     private let address = AppData.shop.address
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    /// 80% ink from 40% of the way down, where the two lines start up to xLarge text (at the
+    /// default size they start at about 47%). From xxLarge they reach higher up the tile than any
+    /// fade can follow, so the whole photo sits under 80% ink.
+    private var scrim: [Gradient.Stop] {
+        if dynamicTypeSize >= .xxLarge {
+            return [
+                .init(color: Theme.ink.opacity(0.80), location: 0),
+                .init(color: Theme.ink.opacity(0.88), location: 1),
+            ]
+        }
+        return [
+            .init(color: Theme.ink.opacity(0.15), location: 0),
+            .init(color: Theme.ink.opacity(0.80), location: 0.4),
+            .init(color: Theme.ink.opacity(0.88), location: 1),
+        ]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
@@ -89,15 +107,7 @@ struct DirectionsTile: View {
         .background {
             ZStack {
                 FillImage(name: Asset.storefront)
-                LinearGradient(
-                    stops: [
-                        .init(color: Theme.ink.opacity(0.15), location: 0),
-                        .init(color: Theme.ink.opacity(0.80), location: 0.5),
-                        .init(color: Theme.ink.opacity(0.88), location: 1),
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
+                LinearGradient(stops: scrim, startPoint: .top, endPoint: .bottom)
             }
             .accessibilityHidden(true)
         }

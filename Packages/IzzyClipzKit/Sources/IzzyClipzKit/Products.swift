@@ -264,6 +264,9 @@ public struct ProductCatalog: Sendable {
 /// A product's current price and stock on the sponsor's store.
 public struct LivePrice: Hashable, Sendable {
     public let cents: Int
+    /// Whether that variant (the one shown, and the one a cart link adds) is in
+    /// stock. Another size or pack being in stock doesn't count: a cart link
+    /// can't add the variant that's sold out.
     public let isAvailable: Bool
     /// The Shopify variant whose price this is (the cheapest one), so a cart
     /// link adds the item that was shown. `nil` when the feed didn't say.
@@ -284,14 +287,18 @@ public enum ShopifyPrices {
     }
 
     /// Parses a Shopify `/products.json` response: handle -> lowest variant price,
-    /// that variant's ID, and whether any variant is available.
+    /// that variant's ID, and whether that variant is available.
     ///
     /// Prices are strings like "17.99"; they're turned into cents by hand, never
     /// through floating point. Variants without a readable, non-zero price are
     /// ignored, products left with no variants are skipped, and a variant
     /// without an "available" flag counts as available. When several variants
-    /// share the lowest price, the first one listed wins. A missing or
-    /// unreadable variant "id" leaves `variantID` empty rather than dropping the price.
+    /// share the lowest price, the first one in stock wins, or the first one
+    /// listed when none is. A missing or unreadable variant "id" leaves
+    /// `variantID` empty rather than dropping the price.
+    ///
+    /// Availability is the shown variant's own: Texture Powder's single can be
+    /// sold out while its 12-count display box isn't, and the app sells the single.
     public static func parse(_ data: Data) throws -> [String: LivePrice] {
         let feed: Feed
         do {
@@ -303,11 +310,12 @@ public enum ShopifyPrices {
         var prices: [String: LivePrice] = [:]
         for product in feed.products.decodedValues() where prices[product.handle] == nil {
             let variants = product.variants.decodedValues()
-            // `min(by:)` keeps the first of equal elements.
-            guard let lowest = variants.min(by: { $0.cents < $1.cents }) else { continue }
+            // Cheapest first, then in stock first; `min(by:)` keeps the first of equal elements.
+            guard let lowest = variants.min(by: { ($0.cents, $0.isAvailable ? 0 : 1) < ($1.cents, $1.isAvailable ? 0 : 1) })
+            else { continue }
             prices[product.handle] = LivePrice(
                 cents: lowest.cents,
-                isAvailable: variants.contains(where: \.isAvailable),
+                isAvailable: lowest.isAvailable,
                 variantID: lowest.id
             )
         }

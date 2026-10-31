@@ -38,11 +38,21 @@ struct RootView: View {
             .allowsHitTesting(!isKeyboardVisible)
             .accessibilityHidden(isKeyboardVisible)
         }
+        // Only a keyboard over the tabs moves the bar. One in a sheet (Squire's or Bravo's pages,
+        // the calendar editor) leaves the bar and the five tab layouts alone under it.
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            isKeyboardVisible = true
+            if router.sheet == nil {
+                isKeyboardVisible = true
+            }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
             isKeyboardVisible = false
+        }
+        // Every tab stays alive, so a text field on one keeps the keyboard when another is
+        // selected, and with the bar hidden there would be no way back. A switch the app makes
+        // while the client types (a notification tap that opens Book) ends the typing first.
+        .onChange(of: router.selectedTab) {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         }
         .background {
             GeometryReader { proxy in

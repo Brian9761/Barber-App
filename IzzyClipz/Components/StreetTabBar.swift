@@ -127,6 +127,8 @@ struct StreetTabBar: View {
                 .offset(y: -Self.indicatorRise)
         }
         .accessibilityElement(children: .contain)
+        // VoiceOver reads each button as a tab ("Services, tab, 2 of 5"), as on a system tab bar.
+        .accessibilityAddTraits(.isTabBar)
     }
 
     /// The bone capsule, with a slightly darker 2 pt edge along the bottom like a sneaker's sole.
