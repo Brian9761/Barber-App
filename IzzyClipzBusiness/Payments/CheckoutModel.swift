@@ -143,6 +143,7 @@ final class CheckoutModel {
     /// Telling Stripe about PaymentIntents given up on, one after another and
     /// never while the reader is busy with a payment (it does one thing at a time).
     @ObservationIgnored private var abandoning: Task<Void, Never>?
+    @ObservationIgnored private var isSyncingPending = false
 
     let terminal: any PaymentTerminal
     let practiceTerminal: SimulatedPaymentTerminal
@@ -555,7 +556,9 @@ final class CheckoutModel {
     /// Asks the server about payments left unconfirmed by an earlier run (the
     /// app closed mid-payment, the network dropped).
     func syncPendingPayments() async {
-        guard !pending.entries.isEmpty else { return }
+        guard !pending.entries.isEmpty, !isSyncingPending else { return }
+        isSyncingPending = true
+        defer { isSyncingPending = false }
         let now = clock()
         var changed = false
         var recovered: [Int] = []
