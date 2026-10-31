@@ -40,7 +40,8 @@ protocol PaymentTerminal: AnyObject {
 
     /// Stops whatever the reader is doing (connecting, waiting for Stripe to
     /// reconnect, looking up the payment or waiting for a card). The running
-    /// `prepare` or `collect` then throws `TerminalError.cancelled`.
+    /// `prepare` or `collect` then throws `TerminalError.cancelled`. Once the
+    /// card is read (`.processing`), the payment can't be stopped.
     func cancel()
 
     /// Best effort: tells Stripe a PaymentIntent that was never charged won't

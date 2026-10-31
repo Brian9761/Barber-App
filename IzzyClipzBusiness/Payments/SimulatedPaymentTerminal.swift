@@ -117,6 +117,8 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
     }
 
     func cancel() {
+        // Like Stripe's reader: once the card is read, the payment goes on.
+        guard state != .processing else { return }
         cancelRequested = true
         choose(.customerCancels)
     }

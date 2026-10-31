@@ -12,9 +12,10 @@ import UIKit
 /// - `prepare` connects the iPhone's built-in reader to the shop's Terminal
 ///   location. The first connect on a phone shows Apple's terms (once per
 ///   Stripe account) and configures the phone, reported as progress.
-/// - `collect` retrieves the PaymentIntent the server created and processes
-///   it: Apple's Tap to Pay screen takes the card. Retries reuse the same
-///   PaymentIntent, so one checkout can never charge a card twice.
+/// - `collect` retrieves the PaymentIntent the server created, collects the
+///   card on Apple's Tap to Pay screen, then confirms it with Stripe (the app
+///   says Processing in between). Retries reuse the same PaymentIntent, so
+///   one checkout can never charge a card twice.
 /// - Stripe calls the delegate on its own threads; `TapToPayReaderEvents`
 ///   moves every event to the main actor, in order, before touching state.
 @MainActor
@@ -215,16 +216,20 @@ final class StripeTapToPayTerminal: PaymentTerminal {
         // looked up: stop before Apple's Tap to Pay screen opens.
         if cancelRequested { throw TerminalError.cancelled }
 
-        state = .collecting
         readerMessage = nil
         do {
-            let updated: PaymentIntent
-            if intent.status == .requiresConfirmation {
-                // The card was read but confirming failed (a network blip): confirm the same card again.
-                updated = try await confirm(intent)
-            } else {
-                updated = try await process(intent)
+            var collected = intent
+            if intent.status != .requiresConfirmation {
+                // Apple's Tap to Pay screen takes the card.
+                state = .collecting
+                collected = try await collectPaymentMethod(intent)
+                // Kept, so if confirming fails the same card is confirmed again.
+                intents[clientSecret] = collected
             }
+            // The card was read (now, or before confirming failed on a network
+            // blip): Stripe authorizes it while the app says Processing.
+            state = .processing
+            let updated = try await confirm(collected)
             intents[clientSecret] = updated
             paymentCancelable = nil
             state = .ready
@@ -239,6 +244,8 @@ final class StripeTapToPayTerminal: PaymentTerminal {
                 throw TerminalError.declined(message: "The card wasn't charged. Ask for another card and try again.")
             }
         } catch let error as TerminalError {
+            // Nobody knows if the card was charged: look the PaymentIntent up again next time.
+            if error == .outcomeUnknown { intents[clientSecret] = nil }
             paymentCancelable = nil
             state = Terminal.shared.connectionStatus == .connected ? .ready : .idle
             throw error
@@ -258,13 +265,15 @@ final class StripeTapToPayTerminal: PaymentTerminal {
         }
     }
 
-    private func process(_ intent: PaymentIntent) async throws -> PaymentIntent {
+    /// Apple's Tap to Pay screen reads the card. Nothing is charged yet:
+    /// `confirm` does that.
+    private func collectPaymentMethod(_ intent: PaymentIntent) async throws -> PaymentIntent {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<PaymentIntent, Error>) in
-            paymentCancelable = Terminal.shared.processPaymentIntent(intent, collectConfig: nil, confirmConfig: nil) { result, error in
+            paymentCancelable = Terminal.shared.collectPaymentMethod(intent) { result, error in
                 if let result {
                     continuation.resume(returning: result)
                 } else {
-                    continuation.resume(throwing: error ?? TerminalError.outcomeUnknown)
+                    continuation.resume(throwing: error ?? TerminalError.failed(message: "Tap to Pay couldn't read the card. No card was charged. Try again."))
                 }
             }
         }
@@ -283,6 +292,9 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     }
 
     func cancel() {
+        // Once the card is read, Stripe is authorizing it: stopping that could
+        // leave nobody knowing whether the card was charged.
+        guard state != .processing else { return }
         cancelRequested = true
         paymentCancelable?.cancel { _ in }
         paymentCancelable = nil

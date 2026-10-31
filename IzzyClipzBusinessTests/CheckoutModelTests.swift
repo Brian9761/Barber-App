@@ -432,6 +432,33 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertFalse(harness.server.payments.contains { $0.payment.isSucceeded && $0.payment.amountCents == 2000 })
     }
 
+    func testOnceTheCardIsReadTheScreenSaysProcessingAndCancelIsGone() async {
+        terminal = SimulatedPaymentTerminal(stepDelay: .milliseconds(300))
+        let server = harness.server
+        terminal.onApproved = { server.cardApproved(clientSecret: $0) }
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        let waiting = await eventually { self.terminal.pendingTap != nil }
+        XCTAssertTrue(waiting)
+        XCTAssertFalse(checkout.isProcessing, "Waiting for the card")
+        XCTAssertTrue(checkout.canCancel)
+
+        // The customer taps: the reader authorizes the card before the server checks it.
+        terminal.choose(.approve)
+        let processing = await eventually { checkout.isProcessing }
+        XCTAssertTrue(processing, "Got \(checkout.phase)")
+        XCTAssertEqual(checkout.phase, .collecting, "Still at the reader, before the server's check")
+        XCTAssertEqual(terminal.state, .processing)
+        XCTAssertFalse(checkout.canCancel, "No Cancel once the card is read")
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(receipt.amountCents, 2000)
+        XCTAssertFalse(checkout.isProcessing)
+        XCTAssertFalse(checkout.canCancel)
+    }
+
     // MARK: Payments today and recovery
 
     func testTodaysPaymentsListOnlyWhatSucceeded() async {

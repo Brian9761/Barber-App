@@ -62,7 +62,8 @@ final class CheckoutModel {
         case preparing
         /// Asking the server for a PaymentIntent.
         case creating
-        /// The Tap to Pay screen is up.
+        /// The Tap to Pay screen is up, then (once the card is read) Stripe
+        /// authorizes it: see `isProcessing`.
         case collecting
         /// The card was read; the server is checking with Stripe.
         case confirming
@@ -346,14 +347,30 @@ final class CheckoutModel {
         }
     }
 
+    /// The card was read: Stripe is authorizing it, or the server is checking
+    /// it. The screen says Processing.
+    var isProcessing: Bool {
+        switch phase {
+        case .confirming: return true
+        case .collecting: return currentTerminal.state == .processing
+        default: return false
+        }
+    }
+
+    /// Whether Cancel can still stop the payment: while Tap to Pay gets ready
+    /// or waits for the card, not once the card is read.
+    var canCancel: Bool {
+        switch phase {
+        case .preparing: return true
+        case .collecting: return !isProcessing
+        default: return false
+        }
+    }
+
     /// Stops connecting or waiting for the card.
     func cancel() {
-        switch phase {
-        case .preparing, .collecting:
-            currentTerminal.cancel()
-        default:
-            break
-        }
+        guard canCancel else { return }
+        currentTerminal.cancel()
     }
 
     /// Back to the amount after a decline, cancellation or error. The same
