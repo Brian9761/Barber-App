@@ -60,6 +60,7 @@ struct TakePaymentView: View {
                 PaymentProgressView(checkout: checkout, workspace: workspace)
             }
             .task {
+                await workspace.recheckStatusIfNeeded()
                 await checkout.loadPayments()
                 await checkout.syncPendingPayments()
             }
@@ -72,11 +73,25 @@ struct TakePaymentView: View {
     private var modeSection: some View {
         switch checkout.mode {
         case .checking:
-            HStack(spacing: 8) {
-                ProgressView()
-                Text("Checking card payments…").foregroundStyle(.secondary)
+            if let problem = workspace.paymentsStatusError {
+                // The check with the server failed: say why, and offer to check again.
+                IssueCard(issue: TerminalIssue(title: "Can't check card payments", message: problem)) {
+                    Button("Check again") { Task { await workspace.refreshStatus() } }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("checkStripeAgain")
+                    Button("Practice in test mode") { checkout.startPractice() }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("startPractice")
+                }
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("paymentsStatusUnknown")
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Checking card payments…").foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         case .unavailable(let issue):
             IssueCard(issue: issue) {
                 Button("Practice in test mode") { checkout.startPractice() }

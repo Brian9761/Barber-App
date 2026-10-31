@@ -119,6 +119,55 @@ final class SessionTests: XCTestCase {
         XCTAssertEqual(workspace?.checkout.mode, .checking)
     }
 
+    func testTakePaymentSaysWhyItCantCheckAfterAnOfflineLaunchAndChecksAgain() async throws {
+        let (model, _, server) = makeModel(savedKey: FakeServer.ownerKey)
+        server.options.offline = true
+        await model.start()
+        let workspace = try XCTUnwrap(model.workspace)
+        XCTAssertEqual(workspace.checkout.mode, .checking)
+        XCTAssertEqual(
+            workspace.paymentsStatusError, "We couldn't reach the server. Check your internet connection and try again.",
+            "Take payment says why instead of \"Checking card payments…\" for good"
+        )
+
+        // The network is back: opening Take payment checks again by itself.
+        server.options.offline = false
+        await workspace.recheckStatusIfNeeded()
+        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+        XCTAssertNil(workspace.paymentsStatusError)
+
+        // Once Stripe's status is known, opening Take payment doesn't ask the server again.
+        let checks = server.calls.filter { $0 == "ownerStatus" }.count
+        await workspace.recheckStatusIfNeeded()
+        XCTAssertEqual(server.calls.filter { $0 == "ownerStatus" }.count, checks)
+    }
+
+    func testTapToPayAfterAFailedCheckChecksAgain() async throws {
+        let (model, _, server) = makeModel(savedKey: FakeServer.ownerKey)
+        server.options.offline = true
+        await model.start()
+        let workspace = try XCTUnwrap(model.workspace)
+        let checkout = workspace.checkout
+        server.options.offline = false
+
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        XCTAssertEqual(checkout.phase, .editing)
+        XCTAssertEqual(checkout.validationMessage, "Still checking whether card payments are set up. Try again in a moment.")
+        let known = await eventually { checkout.mode != .checking }
+        XCTAssertTrue(known, "Tapping Tap to Pay on iPhone checked with the server again")
+        XCTAssertNil(workspace.paymentsStatusError)
+
+        // Trying again now starts the payment.
+        let reader = try XCTUnwrap(model.environment.terminal as? SimulatedPaymentTerminal)
+        checkout.charge()
+        let started = await eventually { checkout.phase == .collecting && reader.pendingTap != nil }
+        XCTAssertTrue(started, "Got \(checkout.phase)")
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(checkout.phase, .cancelled)
+    }
+
     func testSignOutForgetsTheKeyAndTheWorkspace() async throws {
         let (model, secrets, _) = makeModel(savedKey: FakeServer.ownerKey)
         await model.start()

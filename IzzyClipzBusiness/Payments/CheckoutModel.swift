@@ -158,6 +158,9 @@ final class CheckoutModel {
     /// Called when a payment connected real Tap to Pay (the first time on
     /// this iPhone, that's its setup).
     @ObservationIgnored var onReaderConnected: (() -> Void)?
+    /// Called when Tap to Pay on iPhone is tapped before the server said
+    /// whether Stripe is set up, so the app checks again.
+    @ObservationIgnored var onStatusNeeded: (() -> Void)?
 
     init(
         api: any OwnerAPI,
@@ -283,6 +286,8 @@ final class CheckoutModel {
         }
         if case .checking = mode {
             validationMessage = "Still checking whether card payments are set up. Try again in a moment."
+            // The last check may have failed (offline at launch): check again now.
+            onStatusNeeded?()
             return
         }
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
