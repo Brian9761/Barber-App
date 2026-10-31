@@ -573,7 +573,10 @@ final class CheckoutModel {
         let now = clock()
         var changed = false
         var recovered: [Int] = []
-        for (id, created) in pending.entries where id != active?.paymentIntentId {
+        // Oldest first, each looked at again just before it's checked: the
+        // payment on screen, or one it just finished meanwhile, isn't from earlier.
+        for (id, created) in pending.entries.sorted(by: { $0.value < $1.value }) {
+            guard pending.entries[id] != nil, id != active?.paymentIntentId else { continue }
             do {
                 let payment = try await api.completePayment(id: id)
                 if payment.isSucceeded || payment.status == "canceled" {

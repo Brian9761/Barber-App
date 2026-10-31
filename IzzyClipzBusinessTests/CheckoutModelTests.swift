@@ -446,6 +446,47 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(checkout.recoveryNotice, "A $55.00 card payment from earlier went through and is now recorded. Don't charge it again.")
     }
 
+    func testThePaymentJustTakenIsNeverReportedAsOneFromEarlier() async throws {
+        // An older PaymentIntent that was never charged: the app closed after its decline.
+        let older = try await harness.api.createPayment(.init(amountCents: 700))
+        pending.add(older.paymentIntentId, at: TestClock.now.addingTimeInterval(-600))
+        var checked: [String] = []
+        var olderIsSlow = true
+        api.completeHandler = { @MainActor [api] id in
+            checked.append(id)
+            if id == older.paymentIntentId {
+                while olderIsSlow { try await Task.sleep(for: .milliseconds(10)) }
+            }
+            return try await api!.base.completePayment(id: id)
+        }
+        let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        terminal.automaticOutcome = nil
+        let checkout = makeCheckout()
+        checkout.prefill(.init(appointment: andre, catalog: .izzyClipz))
+        checkout.charge()
+        let waiting = await eventually { self.terminal.pendingTap != nil }
+        XCTAssertTrue(waiting)
+        let current = try XCTUnwrap(checkout.active?.paymentIntentId)
+
+        // The app comes back to the foreground mid-payment (Notification Center was
+        // pulled down): it checks what's pending, and the older one is slow to answer.
+        let sync = Task { await checkout.syncPendingPayments() }
+        let checkingOlder = await eventually { checked == [older.paymentIntentId] }
+        XCTAssertTrue(checkingOlder, "Checked: \(checked)")
+
+        // Meanwhile the customer taps and this payment goes through.
+        terminal.choose(.approve)
+        await checkout.waitUntilSettled()
+        guard case .succeeded = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        olderIsSlow = false
+        await sync.value
+
+        XCTAssertNil(checkout.recoveryNotice, "The payment just taken isn't \"a card payment from earlier\"")
+        XCTAssertEqual(paidAppointments, [andre.id], "Marked paid once")
+        XCTAssertEqual(checked, [older.paymentIntentId, current], "The payment just taken was confirmed once, by itself")
+        XCTAssertNotNil(pending.entries[older.paymentIntentId], "Recent and not paid: still kept")
+    }
+
     func testPendingPaymentsStoreOnlyIDsAndDates() {
         let store = PendingPayments(defaults: makeDefaults())
         store.add("pi_1", at: TestClock.now)
