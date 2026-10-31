@@ -424,11 +424,13 @@ final class CheckoutModel {
         if let active, active.request == request, active.isPractice == isPractice {
             payment = active
         } else {
+            // Shows "Starting the payment" (no Cancel) while the old
+            // PaymentIntent is let go: Cancel couldn't stop that wait.
+            phase = .creating
             if let active {
                 discard(active)
                 await abandoning?.value
             }
-            phase = .creating
             if isPractice {
                 payment = ActivePayment(paymentIntentId: nil, clientSecret: "practice_\(UUID().uuidString)", request: request, isPractice: true)
             } else {

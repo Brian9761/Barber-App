@@ -332,6 +332,27 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(api.createdPayments, 0, "Nothing was created before the reader was ready")
     }
 
+    func testCancelBeforeTheCardIsReadStopsThePayment() async {
+        // The reader takes a moment before the card is read (Stripe looks the
+        // payment up, then the customer taps): Cancel works all that time.
+        terminal.stepDelay = .milliseconds(300)
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        let collecting = await eventually { checkout.phase == .collecting }
+        XCTAssertTrue(collecting, "Got \(checkout.phase)")
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(checkout.phase, .cancelled, "Cancel stopped the payment")
+        XCTAssertFalse(harness.server.payments.contains { $0.payment.isSucceeded && $0.payment.amountCents == 2000 }, "Nothing was charged")
+
+        // Trying again uses the same PaymentIntent and goes through.
+        checkout.tryAgain()
+        await checkout.waitUntilSettled()
+        guard case .succeeded = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(api.createdPayments, 1)
+    }
+
     // MARK: Entry
 
     func testAmountsOutsideTheServersRangeAreExplained() async {

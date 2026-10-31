@@ -41,6 +41,10 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     /// The latest copy of each PaymentIntent this terminal worked on, by client
     /// secret, so a retry continues from where the last attempt stopped.
     @ObservationIgnored private var intents: [String: PaymentIntent] = [:]
+    /// Set by `cancel()`. The running `prepare` or `collect` stops at its next
+    /// step, also where Stripe has nothing to cancel (while it reconnects by
+    /// itself, or while the PaymentIntent is looked up).
+    @ObservationIgnored private var cancelRequested = false
 
     init() {
         events.terminal = self
@@ -57,6 +61,13 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     // MARK: Connecting
 
     func prepare(locationId: String) async throws {
+        cancelRequested = false
+        try await connectIfNeeded(locationId: locationId)
+        // Cancel tapped just as Tap to Pay connected: it stays ready, but this payment stops.
+        if cancelRequested { throw TerminalError.cancelled }
+    }
+
+    private func connectIfNeeded(locationId: String) async throws {
         requestedLocationId = locationId
         if let connectTask {
             // Already connecting (at launch, or coming back to the foreground): wait for it.
@@ -90,6 +101,12 @@ final class StripeTapToPayTerminal: PaymentTerminal {
             break
         @unknown default:
             break
+        }
+        if cancelRequested {
+            // Cancel tapped while waiting for Stripe: don't start connecting. If
+            // Stripe is still reconnecting by itself, its events say how that ends.
+            state = terminal.connectionStatus == .reconnecting ? .reconnecting : .idle
+            throw TerminalError.cancelled
         }
         let task = Task { try await self.connect(locationId: locationId) }
         connectTask = task
@@ -144,26 +161,25 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     }
 
     /// Waits (up to two minutes, Apple's longest configuration) while Stripe
-    /// is connecting or reconnecting by itself.
+    /// is connecting or reconnecting by itself, or until Cancel is tapped.
     private func waitWhileConnecting() async {
-        for _ in 0..<480 {
+        await ReaderWait.whileConnecting({
             switch Terminal.shared.connectionStatus {
-            case .connecting, .reconnecting, .discovering:
-                try? await Task.sleep(for: .milliseconds(250))
-            default:
-                return
+            case .connecting, .reconnecting, .discovering: return true
+            default: return false
             }
-        }
+        }, unlessCancelled: { cancelRequested })
     }
 
     // MARK: Payments
 
     func collect(amountCents: Int, clientSecret: String) async throws -> TerminalPaymentResult {
+        cancelRequested = false
         if state != .ready || !Terminal.isInitialized() || Terminal.shared.connectionStatus != .connected {
             guard let location = connectedLocationId ?? requestedLocationId else {
                 throw TerminalError.failed(message: "Tap to Pay isn't set up yet. Go to Settings and set up Tap to Pay on iPhone.")
             }
-            try await prepare(locationId: location)
+            try await connectIfNeeded(locationId: location)
         }
 
         var intent: PaymentIntent
@@ -195,6 +211,9 @@ final class StripeTapToPayTerminal: PaymentTerminal {
         default:
             break
         }
+        // Cancel tapped while Tap to Pay reconnected or the PaymentIntent was
+        // looked up: stop before Apple's Tap to Pay screen opens.
+        if cancelRequested { throw TerminalError.cancelled }
 
         state = .collecting
         readerMessage = nil
@@ -264,6 +283,7 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     }
 
     func cancel() {
+        cancelRequested = true
         paymentCancelable?.cancel { _ in }
         paymentCancelable = nil
         connectCancelable?.cancel { _ in }

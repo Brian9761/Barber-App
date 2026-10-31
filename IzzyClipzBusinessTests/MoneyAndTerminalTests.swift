@@ -124,6 +124,35 @@ final class MoneyAndTerminalTests: XCTestCase {
         }
     }
 
+    // MARK: Waiting for Stripe to reconnect
+
+    func testWaitingForStripeToReconnectStopsAsSoonAsTheOwnerCancels() async {
+        var checks = 0
+        var cancelled = false
+        let clock = ContinuousClock()
+        let start = clock.now
+        await ReaderWait.whileConnecting({
+            checks += 1
+            if checks == 3 { cancelled = true } // The owner taps Cancel while Stripe still reconnects.
+            return true // Stripe never finishes.
+        }, unlessCancelled: { cancelled }, every: .milliseconds(10), attempts: 1_000)
+        XCTAssertEqual(checks, 3, "Stopped right after Cancel, without waiting for Stripe")
+        XCTAssertLessThan(clock.now - start, .seconds(2))
+    }
+
+    func testWaitingForStripeEndsWhenItConnectsOrAfterTheLimit() async {
+        var connectingFor = 3
+        await ReaderWait.whileConnecting({
+            connectingFor -= 1
+            return connectingFor > 0
+        }, unlessCancelled: { false }, every: .milliseconds(1))
+        XCTAssertEqual(connectingFor, 0, "Done once Stripe stops connecting")
+
+        var checks = 0
+        await ReaderWait.whileConnecting({ checks += 1; return true }, unlessCancelled: { false }, every: .milliseconds(1), attempts: 5)
+        XCTAssertEqual(checks, 5, "Gives up after the limit")
+    }
+
     func testTerminalStatesSayWhenTheyreBusy() {
         XCTAssertTrue(TerminalState.preparing(progress: 0.5).isBusy)
         XCTAssertTrue(TerminalState.collecting.isBusy)
