@@ -1,0 +1,415 @@
+{
+  "barbers" : [
+    {
+      "id" : "israel-flores",
+      "name" : "Izzy"
+    },
+    {
+      "id" : "carlos-rafael",
+      "name" : "Carlos"
+    },
+    {
+      "id" : "flowxbori",
+      "name" : "Flowxbori"
+    },
+    {
+      "id" : "cristian-ceja",
+      "name" : "Cristian"
+    },
+    {
+      "id" : "julian-ramos",
+      "name" : "Julian"
+    }
+  ],
+  "firstAvailable" : [
+    {
+      "offeringIds" : [
+        "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+        "cristian-ceja/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+        "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a"
+      ],
+      "serviceId" : "haircut"
+    },
+    {
+      "offeringIds" : [
+        "israel-flores/4cee4e88-564d-415e-a095-d47d89d132bc",
+        "flowxbori/4cee4e88-564d-415e-a095-d47d89d132bc",
+        "cristian-ceja/4cee4e88-564d-415e-a095-d47d89d132bc",
+        "julian-ramos/4cee4e88-564d-415e-a095-d47d89d132bc"
+      ],
+      "serviceId" : "military-haircut"
+    },
+    {
+      "offeringIds" : [
+        "flowxbori/90c9bf5d-e012-4164-a906-67638220e262",
+        "julian-ramos/90c9bf5d-e012-4164-a906-67638220e262"
+      ],
+      "serviceId" : "seniors-haircut"
+    },
+    {
+      "offeringIds" : [
+        "israel-flores/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+        "carlos-rafael/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+        "flowxbori/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+        "cristian-ceja/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+        "julian-ramos/23936782-15f7-4ed5-9cde-ece8cc1d730c"
+      ],
+      "serviceId" : "haircut-and-beard"
+    },
+    {
+      "offeringIds" : [
+        "israel-flores/dc8eaeeb-e359-48be-84ca-c877ae337e5d",
+        "flowxbori/dc8eaeeb-e359-48be-84ca-c877ae337e5d",
+        "julian-ramos/dc8eaeeb-e359-48be-84ca-c877ae337e5d"
+      ],
+      "serviceId" : "hot-towel-shave"
+    }
+  ],
+  "hours" : {
+    "1" : {
+      "closes" : "18:00",
+      "opens" : "10:00"
+    },
+    "2" : {
+      "closes" : "19:00",
+      "opens" : "10:00"
+    },
+    "3" : {
+      "closes" : "19:00",
+      "opens" : "10:00"
+    },
+    "4" : {
+      "closes" : "19:00",
+      "opens" : "10:00"
+    },
+    "5" : {
+      "closes" : "19:00",
+      "opens" : "10:00"
+    },
+    "6" : {
+      "closes" : "19:00",
+      "opens" : "10:00"
+    },
+    "7" : {
+      "closes" : "19:00",
+      "opens" : "10:00"
+    }
+  },
+  "leadTimeMinutes" : 30,
+  "offerings" : [
+    {
+      "barberId" : "israel-flores",
+      "durationMinutes" : 60,
+      "id" : "israel-flores/0d069a9e-c5ea-4cca-ae34-3f38bf668940",
+      "priceCents" : 4000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$40",
+      "serviceId" : "haircut"
+    },
+    {
+      "barberId" : "israel-flores",
+      "durationMinutes" : 45,
+      "id" : "israel-flores/4cee4e88-564d-415e-a095-d47d89d132bc",
+      "priceCents" : 2500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$25",
+      "serviceId" : "military-haircut"
+    },
+    {
+      "barberId" : "israel-flores",
+      "durationMinutes" : 60,
+      "id" : "israel-flores/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+      "priceCents" : 5500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$55",
+      "serviceId" : "haircut-and-beard"
+    },
+    {
+      "barberId" : "israel-flores",
+      "durationMinutes" : 75,
+      "id" : "israel-flores/9a33be59-43eb-445c-9c18-6435125b1f75",
+      "priceCents" : 8000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$80",
+      "serviceId" : "vip"
+    },
+    {
+      "barberId" : "israel-flores",
+      "durationMinutes" : 30,
+      "id" : "israel-flores/dc8eaeeb-e359-48be-84ca-c877ae337e5d",
+      "priceCents" : 3000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$30",
+      "serviceId" : "hot-towel-shave"
+    },
+    {
+      "barberId" : "israel-flores",
+      "durationMinutes" : 120,
+      "id" : "israel-flores/8f795304-bb2d-4f55-bd37-a6fe6cabb43c",
+      "priceCents" : 8000,
+      "priceKind" : "startingAt",
+      "priceLabel" : "From $80",
+      "serviceId" : "lightener"
+    },
+    {
+      "barberId" : "israel-flores",
+      "durationMinutes" : 240,
+      "id" : "israel-flores/7e5d9547-5951-475e-87d9-9b915ca5684e",
+      "priceCents" : 15000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$150",
+      "serviceId" : "perm"
+    },
+    {
+      "barberId" : "carlos-rafael",
+      "durationMinutes" : 45,
+      "id" : "carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41",
+      "priceCents" : 4500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$45",
+      "serviceId" : "haircut"
+    },
+    {
+      "barberId" : "carlos-rafael",
+      "durationMinutes" : 45,
+      "id" : "carlos-rafael/ff42ccab-844e-4afd-9ee1-0f6c5e2cf930",
+      "priceCents" : 3500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$35",
+      "serviceId" : "military-haircut"
+    },
+    {
+      "barberId" : "carlos-rafael",
+      "durationMinutes" : 60,
+      "id" : "carlos-rafael/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+      "priceCents" : 6000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$60",
+      "serviceId" : "haircut-and-beard"
+    },
+    {
+      "barberId" : "carlos-rafael",
+      "durationMinutes" : 15,
+      "id" : "carlos-rafael/a2f11804-e406-41f3-b763-6ebb3bddd1b0",
+      "priceCents" : 500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$5",
+      "serviceId" : "hot-lather-shave"
+    },
+    {
+      "barberId" : "carlos-rafael",
+      "durationMinutes" : 15,
+      "id" : "carlos-rafael/0b5b851e-ab05-44a1-8d42-dc9dbc5f02eb",
+      "priceCents" : 0,
+      "priceKind" : "includedWithCut",
+      "priceLabel" : "Included with cut",
+      "serviceId" : "eyebrows"
+    },
+    {
+      "barberId" : "carlos-rafael",
+      "durationMinutes" : 15,
+      "id" : "carlos-rafael/0a68da55-05a5-4a45-ac57-e60f5c15547a",
+      "priceCents" : 0,
+      "priceKind" : "includedWithCut",
+      "priceLabel" : "Included with cut",
+      "serviceId" : "mustache"
+    },
+    {
+      "barberId" : "carlos-rafael",
+      "durationMinutes" : 15,
+      "id" : "carlos-rafael/6fe4e1ce-7e98-42dc-a581-d33fdbf57719",
+      "priceCents" : 500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$5",
+      "serviceId" : "enhancements"
+    },
+    {
+      "barberId" : "flowxbori",
+      "durationMinutes" : 45,
+      "id" : "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "priceCents" : 3500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$35",
+      "serviceId" : "haircut"
+    },
+    {
+      "barberId" : "flowxbori",
+      "durationMinutes" : 60,
+      "id" : "flowxbori/0d069a9e-c5ea-4cca-ae34-3f38bf668940",
+      "priceCents" : 4000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$40",
+      "serviceId" : "haircut"
+    },
+    {
+      "barberId" : "flowxbori",
+      "durationMinutes" : 45,
+      "id" : "flowxbori/4cee4e88-564d-415e-a095-d47d89d132bc",
+      "priceCents" : 2500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$25",
+      "serviceId" : "military-haircut"
+    },
+    {
+      "barberId" : "flowxbori",
+      "durationMinutes" : 30,
+      "id" : "flowxbori/90c9bf5d-e012-4164-a906-67638220e262",
+      "priceCents" : 1600,
+      "priceKind" : "fixed",
+      "priceLabel" : "$16",
+      "serviceId" : "seniors-haircut"
+    },
+    {
+      "barberId" : "flowxbori",
+      "durationMinutes" : 60,
+      "id" : "flowxbori/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+      "priceCents" : 5500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$55",
+      "serviceId" : "haircut-and-beard"
+    },
+    {
+      "barberId" : "flowxbori",
+      "durationMinutes" : 30,
+      "id" : "flowxbori/dc8eaeeb-e359-48be-84ca-c877ae337e5d",
+      "priceCents" : 3000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$30",
+      "serviceId" : "hot-towel-shave"
+    },
+    {
+      "barberId" : "cristian-ceja",
+      "durationMinutes" : 45,
+      "id" : "cristian-ceja/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "priceCents" : 3500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$35",
+      "serviceId" : "haircut"
+    },
+    {
+      "barberId" : "cristian-ceja",
+      "durationMinutes" : 45,
+      "id" : "cristian-ceja/4cee4e88-564d-415e-a095-d47d89d132bc",
+      "priceCents" : 2500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$25",
+      "serviceId" : "military-haircut"
+    },
+    {
+      "barberId" : "cristian-ceja",
+      "durationMinutes" : 60,
+      "id" : "cristian-ceja/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+      "priceCents" : 5500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$55",
+      "serviceId" : "haircut-and-beard"
+    },
+    {
+      "barberId" : "cristian-ceja",
+      "durationMinutes" : 15,
+      "id" : "cristian-ceja/8a1817c8-0976-40f1-8fb9-924430377d0a",
+      "priceCents" : 3000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$30",
+      "serviceId" : "hot-towel-shave"
+    },
+    {
+      "barberId" : "julian-ramos",
+      "durationMinutes" : 45,
+      "id" : "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "priceCents" : 3500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$35",
+      "serviceId" : "haircut"
+    },
+    {
+      "barberId" : "julian-ramos",
+      "durationMinutes" : 45,
+      "id" : "julian-ramos/4cee4e88-564d-415e-a095-d47d89d132bc",
+      "priceCents" : 2500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$25",
+      "serviceId" : "military-haircut"
+    },
+    {
+      "barberId" : "julian-ramos",
+      "durationMinutes" : 30,
+      "id" : "julian-ramos/90c9bf5d-e012-4164-a906-67638220e262",
+      "priceCents" : 1600,
+      "priceKind" : "fixed",
+      "priceLabel" : "$16",
+      "serviceId" : "seniors-haircut"
+    },
+    {
+      "barberId" : "julian-ramos",
+      "durationMinutes" : 60,
+      "id" : "julian-ramos/23936782-15f7-4ed5-9cde-ece8cc1d730c",
+      "priceCents" : 5500,
+      "priceKind" : "fixed",
+      "priceLabel" : "$55",
+      "serviceId" : "haircut-and-beard"
+    },
+    {
+      "barberId" : "julian-ramos",
+      "durationMinutes" : 30,
+      "id" : "julian-ramos/dc8eaeeb-e359-48be-84ca-c877ae337e5d",
+      "priceCents" : 3000,
+      "priceKind" : "fixed",
+      "priceLabel" : "$30",
+      "serviceId" : "hot-towel-shave"
+    }
+  ],
+  "services" : [
+    {
+      "id" : "haircut",
+      "name" : "Haircut"
+    },
+    {
+      "id" : "military-haircut",
+      "name" : "Military Haircut"
+    },
+    {
+      "id" : "seniors-haircut",
+      "name" : "Seniors Haircut"
+    },
+    {
+      "id" : "haircut-and-beard",
+      "name" : "Haircut & Beard"
+    },
+    {
+      "id" : "vip",
+      "name" : "VIP"
+    },
+    {
+      "id" : "hot-towel-shave",
+      "name" : "Hot Towel Shave"
+    },
+    {
+      "id" : "lightener",
+      "name" : "Lightener Process"
+    },
+    {
+      "id" : "perm",
+      "name" : "Perm"
+    },
+    {
+      "id" : "hot-lather-shave",
+      "name" : "Hot Lather Shave"
+    },
+    {
+      "id" : "eyebrows",
+      "name" : "Eyebrows"
+    },
+    {
+      "id" : "mustache",
+      "name" : "Mustache"
+    },
+    {
+      "id" : "enhancements",
+      "name" : "Enhancements"
+    }
+  ],
+  "slotIntervalMinutes" : 30,
+  "timeZone" : "America/Los_Angeles",
+  "windowDays" : 60
+}
