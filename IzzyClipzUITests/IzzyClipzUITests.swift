@@ -503,7 +503,7 @@ final class IzzyClipzUITests: XCTestCase {
     }
 
     /// A booking that's slow to answer has no Start over. If the client leaves it anyway (another
-    /// Book button, here a barber on Services) and it then goes through, "You're booked" shows:
+    /// Book button, here Home's) and it then goes through, "You're booked" shows:
     /// they haven't seen it yet, and booking that time again would make a second appointment.
     func testABookingLeftWhileItsSentStillShowsBooked() {
         launch(UITestArguments.slowBooking, UITestArguments.savedDetails)
@@ -518,14 +518,17 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitUntil(element("bookAppointmentButton"), toMatch: NSPredicate(format: "isEnabled == false")), "It isn't booking")
         XCTAssertTrue(waitForDisappearance(of: element("bookingStartOver")), "Start over shows while it's booking")
 
-        // Another booking, started from Home while the first is still being sent (the sample
-        // server takes 12 seconds to answer it). Home's button is near the top, so this takes a
-        // moment, well inside those 12 seconds.
+        // Another booking, started from Home while the first is still being sent. The sample
+        // server holds the first booking's answer until the app asks for open times again, so
+        // this doesn't depend on how fast the simulator is.
         openTab("Home")
         tap("homeBookButton")
         assertSelectedTab("Book")
-        XCTAssertTrue(element("bookService-haircut").waitForExistence(timeout: 10), "Home's button didn't start a booking")
-        XCTAssertFalse(element("bookedSummary").exists, "The first booking answered before the client left it; the test needs a longer delay")
+        tap("bookService-haircut")
+        XCTAssertTrue(element("chooseAnyBarber").waitForExistence(timeout: 10), "Home's button didn't start a booking")
+        XCTAssertFalse(element("bookedSummary").exists, "The first booking answered before the client left it")
+        // The new booking's times load, and the first booking's answer comes in.
+        tap("chooseAnyBarber")
 
         let summary = element("bookedSummary")
         XCTAssertTrue(summary.waitForExistence(timeout: 30), "It was booked, but nothing said so")

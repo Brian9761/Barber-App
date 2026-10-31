@@ -117,7 +117,7 @@ The UI tests run the app with `-ui-testing`: it starts with no favorite, details
 | `-fakeBookingOffline` | The first booking attempt fails offline; Try again works. |
 | `-fakeLoseBookingResponse` | The first booking goes through but its answer is lost (it looks offline); Try again gets that same appointment. |
 | `-fakeSlotTaken` | The first booking finds the time just taken. |
-| `-fakeSlowBooking` | The first booking takes 12 seconds to answer, so the app can be used while it's on its way. |
+| `-fakeSlowBooking` | The first booking doesn't answer until the app asks for open times again (another booking reached its times) or two minutes pass, so the app can be used while it's on its way. |
 | `-fakeNoProducts` | The shop has no products yet. |
 | `-fakeReviewsUnavailable` | Google's reviews can't be shown and Yelp isn't set up. |
 | `-fakeYelp` | The server also has Yelp reviews. |

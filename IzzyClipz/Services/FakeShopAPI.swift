@@ -28,8 +28,10 @@ final class FakeShopAPI: ShopAPI {
         /// `-fakeSlotTaken`: the first booking attempt finds the time just taken, and that time
         /// disappears from the list.
         var slotTakenOnce = false
-        /// `-fakeSlowBooking`: the first booking takes `slowBookingDelay` to answer, so the app
-        /// can be used while it's on its way.
+        /// `-fakeSlowBooking`: the first booking doesn't answer until the app asks for open times
+        /// again (the client has started another booking and reached its times), or until
+        /// `slowBookingLimit` has passed. So the app can be used while it's on its way, however
+        /// slow the simulator is.
         var slowBookingOnce = false
         /// `-fakeNoProducts`: the shop hasn't added any products yet.
         var noProducts = false
@@ -100,6 +102,8 @@ final class FakeShopAPI: ShopAPI {
     }
 
     func availability(_ query: IzzyAPI.AvailabilityQuery) async throws -> IzzyAPI.AvailabilityResponse {
+        // Another booking has reached its times: let a held booking answer.
+        holdsBooking = false
         try await respond()
         guard IzzyAPI.availabilityDaysRange.contains(query.days) else {
             throw APIError.server(code: IzzyAPI.ErrorCode.invalidRequest, message: "Ask for 1 to 31 days.", status: 400)
@@ -114,14 +118,23 @@ final class FakeShopAPI: ShopAPI {
         return IzzyAPI.AvailabilityResponse(timeZone: shop.timeZoneIdentifier, days: days)
     }
 
-    /// How long the first booking takes with `slowBookingOnce`.
-    static let slowBookingDelay: Duration = .seconds(12)
+    /// The longest the first booking waits with `slowBookingOnce`.
+    static let slowBookingLimit: Duration = .seconds(120)
+
+    /// A booking held back by `slowBookingOnce`, until the next request for open times.
+    private var holdsBooking = false
 
     func book(_ request: IzzyAPI.NewAppointment, token manageToken: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation {
         try await respond()
         if options.slowBookingOnce {
             options.slowBookingOnce = false
-            try await Task.sleep(for: Self.slowBookingDelay)
+            holdsBooking = true
+            let clock = ContinuousClock()
+            let deadline = clock.now.advanced(by: Self.slowBookingLimit)
+            while holdsBooking, clock.now < deadline {
+                try await Task.sleep(for: .milliseconds(200))
+            }
+            holdsBooking = false
         }
         if options.bookingOfflineOnce {
             options.bookingOfflineOnce = false
