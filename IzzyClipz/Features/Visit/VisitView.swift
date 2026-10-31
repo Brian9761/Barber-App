@@ -427,7 +427,7 @@ private struct VisitHoursRow: View {
                 .font(.system(.subheadline, design: .default, weight: isToday ? .bold : .regular))
                 .foregroundStyle(isToday ? Theme.ink : Theme.smokeDark)
             if isToday {
-                MonoTag(text: "Today", style: .ink)
+                Badge(text: "Today", style: .ink)
             }
         }
     }

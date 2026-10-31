@@ -95,7 +95,7 @@ struct InfoCallout: View {
 
 // MARK: - Empty states
 
-/// `ContentUnavailableView` in Street Drip: a bone symbol on an `ink4` tile, a Display M title, a
+/// `ContentUnavailableView` in Street Drip: a bone symbol on an `ink4` tile, a title, a
 /// line of body text and the actions (a bone "Call (442) 341-3053" is the usual one). For a link to
 /// a service or barber that no longer exists, or a list with nothing in it.
 ///

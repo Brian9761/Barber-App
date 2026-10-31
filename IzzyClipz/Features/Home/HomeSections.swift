@@ -6,13 +6,10 @@ import SwiftUI
 // MARK: - Hero
 
 /// The shop's six cuts as a photo pager you swipe through (no autoplay), with the open status on
-/// top and "FRESH / OUT THE CHAIR." over an ink band at the bottom. Each photo's real caption and a
-/// "3 / 6" counter sit under it, on the canvas. Tapping a photo, or the ↗ button, opens the Gallery.
-///
-/// Text sits only on the band, which is 82% ink under the type (bone on it is 10:1 or better over
-/// any photo); the faces stay clear above it.
+/// top and a button to the gallery in the corner. Each photo's caption and a "3 of 6" counter sit
+/// under it, on the canvas. Tapping a photo opens the gallery too.
 struct HomeHero: View {
-    /// The pager's minimum height: it grows with the headline at large text sizes.
+    /// The pager's height.
     let height: CGFloat
 
     @Environment(AppRouter.self) private var router
@@ -42,63 +39,24 @@ struct HomeHero: View {
     // MARK: Card
 
     private var card: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            LiveStatusPill(isOverPhoto: true)
-                // One line on the photo: the longest status ("Closed · opens 10 AM tomorrow") still
-                // fits at xxxLarge. VoiceOver reads it in full.
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                .padding(Theme.Space.l)
-                // Swipes that start on the pill still turn the page.
-                .allowsHitTesting(false)
-            Spacer(minLength: Theme.Space.xxl)
-            HStack(alignment: .bottom, spacing: Theme.Space.l) {
-                headline
+        pager
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay(alignment: .topLeading) {
+                LiveStatusPill(isOverPhoto: true)
+                    // One line on the photo: the longest status still fits at xxxLarge. VoiceOver
+                    // reads it in full.
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .padding(Theme.Space.l)
+                    // Swipes that start on the pill still turn the page.
                     .allowsHitTesting(false)
-                Spacer(minLength: 0)
-                galleryButton
             }
-            .padding(.leading, Theme.Space.xl)
-            .padding(.trailing, 14)
-            .padding(.bottom, 14)
-            .background(alignment: .top) { band }
-        }
-        // `idealHeight` too: inside the vertical scroll view nothing proposes a height, and without
-        // it the spacer wouldn't push the headline down to the bottom of the photo.
-        .frame(maxWidth: .infinity, minHeight: height, idealHeight: height, alignment: .topLeading)
-        .background { pager }
-        .background(Theme.ink3)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
-    }
-
-    /// The one drip word on Home, in bone (red stays for the Book button), over the hero line.
-    private var headline: some View {
-        // Rubik Wet Paint's drips hang 16 pt below its baseline, inside its own line box; pulling
-        // the next line up by a point leaves the 2–4 pt gap the spec asks for.
-        VStack(alignment: .leading, spacing: -1) {
-            Text("Fresh")
-                .textRole(.displayXL)
-            Text("Out the chair.")
-                .textRole(.displayL)
-        }
-        .foregroundStyle(Theme.bone)
-        .lineLimit(2)
-        .minimumScaleFactor(0.7)
-        .fixedSize(horizontal: false, vertical: true)
-        // A slogan, not information: VoiceOver gets the photos and the status instead.
-        .accessibilityHidden(true)
-    }
-
-    /// 82% ink behind the headline, fading in over the 40 pt above it.
-    private var band: some View {
-        let fade: CGFloat = 40
-        return VStack(spacing: 0) {
-            LinearGradient(colors: [Theme.ink.opacity(0), Theme.ink.opacity(0.82)], startPoint: .top, endPoint: .bottom)
-                .frame(height: fade)
-            Theme.ink.opacity(0.82)
-        }
-        .padding(.top, -fade)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+            .overlay(alignment: .bottomTrailing) {
+                galleryButton
+                    .padding(14)
+            }
+            .background(Theme.ink3)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
     }
 
     private var galleryButton: some View {
@@ -143,7 +101,7 @@ struct HomeHero: View {
         .accessibilityIdentifier("homeHeroPhotos")
     }
 
-    /// "Textured crop with a fade" on the left, "1 / 6" on the right.
+    /// "Textured crop with a fade" on the left, "1 of 6" on the right.
     private func caption(for photo: GalleryPhoto, index: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
             Text(photo.caption)
@@ -151,7 +109,7 @@ struct HomeHero: View {
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            Text("\(index + 1) / \(Self.photos.count)")
+            Text("\(index + 1) of \(Self.photos.count)")
                 .textRole(.detail)
                 .foregroundStyle(Theme.bone)
                 .fixedSize()
@@ -203,9 +161,8 @@ private extension GalleryPhoto {
 
 // MARK: - Book, and the next appointment
 
-/// The screen's one red thing, "BOOK AN APPOINTMENT" with the logo's drips, then either the next
-/// saved appointment as a ticket or, with nothing booked, a mono line about walk-ins (not another
-/// booking card: the button above already does that job).
+/// The screen's one red thing, "Book an appointment" (with "No payment needed" under it), then
+/// the next appointment or, with nothing booked, a line about walk-ins and today's hours.
 struct HomeBookSection: View {
     @Environment(AppRouter.self) private var router
     @Environment(AppointmentStore.self) private var appointments
@@ -234,13 +191,19 @@ struct HomeBookSection: View {
         Button {
             router.startBooking()
         } label: {
-            Text("Book an appointment")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Book an appointment")
+                Text("No payment needed. Pay at the shop.")
+                    .textRole(.caption)
+            }
         }
-        .buttonStyle(.primary(drips: true))
+        .buttonStyle(.primary)
+        .accessibilityLabel("Book an appointment")
+        .accessibilityHint("No payment needed. You pay at the shop.")
         .accessibilityIdentifier("homeBookButton")
     }
 
-    /// "WALK-INS WELCOME · TODAY 10 AM – 7 PM", from the shop's highlights and regular hours.
+    /// "Walk-ins welcome · Today 10 AM – 7 PM", from the shop's highlights and regular hours.
     private func walkInLine(at date: Date) -> some View {
         let hours = AppData.clock.todayLabel(at: date)
         let walkIns = AppData.shop.highlights.first { $0.localizedCaseInsensitiveContains("walk-in") }
@@ -467,7 +430,6 @@ struct HomeFavoriteBarberCard: View {
                 Text("Your barber")
                     .textRole(.label)
                     .foregroundStyle(Theme.smoke)
-                    // UI tests look for this exact text; the role sets it in capitals.
                     .accessibilityLabel("Your barber")
             }
             ViewThatFits(in: .horizontal) {
@@ -600,5 +562,44 @@ struct HomeReviewsCard: View {
             MenuChevron()
         }
         .accessibilityElement(children: .combine)
+    }
+}
+
+// MARK: - Shop
+
+/// The shop's own products, a tap from Home: "Only at Izzy Clipz", opening the Shop tab.
+struct HomeShopCard: View {
+    @Environment(AppRouter.self) private var router
+
+    var body: some View {
+        Button {
+            router.selectedTab = .shop
+        } label: {
+            HStack(spacing: Theme.Space.l) {
+                Image(systemName: Symbol.shop)
+                    .font(.title3)
+                    .foregroundStyle(Theme.bone)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.ink4, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Only at \(AppData.shop.name)")
+                        .textRole(.headline)
+                        .foregroundStyle(Theme.bone)
+                    Text("Products you can pick up at the shop")
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                }
+                .multilineTextAlignment(.leading)
+                Spacer(minLength: Theme.Space.s)
+                MenuChevron()
+            }
+            .card(padding: Theme.Space.xl)
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
+        }
+        .buttonStyle(.pressable)
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("Opens the Shop tab")
+        .accessibilityIdentifier("homeShopCard")
     }
 }

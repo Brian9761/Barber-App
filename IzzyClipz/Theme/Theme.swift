@@ -50,14 +50,14 @@ enum Theme {
     /// The primary-action color: the Book button, each screen's one main button, the Shop's bag badge.
     /// Labels on it are `white` at 100%.
     static let dripRed = Color(hex: 0xD7141C)
-    /// Red text on ink, used in exactly two places: the wordmark's "CLIPZ" and the "BOOKED" drip word.
+    /// Red text on ink, used in one place: the wordmark's "Clipz".
     static let hotRed = Color(hex: 0xFF4545)
     /// Red text on bone (5.97). Kept for the logo's own red; the build rules leave it almost unused.
     static let logoRed = Color(hex: 0xB80000)
 
     // MARK: Blue
 
-    /// The logo's royal blue: the promo gradient's start, blue text on bone, the pole's blue stripes.
+    /// The logo's royal blue: the blue monogram tiles, blue text on bone.
     static let royal = Color(hex: 0x00309A)
     /// The promo gradient's end, and the blue monogram tiles.
     static let blue = Color(hex: 0x1F4FD8)

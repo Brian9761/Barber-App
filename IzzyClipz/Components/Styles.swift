@@ -3,19 +3,16 @@ import UIKit
 
 // MARK: - Buttons
 
-/// The screen's one red thing: its primary action. Drip red, 60 pt tall, radius 18, a white
-/// uppercase label in Archivo Expanded and, by default, a bone square with an arrow at the end.
+/// The screen's one red thing: its primary action. Drip red, at least 60 pt tall, radius 18, a white
+/// label and, by default, a bone square with an arrow at the end.
 ///
-/// - `trailingSymbol: nil` centres the label with no square (e.g. "Save appointment").
-/// - `drips: true` hangs the logo's paint drips under it (only Home's "Book an appointment" and
-///   "Confirm on Squire"). The drips take 22 pt below the button.
+/// - `trailingSymbol: nil` centres the label with no square.
 /// - Disabled: `ink3` with a `smoke` label, so it never reads as the red action.
-/// - Long labels wrap to two lines rather than clipping at large text sizes.
+/// - Long labels wrap rather than clipping at large text sizes.
 ///
 /// Use it at most once per screen, and never for selection.
 struct PrimaryButtonStyle: ButtonStyle {
     var trailingSymbol: String? = Symbol.forward
-    var drips = false
 
     @Environment(\.isEnabled) private var isEnabled
 
@@ -46,12 +43,10 @@ struct PrimaryButtonStyle: ButtonStyle {
         .background(fill, in: shape)
         .contentShape(shape)
         .brightness(configuration.isPressed ? -0.08 : 0)
-        .scaleEffect(configuration.isPressed ? 0.98 : 1)
-        .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
-/// A strong second action: a bone button with ink text ("Add to calendar", "Pick another time").
+/// A strong second action: a bone button with ink text ("Try again", "Pick another time").
 struct SecondaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
@@ -67,12 +62,10 @@ struct SecondaryButtonStyle: ButtonStyle {
                 isEnabled ? (configuration.isPressed ? Theme.bone2 : Theme.bone) : Theme.ink3,
                 in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
             )
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
-/// A quiet action on the ink canvas: `ink3` with bone text and a hairline ("Browse all on Squire",
+/// A quiet action on the ink canvas: `ink3` with bone text and a hairline ("Add to Calendar",
 /// "Call (442) 341-3053").
 struct TertiaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
@@ -88,8 +81,6 @@ struct TertiaryButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: 52)
             .background(configuration.isPressed ? Theme.ink4 : Theme.ink3, in: shape)
             .overlay(shape.strokeBorder(Theme.line))
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
@@ -114,12 +105,10 @@ struct PressableStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .opacity(configuration.isPressed ? 0.85 : 1)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 
-/// A text-only action, 44 pt tall: "All 5 barbers ›", "Open Squire again ↗", "I didn't book".
+/// A text-only action, 44 pt tall: "All 5 barbers ›", "Change", "Cancel appointment".
 struct TextLinkButtonStyle: ButtonStyle {
     /// Bone or smoke on ink; `electric` for links on dark cards; `ink` on bone.
     var color: Color = Theme.bone
@@ -181,9 +170,9 @@ extension ButtonStyle where Self == PrimaryButtonStyle {
     /// The red primary action with an arrow square.
     static var primary: PrimaryButtonStyle { PrimaryButtonStyle() }
 
-    /// The red primary action, with a different end symbol (`nil` for none) or drips.
-    static func primary(trailingSymbol: String? = Symbol.forward, drips: Bool = false) -> PrimaryButtonStyle {
-        PrimaryButtonStyle(trailingSymbol: trailingSymbol, drips: drips)
+    /// The red primary action, with a different end symbol (`nil` for none).
+    static func primary(trailingSymbol: String?) -> PrimaryButtonStyle {
+        PrimaryButtonStyle(trailingSymbol: trailingSymbol)
     }
 }
 
@@ -278,8 +267,8 @@ extension View {
         background(Theme.ink.ignoresSafeArea())
     }
 
-    /// Pins a bar of actions to the bottom of the screen over an ink fade, above the floating tab
-    /// bar (tab roots reserve that space). Scroll content passes under it and stops above it.
+    /// Pins a bar of actions to the bottom of the screen over an ink fade, above the tab bar.
+    /// Scroll content passes under it and stops above it.
     ///
     ///     ScrollView { … }
     ///         .stickyBottomBar {

@@ -170,7 +170,7 @@ private struct BarberInstagramRow: View {
 
 // MARK: - About
 
-/// The bio, then the specialties as one mono line (they aren't tappable, so they aren't chips).
+/// The bio, then the specialties as one line (they aren't tappable, so they aren't chips).
 private struct BarberAbout: View {
     let barber: Barber
 
@@ -264,7 +264,7 @@ private struct BarberMenuSection: View {
     }
 }
 
-/// An `ink3` row: the service and the barber's price, their length in mono, their note, a chevron.
+/// An `ink3` row: the service and the barber's price, their length, their note, a chevron.
 private struct BarberMenuRow: View {
     let service: Service
     let offering: Offering

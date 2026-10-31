@@ -117,8 +117,8 @@ struct MenuNamePriceLine: View {
 // MARK: - Big names
 
 /// A name or title in a display role that wraps between words but never inside one, which plain
-/// `Text` does when a word is wider than the line (FLOWXBORI in Display XL, ENHANCEMENTS in
-/// Display L at the largest text sizes, on a 375 pt phone). When every word fits, it wraps like
+/// `Text` does when a word is wider than the line (Flowxbori as a large title, Enhancements as a
+/// title at the largest text sizes, on a 375 pt phone). When every word fits, it wraps like
 /// any text; when one doesn't, it sets one word per line and shrinks them together until the
 /// longest fits. VoiceOver reads it once, as written.
 struct MenuTitleText: View {

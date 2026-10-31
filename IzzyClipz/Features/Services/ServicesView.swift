@@ -23,13 +23,13 @@ struct ServicesView: View {
                     }
                 }
                 // Under the title, as on iOS 17 and 18, also on iOS 26 (whose automatic placement
-                // can move it to the bottom, where the floating tab bar is).
+                // can move it to the bottom, by the tab bar).
                 .searchable(
                     text: $query,
                     placement: .navigationBarDrawer(displayMode: .automatic),
                     prompt: "Search services"
                 )
-                // The native large title (Archivo, from NavigationBarAppearance) sits above the search
+                // The native large title sits above the search
                 // field, which is where search belongs; it folds into the bar as the menu scrolls.
                 .navigationTitle("Services")
                 .navigationBarTitleDisplayMode(.large)
@@ -117,7 +117,7 @@ private struct ServicesMenu: View {
         }
     }
 
-    /// "The menu · 12 services", or "3 of 12 services" while searching (set in capitals).
+    /// "The menu · 12 services", or "3 of 12 services" while searching.
     private var kicker: String {
         let total = catalog.services.count
         guard isSearching else { return "The menu · \(total) services" }
@@ -223,7 +223,7 @@ private struct ServiceMenuLink: View {
 }
 
 /// An `ink3` card (bone for the featured service): the service's symbol on a 56 pt tile, its name,
-/// the length range in mono with the price range across from it, its description in two lines,
+/// the length range with the price range across from it, its description in two lines,
 /// and a chevron.
 /// At accessibility text sizes the tile moves above the text so the name keeps the full width.
 private struct ServiceMenuCard: View {
@@ -261,7 +261,7 @@ private struct ServiceMenuCard: View {
     private var details: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             if isFeatured {
-                MonoTag(text: MenuFeaturedService.tag, style: .ink)
+                Badge(text: MenuFeaturedService.tag, style: .ink)
                     .padding(.bottom, 2)
             }
             MenuTitleText(service.name, role: .displayS)
@@ -279,7 +279,7 @@ private struct ServiceMenuCard: View {
     }
 }
 
-/// The length range in mono on the left and the price range on the right, on one line under the
+/// The length range on the left and the price range on the right, on one line under the
 /// name, so every card has the same shape whatever the name's length ("MILITARY HAIRCUT" and
 /// "Included with cut" both fit at 375 pt). With big text the price moves under the length.
 private struct ServiceLengthAndPrice: View {

@@ -54,7 +54,7 @@ struct ReminderSettingsView: View {
     }
 }
 
-/// A still barber pole, the kicker, "KEEP IT FRESH" and how reminders work.
+/// The kicker, "Keep it fresh" and how reminders work.
 private struct ReminderSettingsHeader: View {
     var body: some View {
         VStack(spacing: Theme.Space.m) {
@@ -292,8 +292,8 @@ private struct ReminderChipStyle: ButtonStyle {
     }
 }
 
-/// When the next reminder will show up, on a bone card: the day in Display M, the time in mono.
-/// While it's being scheduled, the pole spins in its place.
+/// When the next reminder will show up, on a bone card: the day and the time. While it's being
+/// scheduled, a spinner shows in its place.
 private struct ReminderNextCard: View {
     @Environment(ReminderStore.self) private var store
 
