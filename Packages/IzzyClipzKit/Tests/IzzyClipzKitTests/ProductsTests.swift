@@ -339,7 +339,8 @@ final class ShopifyPricesTests: XCTestCase {
         let prices = try ShopifyPrices.parse(Data(json.utf8))
         XCTAssertEqual(prices, [
             "single": LivePrice(cents: 1799, isAvailable: true),
-            "multi": LivePrice(cents: 1899, isAvailable: true),
+            // The single is the variant shown and added to a cart, so the box being in stock doesn't count.
+            "multi": LivePrice(cents: 1899, isAvailable: false),
             "sold-out": LivePrice(cents: 1299, isAvailable: false),
             "no-flag": LivePrice(cents: 1800, isAvailable: true),
             "odd-flag": LivePrice(cents: 1850, isAvailable: true),
@@ -362,7 +363,9 @@ final class ShopifyPricesTests: XCTestCase {
             {"handle": "bad-ids", "variants": [{"id": -5, "price": "4.00"}, {"id": 0, "price": "4.50"}]},
             {"handle": "fraction-id", "variants": [{"id": 1.5, "price": "4.00"}]},
             {"handle": "cheapest-unreadable", "variants": [{"id": 20, "price": "oops"}, {"id": 21, "price": "9.00"}]},
-            {"handle": "cheapest-sold-out", "variants": [{"id": 30, "price": "3.00", "available": false}, {"id": 31, "price": "4.00", "available": true}]}
+            {"handle": "cheapest-sold-out", "variants": [{"id": 30, "price": "3.00", "available": false}, {"id": 31, "price": "4.00", "available": true}]},
+            {"handle": "tie-first-sold-out", "variants": [{"id": 40, "price": "5.00", "available": false}, {"id": 41, "price": "5.00", "available": true}]},
+            {"handle": "tie-all-sold-out", "variants": [{"id": 50, "price": "5.00", "available": false}, {"id": 51, "price": "5.00", "available": false}]}
         ]}
         """#
         let prices = try ShopifyPrices.parse(Data(json.utf8))
@@ -375,8 +378,12 @@ final class ShopifyPricesTests: XCTestCase {
             "bad-ids": LivePrice(cents: 400, isAvailable: true),
             "fraction-id": LivePrice(cents: 400, isAvailable: true),
             "cheapest-unreadable": LivePrice(cents: 900, isAvailable: true, variantID: 21),
-            // The price shown is the cheapest variant's, so its ID goes with it.
-            "cheapest-sold-out": LivePrice(cents: 300, isAvailable: true, variantID: 30),
+            // The price shown is the cheapest variant's, so its ID and its stock go with it: a cart
+            // link can't add a sold-out variant, even when a pricier one is in stock.
+            "cheapest-sold-out": LivePrice(cents: 300, isAvailable: false, variantID: 30),
+            // Several at the lowest price: the first one in stock, else the first one listed.
+            "tie-first-sold-out": LivePrice(cents: 500, isAvailable: true, variantID: 41),
+            "tie-all-sold-out": LivePrice(cents: 500, isAvailable: false, variantID: 50),
         ])
     }
 
