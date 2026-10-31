@@ -183,6 +183,11 @@ final class NewBookingStore {
         selectedSlot = IzzyAPI.Slot(start: start, barberIds: [])
     }
 
+    /// The "Now" the screen shows: once picked, the minute it was picked, even when Now
+    /// wouldn't be offered any more (the service no longer ends by closing), since that's what
+    /// Book sends; until then, `nowStart`.
+    var nowChoice: Date? { isNowSelected ? selectedSlot?.start : nowStart }
+
     /// Whether `slot` is "Now" rather than one of the listed times (those always name the
     /// barbers who are free then).
     static func isNow(_ slot: IzzyAPI.Slot) -> Bool { slot.barberIds.isEmpty }

@@ -103,7 +103,7 @@ struct NewBookingView: View {
             .environment(\.timeZone, store.shopTime.timeZone)
             .accessibilityIdentifier("bookingDay")
 
-            if let start = store.nowStart {
+            if let start = store.nowChoice {
                 nowButton(start)
             }
 
@@ -117,7 +117,7 @@ struct NewBookingView: View {
                 } else {
                     Text("Free at \(store.shopTime.time(slot.start)): \(store.barberNames(for: slot)). The one with the fewest bookings that day gets it.")
                 }
-            } else if store.nowStart != nil {
+            } else if store.nowChoice != nil {
                 Text("Times are the shop's. Pick Now for a walk-in who's here.")
             } else {
                 Text("Times are the shop's.")
@@ -125,12 +125,11 @@ struct NewBookingView: View {
         }
     }
 
-    /// "Now (11:10 AM)": books the walk-in from this minute, not the next half hour.
+    /// "Now (11:10 AM)": books the walk-in from this minute, not the next half hour. `start`
+    /// is `nowChoice`: once picked, the minute it was picked; until then, the time it is.
     private func nowButton(_ start: Date) -> some View {
-        // Once picked, the minute it was picked; until then, the time it is.
-        let picked = store.isNowSelected ? store.selectedSlot?.start : nil
-        let selected = picked != nil
-        let text = "Now (\(store.shopTime.time(picked ?? start)))"
+        let selected = store.isNowSelected
+        let text = "Now (\(store.shopTime.time(start)))"
         return Button {
             store.selectNow()
         } label: {
@@ -139,7 +138,7 @@ struct NewBookingView: View {
         .buttonStyle(.plain)
         .padding(.vertical, 4)
         .accessibilityLabel(text)
-        .accessibilityHint("Books it from now, for a walk-in who's here.")
+        .accessibilityHint("Picks this minute, for a walk-in who's here.")
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityIdentifier("bookNow")
     }
@@ -160,7 +159,7 @@ struct NewBookingView: View {
             }
         case .loaded:
             if store.slots.isEmpty {
-                Text(store.nowStart == nil
+                Text(store.nowChoice == nil
                     ? "No open times on \(store.shopTime.longDay(store.day)). Try another day or barber."
                     : "No other open times today. Pick Now, or try another day or barber.")
                     .foregroundStyle(.secondary)

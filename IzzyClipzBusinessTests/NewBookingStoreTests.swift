@@ -481,6 +481,30 @@ final class NewBookingStoreTests: XCTestCase {
         XCTAssertFalse(store.isNowSelected)
     }
 
+    /// Now picked at 6:14 PM stays on screen at 6:16, when a 45-minute cut would no longer be
+    /// offered as Now: Book still sends 6:14, so the screen shows that, instead of hiding the
+    /// chip and saying there are no times.
+    func testNowStaysOnScreenOncePickedEvenWhenItWouldntBeOfferedNow() async throws {
+        let clock = MovableClock(TestClock.at(18, 14))
+        let (store, _) = makeStore(clock: clock)
+        store.selectService("haircut")
+        await store.loadSlots()
+        XCTAssertEqual(store.nowChoice, TestClock.at(18, 14), "Before it's picked, the time it is")
+        store.selectNow()
+        clock.now = TestClock.at(18, 16)
+        XCTAssertNil(store.nowStart, "A 45-minute cut from 6:16 wouldn't end by closing")
+        XCTAssertTrue(store.isNowSelected)
+        XCTAssertEqual(store.nowChoice, TestClock.at(18, 14), "The minute Now was picked, which Book sends")
+        store.selectNow()
+        XCTAssertEqual(store.selectedSlot?.start, TestClock.at(18, 14), "Tapping it again keeps it")
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        XCTAssertEqual(store.booked?.start, TestClock.at(18, 14))
+
+        store.startOver()
+        XCTAssertNil(store.nowChoice, "Nothing picked, and Now doesn't fit any more")
+    }
+
     /// Book again after a lost answer sends the minute Now was picked, so it finds the booking
     /// that went through instead of putting the client in a second barber's chair.
     func testBookAgainAfterALostAnswerKeepsNowsMinute() async throws {
