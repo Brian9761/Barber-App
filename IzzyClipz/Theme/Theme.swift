@@ -260,6 +260,7 @@ enum Symbol {
     static let walkIn = "figure.walk"
     static let firstAvailable = "person.2.fill"
     static let gallery = "photo.on.rectangle"
+    static let photoUnavailable = "photo"
     static let quote = "quote.opening"
     static let info = "info.circle"
     static let map = "map"
@@ -285,6 +286,7 @@ enum Symbol {
             team, starFilled, starHalf, starEmpty, favorite, favoriteFilled, included, clock, calendar, calendarAdd,
             calendarClock, payment, accessibility, walkIn, firstAvailable, gallery, quote, info, map, location,
             checkmark, success, partner, shipping, reviews, morning, afternoon, evening, sparkles, warning, remindersOff,
+            photoUnavailable,
         ]
         let data = Catalog.izzyClipz.services.map(\.symbol) + ServiceCategory.allCases.map(\.symbol)
         return Array(Set(own + data)).sorted()

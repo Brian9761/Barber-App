@@ -13,6 +13,12 @@ enum AppData {
     }
 }
 
+/// Where the shop's reviews live on Google and Yelp.
+enum ReviewLinks {
+    /// The shop's Yelp page, for "Read our reviews on Yelp" when the server has no Yelp data.
+    static let yelpPage = URL(string: "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")!
+}
+
 /// Launch configuration, so UI tests run against a clean, predictable app.
 enum LaunchOptions {
     static let uiTestingArgument = "-ui-testing"

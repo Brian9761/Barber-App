@@ -48,6 +48,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
+        # The shop's server (see server/README.md). A placeholder until it's deployed.
+        IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIApplicationSupportsIndirectInputEvents: true

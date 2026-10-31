@@ -9,6 +9,9 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     let favorites = Favorites(defaults: LaunchOptions.defaults)
     let reminders = ReminderStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
     let appointments = AppointmentStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
+    /// The shop's server, or an in-memory fake while UI testing.
+    let api: any ShopAPI = APIConfiguration.makeAPI()
+    private(set) lazy var products = ProductsStore { [api] in try await api.products() }
 
     /// UI tests never see a permission alert; everyone else gets the real thing.
     private static func makeScheduler() -> NotificationScheduling {
