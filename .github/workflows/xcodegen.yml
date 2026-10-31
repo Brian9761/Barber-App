@@ -1,0 +1,50 @@
+name: Xcode project (v4 development)
+
+# Temporary helper while v4 is built without a Mac: regenerates
+# IzzyClipz.xcodeproj from project.yml with XcodeGen whenever v4 changes, and
+# commits the result. Remove before merging so it never overwrites changes
+# made in Xcode.
+on:
+  push:
+    branches: [v4]
+    paths: ["project.yml", "IzzyClipz/**", "IzzyClipzTests/**", "IzzyClipzUITests/**", "Packages/**", "IzzyClipzBusiness/**", "IzzyClipzBusinessTests/**", "IzzyClipzBusinessUITests/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: xcodegen-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate:
+    name: Regenerate the Xcode project
+    # Intel: Apple silicon runners are short on capacity, and this job needs no speed.
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate
+        run: |
+          xcodegen --version
+          xcodegen generate
+
+      - name: Commit if it changed
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [ -z "$(git status --porcelain -- IzzyClipz.xcodeproj)" ]; then
+            echo "The Xcode project is already up to date"
+            exit 0
+          fi
+          git status --short -- IzzyClipz.xcodeproj
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A IzzyClipz.xcodeproj
+          git commit -q -m "Regenerate the Xcode project from project.yml"
+          git push origin "HEAD:$REF_NAME"
