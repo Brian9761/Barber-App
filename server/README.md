@@ -99,7 +99,7 @@ DATABASE_URL_UNPOOLED=postgres://… npm run migrate    # or with .env.local fro
 
 Applies `migrations/NNN_name.sql` in order, each in its own transaction, recorded with a checksum in `schema_migrations`. Running it again does nothing; two runs at once are serialized by an advisory lock. It refuses to continue if an applied file was edited: add a new numbered file instead. It then upserts the barbers from `data/catalog.json` (barbers no longer listed stay in the table, marked inactive, because old bookings point at them).
 
-Run it once when the database is created, after every new migration, and after every catalog change. It isn't part of the Vercel build, so preview deployments can't change the production schema.
+Run it once when the database is created, after every new migration, and after every catalog change. It isn't part of the Vercel build, so preview deployments can't change the production schema. That also means a new migration has to be applied **before** the code that needs it goes live: `002_manage_token_unique.sql` adds the `any_barber` column that every booking writes, so a database without it can't take bookings.
 
 ## Deploy
 
