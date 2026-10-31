@@ -27,6 +27,9 @@ final class NewBookingStore {
     private(set) var day: LocalDate
     private(set) var slots: [IzzyAPI.Slot] = []
     private(set) var slotsState: SlotsState = .idle
+    /// Bumped whenever the times are cleared, so the screen loads them again
+    /// even when the service, barber and day stay the same (after a booking).
+    private(set) var slotsVersion = 0
     var selectedSlot: IzzyAPI.Slot?
     var clientName = ""
     var clientPhone = ""
@@ -127,6 +130,7 @@ final class NewBookingStore {
 
     private func clearSlots() {
         generation += 1
+        slotsVersion += 1
         slots = []
         selectedSlot = nil
         slotsState = .idle

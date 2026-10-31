@@ -27,7 +27,7 @@ struct NewBookingView: View {
             }
             .navigationTitle("New booking")
             .scrollDismissesKeyboard(.interactively)
-            .task(id: SlotsKey(target: store.target, day: store.day)) {
+            .task(id: SlotsKey(target: store.target, day: store.day, version: store.slotsVersion)) {
                 if store.target != nil, store.slotsState == .idle {
                     await store.loadSlots()
                 }
@@ -222,6 +222,7 @@ private extension String {
 private struct SlotsKey: Hashable {
     let target: IzzyAPI.BookingTarget?
     let day: LocalDate
+    let version: Int
 }
 
 private struct BookedItem: Identifiable {

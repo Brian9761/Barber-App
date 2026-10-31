@@ -100,7 +100,10 @@ final class NewBookingStoreTests: XCTestCase {
         XCTAssertEqual(booked.map(\.id), [appointment.id], "The schedule hears about it")
         XCTAssertTrue(store.summary(of: appointment).hasSuffix("today at 11:30 AM"))
 
+        let version = store.slotsVersion
         store.startOver()
+        XCTAssertGreaterThan(store.slotsVersion, version, "The screen reloads the times for the next walk-in")
+        XCTAssertEqual(store.slotsState, .idle)
         XCTAssertNil(store.booked)
         XCTAssertEqual(store.clientName, "")
         XCTAssertNil(store.selectedSlot)

@@ -337,14 +337,19 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10), "The new product isn't listed")
         XCTAssertTrue(row.label.contains("$15.00"), "Got: \(row.label)")
 
+        // Edit: hide it from the customer app in the editor.
         row.tap()
-        typeInto("productPrice", ".5")
+        let visible = element("productVisible")
+        XCTAssertTrue(visible.waitForExistence(timeout: 10))
+        // The switch is at the row's trailing end; the row's middle is its label.
+        visible.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         tap("saveProduct")
-        XCTAssertTrue(waitForLabel(element("product-Sample wax"), containing: "$15.50"))
-
-        element("product-Sample wax").swipeLeft()
-        tapButton("Hide")
         XCTAssertTrue(waitForLabel(element("product-Sample wax"), containing: "hidden"))
+
+        // Show it again with a swipe.
+        element("product-Sample wax").swipeLeft()
+        tapButton("Show")
+        XCTAssertTrue(waitUntil(element("product-Sample wax"), toMatch: NSPredicate(format: "NOT (label CONTAINS %@)", "hidden")))
 
         element("product-Sample wax").swipeLeft()
         tapButton("Delete")
@@ -454,9 +459,21 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     /// Taps a button by its label: menu items, picker rows, swipe actions.
     private func tapButton(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
-        let button = app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
-        XCTAssertTrue(button.waitForExistence(timeout: 10), "Missing the \(label) button", file: file, line: line)
-        button.tap()
+        let predicate = NSPredicate(format: "label == %@", label)
+        let button = app.buttons.matching(predicate).firstMatch
+        if button.waitForExistence(timeout: 5) {
+            button.tap()
+            return
+        }
+        // Menus and pickers can show their choices as menu items, cells or text.
+        for query in [app.menuItems, app.cells, app.staticTexts] {
+            let match = query.matching(predicate).firstMatch
+            if match.exists {
+                match.tap()
+                return
+            }
+        }
+        XCTFail("Missing the \(label) button", file: file, line: line)
     }
 
     /// Taps a button in a confirmation dialog: by identifier when SwiftUI

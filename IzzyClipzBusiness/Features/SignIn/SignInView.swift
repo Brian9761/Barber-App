@@ -39,7 +39,6 @@ struct SignInView: View {
 
                 Section {
                     SecureField("Owner key", text: $key)
-                        .textContentType(.password)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .focused($keyFocused)

@@ -27,9 +27,8 @@ struct ProductsView: View {
                 }
             }
             .refreshable { await store.refresh() }
-            .task {
-                if store.loadState == .idle { await store.refresh() }
-            }
+            // Every time the tab shows: what's on screen stays while it reloads.
+            .task { await store.refresh() }
             .sheet(item: $editing) { item in
                 ProductEditorView(store: store, product: item.product, allowsTestPhoto: allowsTestPhoto)
             }

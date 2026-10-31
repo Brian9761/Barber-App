@@ -142,7 +142,11 @@ struct PaymentProgressView: View {
                 primary("Done", id: "paymentDone") {
                     checkout.reset()
                     if workspace.owesHowToTap {
-                        Task { await workspace.showHowToTap() }
+                        // After this screen has gone, so Apple's sheet has something to show over.
+                        Task {
+                            try? await Task.sleep(for: .milliseconds(700))
+                            await workspace.showHowToTap()
+                        }
                     }
                 }
             case .declined:
