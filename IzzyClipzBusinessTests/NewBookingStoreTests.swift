@@ -121,6 +121,34 @@ final class NewBookingStoreTests: XCTestCase {
         XCTAssertEqual(store.booked?.customer.phone, "+14425550123")
     }
 
+    /// The form turns down exactly the numbers the server does, N11 codes like 911 included, so
+    /// the owner hears about a typo before booking, not from the server.
+    func testThePhoneNumberFollowsTheServersRules() async throws {
+        let store = makeStore()
+        for typed in ["", "  ", "(442) 555-0123", "+1 442 555 0123", "442\t555\t0123"] {
+            store.clientPhone = typed
+            XCTAssertTrue(store.phoneIsValid, typed.debugDescription)
+        }
+        for typed in ["12", "(442) 911-3053", "(211) 555-0123", "911-555-0100", "442-555-0123 ext 2", "+44 20 7946 0958"] {
+            store.clientPhone = typed
+            XCTAssertFalse(store.phoneIsValid, typed)
+        }
+        // The sample server answers like the real one when a number gets through anyway.
+        let open = try await harness.api.ownerAvailability(.init(target: .anyBarber(serviceId: "haircut"), from: TestClock.today))
+        let slot = try XCTUnwrap(open.slots(on: TestClock.today).first)
+        do {
+            _ = try await harness.api.createAppointment(.init(
+                target: .anyBarber(serviceId: "haircut"), start: slot.start, customer: .init(name: "Sample", phone: "(442) 911-3053")
+            ))
+            XCTFail("An N11 exchange was booked")
+        } catch {
+            XCTAssertEqual(error as? APIError, .server(
+                code: "invalid_request", message: "Enter a US mobile number, like (442) 341-3053, or leave it empty.", status: 400
+            ))
+        }
+        XCTAssertNil(harness.appointment(named: "Sample"))
+    }
+
     func testWhatsMissingIsSaidInOrder() async {
         let store = makeStore()
         XCTAssertEqual(store.missing, "Pick a service.")

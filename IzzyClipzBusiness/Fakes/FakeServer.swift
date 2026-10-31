@@ -169,6 +169,18 @@ final class FakeServer {
         guard !name.isEmpty else {
             throw APIError.server(code: IzzyAPI.ErrorCode.invalidRequest, message: "Enter your name.", status: 400)
         }
+        // The phone is optional, but one that's given must be a US number (as on the server).
+        var phone: String?
+        if let typed = request.customer.phone?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmptyOrNil {
+            guard let number = PhoneNumber(parsing: typed) else {
+                throw APIError.server(
+                    code: IzzyAPI.ErrorCode.invalidRequest,
+                    message: "Enter a US mobile number, like (442) 341-3053, or leave it empty.",
+                    status: 400
+                )
+            }
+            phone = number.e164
+        }
         let day = shopTime.day(containing: start)
         guard let open = shopTime.openInterval(on: day) else { throw APIError.outsideHours }
 
@@ -193,7 +205,6 @@ final class FakeServer {
             let fits = candidates.contains { start >= open.start && start.addingTimeInterval(TimeInterval($0.durationMinutes * 60)) <= open.end }
             throw fits ? APIError.slotTaken : APIError.outsideHours
         }
-        let phone = request.customer.phone.flatMap { PhoneNumber(parsing: $0)?.e164 ?? $0 }
         let appointment = makeAppointment(
             offering: offering, start: start,
             customer: IzzyAPI.Customer(name: name, phone: phone, email: request.customer.email),

@@ -414,6 +414,50 @@ final class PhoneNumberParsingTests: XCTestCase {
         }
     }
 
+    /// N11 codes (211, 411, 911…) are never area codes or exchanges; the server turns them
+    /// down, so the details step must too, not the last step of booking.
+    func testRejectsN11AreaCodesAndExchanges() {
+        for input in ["(442) 911-3053", "211-555-0123", "(911) 555-0100", "442-411-0100", "+1 (811) 555-0100", "1 442 611 3053"] {
+            XCTAssertNil(PhoneNumber(parsing: input), input)
+        }
+        // Only both of the last two digits being 1 makes an N11 code.
+        XCTAssertEqual(PhoneNumber(parsing: "(212) 555-0100")?.e164, "+12125550100")
+        XCTAssertEqual(PhoneNumber(parsing: "442-210-3053")?.e164, "+14422103053")
+        XCTAssertNil(PhoneNumber(parsing: "442-121-3053"), "an exchange can't start with 1")
+    }
+
+    /// Spaces count as the server counts them: tabs and no-break spaces are fine, a zero-width
+    /// space or a next-line character isn't.
+    func testSpacesAreTheServersSpaces() {
+        XCTAssertEqual(PhoneNumber(parsing: "442\t341\t3053")?.e164, "+14423413053")
+        XCTAssertEqual(PhoneNumber(parsing: "\u{FEFF}442\u{2009}341\u{00A0}3053\u{3000}")?.e164, "+14423413053")
+        XCTAssertNil(PhoneNumber(parsing: "442\u{200B}341 3053"))
+        XCTAssertNil(PhoneNumber(parsing: "4423413053\u{85}"))
+    }
+
+    /// The server's own list (`server/test/fixtures/phone-numbers.json`), which its tests check
+    /// against `normalizeUSPhone`: the Kit must accept and reject exactly the same numbers.
+    func testAgreesWithTheServerOnEveryNumberInTheSharedList() throws {
+        struct Cases: Decodable {
+            let accepted: [[String]]
+            let rejected: [String]
+        }
+        let url = TestPaths.repository.appendingPathComponent("server/test/fixtures/phone-numbers.json")
+        guard let data = FileManager.default.contents(atPath: url.path) else {
+            throw XCTSkip("No server phone fixtures at \(url.path).")
+        }
+        let cases = try JSONDecoder().decode(Cases.self, from: data)
+        XCTAssertGreaterThan(cases.accepted.count, 10)
+        XCTAssertGreaterThan(cases.rejected.count, 10)
+        for pair in cases.accepted {
+            XCTAssertEqual(pair.count, 2)
+            XCTAssertEqual(PhoneNumber(parsing: pair[0])?.e164, pair[1], "accepted by the server: \(pair[0].debugDescription)")
+        }
+        for input in cases.rejected {
+            XCTAssertNil(PhoneNumber(parsing: input), "rejected by the server: \(input.debugDescription)")
+        }
+    }
+
     func testFormsAgree() {
         let number = PhoneNumber(parsing: "(760) 555-0188")
         XCTAssertEqual(number?.digits, "7605550188")

@@ -220,6 +220,9 @@ final class CustomerDetailsTests: XCTestCase {
         XCTAssertNotNil(CustomerDetails(name: "Alex", phone: "").phoneProblem)
         XCTAssertNotNil(CustomerDetails(name: "Alex", phone: "12345").phoneProblem)
         XCTAssertNotNil(CustomerDetails(name: "Alex", phone: "+44 20 7946 0958").phoneProblem, "US numbers only")
+        // N11 codes (211, 911…) aren't area codes or exchanges: the server turns them down, so this step does too.
+        XCTAssertNotNil(CustomerDetails(name: "Alex", phone: "(442) 911-3053").phoneProblem, "N11 exchange")
+        XCTAssertNotNil(CustomerDetails(name: "Alex", phone: "(211) 555-0123").phoneProblem, "N11 area code")
         XCTAssertNil(CustomerDetails(name: "Alex", phone: "(442) 555-0123").phoneProblem)
         XCTAssertTrue(CustomerDetails(name: "Alex", phone: "+1 442 555 0123").isValid)
     }

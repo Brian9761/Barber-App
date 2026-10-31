@@ -21,6 +21,18 @@ describe('US phone numbers → E.164', () => {
   for (const [input, expected] of ok) it(`${input} → ${expected}`, () => expect(normalizeUSPhone(input)).toBe(expected));
   const bad = ['', '341-3053', '442341305', '44234130531', '+44 20 7946 0958', '+2 442 341 3053', '(042) 341-3053', '442-141-3053', '911-555-0100', '442-911-0100', '442-341-3053 ext 2', 'call me', '1-800-FLOWERS', '+1+4423413053', '442 341 3053+'];
   for (const input of bad) it(`rejects ${JSON.stringify(input)}`, () => expect(normalizeUSPhone(input)).toBeNull());
+
+  // The Kit's PhoneNumber(parsing:) reads the same file, so the apps accept exactly these.
+  const shared = JSON.parse(readFileSync(new URL('./fixtures/phone-numbers.json', import.meta.url), 'utf8')) as {
+    accepted: [string, string][];
+    rejected: string[];
+  };
+  it('agrees with the Kit on every number in fixtures/phone-numbers.json', () => {
+    expect(shared.accepted.length).toBeGreaterThan(10);
+    expect(shared.rejected.length).toBeGreaterThan(10);
+    for (const [input, expected] of shared.accepted) expect(normalizeUSPhone(input), JSON.stringify(input)).toBe(expected);
+    for (const input of shared.rejected) expect(normalizeUSPhone(input), JSON.stringify(input)).toBeNull();
+  });
 });
 
 describe('time helpers', () => {
