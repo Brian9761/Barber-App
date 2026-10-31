@@ -51,6 +51,8 @@ struct TakePaymentView: View {
                 tapToPayButton
             }
             .navigationTitle("Take payment")
+            // A small title leaves room for the keypad, the note and the button on one screen.
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: PaymentsLink.self) { _ in
                 PaymentsTodayView(checkout: checkout)
             }

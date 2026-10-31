@@ -265,6 +265,9 @@ struct AppointmentRow: View {
                     }
                 }
             }
+            // The rest of the row's width: with two badges, the name and service otherwise
+            // wrapped into a narrow column ("Marcus / Sample").
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(.vertical, 4)
         .opacity(appointment.status == .cancelled ? 0.65 : 1)

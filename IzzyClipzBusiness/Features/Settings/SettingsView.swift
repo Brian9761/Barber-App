@@ -55,10 +55,17 @@ struct SettingsView: View {
         Section {
             LabeledContent("Address", value: workspace.environment.serverDescription)
             if let health = workspace.health {
-                LabeledContent("Status") {
-                    Label("Online", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                // A plain row: a Label inside LabeledContent made the row three times as tall.
+                HStack(spacing: 6) {
+                    Text("Status")
+                    Spacer(minLength: 8)
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                        .accessibilityHidden(true)
+                    Text("Online")
+                        .foregroundStyle(.green)
                 }
-                // One element, "Status, Online", not a separate one for the check mark.
+                // One element, "Status, Online".
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("serverStatus")
                 LabeledContent("Server version", value: health.version)
