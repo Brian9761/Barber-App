@@ -157,8 +157,77 @@ describe('with Stripe configured', () => {
     h.stripe.intents.delete(paymentIntentId);
     expect((await h.call('POST', `/api/owner/payments/${paymentIntentId}/complete`, { owner: true })).status).toBe(404);
     h.stripe.nextError = Object.assign(new Error('Invalid API Key provided'), { type: 'StripeAuthenticationError', statusCode: 401 });
-    expect((await pay({ amountCents: 900 })).status).toBe(500);
+    const badKey = await pay({ amountCents: 900 });
+    expect(badKey.status).toBe(500);
+    expect(badKey.body.error).toEqual({
+      code: 'server_error',
+      message: "Stripe didn't accept the server's Stripe key. Check STRIPE_SECRET_KEY on the server.",
+    });
     expect(h.logs.some((l) => l.level === 'error' && l.message.startsWith('Stripe'))).toBe(true);
+  });
+
+  it('a payment Stripe doesn’t have is a 404, and is logged', async () => {
+    configureStripe();
+    const { paymentIntentId } = (await pay({ amountCents: 900 })).body;
+    h.stripe.intents.delete(paymentIntentId);
+    const res = await h.call('POST', `/api/owner/payments/${paymentIntentId}/complete`, { owner: true });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toEqual({ code: 'not_found', message: "Stripe doesn't know that payment." });
+    expect(h.logs).toEqual([
+      {
+        level: 'error',
+        message: 'Stripe retrieve payment failed',
+        details: {
+          type: 'StripeInvalidRequestError',
+          code: 'resource_missing',
+          param: undefined,
+          status: 404,
+          requestId: undefined,
+          message: `No such payment_intent: '${paymentIntentId}'`,
+        },
+      },
+    ]);
+  });
+
+  it('a Terminal location Stripe turns down says so, and is logged without the key', async () => {
+    // Going live with the test-mode location still set: Stripe answers the token with a 400.
+    configureStripe();
+    h.config.stripeSecretKey = 'sk_live_fixture';
+    h.config.stripeTerminalLocationId = 'tml_TestModeLocation';
+    const locationMessage =
+      "Stripe didn't accept the Terminal location set on the server. Check STRIPE_TERMINAL_LOCATION_ID: it must be a location from the same Stripe account and mode (test or live) as the key.";
+    const failures = [
+      { type: 'StripeInvalidRequestError', code: 'resource_missing', param: 'location', statusCode: 400, requestId: 'req_fixture' },
+      { type: 'StripeInvalidRequestError', code: 'resource_missing', statusCode: 404 },
+      { type: 'StripeInvalidRequestError', code: 'parameter_invalid_string', param: 'location', statusCode: 400 },
+    ];
+    for (const failure of failures) {
+      h.stripe.nextError = Object.assign(new Error("No such location: 'tml_TestModeLocation' (key sk_live_fixture)"), failure);
+      const res = await h.call('POST', '/api/owner/terminal/connection-token', { owner: true });
+      expect(res.status, JSON.stringify(failure)).toBe(500);
+      expect(res.body.error).toEqual({ code: 'server_error', message: locationMessage });
+    }
+    expect(h.logs).toHaveLength(3);
+    expect(h.logs[0]).toEqual({
+      level: 'error',
+      message: 'Stripe connection token failed',
+      details: {
+        type: 'StripeInvalidRequestError',
+        code: 'resource_missing',
+        param: 'location',
+        status: 400,
+        requestId: 'req_fixture',
+        message: "No such location: 'tml_TestModeLocation' (key sk_live_…)",
+      },
+    });
+    expect(JSON.stringify(h.logs)).not.toContain('sk_live_fixture');
+    // Not "Stripe doesn't know that payment": nothing here is about a payment.
+    expect(JSON.stringify(h.logs)).not.toContain('payment');
+
+    // A Stripe outage while making the token still says to try again.
+    h.stripe.nextError = Object.assign(new Error('socket hang up'), { type: 'StripeConnectionError' });
+    const outage = await h.call('POST', '/api/owner/terminal/connection-token', { owner: true });
+    expect(outage.body.error).toEqual({ code: 'server_error', message: "We couldn't reach Stripe. Please try again." });
   });
 
   it('lists payments for a shop-local day, newest first', async () => {

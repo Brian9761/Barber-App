@@ -36,14 +36,54 @@ function stripeClient(deps: Deps): StripeClient {
   return deps.stripe(key);
 }
 
-/** Stripe's own errors: a missing object becomes a 404, anything else a 500 with a plain message. */
-function stripeFailure(deps: Deps, error: unknown, what: string): ApiError {
+type StripeCall = 'connection token' | 'create payment' | 'retrieve payment';
+
+/** The parts of a stripe-node error worth logging. */
+interface StripeErrorLike {
+  type?: string;
+  code?: string;
+  param?: string;
+  statusCode?: number;
+  requestId?: string;
+  message?: string;
+}
+
+/** Keys and client secrets never reach the logs, even if Stripe quotes one in a message. */
+function redactSecrets(text: string | undefined): string | undefined {
+  return text?.replace(/\b((?:sk|rk)_(?:test|live)_)[A-Za-z0-9]+/g, '$1…').replace(/(_secret_)[A-Za-z0-9]+/g, '$1…');
+}
+
+/**
+ * Stripe's own errors, logged (what failed and why, never a key) and answered
+ * with what to fix: a payment Stripe doesn't have is a 404; a Terminal location
+ * or key Stripe turns down is a 500 that names the server setting; anything
+ * else is a 500 asking to try again.
+ */
+function stripeFailure(deps: Deps, error: unknown, what: StripeCall): ApiError {
   if (error instanceof ApiError) return error;
-  const e = error as { type?: string; code?: string; statusCode?: number; message?: string };
-  if (e?.code === 'resource_missing' || e?.statusCode === 404) {
+  const e = (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
+  deps.log.error(`Stripe ${what} failed`, {
+    type: e.type,
+    code: e.code,
+    param: e.param,
+    status: e.statusCode,
+    requestId: e.requestId,
+    message: redactSecrets(e.message),
+  });
+  const missing = e.code === 'resource_missing' || e.statusCode === 404;
+  if (what === 'retrieve payment' && missing) {
     return new ApiError('not_found', "Stripe doesn't know that payment.");
   }
-  deps.log.error(`Stripe ${what} failed`, { type: e?.type, code: e?.code, status: e?.statusCode, message: e?.message });
+  if (what === 'connection token' && (missing || e.param === 'location')) {
+    // Usually a test-mode location with a live key (or the other way round), or a typo.
+    return new ApiError(
+      'server_error',
+      "Stripe didn't accept the Terminal location set on the server. Check STRIPE_TERMINAL_LOCATION_ID: it must be a location from the same Stripe account and mode (test or live) as the key.",
+    );
+  }
+  if (e.type === 'StripeAuthenticationError' || e.type === 'StripePermissionError') {
+    return new ApiError('server_error', "Stripe didn't accept the server's Stripe key. Check STRIPE_SECRET_KEY on the server.");
+  }
   return new ApiError('server_error', "We couldn't reach Stripe. Please try again.");
 }
 

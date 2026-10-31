@@ -159,7 +159,7 @@ final class MoneyAndTerminalTests: XCTestCase {
         XCTAssertTrue(background.contains("No card was charged"))
         guard case .failed(let offline) = StripeTapToPayTerminal.map(stripeError(9000)) else { return XCTFail("offline") }
         XCTAssertTrue(offline.contains("internet"))
-        guard case .failed(let token) = StripeTapToPayTerminal.map(stripeError(9050)) else { return XCTFail("token") }
+        guard case .failed(let token) = StripeTapToPayTerminal.map(stripeError(9050), tokenFailure: nil) else { return XCTFail("token") }
         XCTAssertTrue(token.contains("server"))
         guard case .failed = StripeTapToPayTerminal.map(NSError(domain: "Other", code: 1)) else { return XCTFail("other domains") }
         XCTAssertEqual(StripeTapToPayTerminal.map(TerminalError.outcomeUnknown), .outcomeUnknown)
@@ -180,6 +180,41 @@ final class MoneyAndTerminalTests: XCTestCase {
         let failing = await fetch(from: provider)
         XCTAssertNil(failing.0)
         XCTAssertEqual(failing.1 as? APIError, .notConfigured(APIError.Feature.stripe))
+        provider.use(nil)
+    }
+
+    /// When the server answers the token request with a reason (a Terminal location Stripe
+    /// turned down, say), the owner reads that reason, not "check your internet connection".
+    func testATokenTheServerCouldntMakeSaysWhy() async {
+        let location = "Stripe didn't accept the Terminal location set on the server. Check STRIPE_TERMINAL_LOCATION_ID: it must be a location from the same Stripe account and mode (test or live) as the key."
+        let provider = TerminalTokenProvider()
+        provider.use { throw APIError.server(code: "server_error", message: location, status: 500) }
+        _ = await fetch(from: provider)
+        XCTAssertEqual(provider.lastFailure, location)
+        XCTAssertEqual(StripeTapToPayTerminal.map(stripeError(9050), tokenFailure: provider.lastFailure), .failed(message: location))
+        // Stripe gave up waiting: that's about the connection, whatever the server said last.
+        guard case .failed(let timedOut) = StripeTapToPayTerminal.map(stripeError(9052), tokenFailure: location) else { return XCTFail("timed out") }
+        XCTAssertTrue(timedOut.contains("internet"))
+
+        // Offline: no reason from the server, so the usual advice.
+        provider.use { throw APIError.offline }
+        _ = await fetch(from: provider)
+        XCTAssertNil(provider.lastFailure)
+        provider.use { throw APIError.server(code: APIError.networkErrorCode, message: "", status: 0) }
+        _ = await fetch(from: provider)
+        XCTAssertNil(provider.lastFailure)
+
+        // A wrong owner key says to sign in again; a token that arrives clears the reason.
+        provider.use { throw APIError.unauthorized }
+        _ = await fetch(from: provider)
+        XCTAssertEqual(provider.lastFailure, APIError.unauthorized.userMessage)
+        provider.use { "pst_test_123" }
+        XCTAssertNil(provider.lastFailure, "signing in again starts clean")
+        provider.use { throw APIError.unauthorized }
+        _ = await fetch(from: provider)
+        provider.use { "pst_test_123" }
+        _ = await fetch(from: provider)
+        XCTAssertNil(provider.lastFailure)
         provider.use(nil)
     }
 

@@ -61,7 +61,10 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
 6. **Live**: switch the server to the `sk_live_…` key and a location
    created in live mode (`STRIPE_TERMINAL_LOCATION_ID`). The app
    reconnects to the new location by itself; Settings shows "Live: real
-   money". Optionally add `STRIPE_WEBHOOK_SECRET` for the webhook.
+   money". Optionally add `STRIPE_WEBHOOK_SECRET` for the webhook. If the
+   location is still the test-mode one (or has a typo), Tap to Pay says
+   "Stripe didn't accept the Terminal location set on the server" until
+   it's fixed, and the server's logs show Stripe's own error.
 
 ## Test mode
 

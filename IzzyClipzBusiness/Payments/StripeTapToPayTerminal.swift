@@ -1,5 +1,6 @@
 #if canImport(StripeTerminal)
 import Foundation
+import IzzyClipzKit
 import Observation
 import StripeTerminal
 import UIKit
@@ -353,8 +354,11 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     /// Stripe Terminal's error domain (`SCPErrorDomain`), for tests.
     static var stripeErrorDomain: String { ErrorDomain }
 
-    /// Stripe's errors in plain words, with what to do next.
-    static func map(_ error: Error) -> TerminalError {
+    /// Stripe's errors in plain words, with what to do next. `tokenFailure` is
+    /// what the shop's server said when it couldn't make a connection token
+    /// (e.g. that Stripe turned down its Terminal location), shown instead of
+    /// "check your internet connection" when the token is what failed.
+    static func map(_ error: Error, tokenFailure: String? = TerminalTokenProvider.shared.lastFailure) -> TerminalError {
         if let terminalError = error as? TerminalError { return terminalError }
         if let failure = error as? ConfirmPaymentIntentError {
             if let intent = failure.paymentIntent, intent.status == .requiresPaymentMethod {
@@ -428,7 +432,12 @@ final class StripeTapToPayTerminal: PaymentTerminal {
             ))
         case .notConnectedToInternet, .requestTimedOut, .tapToPayInternalNetworkError:
             return .failed(message: "No internet connection. Check Wi-Fi or cellular data and try again.")
-        case .connectionTokenProviderCompletedWithError, .connectionTokenProviderTimedOut, .connectionTokenProviderCompletedWithNothing:
+        case .connectionTokenProviderCompletedWithError:
+            if let tokenFailure {
+                return .failed(message: tokenFailure)
+            }
+            return .failed(message: "We couldn't reach the shop's server to start Tap to Pay. Check your internet connection and try again.")
+        case .connectionTokenProviderTimedOut, .connectionTokenProviderCompletedWithNothing:
             return .failed(message: "We couldn't reach the shop's server to start Tap to Pay. Check your internet connection and try again.")
         case .sessionExpired, .notConnectedToReader:
             return .failed(message: "Tap to Pay disconnected. Try again to reconnect.")
@@ -468,10 +477,21 @@ final class TerminalTokenProvider: NSObject, ConnectionTokenProvider {
 
     private let lock = NSLock()
     private var fetchToken: (@Sendable () async throws -> String)?
+    private var failure: String?
 
     /// Set when the owner signs in, cleared on sign out.
     func use(_ fetch: (@Sendable () async throws -> String)?) {
-        lock.withLock { fetchToken = fetch }
+        lock.withLock {
+            fetchToken = fetch
+            failure = nil
+        }
+    }
+
+    /// Why the shop's server couldn't make the last token, in its own words
+    /// (e.g. "Stripe didn't accept the Terminal location…"). `nil` once a
+    /// token arrives, and when the server couldn't be reached at all.
+    var lastFailure: String? {
+        lock.withLock { failure }
     }
 
     func fetchConnectionToken(_ completion: @escaping ConnectionTokenCompletionBlock) {
@@ -482,10 +502,28 @@ final class TerminalTokenProvider: NSObject, ConnectionTokenProvider {
         }
         Task {
             do {
-                completion(try await fetch(), nil)
+                let token = try await fetch()
+                lock.withLock { failure = nil }
+                completion(token, nil)
             } catch {
+                let reason = Self.serverReason(for: error)
+                lock.withLock { failure = reason }
                 completion(nil, error)
             }
+        }
+    }
+
+    /// What the owner should read when the server answered with an error;
+    /// `nil` when it couldn't be reached (Stripe's own message says so).
+    static func serverReason(for error: Error) -> String? {
+        guard let apiError = error as? APIError else { return nil }
+        switch apiError {
+        case .offline:
+            return nil
+        case .server(let code, _, let status) where code == APIError.networkErrorCode || status == 0:
+            return nil
+        default:
+            return apiError.userMessage
         }
     }
 }
