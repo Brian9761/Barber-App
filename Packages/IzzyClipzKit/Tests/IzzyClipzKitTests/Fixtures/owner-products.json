@@ -1,0 +1,12 @@
+{
+  "products": [
+    {
+      "id": "7e8f9a0b-1c2d-4e3f-9a4b-5c6d7e8f9a0b",
+      "name": "Sample comb",
+      "description": null,
+      "priceCents": 750,
+      "imageUrl": null,
+      "visible": false
+    }
+  ]
+}

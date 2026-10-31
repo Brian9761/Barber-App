@@ -1,0 +1,10 @@
+{
+  "product": {
+    "id": "6d7e8f9a-0b1c-4d2e-8f3a-4b5c6d7e8f9a",
+    "name": "Sample pomade",
+    "description": "Example product used only to test decoding.",
+    "priceCents": 1800,
+    "imageUrl": "https://sample.public.blob.vercel-storage.com/products/6d7e8f9a-sample.jpg",
+    "visible": true
+  }
+}

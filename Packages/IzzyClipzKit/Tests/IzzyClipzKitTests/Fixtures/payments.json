@@ -1,0 +1,20 @@
+{
+  "payments": [
+    {
+      "id": "pi_3SampleSampleSample01",
+      "amountCents": 8000,
+      "description": "VIP with Izzy",
+      "appointmentId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "status": "succeeded",
+      "createdAt": "2026-11-02T19:19:58Z"
+    },
+    {
+      "id": "pi_3SampleSampleSample02",
+      "amountCents": 2500,
+      "description": null,
+      "appointmentId": null,
+      "status": "requires_payment_method",
+      "createdAt": "2026-11-02T20:02:11Z"
+    }
+  ]
+}

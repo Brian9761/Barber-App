@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "slot_taken",
+    "message": "Someone just booked that time. Pick another."
+  }
+}

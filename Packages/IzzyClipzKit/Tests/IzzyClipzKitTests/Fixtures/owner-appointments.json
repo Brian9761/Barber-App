@@ -1,0 +1,58 @@
+{
+  "appointments": [
+    {
+      "id": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
+      "offeringId": "israel-flores/9a33be59-43eb-445c-9c18-6435125b1f75",
+      "serviceId": "vip",
+      "serviceName": "VIP",
+      "barberId": "israel-flores",
+      "barberName": "Izzy",
+      "start": "2026-11-02T18:00:00Z",
+      "end": "2026-11-02T19:15:00Z",
+      "durationMinutes": 75,
+      "priceLabel": "$80",
+      "status": "completed",
+      "cancelledBy": null,
+      "payment": { "status": "paid", "amountCents": 8000, "paidAt": "2026-11-02T19:20:31Z" },
+      "customer": { "name": "Walk-in Client", "phone": null, "email": null },
+      "note": null,
+      "createdAt": "2026-11-02T17:58:02Z"
+    },
+    {
+      "id": "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e",
+      "offeringId": "carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "carlos-rafael",
+      "barberName": "Carlos",
+      "start": "2026-11-02T19:00:00Z",
+      "end": "2026-11-02T19:45:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$45",
+      "status": "noShow",
+      "cancelledBy": null,
+      "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
+      "customer": { "name": "Test Customer Two", "phone": "+17605550188", "email": null },
+      "note": null,
+      "createdAt": "2026-10-30T22:41:17Z"
+    },
+    {
+      "id": "2c3d4e5f-6a7b-4c8d-ae9f-1a2b3c4d5e6f",
+      "offeringId": "israel-flores/8f795304-bb2d-4f55-bd37-a6fe6cabb43c",
+      "serviceId": "lightener",
+      "serviceName": "Lightener Process",
+      "barberId": "israel-flores",
+      "barberName": "Izzy",
+      "start": "2026-11-02T21:00:00Z",
+      "end": "2026-11-02T23:00:00Z",
+      "durationMinutes": 120,
+      "priceLabel": "From $80",
+      "status": "cancelled",
+      "cancelledBy": "shop",
+      "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
+      "customer": { "name": "Test Customer Three", "phone": "+16195550142", "email": "three@example.com" },
+      "note": "First time with lightener.",
+      "createdAt": "2026-10-29T15:03:44Z"
+    }
+  ]
+}
