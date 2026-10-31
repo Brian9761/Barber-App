@@ -502,6 +502,39 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "Home doesn't show the appointment")
     }
 
+    /// A booking that's slow to answer has no Start over. If the client leaves it anyway (another
+    /// Book button, here a barber on Services) and it then goes through, "You're booked" shows:
+    /// they haven't seen it yet, and booking that time again would make a second appointment.
+    func testABookingLeftWhileItsSentStillShowsBooked() {
+        launch(UITestArguments.slowBooking, UITestArguments.savedDetails)
+        openTab("Book")
+        tap("bookService-haircut")
+        tap("choose-\(Self.carlosHaircut)")
+        waitForTimes()
+        pickFirstTime()
+        continueToDetails()
+        continueToReview()
+        tapPinned("bookAppointmentButton")
+        XCTAssertTrue(waitUntil(element("bookAppointmentButton"), toMatch: NSPredicate(format: "isEnabled == false")), "It isn't booking")
+        XCTAssertTrue(waitForDisappearance(of: element("bookingStartOver")), "Start over shows while it's booking")
+
+        openTab("Services")
+        tap("service-haircut")
+        let carlos = element("book-\(Self.carlosHaircut)")
+        XCTAssertTrue(carlos.waitForExistence(timeout: 10))
+        scroll(toReveal: carlos)
+        carlos.tap()
+        assertSelectedTab("Book")
+
+        let summary = element("bookedSummary")
+        XCTAssertTrue(summary.waitForExistence(timeout: 30), "It was booked, but nothing said so")
+        XCTAssertTrue(summary.label.contains("Carlos"), summary.label)
+        tapPinned("bookedDoneButton")
+        let list = element("yourAppointments")
+        XCTAssertTrue(list.waitForExistence(timeout: 10), "No list of appointments on the Book tab")
+        XCTAssertEqual(list.descendants(matching: .any).matching(identifier: "appointmentCard").count, 1)
+    }
+
     func testCalendarNavigationAndStartOver() {
         launch()
         openTab("Book")
@@ -1079,6 +1112,7 @@ enum UITestArguments {
     static let bookingOffline = "-fakeBookingOffline"
     static let loseBookingResponse = "-fakeLoseBookingResponse"
     static let slotTaken = "-fakeSlotTaken"
+    static let slowBooking = "-fakeSlowBooking"
     static let noProducts = "-fakeNoProducts"
     static let reviewsUnavailable = "-fakeReviewsUnavailable"
     static let yelp = "-fakeYelp"

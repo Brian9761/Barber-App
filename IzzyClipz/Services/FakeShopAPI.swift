@@ -28,6 +28,9 @@ final class FakeShopAPI: ShopAPI {
         /// `-fakeSlotTaken`: the first booking attempt finds the time just taken, and that time
         /// disappears from the list.
         var slotTakenOnce = false
+        /// `-fakeSlowBooking`: the first booking takes `slowBookingDelay` to answer, so the app
+        /// can be used while it's on its way.
+        var slowBookingOnce = false
         /// `-fakeNoProducts`: the shop hasn't added any products yet.
         var noProducts = false
         /// `-fakeReviewsUnavailable`: Google's reviews can't be loaded (not set up, or over the
@@ -47,6 +50,7 @@ final class FakeShopAPI: ShopAPI {
             bookingOfflineOnce = arguments.contains("-fakeBookingOffline")
             loseBookingResponseOnce = arguments.contains("-fakeLoseBookingResponse")
             slotTakenOnce = arguments.contains("-fakeSlotTaken")
+            slowBookingOnce = arguments.contains("-fakeSlowBooking")
             noProducts = arguments.contains("-fakeNoProducts")
             reviewsUnavailable = arguments.contains("-fakeReviewsUnavailable")
             yelp = arguments.contains("-fakeYelp")
@@ -110,8 +114,15 @@ final class FakeShopAPI: ShopAPI {
         return IzzyAPI.AvailabilityResponse(timeZone: shop.timeZoneIdentifier, days: days)
     }
 
+    /// How long the first booking takes with `slowBookingOnce`.
+    static let slowBookingDelay: Duration = .seconds(12)
+
     func book(_ request: IzzyAPI.NewAppointment, token manageToken: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation {
         try await respond()
+        if options.slowBookingOnce {
+            options.slowBookingOnce = false
+            try await Task.sleep(for: Self.slowBookingDelay)
+        }
         if options.bookingOfflineOnce {
             options.bookingOfflineOnce = false
             throw APIError.offline

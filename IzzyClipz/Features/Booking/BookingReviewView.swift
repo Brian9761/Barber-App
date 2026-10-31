@@ -153,24 +153,24 @@ private struct BookingReviewScreen: View {
     /// Books it. "Try again" comes back here too, and sends the same booking with the same token,
     /// so a try that went through but whose answer was lost is found, not booked twice.
     ///
-    /// If the client has left this review by the time the answer comes (another booking started
-    /// from Home, say), it leaves the flow on screen alone: a booking that went through is saved
-    /// and shows in their appointments either way.
+    /// Once it's booked, "You're booked" shows even if the client has left this review (for
+    /// another booking started from Services, say): they haven't seen it yet, and booking that
+    /// time again would make a second appointment. A try that didn't go through leaves the flow
+    /// on screen alone once its review is gone.
     private func book() {
         Task {
-            let saved = await submitter.book(draft)
-            guard router.isShowing(.review(draft)) else { return }
-            guard let saved else {
-                if case .timeGone(let message)? = submitter.failure {
-                    // Back to the times, which reload without the time that's gone.
-                    router.returnToTimes(message: message, droppedStart: plan.start)
-                }
-                if let message = submitter.failure?.message {
-                    UIAccessibility.post(notification: .announcement, argument: message)
-                }
+            if let saved = await submitter.book(draft) {
+                router.showBooked(appointmentID: saved.id)
                 return
             }
-            router.showBooked(appointmentID: saved.id)
+            guard router.isShowing(.review(draft)) else { return }
+            if case .timeGone(let message)? = submitter.failure {
+                // Back to the times, which reload without the time that's gone.
+                router.returnToTimes(message: message, droppedStart: plan.start)
+            }
+            if let message = submitter.failure?.message {
+                UIAccessibility.post(notification: .announcement, argument: message)
+            }
         }
     }
 }

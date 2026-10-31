@@ -278,8 +278,8 @@ final class AppRouter {
         }
     }
 
-    /// Whether `step` is the booking step on screen. A booking's answer can arrive after the
-    /// client has left its review for another booking; it mustn't move that one.
+    /// Whether `step` is the booking step on screen. A booking that didn't go through can answer
+    /// after the client has left its review for another booking; it mustn't move that one.
     func isShowing(_ step: BookingStep) -> Bool {
         bookingPath.last == step
     }
