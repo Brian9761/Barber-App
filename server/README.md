@@ -17,6 +17,7 @@ TypeScript on Vercel Functions (Node 24), Postgres on Neon, region `pdx1`. One f
 | `src/catalog.ts`, `data/catalog.json` | The menu, team and hours, exported from IzzyClipzKit. |
 | `src/db.ts`, `src/migrate.ts`, `migrations/*.sql`, `scripts/migrate.ts` | Postgres pool, migrations and the barber seed. |
 | `src/production.ts` | Real dependencies (pg pool, Stripe, Blob, fetch). Tests swap in fakes. |
+| `scripts/dev.ts`, `scripts/smoke.ts` | A local server without Vercel, and the end-to-end check to run after a deploy. |
 | `public/` | A placeholder page. Keep it: without `public/`, Vercel publishes the source files as static files. |
 | `test/` | Vitest suites, fixtures and the contract fixtures the Swift Kit decodes. |
 
@@ -52,7 +53,14 @@ npm test              # vitest: everything, against PGlite (no database to insta
 npx tsc --noEmit      # strict type check (also what `npm run build` does on Vercel)
 ```
 
-To run the API itself, `vercel dev` from `server/` (needs `vercel login` and a linked project), with a database from `vercel env pull .env.local` or a local Postgres in `DATABASE_URL`.
+To run the API itself:
+
+```sh
+DATABASE_URL=postgres://… OWNER_KEY=… npm run migrate   # once
+DATABASE_URL=postgres://… OWNER_KEY=… npm run dev       # http://localhost:3000/api/health
+```
+
+`npm run dev` (`scripts/dev.ts`) serves the same app with the production dependencies over plain Node HTTP and reads `.env.local` if it exists, so it needs no Vercel login. `vercel dev` works too once the project is linked.
 
 ## Tests
 
@@ -74,6 +82,15 @@ What's covered: availability against fixtures exported from the Kit's `BookingCa
 - `test/fixtures/google/*.json` and `test/fixtures/yelp/*.json` follow the response formats in Google's Place Details (New) and Yelp's Places API reference. Their names and texts are obviously test data, not real reviews.
 - `test/fixtures/contract/*.json` are one example of every response type (and `errors/<code>.json` of every error code), written by the real handlers in `test/contract.test.ts` after checking them against strict schemas of the contract. The Swift Kit decodes the same files. If a handler's output changes on purpose, regenerate them with `UPDATE_CONTRACT_FIXTURES=1 npm test` and commit the diff.
 
+### Smoke test after a deploy
+
+```sh
+npm run smoke -- https://izzy-clipz-api.vercel.app            # or SMOKE_BASE_URL
+SMOKE_OWNER_KEY=… npm run smoke -- https://izzy-clipz-api.vercel.app
+```
+
+`scripts/smoke.ts` checks health, books the last start time of a day near the end of the 60-day window ("Smoke test", a 555-01xx number), checks it left availability, reads it back with its manage token, cancels it and checks the slot came back. With `SMOKE_OWNER_KEY` (the server's `OWNER_KEY`; there's no separate test-only key) it also checks the owner schedule and cancels through the owner API if anything fails midway. `.github/workflows/server-smoke.yml` runs it by hand or after each successful production deployment, using the `API_BASE_URL` repository variable and the optional `SMOKE_OWNER_KEY` secret.
+
 ## Migrations
 
 ```sh
@@ -91,7 +108,7 @@ Run it once when the database is created, after every new migration, and after e
 3. **Photos**: create a **public** Blob store in `pdx1` and connect it to the project.
 4. **Secrets**: add `OWNER_KEY`, `CRON_SECRET` and, when ready, the Google, Yelp and Stripe variables above. Redeploy after changing variables.
 5. **Stripe** (when the shop's account is connected): create a Terminal Location for the shop and set `STRIPE_TERMINAL_LOCATION_ID`. Add a webhook endpoint at `https://<domain>/api/stripe/webhook` with API version `2026-10-28.endive` (stripe-node 23's) for `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `payment_intent.processing` and `payment_intent.requires_action`, and set `STRIPE_WEBHOOK_SECRET`.
-6. **Check**: `GET https://<domain>/api/health` → `{ "ok": true, "version": "4.0.0" }`. Point the apps at the production domain, not at a per-deployment URL (those are behind Deployment Protection).
+6. **Check**: `GET https://<domain>/api/health` → `{ "ok": true, "version": "4.0.0" }`, then `npm run smoke -- https://<domain>`. Point the apps at the production domain, not at a per-deployment URL (those are behind Deployment Protection).
 
 Vercel's Hobby plan is for non-commercial use only; a shop taking bookings and payments needs Pro. Pro also allows an hourly cron (see the Yelp note below).
 
