@@ -23,6 +23,9 @@ final class DemoTour: XCTestCase {
         )
         continueAfterFailure = true
         app = XCUIApplication()
+        // The barber pole crosses 3 times slower than in the app: the CI simulator has no GPU and
+        // draws few frames, so at full speed the video catches the pole only as it leaves.
+        app.launchArguments += ["-poleSlowMotion", "3"]
         app.launch()
     }
 
@@ -31,6 +34,12 @@ final class DemoTour: XCTestCase {
         expect("homeBookButton")
         pause(3)
         capture("Home")
+
+        // A lap of the tab bar, for the barber pole: right through the tabs, then back to Home.
+        for name in ["Services", "Book", "Shop", "Visit", "Home"] {
+            tab(name)
+            pause(2.5)
+        }
         for _ in 0..<3 {
             app.swipeUp(velocity: .slow)
             pause(1.2)

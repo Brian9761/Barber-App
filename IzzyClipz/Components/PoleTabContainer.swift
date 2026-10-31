@@ -25,7 +25,12 @@ struct PoleSweepMetrics {
     /// The Reduce Motion cross-fade.
     var fadeDuration: Double = 0.2
 
-    static let streetDrip = PoleSweepMetrics()
+    static let streetDrip: PoleSweepMetrics = {
+        var metrics = PoleSweepMetrics()
+        // 1 except in demo recordings (see `LaunchOptions.poleSlowMotion`).
+        metrics.duration *= LaunchOptions.poleSlowMotion
+        return metrics
+    }()
 }
 
 /// Which way the pole travels. A tab to the right of the current one brings the pole in from the right edge

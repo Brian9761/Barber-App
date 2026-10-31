@@ -30,6 +30,14 @@ enum LaunchOptions {
         defaults.removePersistentDomain(forName: suite)
         return defaults
     }()
+
+    /// For demo recordings only: plays the barber-pole tab switch this many times slower (1–8).
+    /// The CI simulators draw few frames without a GPU, so at full speed a recording catches the
+    /// pole only as it leaves. Set with the launch argument `-poleSlowMotion 4`; otherwise 1.
+    static let poleSlowMotion: Double = {
+        let value = UserDefaults.standard.double(forKey: "poleSlowMotion")
+        return value >= 1 ? min(value, 8) : 1
+    }()
 }
 
 /// Photos of the shop's work, bundled from izzyclipzbarbershop.net.
