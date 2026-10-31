@@ -6,6 +6,7 @@ const h = useHarness({ now: '2026-11-02T19:10:00Z' });
 
 const OWNER_ROUTES: [string, string][] = [
   ['GET', '/api/owner/me'],
+  ['GET', '/api/owner/availability?offeringId=x'],
   ['GET', '/api/owner/appointments?date=2026-11-02'],
   ['POST', '/api/owner/appointments'],
   ['PATCH', '/api/owner/appointments/00000000-0000-4000-8000-000000000001'],
@@ -56,10 +57,10 @@ describe('owner auth', () => {
 
 describe('GET /api/owner/me', () => {
   it('reports Stripe as not configured, test or live', async () => {
-    expect((await h.call('GET', '/api/owner/me', { owner: true })).body).toEqual({ ok: true, stripe: { configured: false, mode: null } });
+    expect((await h.call('GET', '/api/owner/me', { owner: true })).body).toEqual({ ok: true, stripe: { configured: false, mode: null, locationId: null } });
     h.config.stripeSecretKey = 'sk_test_fixture';
-    expect((await h.call('GET', '/api/owner/me', { owner: true })).body.stripe).toEqual({ configured: true, mode: 'test' });
+    expect((await h.call('GET', '/api/owner/me', { owner: true })).body.stripe).toEqual({ configured: true, mode: 'test', locationId: null });
     h.config.stripeSecretKey = 'rk_live_fixture';
-    expect((await h.call('GET', '/api/owner/me', { owner: true })).body.stripe).toEqual({ configured: true, mode: 'live' });
+    expect((await h.call('GET', '/api/owner/me', { owner: true })).body.stripe).toEqual({ configured: true, mode: 'live', locationId: null });
   });
 });

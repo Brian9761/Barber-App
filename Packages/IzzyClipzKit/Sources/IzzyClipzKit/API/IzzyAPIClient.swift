@@ -120,6 +120,10 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.ownerStatus())
     }
 
+    public func ownerAvailability(_ query: IzzyAPI.AvailabilityQuery) async throws -> IzzyAPI.AvailabilityResponse {
+        try await send(IzzyAPI.Endpoints.ownerAvailability(query))
+    }
+
     public func appointments(on date: LocalDate) async throws -> [IzzyAPI.Appointment] {
         try await send(IzzyAPI.Endpoints.ownerAppointments(on: date)).appointments
     }

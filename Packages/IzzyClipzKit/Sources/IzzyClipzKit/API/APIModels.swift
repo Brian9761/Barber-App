@@ -548,24 +548,28 @@ extension IzzyAPI {
         case live
     }
 
-    /// `{ configured, mode }`; `mode` is `nil` when Stripe isn't configured.
+    /// `{ configured, mode, locationId }`; `mode` and `locationId` are `nil` when Stripe isn't
+    /// configured. `locationId` is the Stripe Terminal location Tap to Pay connects to.
     public struct StripeStatus: Codable, Hashable, Sendable {
         public var configured: Bool
         public var mode: StripeMode?
+        public var locationId: String?
 
-        public init(configured: Bool, mode: StripeMode? = nil) {
+        public init(configured: Bool, mode: StripeMode? = nil, locationId: String? = nil) {
             self.configured = configured
             self.mode = mode
+            self.locationId = locationId
         }
 
         private enum CodingKeys: String, CodingKey {
-            case configured, mode
+            case configured, mode, locationId
         }
 
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(configured, forKey: .configured)
             try container.encode(mode, forKey: .mode)
+            try container.encode(locationId, forKey: .locationId)
         }
     }
 

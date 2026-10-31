@@ -128,6 +128,8 @@ Vercel's Hobby plan is for non-commercial use only; a shop taking bookings and p
 
 - `invalid_request` also covers 405 (wrong method, with an `Allow` header), 413 (body too large: 16 KB for JSON, 4 MB for photos) and 415 (photo that isn't `image/jpeg`).
 - `POST /api/owner/payments/:id/complete` answers 200 with the payment and Stripe's current `status`; the app should treat only `"succeeded"` as paid.
+- `GET /api/owner/availability`: the same query and answer as `GET /api/availability`, with the owner key and without the lead time, so a walk-in can take the next slot that hasn't started yet.
+- `GET /api/owner/me`: `stripe.locationId` is the Terminal location the owner app connects Tap to Pay to (`STRIPE_TERMINAL_LOCATION_ID`), `null` until Stripe is configured.
 - `GET /api/availability`: `from` defaults to today and must be within a year of it; `days` defaults to 1 (max 31). `serviceId` + `barberId=any` works for the services listed in the catalog's `firstAvailable` (those at least two barbers share); for the others it's a 400 and the app should ask for a barber.
 - `GET /api/owner/appointments`, `/api/owner/time-off` and `/api/owner/payments` take shop-local days: `date`, or `from` and `to` (inclusive; at most 62 days, or 366 for time off), defaulting to today. Time off is listed when it overlaps those days.
 - `POST /api/owner/time-off` accepts `barberId` missing or `null` for the whole shop. Blocking time over existing appointments keeps them; it only stops new bookings.

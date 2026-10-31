@@ -1,4 +1,4 @@
 {
   "ok": true,
-  "stripe": { "configured": false, "mode": null }
+  "stripe": { "configured": false, "mode": null, "locationId": null }
 }

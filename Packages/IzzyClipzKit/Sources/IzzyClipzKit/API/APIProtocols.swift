@@ -45,6 +45,9 @@ public protocol OwnerAPI: Sendable {
     /// `GET /api/owner/me`: checks the owner key and reports Stripe's status.
     func ownerStatus() async throws -> IzzyAPI.OwnerStatus
 
+    /// `GET /api/owner/availability`: open start times without the lead time (for walk-ins).
+    func ownerAvailability(_ query: IzzyAPI.AvailabilityQuery) async throws -> IzzyAPI.AvailabilityResponse
+
     /// `GET /api/owner/appointments?date=`: one shop day, every status.
     func appointments(on date: LocalDate) async throws -> [IzzyAPI.Appointment]
 

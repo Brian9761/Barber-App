@@ -85,6 +85,7 @@ export async function availability(
   from: string,
   days: number,
   now: Date,
+  options: GridOptions = {},
 ): Promise<DaySlots[]> {
   const zone = catalog.timeZone;
   const dates = Array.from({ length: days }, (_, i) => addDays(from, i));
@@ -95,7 +96,7 @@ export async function availability(
   const rangeEnd = dayBounds(last, zone).end;
 
   // Grid first, so days with nothing to offer cost no query.
-  const grids = dates.map((date) => offerings.map((o) => gridStarts(catalog, date, o.durationMinutes, now)));
+  const grids = dates.map((date) => offerings.map((o) => gridStarts(catalog, date, o.durationMinutes, now, options)));
   const anyCandidates = grids.some((perOffering) => perOffering.some((starts) => starts.length > 0));
   const busy = anyCandidates
     ? await busyIntervals(db, [...new Set(offerings.map((o) => o.barberId))], rangeStart, rangeEnd)

@@ -33,7 +33,19 @@ const availabilityQuery = z.object({
     .optional(),
 });
 
-export async function getAvailability({ url, deps }: Context): Promise<Response> {
+export async function getAvailability(ctx: Context): Promise<Response> {
+  return availabilityResponse(ctx, {});
+}
+
+// GET /api/owner/availability: the same, without the lead time, so the owner can book a walk-in
+// for the next slot that hasn't started yet.
+
+export async function getOwnerAvailability(ctx: Context): Promise<Response> {
+  requireOwner(ctx.request, ctx.deps.config);
+  return availabilityResponse(ctx, { leadTimeMinutes: 0 });
+}
+
+async function availabilityResponse({ url, deps }: Context, options: { leadTimeMinutes?: number }): Promise<Response> {
   const query = parse(availabilityQuery, Object.fromEntries(url.searchParams));
   const target = resolveTarget(deps.catalog, query);
   const now = deps.now();
@@ -43,7 +55,7 @@ export async function getAvailability({ url, deps }: Context): Promise<Response>
   if (Math.abs(daysBetween(today, from)) > 366) {
     throw new ApiError('invalid_request', 'from must be within a year of today.');
   }
-  const days = await availability(deps.db, deps.catalog, targetOfferings(target), from, query.days ?? 1, now);
+  const days = await availability(deps.db, deps.catalog, targetOfferings(target), from, query.days ?? 1, now, options);
   return json({ timeZone: deps.catalog.timeZone, days });
 }
 

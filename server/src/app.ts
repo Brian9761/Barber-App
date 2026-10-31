@@ -1,4 +1,4 @@
-import { cancelAppointment, getAppointment, getAvailability, listOwnerAppointments, patchOwnerAppointment, postAppointment, postOwnerAppointment } from './appointments.js';
+import { cancelAppointment, getAppointment, getAvailability, getOwnerAvailability, listOwnerAppointments, patchOwnerAppointment, postAppointment, postOwnerAppointment } from './appointments.js';
 import { dailyCron } from './cron.js';
 import type { Deps } from './deps.js';
 import { json } from './http.js';
@@ -23,6 +23,7 @@ export function createRouter(): Router {
       .on('GET', '/api/products', listPublicProducts)
       // Owner (Authorization: Bearer OWNER_KEY)
       .on('GET', '/api/owner/me', ownerMe)
+      .on('GET', '/api/owner/availability', getOwnerAvailability)
       .on('GET', '/api/owner/appointments', listOwnerAppointments)
       .on('POST', '/api/owner/appointments', postOwnerAppointment)
       .on('PATCH', '/api/owner/appointments/:id', patchOwnerAppointment)

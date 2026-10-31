@@ -158,6 +158,16 @@ extension IzzyAPI {
             Endpoint(.get, "/api/owner/me", credential: .ownerKey)
         }
 
+        /// `GET /api/owner/availability` → `{ timeZone, days }`: like `availability`, without the
+        /// lead time, so a walk-in can take the next slot that hasn't started yet.
+        public static func ownerAvailability(_ query: AvailabilityQuery) -> Endpoint<AvailabilityResponse> {
+            let target = query.target.fields.map { QueryItem($0.name, $0.value) }
+            return Endpoint(.get, "/api/owner/availability", query: target + [
+                QueryItem("from", query.from.description),
+                QueryItem("days", String(query.days)),
+            ], credential: .ownerKey)
+        }
+
         /// `GET /api/owner/appointments?date=YYYY-MM-DD` → `{ appointments }`.
         public static func ownerAppointments(on date: LocalDate) -> Endpoint<AppointmentsResponse> {
             Endpoint(.get, "/api/owner/appointments", query: [QueryItem("date", date.description)], credential: .ownerKey)

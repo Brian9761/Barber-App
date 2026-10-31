@@ -246,3 +246,18 @@ describe('POST /api/stripe/webhook', () => {
     expect((await h.call('GET', '/api/owner/payments', { owner: true })).body.payments[0].status).toBe('canceled');
   });
 });
+
+describe('GET /api/owner/me', () => {
+  it('reports Stripe as not configured, with no location', async () => {
+    const res = await h.call('GET', '/api/owner/me', { owner: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ ok: true, stripe: { configured: false, mode: null, locationId: null } });
+  });
+
+  it('gives the app the Terminal location it needs to connect Tap to Pay', async () => {
+    configureStripe();
+    const res = await h.call('GET', '/api/owner/me', { owner: true });
+    expect(res.status).toBe(200);
+    expect(res.body.stripe).toEqual({ configured: true, mode: 'test', locationId: 'tml_FixtureLocation' });
+  });
+});

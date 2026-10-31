@@ -111,3 +111,26 @@ describe('GET /api/availability with no bookings', () => {
     expect(res.body.days[0].slots.map((s: { start: string }) => s.start)).toEqual(kitDay.starts);
   });
 });
+
+describe('GET /api/owner/availability', () => {
+  // Saturday Oct 31 2026, 10:05 AM PDT: the 10:30 start is inside the 30-minute lead time.
+  const h = useHarness({ now: '2026-10-31T17:05:00Z' });
+  const flow45 = () => catalog.data.offerings.find((o) => o.durationMinutes === 45 && o.barberId === 'flowxbori')!;
+
+  it('needs the owner key', async () => {
+    const res = await h.call('GET', `/api/owner/availability?offeringId=${encodeURIComponent(flow45().id)}&from=2026-10-31`);
+    expect(res.status).toBe(401);
+  });
+
+  it('skips the lead time, so a walk-in can take the next slot that hasn\'t started', async () => {
+    const path = `availability?offeringId=${encodeURIComponent(flow45().id)}&from=2026-10-31`;
+    const publicStarts = (await h.call('GET', `/api/${path}`)).body.days[0].slots.map((s: { start: string }) => s.start);
+    const owner = await h.call('GET', `/api/owner/${path}`, { owner: true });
+    expect(owner.status).toBe(200);
+    const ownerStarts = owner.body.days[0].slots.map((s: { start: string }) => s.start);
+    expect(publicStarts[0]).toBe('2026-10-31T18:00:00Z');
+    expect(ownerStarts[0]).toBe('2026-10-31T17:30:00Z');
+    expect(ownerStarts).not.toContain('2026-10-31T17:00:00Z');
+    expect(ownerStarts.slice(1)).toEqual(publicStarts);
+  });
+});

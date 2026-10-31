@@ -216,7 +216,7 @@ final class ResponseDecodingTests: XCTestCase {
 
     func testOwnerResponses() throws {
         let me = try decoder.decode(IzzyAPI.OwnerStatus.self, from: try kitFixture("owner-me.json"))
-        XCTAssertEqual(me, IzzyAPI.OwnerStatus(ok: true, stripe: IzzyAPI.StripeStatus(configured: true, mode: .test)))
+        XCTAssertEqual(me, IzzyAPI.OwnerStatus(ok: true, stripe: IzzyAPI.StripeStatus(configured: true, mode: .test, locationId: "tml_FixtureLocation")))
         let unconfigured = try decoder.decode(IzzyAPI.OwnerStatus.self, from: try kitFixture("owner-me-unconfigured.json"))
         XCTAssertEqual(unconfigured.stripe, IzzyAPI.StripeStatus(configured: false, mode: nil))
 
@@ -279,7 +279,7 @@ final class ResponseEncodingTests: XCTestCase {
             "id": .string("p"), "name": .string("Comb"), "description": .null, "priceCents": .null,
             "imageUrl": .null, "visible": .bool(true),
         ]))
-        XCTAssertEqual(try encodeAPI(IzzyAPI.StripeStatus(configured: false)), .object(["configured": .bool(false), "mode": .null]))
+        XCTAssertEqual(try encodeAPI(IzzyAPI.StripeStatus(configured: false)), .object(["configured": .bool(false), "mode": .null, "locationId": .null]))
         XCTAssertEqual(try encodeAPI(IzzyAPI.TimeOff(id: "t", barberId: nil, start: utc(2026, 1, 1), end: utc(2026, 1, 2)))["barberId"], .null)
     }
 

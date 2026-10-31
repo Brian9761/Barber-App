@@ -52,7 +52,9 @@ function stripeFailure(deps: Deps, error: unknown, what: string): ApiError {
 export async function ownerMe(ctx: Context): Promise<Response> {
   requireOwner(ctx.request, ctx.deps.config);
   const configured = Boolean(ctx.deps.config.stripeSecretKey);
-  return json({ ok: true, stripe: { configured, mode: configured ? stripeMode(ctx.deps.config) : null } });
+  // The app needs the Terminal location to connect Tap to Pay (TapToPayConnectionConfiguration).
+  const locationId = configured ? (ctx.deps.config.stripeTerminalLocationId ?? null) : null;
+  return json({ ok: true, stripe: { configured, mode: configured ? stripeMode(ctx.deps.config) : null, locationId } });
 }
 
 // POST /api/owner/terminal/connection-token

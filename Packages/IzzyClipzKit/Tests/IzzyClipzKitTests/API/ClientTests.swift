@@ -260,6 +260,14 @@ final class ClientTests: XCTestCase {
             OwnerCall(name: "me", reply: .fixture("owner-me.json"), method: "GET", path: "/api/owner/me") {
                 let status = try await $0.ownerStatus()
                 XCTAssertEqual(status.stripe.mode, .test)
+                XCTAssertEqual(status.stripe.locationId, "tml_FixtureLocation")
+            },
+            OwnerCall(name: "walk-in times", reply: .fixture("availability.json"), method: "GET", path: "/api/owner/availability",
+                      query: "offeringId=flowxbori%2Fbbb0c294-87a6-465d-9f55-6f579dcb399a&from=2026-11-02&days=1") {
+                let open = try await $0.ownerAvailability(IzzyAPI.AvailabilityQuery(
+                    target: .offering(id: "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a"), from: day
+                ))
+                XCTAssertEqual(open.days.count, 2)
             },
             OwnerCall(name: "day", reply: .fixture("owner-appointments.json"), method: "GET", path: "/api/owner/appointments", query: "date=2026-11-02") {
                 let list = try await $0.appointments(on: day)

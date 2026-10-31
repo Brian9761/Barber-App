@@ -97,7 +97,7 @@ export const RESPONSES = {
   products: z.strictObject({ products: z.array(Product) }),
   'owner-me': z.strictObject({
     ok: z.literal(true),
-    stripe: z.strictObject({ configured: z.boolean(), mode: z.enum(['test', 'live']).nullable() }),
+    stripe: z.strictObject({ configured: z.boolean(), mode: z.enum(['test', 'live']).nullable(), locationId: z.string().nullable() }),
   }),
   'owner-appointments': z.strictObject({ appointments: z.array(Appointment) }),
   'owner-appointment-created': z.strictObject({ appointment: Appointment }),
