@@ -484,7 +484,9 @@ final class IzzyClipzUITests: XCTestCase {
         tapPinned("bookedDoneButton")
         XCTAssertTrue(element("bookService-haircut").waitForExistence(timeout: 10), "Done didn't go back to step 1")
         XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "The appointment isn't on the Book tab")
-        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "appointmentCard").count, 1, "One booking, not two")
+        let list = element("yourAppointments")
+        XCTAssertTrue(list.exists, "No list of appointments on the Book tab")
+        XCTAssertEqual(list.descendants(matching: .any).matching(identifier: "appointmentCard").count, 1, "One booking, not two")
         openTab("Home")
         XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "Home doesn't show the appointment")
     }
