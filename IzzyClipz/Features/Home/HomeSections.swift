@@ -501,74 +501,39 @@ private struct HomeLinkLabel: View {
 
 // MARK: - Reviews
 
-/// What clients say: Google's live rating and count, with Google Maps' attribution, opening the
-/// Reviews screen. Until Google's numbers arrive (or when they can't be shown), it's a plain link,
-/// "See what clients say". Google and Yelp are never added up into one rating.
+/// What clients say: a card that opens the Reviews screen, "See what clients say".
+///
+/// Home never asks for the reviews itself. Google's terms don't allow keeping its reviews, so each
+/// time they're shown costs a Places call against the server's daily limit (kept inside Google's
+/// free tier); loading them for Home on every visit, on every phone, would use that up before
+/// anyone opened Reviews. The Reviews screen loads them live when it opens.
 struct HomeReviewsCard: View {
-    @Environment(ReviewsStore.self) private var reviews
-
     var body: some View {
         NavigationLink(value: HomeRoute.reviews) {
-            Group {
-                if let summary = reviews.value?.google.summary {
-                    rated(summary)
-                } else {
-                    link
+            HStack(spacing: Theme.Space.l) {
+                Image(systemName: Symbol.reviews)
+                    .font(.title3)
+                    .foregroundStyle(Theme.bone)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("See what clients say")
+                        .textRole(.headline)
+                        .foregroundStyle(Theme.bone)
+                    Text("Reviews on Google and Yelp")
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
                 }
+                .multilineTextAlignment(.leading)
+                Spacer(minLength: Theme.Space.s)
+                MenuChevron()
             }
             .card(padding: Theme.Space.xl)
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(accessibilityText)
+        .accessibilityLabel("See what clients say, on Google and Yelp")
         .accessibilityHint("Opens the reviews")
         .accessibilityIdentifier("homeReviews")
-        .task {
-            // Google's numbers are asked for live and never stored; once per half hour at most.
-            await reviews.load(maxAge: 30 * 60)
-        }
-    }
-
-    private func rated(_ summary: Rating) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack {
-                Text("What clients say")
-                    .textRole(.headline)
-                    .foregroundStyle(Theme.bone)
-                Spacer(minLength: Theme.Space.s)
-                MenuChevron()
-            }
-            ReviewScore(rating: summary, site: "Google")
-            GoogleMapsAttribution(lead: "From")
-        }
-    }
-
-    /// "What clients say. Rated 4.9 out of 5 from 61 reviews on Google. From Google Maps", or
-    /// "See what clients say, on Google and Yelp".
-    private var accessibilityText: String {
-        guard let summary = reviews.value?.google.summary else {
-            return "See what clients say, on Google and Yelp"
-        }
-        return "What clients say. Rated \(summary.averageLabel) out of 5 from \(summary.countLabel) on Google. From Google Maps"
-    }
-
-    private var link: some View {
-        HStack(spacing: Theme.Space.l) {
-            Image(systemName: Symbol.reviews)
-                .font(.title3)
-                .foregroundStyle(Theme.bone)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("See what clients say")
-                    .textRole(.headline)
-                    .foregroundStyle(Theme.bone)
-                Text("Reviews on Google and Yelp")
-                    .textRole(.caption)
-                    .foregroundStyle(Theme.smoke)
-            }
-            Spacer(minLength: Theme.Space.s)
-            MenuChevron()
-        }
     }
 }
 

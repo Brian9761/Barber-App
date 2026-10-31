@@ -88,11 +88,12 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("homeBarber-israel-flores").exists)
         screenshot("02-Home-Scrolled")
 
-        // Google's live rating, with its attribution, opening the reviews.
+        // A plain link to the reviews: Home never loads them (each Google answer counts against
+        // the server's daily limit), so no rating shows here.
         let reviews = element("homeReviews")
         scroll(toReveal: reviews)
-        XCTAssertTrue(waitUntil(reviews, toMatch: NSPredicate(format: "label CONTAINS %@", "Rated")), "Home doesn't show Google's rating: \(reviews.label)")
-        XCTAssertTrue(reviews.label.contains("Google Maps"), "Google's rating needs its attribution: \(reviews.label)")
+        XCTAssertTrue(reviews.label.contains("See what clients say"), reviews.label)
+        XCTAssertFalse(reviews.label.contains("Rated"), "Home shouldn't show a rating it didn't load: \(reviews.label)")
         scroll(toReveal: element("homeShopCard"))
         XCTAssertTrue(element("instagramButton").exists || element("meetTeamButton").exists)
         screenshot("03-Home-Reviews-And-Shop")
@@ -433,6 +434,8 @@ final class IzzyClipzUITests: XCTestCase {
         let reviews = element("homeReviews")
         scroll(toReveal: reviews)
         XCTAssertTrue(reviews.label.contains("See what clients say"), reviews.label)
+        reviews.tap()
+        XCTAssertTrue(element("reviewsError").waitForExistence(timeout: 15), "Offline, the reviews should say they couldn't load")
     }
 
     /// The connection drops while booking: "Try again" books it.
@@ -668,7 +671,7 @@ final class IzzyClipzUITests: XCTestCase {
         launch(UITestArguments.reviewsUnavailable)
         let home = element("homeReviews")
         scroll(toReveal: home)
-        XCTAssertTrue(home.label.contains("See what clients say"), "Without Google's numbers Home links to the reviews: \(home.label)")
+        XCTAssertTrue(home.label.contains("See what clients say"), "Home links to the reviews: \(home.label)")
         home.tap()
         XCTAssertTrue(element("googleReviewsUnavailable").waitForExistence(timeout: 15))
         tap("seeAllGoogleReviews")

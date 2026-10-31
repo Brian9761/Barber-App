@@ -25,7 +25,7 @@ These screenshots are taken by the UI tests on every push to `main`. The full se
 
 ## Features
 
-- **Home**: the shop's cuts in a swipeable photo pager with the live open/closed status, "Book an appointment" (no payment needed), the next appointment (or today's walk-in hours when nothing is booked), Directions and Call, popular services, the crew with your favorite barber first, Google's live rating, the shop's products and its Instagram. Pull down to refresh.
+- **Home**: the shop's cuts in a swipeable photo pager with the live open/closed status, "Book an appointment" (no payment needed), the next appointment (or today's walk-in hours when nothing is booked), Directions and Call, popular services, the crew with your favorite barber first, "See what clients say" (opening the reviews), the shop's products and its Instagram. Pull down to refresh.
 - **Book**: five steps, each headed "Step 2 of 5" with a thin bar, and "Start over" in the bar.
   1. A service.
   2. A barber, or **Any barber** when several barbers share the service (the shop's server books whoever is free first). Every barber's own price and length is shown; Flowxbori's 45-minute and hour-long haircuts are separate rows.
@@ -39,7 +39,7 @@ These screenshots are taken by the UI tests on every push to `main`. The full se
 - **Shop**: the shop's own products, added by the owner in Izzy Clipz Business: photo, name, price when the shop lists one, description and "Available at the shop". There's no cart and no checkout. Until the shop adds any: "New products are coming soon. Ask at the shop what's in stock."
 - **Team**: a page for each barber with a monogram, their own menu, specialties, Instagram if they have one, and "Book with…". Clients can mark a favorite barber, which then appears on Home.
 - **Visit**: the storefront, the address with Directions (Apple Maps or Google Maps), Call and Copy address, the week's hours with today marked, a map, walk-in, payment and accessibility info, the shop's Instagram, and links to the website and reviews.
-- **Reviews**: Google's rating, count and up to five reviews in Google's order ("Most relevant on Google"), live, under "Reviews from Google Maps", each with its author and a link to it on Google Maps; Yelp's in a section of its own when the shop's server has them, otherwise "Read our reviews on Yelp". The two are never combined. "Leave a review on Google" opens Google's form.
+- **Reviews**: Google's rating, count and up to five reviews in Google's order ("Most relevant on Google"), live when the screen opens (at most every 5 minutes; Home doesn't load them, because each Google answer counts against the server's daily limit), under "Reviews from Google Maps", each with its author and a link to it on Google Maps; Yelp's in a section of its own when the shop's server has them, otherwise "Read our reviews on Yelp". The two are never combined. "Leave a review on Google" opens Google's form.
 - **Gallery**: the shop's photos, full screen with swipe, pinch and double-tap zoom.
 - **Cut reminders**: an optional "time for a fresh cut" notification every 2–6 weeks after the last cut. Tapping it opens booking.
 

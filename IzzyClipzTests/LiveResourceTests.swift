@@ -88,6 +88,6 @@ final class LiveResourceTests: XCTestCase {
         }
         let store = makeReviews()
         await store.load(maxAge: 60)
-        XCTAssertNil(store.value?.google.summary, "Home shows \"See what clients say\" instead")
+        XCTAssertNil(store.value?.google.summary, "The Reviews screen says Google's reviews can't be shown, with no rating")
     }
 }

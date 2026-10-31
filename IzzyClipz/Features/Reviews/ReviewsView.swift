@@ -162,10 +162,8 @@ private struct GoogleReviewsSection: View {
 /// "Reviews from Google Maps", as Google's attribution rules ask: the system font at regular
 /// weight, 14 pt, white, on one line, never recapitalized.
 struct GoogleMapsAttribution: View {
-    var lead = "Reviews from"
-
     var body: some View {
-        Text("\(lead) Google Maps")
+        Text("Reviews from Google Maps")
             .font(.system(size: 14, weight: .regular))
             .foregroundStyle(Color.white)
             .lineLimit(1)

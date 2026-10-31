@@ -21,8 +21,6 @@ struct HomeView: View {
                         case .reviews: ReviewsView()
                         }
                     }
-                    
-                    
                 }
         }
     }
@@ -33,7 +31,6 @@ struct HomeView: View {
 /// screen pushed from here shows the native bar again, with its back button and swipe-back.
 private struct HomeScreen: View {
     @Environment(AppointmentStore.self) private var appointments
-    @Environment(ReviewsStore.self) private var reviews
 
     var body: some View {
         GeometryReader { proxy in
@@ -43,10 +40,9 @@ private struct HomeScreen: View {
             ScrollView {
                 HomeContent(heroHeight: HomeHero.height(forScreenHeight: screenHeight))
             }
-            // Pull down to check the appointments with the shop and reload Google's rating.
+            // Pull down to check the appointments with the shop. (Reviews load on their own screen.)
             .refreshable {
                 await appointments.refresh(force: true)
-                await reviews.refresh()
             }
             // Content scrolls up under the header, which is frosted ink.
             .safeAreaInset(edge: .top, spacing: 0) {
