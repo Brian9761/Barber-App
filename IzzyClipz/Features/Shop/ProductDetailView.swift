@@ -19,6 +19,7 @@ struct ProductDetailView: View {
                         .foregroundStyle(Theme.bone)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
+                        .accessibilityIdentifier("productDetail")
                     Text(product.priceLabel ?? "Ask at the shop for the price")
                         .textRole(product.priceLabel == nil ? .body : .priceL)
                         .foregroundStyle(product.priceLabel == nil ? Theme.smoke : Theme.bone)
@@ -41,7 +42,6 @@ struct ProductDetailView: View {
         .screenBackground()
         .navigationTitle(product.name)
         .navigationBarTitleDisplayMode(.inline)
-        .accessibilityIdentifier("productDetail")
     }
 }
 

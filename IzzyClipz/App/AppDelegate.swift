@@ -48,7 +48,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         // Set before launch finishes so a tap that launched the app is delivered.
         UNUserNotificationCenter.current().delegate = self
-        if LaunchOptions.isUITesting {
+        // UI tests run without animations, except the recorded demo (`-keepAnimations`).
+        if LaunchOptions.isUITesting, !ProcessInfo.processInfo.arguments.contains("-keepAnimations") {
             UIView.setAnimationsEnabled(false)
         }
         return true

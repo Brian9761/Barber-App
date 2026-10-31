@@ -73,6 +73,7 @@ struct BookedView: View {
                 SummaryRow(label: "Where", value: AppData.shop.address.streetLine, detail: AppData.shop.address.cityLine)
             }
             .card(padding: Theme.Space.xl)
+            .accessibilityElement(children: .combine)
             .accessibilityIdentifier("bookedSummary")
 
             BookingPayAtShopNote()

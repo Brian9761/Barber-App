@@ -130,10 +130,8 @@ private struct ProductGrid: View {
                     ProductTile(product: product)
                 }
                 .buttonStyle(.pressable)
-                .accessibilityElement(children: .ignore)
                 .accessibilityLabel(ProductTile.accessibilityText(for: product))
                 .accessibilityHint("Shows the product")
-                .accessibilityAddTraits(.isButton)
                 .accessibilityIdentifier("product-\(product.id)")
             }
         }

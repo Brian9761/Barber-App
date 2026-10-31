@@ -520,6 +520,7 @@ struct HomeReviewsCard: View {
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
+        .accessibilityLabel(accessibilityText)
         .accessibilityHint("Opens the reviews")
         .accessibilityIdentifier("homeReviews")
         .task {
@@ -538,10 +539,17 @@ struct HomeReviewsCard: View {
                 MenuChevron()
             }
             ReviewScore(rating: summary, site: "Google")
-                .accessibilityIdentifier("homeGoogleRating")
             GoogleMapsAttribution(lead: "From")
         }
-        .accessibilityElement(children: .combine)
+    }
+
+    /// "What clients say. Rated 4.9 out of 5 from 61 reviews on Google. From Google Maps", or
+    /// "See what clients say, on Google and Yelp".
+    private var accessibilityText: String {
+        guard let summary = reviews.value?.google.summary else {
+            return "See what clients say, on Google and Yelp"
+        }
+        return "What clients say. Rated \(summary.averageLabel) out of 5 from \(summary.countLabel) on Google. From Google Maps"
     }
 
     private var link: some View {
@@ -561,7 +569,6 @@ struct HomeReviewsCard: View {
             Spacer(minLength: Theme.Space.s)
             MenuChevron()
         }
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -598,7 +605,7 @@ struct HomeShopCard: View {
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Only at \(AppData.shop.name): products you can pick up at the shop")
         .accessibilityHint("Opens the Shop tab")
         .accessibilityIdentifier("homeShopCard")
     }

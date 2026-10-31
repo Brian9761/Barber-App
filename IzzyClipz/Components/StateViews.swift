@@ -75,6 +75,8 @@ struct ErrorStateView: View {
             .accessibilityIdentifier("errorCallButton")
         }
         .card(padding: Theme.Space.xl)
+        // One container, so an identifier given to the whole card doesn't replace its buttons'.
+        .accessibilityElement(children: .contain)
     }
 }
 

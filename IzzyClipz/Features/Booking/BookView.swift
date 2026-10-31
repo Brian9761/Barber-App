@@ -152,6 +152,7 @@ private struct BookAppointmentsSection: View {
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("yourAppointments")
         }
     }
@@ -186,6 +187,7 @@ private struct BookCustomerDetailsRow: View {
                 .accessibilityIdentifier("changeCustomerDetails")
             }
             .card()
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("customerDetailsRow")
         }
     }

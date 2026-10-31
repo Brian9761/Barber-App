@@ -125,6 +125,7 @@ private struct BookingReviewScreen: View {
         }
         .card(padding: Theme.Space.xl)
         .disabled(submitter.isBooking)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("bookingSummary")
     }
 
