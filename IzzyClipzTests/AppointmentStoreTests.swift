@@ -69,6 +69,76 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertEqual(store.appointment(withID: id)?.status, .cancelled)
     }
 
+    // MARK: Booking tokens
+
+    private func request(start: Date = TestData.friday, name: String = "Alex", phone: String = "4425550123", note: String? = nil) -> IzzyAPI.NewAppointment {
+        IzzyAPI.NewAppointment(
+            target: .offering(id: TestData.carlosHaircutID),
+            start: start,
+            customer: IzzyAPI.NewCustomer(name: name, phone: phone),
+            note: note
+        )
+    }
+
+    /// One token per booking, the same for every try of it, kept in the Keychain (never in
+    /// UserDefaults) across launches until the booking is confirmed.
+    func testBookingTokensArePerBookingAndKeptUntilItsBooked() {
+        let defaults = TestData.defaults()
+        let store = makeStore(defaults: defaults)
+        let token = store.bookingToken(for: request())
+        XCTAssertEqual(store.bookingToken(for: request()), token)
+        // Typed differently, sent the same: the same booking.
+        XCTAssertEqual(store.bookingToken(for: request(name: "  Alex ", phone: "(442) 555-0123", note: "  ")), token)
+        XCTAssertNotNil(tokens.secrets[AppointmentStore.pendingBookingsAccount])
+        XCTAssertFalse(String(describing: defaults.dictionaryRepresentation()).contains(token.rawValue))
+
+        // Anything sent that's different is another booking.
+        let others = [
+            request(start: TestData.friday.addingTimeInterval(30 * 60)),
+            request(name: "Sam"),
+            request(phone: "4425550124"),
+            request(note: "Low fade"),
+            IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: TestData.friday, customer: IzzyAPI.NewCustomer(name: "Alex", phone: "4425550123")),
+        ]
+        let otherTokens = others.map { store.bookingToken(for: $0) }
+        XCTAssertEqual(Set(otherTokens + [token]).count, others.count + 1)
+
+        // The app opened again: the same tokens.
+        let reopened = makeStore(defaults: defaults)
+        XCTAssertEqual(reopened.bookingToken(for: request()), token)
+        XCTAssertEqual(others.map { reopened.bookingToken(for: $0) }, otherTokens)
+
+        // Booked: the next booking of the same time is a new one.
+        reopened.finishedBooking(request())
+        XCTAssertNotEqual(makeStore(defaults: defaults).bookingToken(for: request()), token)
+    }
+
+    func testPendingTokensAreDroppedOnceTheirTimeHasPassed() {
+        let store = makeStore(defaults: TestData.defaults())
+        let token = store.bookingToken(for: request())
+        now = TestData.friday.addingTimeInterval(60)
+        store.refreshLocally()
+        XCTAssertNil(tokens.secrets[AppointmentStore.pendingBookingsAccount], "Nothing left to retry")
+        XCTAssertNotEqual(store.bookingToken(for: request()), token)
+    }
+
+    func testAtMostTheTenLatestPendingBookingsAreKept() {
+        let store = makeStore(defaults: TestData.defaults())
+        let requests = (0..<12).map { request(start: TestData.friday.addingTimeInterval(TimeInterval($0) * 30 * 60)) }
+        let first = requests.map { store.bookingToken(for: $0) }
+        XCTAssertEqual(requests.suffix(10).map { store.bookingToken(for: $0) }, Array(first.suffix(10)))
+        XCTAssertNotEqual(store.bookingToken(for: requests[0]), first[0], "The oldest ones were let go")
+    }
+
+    /// If the Keychain won't take it, the token still covers retries until the app closes.
+    func testAPendingTokenTheKeychainRefusesIsKeptForThisLaunch() {
+        tokens.failsWrites = true
+        let store = makeStore(defaults: TestData.defaults())
+        let token = store.bookingToken(for: request())
+        XCTAssertEqual(store.bookingToken(for: request()), token)
+        XCTAssertNil(tokens.secrets[AppointmentStore.pendingBookingsAccount])
+    }
+
     func testRemindersAreScheduledTheDayBeforeAndAnHourBefore() async throws {
         scheduler.status = .authorized
         let store = makeStore(defaults: TestData.defaults())

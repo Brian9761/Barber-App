@@ -147,12 +147,25 @@ enum AppointmentActionError: Error, Equatable {
     }
 }
 
+/// A booking this iPhone has sent and not yet seen confirmed, with the manage token it was sent
+/// with. Kept (in the Keychain) so every try of that same booking sends the same token.
+struct PendingBooking: Codable, Equatable {
+    /// The request exactly as it's sent (its JSON), to tell a retry of it from a new booking.
+    let request: String
+    let token: IzzyAPI.ManageToken
+    /// When the appointment would start. After that there's nothing left to retry.
+    let start: Date
+}
+
 /// The client's appointments: kept on this iPhone with their manage tokens (in the Keychain),
 /// checked with the shop's server when the app opens and on pull to refresh, cancellable from the
 /// app, and reminded about the day before and an hour before.
 ///
 /// Appointments stay listed until 30 days after they end. Nothing is dropped because the server
 /// couldn't be reached or didn't recognize it: those are shown with what went wrong instead.
+///
+/// It also keeps the token each booking is tried with until the booking is confirmed (see
+/// `bookingToken(for:)`), so a retry after a lost answer can't book twice.
 @MainActor
 @Observable
 final class AppointmentStore {
@@ -165,6 +178,12 @@ final class AppointmentStore {
 
     /// How long a finished appointment stays listed.
     static let keepDays = 30
+
+    /// The Keychain item with the bookings not yet confirmed. Appointments' own tokens are kept
+    /// under their IDs, which never look like this.
+    static let pendingBookingsAccount = "pending-bookings"
+    /// How many unconfirmed bookings are remembered at most (the most recent ones).
+    static let maxPendingBookings = 10
 
     /// Every saved appointment, earliest first.
     private(set) var appointments: [SavedAppointment] = []
@@ -186,6 +205,9 @@ final class AppointmentStore {
     @ObservationIgnored private var unsavedTokens: [String: String] = [:]
     @ObservationIgnored private var syncTask: Task<Void, Never>?
     @ObservationIgnored private var refreshTask: Task<Void, Never>?
+    /// The bookings not yet confirmed, read from the Keychain the first time they're needed. If
+    /// the Keychain won't take them, this copy still covers retries until the app closes.
+    @ObservationIgnored private var pendingBookings: [PendingBooking]?
 
     init(
         api: any ShopAPI,
@@ -274,6 +296,46 @@ final class AppointmentStore {
         return saved
     }
 
+    /// The manage token to book `request` with (`ShopAPI.book(_:token:)`).
+    ///
+    /// Every try of the same booking gets the same token: Try again after an error, and a retry
+    /// after the app went to the background or was closed and opened again. So if an earlier try
+    /// went through but its answer never arrived, the server recognizes the retry and answers
+    /// with that appointment instead of booking it twice (or saying the time was just taken).
+    /// A booking that differs in anything that's sent (service, barber, time, name, number or
+    /// note) gets a token of its own. Tokens are kept until `finishedBooking(_:)` or until the
+    /// appointment's start has passed.
+    func bookingToken(for request: IzzyAPI.NewAppointment) -> IzzyAPI.ManageToken {
+        let key = Self.bookingKey(for: request)
+        var pending = currentPendingBookings()
+        if let known = pending.first(where: { $0.request == key }) {
+            return known.token
+        }
+        let token = IzzyAPI.ManageToken.generate()
+        pending.append(PendingBooking(request: key, token: token, start: request.start))
+        savePendingBookings(Array(pending.suffix(Self.maxPendingBookings)))
+        return token
+    }
+
+    /// The server has answered `request` with its appointment (saved with `add`): its token is
+    /// the appointment's now, and the next booking, even of the same time, gets a new one.
+    func finishedBooking(_ request: IzzyAPI.NewAppointment) {
+        let key = Self.bookingKey(for: request)
+        let pending = currentPendingBookings()
+        guard pending.contains(where: { $0.request == key }) else { return }
+        savePendingBookings(pending.filter { $0.request != key })
+    }
+
+    /// What tells two tries of a booking apart: the request as it's sent (sorted keys, the name
+    /// and note trimmed, the number in E.164).
+    static func bookingKey(for request: IzzyAPI.NewAppointment) -> String {
+        guard let data = try? IzzyAPI.makeEncoder().encode(request) else {
+            // Never happens (the request types always encode); a key that's never reused is safe.
+            return UUID().uuidString
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+
     func setReminders(_ remind: Bool, for id: String) {
         guard let index = appointments.firstIndex(where: { $0.id == id }) else { return }
         appointments[index].remind = remind
@@ -299,6 +361,7 @@ final class AppointmentStore {
     /// active (`refresh` then asks the server).
     func refreshLocally() {
         prune()
+        _ = currentPendingBookings()
         persist()
         sync()
     }
@@ -442,6 +505,31 @@ final class AppointmentStore {
             return .missing
         } catch {
             return .unreadable
+        }
+    }
+
+    /// The bookings not yet confirmed whose time hasn't come, dropping the ones whose has.
+    private func currentPendingBookings() -> [PendingBooking] {
+        if pendingBookings == nil {
+            // Unreadable (the iPhone hasn't been unlocked since it restarted) counts as none.
+            let stored = try? tokens.secret(for: Self.pendingBookingsAccount)
+            pendingBookings = stored.flatMap { try? IzzyAPI.makeDecoder().decode([PendingBooking].self, from: Data($0.utf8)) } ?? []
+        }
+        let all = pendingBookings ?? []
+        let current = now()
+        let live = all.filter { $0.start > current }
+        if live.count != all.count {
+            savePendingBookings(live)
+        }
+        return live
+    }
+
+    private func savePendingBookings(_ pending: [PendingBooking]) {
+        pendingBookings = pending
+        if pending.isEmpty {
+            try? tokens.removeSecret(for: Self.pendingBookingsAccount)
+        } else if let data = try? IzzyAPI.makeEncoder().encode(pending) {
+            try? tokens.setSecret(String(decoding: data, as: UTF8.self), for: Self.pendingBookingsAccount)
         }
     }
 

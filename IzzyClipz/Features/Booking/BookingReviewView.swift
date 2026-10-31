@@ -10,6 +10,7 @@ struct BookingReviewView: View {
     let draft: BookingDraft
 
     @Environment(\.shopAPI) private var api
+    @Environment(AppointmentStore.self) private var appointments
     @State private var submitter: BookingSubmitter?
 
     var body: some View {
@@ -23,7 +24,7 @@ struct BookingReviewView: View {
         .bookingStepChrome(title: "Review")
         .onAppear {
             if submitter == nil {
-                submitter = BookingSubmitter(api: api)
+                submitter = BookingSubmitter(api: api, appointments: appointments)
             }
         }
     }
@@ -34,7 +35,6 @@ private struct BookingReviewScreen: View {
     let submitter: BookingSubmitter
 
     @Environment(AppRouter.self) private var router
-    @Environment(AppointmentStore.self) private var appointments
     private let calendar = AppData.bookingCalendar
 
     private var plan: BookingPlan { draft.plan }
@@ -144,9 +144,11 @@ private struct BookingReviewScreen: View {
         router.returnToTimes(message: nil, droppedStart: nil)
     }
 
+    /// Books it. "Try again" comes back here too, and sends the same booking with the same token,
+    /// so a try that went through but whose answer was lost is found, not booked twice.
     private func book() {
         Task {
-            guard let confirmation = await submitter.book(draft) else {
+            guard let saved = await submitter.book(draft) else {
                 if case .timeGone(let message)? = submitter.failure {
                     // Back to the times, which reload without the time that's gone.
                     router.returnToTimes(message: message, droppedStart: plan.start)
@@ -156,7 +158,6 @@ private struct BookingReviewScreen: View {
                 }
                 return
             }
-            let saved = appointments.add(confirmation, remind: true)
             router.showBooked(appointmentID: saved.id)
         }
     }

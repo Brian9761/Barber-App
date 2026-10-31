@@ -9,6 +9,8 @@ import Foundation
 /// - Every barber already has one booking each open day (an hour, at a different time per
 ///   barber), so the time lists have gaps like a real day.
 /// - Bookings, look-ups and cancellations work on what it holds in memory.
+/// - A booking keeps the manage token it was sent with. A retry with that token and the same
+///   booking gets the same appointment back; the same token for another booking is turned down.
 ///
 /// Launch arguments make it misbehave on purpose, so the app's error states can be tested; see
 /// `Options`. Everything it returns that isn't the shop's real menu (sample reviews, sample
@@ -20,6 +22,9 @@ final class FakeShopAPI: ShopAPI {
         var offline = false
         /// `-fakeBookingOffline`: the first booking attempt fails as offline; a retry works.
         var bookingOfflineOnce = false
+        /// `-fakeLoseBookingResponse`: the first booking goes through, but its answer is lost on
+        /// the way back and the app sees it as offline. A retry with the same token gets it.
+        var loseBookingResponseOnce = false
         /// `-fakeSlotTaken`: the first booking attempt finds the time just taken, and that time
         /// disappears from the list.
         var slotTakenOnce = false
@@ -40,6 +45,7 @@ final class FakeShopAPI: ShopAPI {
         init(arguments: [String]) {
             offline = arguments.contains("-fakeOffline")
             bookingOfflineOnce = arguments.contains("-fakeBookingOffline")
+            loseBookingResponseOnce = arguments.contains("-fakeLoseBookingResponse")
             slotTakenOnce = arguments.contains("-fakeSlotTaken")
             noProducts = arguments.contains("-fakeNoProducts")
             reviewsUnavailable = arguments.contains("-fakeReviewsUnavailable")
@@ -53,6 +59,8 @@ final class FakeShopAPI: ShopAPI {
         let token: String
         /// Made before the app started (a seeded booking), so `shopCancels` applies to it.
         let isSeeded: Bool
+        /// What was asked for, to recognize a retry; `nil` for a seeded booking.
+        var request: IzzyAPI.NewAppointment? = nil
     }
 
     private var options: Options
@@ -108,6 +116,14 @@ final class FakeShopAPI: ShopAPI {
             options.bookingOfflineOnce = false
             throw APIError.offline
         }
+        // A retry of a booking that went through: the same appointment, as it is now, before
+        // any time rules (as on the server).
+        if let earlier = stored.values.first(where: { $0.token == manageToken.rawValue }) {
+            guard let asked = earlier.request, Self.isSameBooking(asked, request) else {
+                throw APIError.server(code: IzzyAPI.ErrorCode.invalidRequest, message: "That booking token was already used.", status: 400)
+            }
+            return IzzyAPI.BookingConfirmation(appointment: earlier.appointment, manageToken: earlier.token)
+        }
         let name = request.customer.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (1...60).contains(name.count) else {
             throw APIError.server(code: IzzyAPI.ErrorCode.invalidRequest, message: "Enter your name.", status: 400)
@@ -134,9 +150,26 @@ final class FakeShopAPI: ShopAPI {
         let appointment = makeAppointment(offering: offering, start: request.start, name: name, phone: phone.e164, note: request.note)
         bookingCount += 1
         let token = manageToken.rawValue
-        stored[appointment.id] = Stored(appointment: appointment, token: token, isSeeded: false)
+        stored[appointment.id] = Stored(appointment: appointment, token: token, isSeeded: false, request: request)
         markBusy(offering.barberID, from: appointment.start, minutes: appointment.durationMinutes)
+        if options.loseBookingResponseOnce {
+            // Booked, but the answer never reaches the phone.
+            options.loseBookingResponseOnce = false
+            throw APIError.offline
+        }
         return IzzyAPI.BookingConfirmation(appointment: appointment, manageToken: token)
+    }
+
+    /// How many appointments were booked through it (seeded ones not counted). For tests.
+    var bookingsMade: Int { bookingCount }
+
+    /// The server's rule for a retry: the same target asked for the same way, the same start and
+    /// the same phone number. The name and note may differ.
+    private static func isSameBooking(_ earlier: IzzyAPI.NewAppointment, _ retry: IzzyAPI.NewAppointment) -> Bool {
+        func phone(_ request: IzzyAPI.NewAppointment) -> String? {
+            request.customer.phone.flatMap(PhoneNumber.init(parsing:))?.e164
+        }
+        return earlier.target == retry.target && earlier.start == retry.start && phone(earlier) == phone(retry)
     }
 
     func appointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {

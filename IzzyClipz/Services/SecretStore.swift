@@ -2,8 +2,8 @@ import Foundation
 import Security
 
 /// Small secrets kept by name: the manage tokens that let this iPhone look up and cancel its
-/// appointments. Each token is the only copy (the server keeps just its hash), so a store must
-/// either keep it or say it couldn't.
+/// appointments, and the ones bookings not yet confirmed were sent with. Each token is the only
+/// copy (the server keeps just its hash), so a store must either keep it or say it couldn't.
 protocol SecretStore: AnyObject {
     /// The secret saved under `account`, or `nil` if there's none.
     /// - Throws: when the store can't be read right now (e.g. the phone hasn't been unlocked

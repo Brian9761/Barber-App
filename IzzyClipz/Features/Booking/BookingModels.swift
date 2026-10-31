@@ -156,7 +156,19 @@ final class AvailabilityLoader {
     }
 }
 
-/// Books an appointment and turns what can go wrong into a plain message with a way forward.
+extension BookingDraft {
+    /// What the server is sent to book it.
+    var request: IzzyAPI.NewAppointment {
+        IzzyAPI.NewAppointment(target: plan.choice.target, start: plan.start, customer: customer.newCustomer, note: note)
+    }
+}
+
+/// Books an appointment, saves it, and turns what can go wrong into a plain message with a way
+/// forward.
+///
+/// Every try of the same booking is sent with the same manage token (kept by the appointment
+/// store until the booking is confirmed), so Try again after a lost answer gets the appointment
+/// that went through instead of booking twice or finding the client's own time taken.
 @MainActor
 @Observable
 final class BookingSubmitter {
@@ -192,34 +204,51 @@ final class BookingSubmitter {
     private(set) var failure: Failure?
 
     private let api: any ShopAPI
+    private let appointments: AppointmentStore
     private let calendar: BookingCalendar
 
-    init(api: any ShopAPI, calendar: BookingCalendar = AppData.bookingCalendar) {
+    init(api: any ShopAPI, appointments: AppointmentStore, calendar: BookingCalendar = AppData.bookingCalendar) {
         self.api = api
+        self.appointments = appointments
         self.calendar = calendar
     }
 
-    /// Books `draft`. Returns the server's confirmation, or `nil` with `failure` set. A second
-    /// call while one is running does nothing, so a double tap can't book twice.
-    func book(_ draft: BookingDraft) async -> IzzyAPI.BookingConfirmation? {
+    /// Books `draft` and saves it with its token and reminders. Returns the saved appointment, or
+    /// `nil` with `failure` set. A second call while one is running does nothing, so a double tap
+    /// can't book twice.
+    func book(_ draft: BookingDraft) async -> SavedAppointment? {
         guard !isBooking else { return nil }
         isBooking = true
         failure = nil
         defer { isBooking = false }
-        let request = IzzyAPI.NewAppointment(
-            target: draft.plan.choice.target,
-            start: draft.plan.start,
-            customer: draft.customer.newCustomer,
-            note: draft.note
-        )
+        let request = draft.request
+        let token = appointments.bookingToken(for: request)
+        let confirmation: IzzyAPI.BookingConfirmation
         do {
-            return try await api.book(request, token: .generate())
+            confirmation = try await api.book(request, token: token)
         } catch where error.isCancellation {
             return nil
         } catch {
             failure = Self.failure(for: error.asAPIError, start: draft.plan.start, calendar: calendar)
             return nil
         }
+        let saved = appointments.add(confirmation, remind: true)
+        appointments.finishedBooking(request)
+        guard saved.status == .booked else {
+            // A retry found the booking an earlier try made, but it has been cancelled since.
+            failure = .timeGone(Self.noLongerBooked(saved, calendar: calendar))
+            return nil
+        }
+        return saved
+    }
+
+    /// Why a booking the server already had isn't on any more.
+    static func noLongerBooked(_ saved: SavedAppointment, calendar: BookingCalendar) -> String {
+        let time = calendar.timeLabel(for: saved.start)
+        if saved.isCancelledByShop {
+            return "Your booking for \(time) went through, but the shop has cancelled it since. Pick another time, or call the shop."
+        }
+        return "Your booking for \(time) went through, but it isn't on any more. Pick another time, or call the shop."
     }
 
     func clearFailure() {

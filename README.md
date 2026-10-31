@@ -33,7 +33,7 @@ These screenshots are taken by the UI tests on every push to `main`. The full se
   4. Name, US mobile number and an optional note for the barber, remembered on the iPhone for next time unless turned off.
   5. A review that says **No payment now — you'll pay at the shop**, then **Book appointment**.
 
-  Then "You're booked", with Add to Calendar, a reminders switch and Done. If someone else takes the time first, the app goes back to the times, refreshed, and says so. Offline, every screen says what happened and offers Try again and Call the shop.
+  Then "You're booked", with Add to Calendar, a reminders switch and Done. If someone else takes the time first, the app goes back to the times, refreshed, and says so. Offline, every screen says what happened and offers Try again and Call the shop. Trying again is safe: each booking is sent with a token the app made for it (kept in the Keychain until the booking is confirmed, even if the app is closed), so if a try went through but its answer was lost, the next try gets that appointment instead of booking twice or finding the client's own time taken.
 - **Your appointments**: on Home (the next one) and in Book (everything ahead and the last 30 days). The app checks them with the shop when it opens and on pull to refresh, so a cancellation by the shop or a finished appointment shows up. Cancel appointment asks first, then tells the shop. Reminders come the day before and an hour before; cancelled appointments lose theirs. Each card has Add to Calendar and Directions.
 - **Services**: the shop's 12 services by category with each one's price range and length, jump chips and search. Each service lists who offers it at what price and books that exact item.
 - **Shop**: the shop's own products, added by the owner in Izzy Clipz Business: photo, name, price when the shop lists one, description and "Available at the shop". There's no cart and no checkout. Until the shop adds any: "New products are coming soon. Ask at the shop what's in stock."
@@ -115,6 +115,7 @@ The UI tests run the app with `-ui-testing`: it starts with no favorite, details
 | --- | --- |
 | `-fakeOffline` | Every request fails as if the phone were offline. |
 | `-fakeBookingOffline` | The first booking attempt fails offline; Try again works. |
+| `-fakeLoseBookingResponse` | The first booking goes through but its answer is lost (it looks offline); Try again gets that same appointment. |
 | `-fakeSlotTaken` | The first booking finds the time just taken. |
 | `-fakeNoProducts` | The shop has no products yet. |
 | `-fakeReviewsUnavailable` | Google's reviews can't be shown and Yelp isn't set up. |
@@ -127,9 +128,9 @@ The UI tests run the app with `-ui-testing`: it starts with no favorite, details
 The test suites check, among other things:
 
 - Business hours and the booking calendar: opening and closing minutes, start times that fit before closing, lead time, the booking window, DST changes, and a phone set to another time zone.
-- Availability asked for two weeks at a time and kept by the shop's day; every booking failure turned into words and a way forward; slot starts sent back unchanged and numbers sent in E.164.
+- Availability asked for two weeks at a time and kept by the shop's day; every booking failure turned into words and a way forward; slot starts sent back unchanged and numbers sent in E.164; the same token for every try of a booking (across a relaunch too) and a new one when anything about it changes, so a lost answer then Try again makes one appointment.
 - Appointments: tokens kept in the Keychain (never in UserDefaults), a token the Keychain refuses kept for the launch and flagged, statuses refreshed from the server, offline and unknown appointments kept rather than dropped, cancelling, reminders, and the previous version's Squire appointments carried over read-only.
-- Every booking path in the UI, a taken time, offline errors with Try again, cancelling, a cancellation by the shop, the shop with and without products, and the reviews with and without Google and Yelp.
+- Every booking path in the UI, a taken time, offline errors with Try again, a booking whose answer was lost then Try again, cancelling, a cancellation by the shop, the shop with and without products, and the reviews with and without Google and Yelp.
 - The API client against the server's own contract fixtures, and the catalog export against `server/data/catalog.json`.
 - That every SF Symbol and image the app uses exists, and that the privacy manifest declares what's sent to the shop.
 

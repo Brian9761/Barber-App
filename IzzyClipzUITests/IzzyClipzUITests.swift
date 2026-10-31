@@ -455,6 +455,37 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("bookedTitle").waitForExistence(timeout: 15), "Trying again didn't book it")
     }
 
+    /// The booking goes through, but its answer is lost on the way back, so it looks like the
+    /// connection dropped. "Try again" sends the same booking with the same token: the app gets
+    /// the appointment that was made, not "Someone just booked" for its own time, and there's one
+    /// appointment, not two.
+    func testLostBookingAnswerThenTryAgain() {
+        launch(UITestArguments.loseBookingResponse, UITestArguments.savedDetails)
+        openTab("Book")
+        tap("bookService-haircut")
+        tap("chooseAnyBarber")
+        waitForTimes()
+        pickFirstTime()
+        continueToDetails()
+        continueToReview()
+        tapPinned("bookAppointmentButton")
+        let error = element("bookingError")
+        XCTAssertTrue(error.waitForExistence(timeout: 15), "A lost answer should look like the connection dropped")
+        XCTAssertTrue(error.label.contains("Not booked yet"), error.label)
+
+        tap("retryBookingButton")
+        // With a new token the retry would find its own time taken and go back to the times.
+        XCTAssertTrue(element("bookedTitle").waitForExistence(timeout: 15), "Trying again didn't find the booking that went through")
+        screenshot("42-Booked-After-Lost-Answer")
+
+        tapPinned("bookedDoneButton")
+        XCTAssertTrue(element("bookService-haircut").waitForExistence(timeout: 10), "Done didn't go back to step 1")
+        XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "The appointment isn't on the Book tab")
+        XCTAssertEqual(app.descendants(matching: .any).matching(identifier: "appointmentCard").count, 1, "One booking, not two")
+        openTab("Home")
+        XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "Home doesn't show the appointment")
+    }
+
     func testCalendarNavigationAndStartOver() {
         launch()
         openTab("Book")
@@ -1007,6 +1038,7 @@ final class IzzyClipzUITests: XCTestCase {
 enum UITestArguments {
     static let offline = "-fakeOffline"
     static let bookingOffline = "-fakeBookingOffline"
+    static let loseBookingResponse = "-fakeLoseBookingResponse"
     static let slotTaken = "-fakeSlotTaken"
     static let noProducts = "-fakeNoProducts"
     static let reviewsUnavailable = "-fakeReviewsUnavailable"
