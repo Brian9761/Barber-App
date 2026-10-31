@@ -556,7 +556,8 @@ final class IzzyClipzUITests: XCTestCase {
     }
 
     /// The shop cancelled it: the app finds out when it opens and says so, on Home too. Booking
-    /// another time puts the new appointment on Home.
+    /// another time, later than the cancelled one, puts the new appointment on Home under the
+    /// shop's cancellation (it used to stay hidden until the cancelled time was over).
     func testShopCancelledAppointment() {
         launch(UITestArguments.bookedAppointment, UITestArguments.shopCancels, UITestArguments.savedDetails)
         XCTAssertTrue(labeled("Cancelled by the shop").waitForExistence(timeout: 20), "Home doesn't say the shop cancelled it")
@@ -570,14 +571,21 @@ final class IzzyClipzUITests: XCTestCase {
 
         tap("chooseAnyBarber")
         waitForTimes()
+        // The cancelled one is 2 to 14 days out (FakeShopAPI.seedBooking), so this is after it.
+        pickOpenDay(atLeast: 15)
         pickFirstTime()
         continueToDetails()
         continueToReview()
         bookAppointment()
         tapPinned("bookedDoneButton")
         openTab("Home")
-        XCTAssertTrue(labeled("Next appointment").waitForExistence(timeout: 10), "Home doesn't show the new booking")
+        let next = labeled("Next appointment")
+        XCTAssertTrue(next.waitForExistence(timeout: 10), "Home doesn't show the new booking")
         XCTAssertTrue(element("cancelAppointmentButton").exists, "The new booking can be cancelled from Home")
+        let cancelled = labeled("Cancelled by the shop")
+        XCTAssertTrue(cancelled.exists, "Home no longer says the shop cancelled the earlier one")
+        XCTAssertTrue(element("bookAgainButton").exists)
+        XCTAssertLessThan(cancelled.frame.minY, next.frame.minY, "The earlier, cancelled appointment should come first")
     }
 
     /// Offline, Home still shows the appointment as it was, and says it couldn't check it with the
@@ -790,6 +798,40 @@ final class IzzyClipzUITests: XCTestCase {
 
     private func firstTime() -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "time-")).firstMatch
+    }
+
+    /// Picks the first day with open times at least `days` days after today in the shop, turning
+    /// to the next month when the day is on it.
+    private func pickOpenDay(atLeast days: Int, file: StaticString = #filePath, line: UInt = #line) {
+        var shopCalendar = Calendar(identifier: .gregorian)
+        // The shop's time zone (IzzyClipzData): the calendar's days are the shop's days.
+        shopCalendar.timeZone = TimeZone(identifier: "America/Los_Angeles") ?? .current
+        let dayID = DateFormatter()
+        dayID.calendar = shopCalendar
+        dayID.timeZone = shopCalendar.timeZone
+        dayID.locale = Locale(identifier: "en_US_POSIX")
+        dayID.dateFormat = "'day-'yyyy-MM-dd"
+        let today = Date()
+        for offset in days..<(days + 28) {
+            guard let date = shopCalendar.date(byAdding: .day, value: offset, to: today) else { continue }
+            let identifier = dayID.string(from: date)
+            let cell = element(identifier)
+            if !cell.exists {
+                let nextMonth = element("calendarNextMonth")
+                XCTAssertTrue(nextMonth.isEnabled, "\(identifier) isn't on the calendar", file: file, line: line)
+                nextMonth.tap()
+                XCTAssertTrue(cell.waitForExistence(timeout: 10), "Next month didn't show \(identifier)", file: file, line: line)
+            }
+            // Days show as "checking" until their times load; then only a day with times is enabled.
+            let checked = waitUntil(cell, toMatch: NSPredicate(format: "NOT (label CONTAINS[c] %@)", "checking"), timeout: 20)
+            XCTAssertTrue(checked, "The times for \(identifier) didn't load", file: file, line: line)
+            guard cell.isEnabled else { continue }
+            scroll(toReveal: cell, file: file, line: line)
+            cell.tap()
+            XCTAssertTrue(waitUntil(cell, toMatch: selected()), "Didn't pick \(identifier)", file: file, line: line)
+            return
+        }
+        XCTFail("No open day \(days) or more days out", file: file, line: line)
     }
 
     /// Taps the earliest time on the picked day and returns its identifier.
