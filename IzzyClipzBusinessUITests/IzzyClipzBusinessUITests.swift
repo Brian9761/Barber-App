@@ -88,15 +88,20 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(reveal("appointment-Sam Sample").label.contains("Cancelled"))
         reveal("previousDay", searchingFirst: .up)
 
+        // Izzy's day only: Cristian's 10 AM client and Flowxbori's lunch go; Izzy's clients stay.
+        XCTAssertTrue(element("appointment-Jay Sample").exists)
         tap("barberFilter")
         tapButton("Izzy")
-        XCTAssertTrue(waitForDisappearance(of: element("appointment-Luis Sample")), "Julian's client still shows")
+        XCTAssertTrue(waitForDisappearance(of: element("appointment-Jay Sample")), "Cristian's client still shows")
         XCTAssertTrue(element("appointment-Andre Sample").exists)
+        XCTAssertTrue(element("appointment-Marcus Sample").exists)
         XCTAssertFalse(element("timeOff-Lunch").exists)
         screenshot("O04-Schedule-Filtered")
         tap("barberFilter")
         tapButton("Everyone")
-        XCTAssertTrue(element("appointment-Luis Sample").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("appointment-Jay Sample").waitForExistence(timeout: 10))
+        XCTAssertTrue(reveal("appointment-Luis Sample").exists, "Julian's client is back")
+        reveal("nextDay", searchingFirst: .up)
 
         tap("nextDay")
         XCTAssertTrue(element("scheduleEmpty").waitForExistence(timeout: 10), "Tuesday has nothing booked")
@@ -203,7 +208,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitUntil(element("slot-11:30 AM"), toMatch: NSPredicate(format: "isSelected == true")))
         typeInto("clientName", "Late Sample")
         tap("bookButton")
-        XCTAssertTrue(waitForLabel(element("bookingError"), containing: "Someone just took that time"))
+        XCTAssertTrue(waitForLabel(reveal("bookingError"), containing: "Someone just took that time"))
         screenshot("O09-Slot-Taken")
         // The list was refreshed: another time works.
         tap("slot-12 PM")
@@ -472,16 +477,46 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         for direction in first == .down ? [Direction.down, .up] : [.up, .down] {
             for _ in 0..<8 {
                 if target.exists, target.isHittable {
+                    settle(target)
                     return target
                 }
-                switch direction {
-                case .down: app.swipeUp(velocity: .slow)
-                case .up: app.swipeDown(velocity: .slow)
-                }
+                drag(direction)
             }
         }
         XCTAssertTrue(target.exists && target.isHittable, "Couldn't find \(identifier) on the screen", file: file, line: line)
         return target
+    }
+
+    /// Drags the page about a third of the screen and holds still before letting go, so it
+    /// doesn't keep gliding: a tap on a list that's still moving only stops it. The drag stays
+    /// above the keyboard while one is up.
+    private func drag(_ direction: Direction) {
+        let lowY = min(0.7, pageBottom() - 0.1)
+        let highY = max(0.2, lowY - 0.35)
+        let low = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: lowY))
+        let high = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: highY))
+        let (start, end) = direction == .down ? (low, high) : (high, low)
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.15)
+    }
+
+    /// Where the page ends, as a fraction of the screen's height: the keyboard's top while one is up.
+    private func pageBottom() -> CGFloat {
+        let keyboard = app.keyboards.firstMatch
+        let screen = app.frame
+        guard keyboard.exists, !screen.isEmpty, keyboard.frame.minY > screen.minY else { return 1 }
+        return max(0.45, (keyboard.frame.minY - screen.minY) / screen.height)
+    }
+
+    /// Waits until the element stops moving, up to two seconds.
+    private func settle(_ target: XCUIElement) {
+        var last = target.frame
+        for _ in 0..<8 {
+            Thread.sleep(forTimeInterval: 0.25)
+            guard target.exists else { return }
+            let now = target.frame
+            if now == last { return }
+            last = now
+        }
     }
 
     /// The appointment's status, at the top of its details.

@@ -137,7 +137,10 @@ final class NewBookingStore {
     }
 
     /// Open start times on the chosen day (`GET /api/owner/availability`).
-    func loadSlots() async {
+    /// `keepingTheTimes` refreshes the times already on screen without
+    /// swapping them for a spinner, so the form doesn't jump while the owner
+    /// reads why their booking didn't go through.
+    func loadSlots(keepingTheTimes: Bool = false) async {
         guard let target else {
             clearSlots()
             return
@@ -145,7 +148,9 @@ final class NewBookingStore {
         generation += 1
         let requested = generation
         let day = self.day
-        slotsState = .loading
+        if !(keepingTheTimes && slotsState == .loaded) {
+            slotsState = .loading
+        }
         do {
             let response = try await api.ownerAvailability(IzzyAPI.AvailabilityQuery(target: target, from: day, days: 1))
             guard requested == generation else { return }
@@ -250,11 +255,11 @@ final class NewBookingStore {
         } catch APIError.slotTaken {
             formError = "Someone just took that time. Pick another one."
             selectedSlot = nil
-            await loadSlots()
+            await loadSlots(keepingTheTimes: true)
         } catch APIError.outsideHours {
             formError = "That time is outside the shop's hours. Pick another one."
             selectedSlot = nil
-            await loadSlots()
+            await loadSlots(keepingTheTimes: true)
         } catch is CancellationError {
             return
         } catch {
