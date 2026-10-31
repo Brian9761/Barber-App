@@ -56,12 +56,12 @@ struct ShopView: View {
                     .padding(.bottom, Theme.Space.section)
                 }
                 .screenBackground()
-                .reservesTabBarSpace()
+                .tabScreen()
                 .modifier(ShopRootBar())
                 .navigationDestination(for: Product.self) { product in
                     ProductDetailView(product: product)
                         .barberPolePushRide()
-                        .reservesTabBarSpace()
+                        .tabScreen()
                 }
                 .onTabReselect {
                     if path.isEmpty {

@@ -268,7 +268,7 @@ final class IzzyClipzUITests: XCTestCase {
     }
 
     func testFavoriteBarberShowsOnHome() {
-        XCTAssertFalse(app.staticTexts["Your barber"].exists, "No favorite yet")
+        XCTAssertFalse(labeled("Your barber").exists, "No favorite yet")
         openTeam()
         tap("barber-flowxbori")
         let favorite = element("favoriteButton")
@@ -285,10 +285,10 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("homeBookButton").waitForExistence(timeout: 10))
 
         // "YOUR BARBER" on Home, with a Book button that goes to their own menu.
-        XCTAssertTrue(app.staticTexts["Your barber"].waitForExistence(timeout: 10))
+        XCTAssertTrue(labeled("Your barber").waitForExistence(timeout: 10), "No YOUR BARBER on Home")
         let book = element("homeFavoriteBook")
         XCTAssertTrue(book.waitForExistence(timeout: 10))
-        XCTAssertEqual(book.label, "Book with Flowxbori")
+        XCTAssertEqual(book.label.lowercased(), "book with flowxbori")
         scroll(toReveal: book)
         screenshot("33-Home-Your-Barber")
         book.tap()
@@ -972,9 +972,11 @@ final class IzzyClipzUITests: XCTestCase {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
-    /// Any element whose accessibility label is exactly `label`.
+    /// Any element whose accessibility label is `label`, ignoring case.
     private func labeled(_ label: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", label)).firstMatch
+        // Case-insensitive: the type styles set many labels in capitals, and VoiceOver (and XCUI)
+        // get them that way, e.g. "YOUR BARBER".
+        app.descendants(matching: .any).matching(NSPredicate(format: "label ==[c] %@", label)).firstMatch
     }
 
     /// Waits for an element, scrolls it into view and taps it.

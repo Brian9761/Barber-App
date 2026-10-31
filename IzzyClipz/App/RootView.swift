@@ -23,21 +23,22 @@ struct RootView: View {
             tabRoot(tab)
                 // Bone, not red, for back buttons and plain buttons: red is each screen's main action.
                 .tint(Theme.bone)
-                // Applied inside each tab's NavigationStack by `reservesTabBarSpace()`.
+                // Applied inside each tab's NavigationStack by `tabScreen()`.
                 .environment(\.tabBarReserve, isKeyboardVisible ? 0 : StreetTabBar.contentReserve(for: tab, safeAreaBottom: bottomInset))
                 .environment(\.tabReselection, reselections[tab, default: 0])
         }
         .overlay(alignment: .bottom) {
-            StreetTabBar(selection: $router.selectedTab, safeAreaBottom: bottomInset) { tab in
-                reselect(tab)
+            // Gone, not just transparent, while typing: a see-through bar stayed in the
+            // accessibility tree.
+            if !isKeyboardVisible {
+                StreetTabBar(selection: $router.selectedTab, safeAreaBottom: bottomInset) { tab in
+                    reselect(tab)
+                }
+                // The overlay ends where the safe area does, above the home indicator, and
+                // `ignoresSafeArea` doesn't reach past it (on iOS 26 the bar sat 34 pt too high). Moving
+                // the bar down by the measured inset puts it, and the scrim under it, on the screen's edge.
+                .offset(y: bottomInset)
             }
-            // The overlay ends where the safe area does, above the home indicator, and
-            // `ignoresSafeArea` doesn't reach past it (on iOS 26 the bar sat 34 pt too high). Moving
-            // the bar down by the measured inset puts it, and the scrim under it, on the screen's edge.
-            .offset(y: bottomInset)
-            .opacity(isKeyboardVisible ? 0 : 1)
-            .allowsHitTesting(!isKeyboardVisible)
-            .accessibilityHidden(isKeyboardVisible)
         }
         // Only a keyboard over the tabs moves the bar. One in a sheet (Squire's or Bravo's pages,
         // the calendar editor) leaves the bar and the five tab layouts alone under it.

@@ -11,9 +11,9 @@ struct HomeView: View {
 
         NavigationStack(path: $router.homePath) {
             HomeScreen()
-                .reservesTabBarSpace()
-                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide().reservesTabBarSpace() }
-                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide().reservesTabBarSpace() }
+                .tabScreen()
+                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide().tabScreen() }
+                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide().tabScreen() }
                 .navigationDestination(for: HomeRoute.self) { route in
                     Group {
                         switch route {
@@ -23,7 +23,7 @@ struct HomeView: View {
                         }
                     }
                     .barberPolePushRide()
-                    .reservesTabBarSpace()
+                    .tabScreen()
                 }
         }
     }

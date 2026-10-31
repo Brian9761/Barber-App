@@ -270,21 +270,27 @@ extension EnvironmentValues {
     }
 }
 
-private struct TabBarSpaceModifier: ViewModifier {
+private struct TabScreenModifier: ViewModifier {
     @Environment(\.tabBarReserve) private var reserve
+    @Environment(\.isSelectedTab) private var isSelectedTab
 
     func body(content: Content) -> some View {
-        content.safeAreaPadding(.bottom, reserve)
+        content
+            .safeAreaPadding(.bottom, reserve)
+            .accessibilityHidden(!isSelectedTab)
     }
 }
 
 extension View {
-    /// Keeps this screen's scrolling content and sticky bottom bars clear of the floating tab bar.
+    /// Makes this screen behave as part of its tab: its scrolling content and sticky bottom bars stay
+    /// clear of the floating tab bar, and while another tab is selected, VoiceOver (and UI tests)
+    /// can't reach it.
     ///
-    /// Apply it to a tab's first screen and to every screen it pushes, inside the `NavigationStack`:
-    /// each pushed screen has its own safe area, so padding added outside the stack doesn't reach it
-    /// (on iOS 26, Continue and the other pinned bars ended up behind the tab bar).
-    func reservesTabBarSpace() -> some View {
-        modifier(TabBarSpaceModifier())
+    /// Apply it to a tab's first screen and to every screen it pushes, inside the `NavigationStack`.
+    /// Each pushed screen is hosted on its own, so neither padding nor `accessibilityHidden` added
+    /// outside the stack reaches it: on iOS 26 Continue and the other pinned bars ended up behind the
+    /// tab bar, and every hidden tab stayed in the accessibility tree.
+    func tabScreen() -> some View {
+        modifier(TabScreenModifier())
     }
 }

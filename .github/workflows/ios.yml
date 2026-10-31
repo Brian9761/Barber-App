@@ -127,9 +127,18 @@ jobs:
           import json, pathlib, re, shutil
           source = pathlib.Path("build/attachments")
           target = pathlib.Path("build/screenshots")
+          failures = pathlib.Path("build/failures")
+          failures.mkdir(exist_ok=True)
           try:
               for test in json.loads((source / "manifest.json").read_text()):
                   for attachment in test.get("attachments", []):
+                      # A failing UI test's view hierarchy: what XCUI could see when it failed.
+                      if attachment["suggestedHumanReadableName"].startswith("App UI hierarchy"):
+                          test_name = test.get("testIdentifier") or test.get("testName") or "test"
+                          test_name = re.sub(r"[^A-Za-z0-9._-]", "-", str(test_name))
+                          count = len(list(failures.glob(f"{test_name}-hierarchy*.txt")))
+                          shutil.copy(source / attachment["exportedFileName"], failures / f"{test_name}-hierarchy-{count + 1}.txt")
+                          continue
                       # Only the named screenshots; failed tests also attach recordings and logs.
                       if not attachment["exportedFileName"].lower().endswith(".png"):
                           continue
@@ -154,6 +163,14 @@ jobs:
           name: screenshots-${{ matrix.runner }}
           path: build/screenshots
           if-no-files-found: warn
+
+      - name: Upload failure details
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failures-${{ matrix.runner }}
+          path: build/failures
+          if-no-files-found: ignore
 
       - name: Upload test results
         if: failure()
