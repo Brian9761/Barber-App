@@ -555,9 +555,10 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("appointmentCard")), "The appointment is still listed")
     }
 
-    /// The shop cancelled it: the app finds out when it opens and says so, on Home too.
+    /// The shop cancelled it: the app finds out when it opens and says so, on Home too. Booking
+    /// another time puts the new appointment on Home.
     func testShopCancelledAppointment() {
-        launch(UITestArguments.bookedAppointment, UITestArguments.shopCancels)
+        launch(UITestArguments.bookedAppointment, UITestArguments.shopCancels, UITestArguments.savedDetails)
         XCTAssertTrue(labeled("Cancelled by the shop").waitForExistence(timeout: 20), "Home doesn't say the shop cancelled it")
         XCTAssertTrue(element("bookAgainButton").exists)
         XCTAssertFalse(element("cancelAppointmentButton").exists)
@@ -566,6 +567,17 @@ final class IzzyClipzUITests: XCTestCase {
         tap("bookAgainButton")
         XCTAssertTrue(element("chooseAnyBarber").waitForExistence(timeout: 10), "Book another time didn't start booking the service")
         assertSelectedTab("Book")
+
+        tap("chooseAnyBarber")
+        waitForTimes()
+        pickFirstTime()
+        continueToDetails()
+        continueToReview()
+        bookAppointment()
+        tapPinned("bookedDoneButton")
+        openTab("Home")
+        XCTAssertTrue(labeled("Next appointment").waitForExistence(timeout: 10), "Home doesn't show the new booking")
+        XCTAssertTrue(element("cancelAppointmentButton").exists, "The new booking can be cancelled from Home")
     }
 
     /// An appointment the previous version saved after booking on Squire stays listed, read-only,
