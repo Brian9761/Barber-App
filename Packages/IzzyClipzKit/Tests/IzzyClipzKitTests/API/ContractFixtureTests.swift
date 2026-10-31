@@ -100,7 +100,12 @@ final class ContractFixtureTests: XCTestCase {
         guard FileManager.default.fileExists(atPath: folder.path) else {
             throw XCTSkip("No server contract fixtures at \(folder.path) yet; the server's tests write them.")
         }
-        let covered = try checkFixtures(in: folder)
+        var covered = try checkFixtures(in: folder)
+        // The server keeps one error envelope per error code in a subfolder.
+        let errors = folder.appendingPathComponent("errors")
+        if FileManager.default.fileExists(atPath: errors.path) {
+            covered.formUnion(try checkFixtures(in: errors))
+        }
         let missing = Self.kinds.map(\.name).filter { !covered.contains($0) }
         XCTAssertEqual(missing, [], "The server has no contract fixture for these response types")
     }
