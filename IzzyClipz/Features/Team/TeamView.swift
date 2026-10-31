@@ -93,7 +93,7 @@ private struct TeamBarberRow: View {
                 }
             }
             Text(barber.title)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             if let rating = barber.rating {
@@ -101,7 +101,7 @@ private struct TeamBarberRow: View {
             }
             if let haircut = Self.haircutLine(for: barber) {
                 Text(haircut)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }

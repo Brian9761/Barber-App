@@ -218,7 +218,7 @@ private struct AppointmentTicket: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: Theme.Space.s) {
                 Text(tag)
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smokeDark)
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -286,7 +286,7 @@ private struct AppointmentTicket: View {
 
     private var durationText: some View {
         Text(duration)
-            .textRole(.monoNumber)
+            .textRole(.detail)
             .foregroundStyle(Theme.smokeDark)
     }
 }

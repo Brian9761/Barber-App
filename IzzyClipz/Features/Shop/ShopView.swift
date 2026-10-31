@@ -56,21 +56,11 @@ struct ShopView: View {
                     .padding(.bottom, Theme.Space.section)
                 }
                 .screenBackground()
-                .tabScreen()
                 .modifier(ShopRootBar())
                 .navigationDestination(for: Product.self) { product in
                     ProductDetailView(product: product)
-                        .barberPolePushRide()
-                        .tabScreen()
-                }
-                .onTabReselect {
-                    if path.isEmpty {
-                        withAnimation(reduceMotion ? nil : .smooth) {
-                            scroller.scrollTo(Self.topID, anchor: .top)
-                        }
-                    } else {
-                        path = NavigationPath()
-                    }
+                        
+                        
                 }
             }
         }
@@ -133,7 +123,7 @@ private struct ShopHeader: View {
                 .fill(Theme.line)
                 .frame(width: 1, height: 16)
             Text("Proud \(sponsor.name) partner")
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -155,7 +145,7 @@ private struct ShopShippingBand: View {
                 .font(.system(size: 13, weight: .bold))
                 .accessibilityHidden(true)
             Text(note)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -202,8 +192,7 @@ private struct ShopFeaturedCard: View {
     private static let discBleed: CGFloat = 34
     /// The room the text leaves for the disc.
     private static let discReserve: CGFloat = discSize - discBleed + 10
-    /// Clears the longest drip and its droplet.
-    private static let topInset: CGFloat = DripEdge.depth(of: DripEdge.gelCard, band: 5) + 8
+    private static let topInset: CGFloat = Theme.Space.xl
 
     private var isLargeText: Bool { dynamicTypeSize.isAccessibilitySize }
     private var isSoldOut: Bool { bravo.isSoldOut(product) }
@@ -250,7 +239,7 @@ private struct ShopFeaturedCard: View {
             }
             HStack(spacing: Theme.Space.s) {
                 Text("Featured · \(sponsor.name)")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Color.white)
                     .fixedSize(horizontal: false, vertical: true)
                 if isSoldOut {
@@ -266,7 +255,7 @@ private struct ShopFeaturedCard: View {
                 .shopGhost(isGhost)
             if let sizeLine {
                 Text(sizeLine)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Color.white)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, Theme.Space.xs)
@@ -341,12 +330,6 @@ private struct ShopFeaturedCard: View {
                     disc(side: Self.discSize)
                         .offset(x: Self.discBleed, y: Theme.Space.s)
                 }
-            }
-            .overlay(alignment: .top) {
-                DripEdge(drips: DripEdge.gelCard, band: 5)
-                    .fill(Theme.electric)
-                    .frame(height: DripEdge.depth(of: DripEdge.gelCard, band: 5))
-                    .accessibilityHidden(true)
             }
             .clipShape(shape)
     }

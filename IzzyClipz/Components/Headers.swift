@@ -12,7 +12,7 @@ struct Kicker: View {
 
     var body: some View {
         Text(text)
-            .textRole(.monoTag)
+            .textRole(.label)
             .foregroundStyle(tone.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -44,7 +44,7 @@ struct MonoTag: View {
                     .accessibilityHidden(true)
             }
             Text(text)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .lineLimit(1)
         }
         .foregroundStyle(foreground)
@@ -171,9 +171,9 @@ struct StepHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.m) {
-                PoleProgressBar(step: step, total: total)
+                StepProgressBar(step: step, total: total)
                 Text(tag)
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     .accessibilityHidden(true)
             }
@@ -222,5 +222,28 @@ extension String {
     /// VoiceOver doesn't always read a dash between values as "to".
     var spokenRanges: String {
         replacingOccurrences(of: " – ", with: " to ").replacingOccurrences(of: "–", with: " to ")
+    }
+}
+
+/// Where you are in booking, as a thin bar: the finished part in bone, the rest in `ink4`.
+/// Decoration for the text beside it ("Step 2 of 5"), so VoiceOver skips it.
+///
+///     StepProgressBar(step: 2, total: 5)
+struct StepProgressBar: View {
+    /// The current step, from 1.
+    let step: Int
+    var total = 5
+
+    var body: some View {
+        GeometryReader { proxy in
+            let fraction = CGFloat(min(max(step, 1), max(total, 1))) / CGFloat(max(total, 1))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.ink4)
+                Capsule().fill(Theme.bone)
+                    .frame(width: proxy.size.width * fraction)
+            }
+        }
+        .frame(height: 4)
+        .accessibilityHidden(true)
     }
 }

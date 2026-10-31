@@ -20,8 +20,6 @@ struct ConfirmBookingSheet: View {
     @State private var range: ClosedRange<Date>
     @State private var remind = true
     @State private var saved: Appointment?
-    /// The pole's stripe position; one period up when the appointment is saved.
-    @State private var poleSpin: Double = 0
 
     /// How far ahead an appointment can be saved.
     private static let maximumDaysAhead = 90
@@ -44,8 +42,6 @@ struct ConfirmBookingSheet: View {
     var body: some View {
         ScrollView {
             VStack(spacing: Theme.Space.xl) {
-                BarberPole(phase: poleSpin)
-                    .frame(width: 22, height: 58)
                 // Overlapping, so the form and the saved state cross-fade in place.
                 ZStack(alignment: .top) {
                     if let saved {
@@ -219,12 +215,6 @@ struct ConfirmBookingSheet: View {
         withAnimation(.snappy) {
             saved = appointment
         }
-        // One turn of the pole for "BOOKED". With Reduce Motion it stays still.
-        if !reduceMotion {
-            withAnimation(.easeInOut(duration: 0.9)) {
-                poleSpin += 1
-            }
-        }
         UIAccessibility.post(notification: .announcement, argument: "Appointment saved. You're all set.")
     }
 }
@@ -247,7 +237,7 @@ private struct ConfirmBookingChoiceRow: View {
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(choice.priceLabel) · \(choice.durationLabel)")
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -274,7 +264,7 @@ private struct ConfirmBookingSuccess: View {
     var body: some View {
         VStack(spacing: Theme.Space.xxl) {
             Text("Booked")
-                .textRole(.dripWord)
+                .textRole(.displayXL)
                 .foregroundStyle(Theme.hotRed)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)

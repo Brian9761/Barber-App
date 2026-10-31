@@ -58,9 +58,6 @@ struct ReminderSettingsView: View {
 private struct ReminderSettingsHeader: View {
     var body: some View {
         VStack(spacing: Theme.Space.m) {
-            BarberPole(phase: 0)
-                .frame(width: 18, height: 48)
-                .padding(.bottom, Theme.Space.xs)
             VStack(spacing: Theme.Space.xxs) {
                 Kicker("Cut reminders")
                 Text("Keep it fresh")
@@ -205,7 +202,7 @@ private struct ReminderScheduleSection: View {
 
     private var pickedInterval: some View {
         Text(Self.weeks(store.intervalWeeks))
-            .textRole(.monoNumber)
+            .textRole(.detail)
             .foregroundStyle(Theme.bone)
     }
 
@@ -285,7 +282,7 @@ private struct ReminderChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
         return configuration.label
-            .font((isSelected ? BrandFont.bold : BrandFont.semiBold).font(size: 15, relativeTo: .subheadline).monospacedDigit())
+            .font(.system(.subheadline, design: .default, weight: isSelected ? .bold : .semibold).monospacedDigit())
             .foregroundStyle(isSelected ? Theme.ink : Theme.bone)
             .lineLimit(1)
             .padding(.horizontal, Theme.Space.s)
@@ -310,11 +307,12 @@ private struct ReminderNextCard: View {
                     .textRole(.displayM)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(next.date, format: .dateTime.hour().minute())
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smokeDark)
             } else {
                 HStack(spacing: Theme.Space.m) {
-                    BarberPoleSpinner(size: CGSize(width: 12, height: 36), label: "Scheduling")
+                    ProgressView()
+                        .accessibilityLabel("Scheduling")
                     Text("Scheduling…")
                         .textRole(.callout)
                         .foregroundStyle(Theme.smokeDark)

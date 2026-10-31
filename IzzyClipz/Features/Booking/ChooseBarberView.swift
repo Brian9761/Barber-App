@@ -15,7 +15,7 @@ struct ChooseBarberView: View {
                 VStack(alignment: .leading, spacing: Theme.Space.s) {
                     BookingStepTitle(step: 2, name: "Barber", title: "Pick your barber")
                     Text(summary)
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityLabel(summary.spokenRanges)
@@ -137,7 +137,7 @@ private struct ChooseBarberOfferingLink: View {
                 } else {
                     // Cristian and Julian have no published rating: "BARBER", never "0 reviews".
                     Text(barber.title)
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.smoke)
                 }
             }
@@ -251,7 +251,7 @@ private struct ChooseBarberRow<Leading: View, Detail: View>: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(isStacked ? .leading : .trailing)
             Text(duration)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
     }

@@ -126,17 +126,6 @@ enum Theme {
         endPoint: UnitPoint(x: 0.93, y: 0.75)
     )
 
-    /// The fade above the floating tab bar, so scrolling content dissolves before it reaches the bar.
-    static let tabScrim = LinearGradient(
-        stops: [
-            .init(color: ink.opacity(0), location: 0),
-            .init(color: ink.opacity(0.88), location: 0.34),
-            .init(color: ink, location: 0.58),
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
-
     /// The dot in the open-status pill.
     static func color(for tone: StatusSummary.Tone) -> Color {
         switch tone {

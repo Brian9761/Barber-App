@@ -43,7 +43,7 @@ struct RatingLine: View {
                 .font(.system(size: 10, weight: .bold))
                 .foregroundStyle(tone.primary)
             Text(line)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(tone.secondary)
         }
         .accessibilityElement(children: .ignore)
@@ -77,7 +77,7 @@ struct ScoreTile: View {
             RatingStars(average: sourced.rating.average, size: 13)
             HStack(spacing: 4) {
                 Text("\(sourced.rating.count) on \(sourced.source)")
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smokeDark)
                 if showsLink {
                     Image(systemName: Symbol.external)
@@ -147,7 +147,7 @@ struct ReviewCard: View {
                 .lineLimit(lineLimit)
                 .fixedSize(horizontal: false, vertical: lineLimit == nil)
             Text(byline)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smokeDark)
         }
         .boneCard(padding: Theme.Space.xl)
@@ -193,7 +193,7 @@ struct WalkInCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                 TimelineView(.everyMinute) { context in
                     Text(AppData.clock.todayLabel(at: context.date))
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.bone)
                 }
                 .padding(.top, 2)

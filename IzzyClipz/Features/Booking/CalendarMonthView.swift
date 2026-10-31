@@ -84,7 +84,7 @@ struct CalendarMonthView: View {
         LazyVGrid(columns: columns, spacing: 0) {
             ForEach(0..<7, id: \.self) { index in
                 Text(verbatim: Self.weekdayInitials[index])
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     .frame(maxWidth: .infinity, minHeight: 18)
             }
@@ -197,8 +197,8 @@ private struct CalendarMonthDayCell: View {
 
     /// Tabular digits, so the columns line up; bold for today and the selected day.
     private var font: Font {
-        let face: BrandFont = isSelected || isToday ? .bold : (isBookable ? .semiBold : .medium)
-        return face.font(size: 16, relativeTo: .body).monospacedDigit()
+        let weight: Font.Weight = isSelected || isToday ? .bold : (isBookable ? .semibold : .regular)
+        return Font.system(.body, design: .default, weight: weight).monospacedDigit()
     }
 
     /// Selection is bone with ink, never red. Days that can't be booked are bone at 40%.

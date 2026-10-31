@@ -14,9 +14,6 @@ struct ChooseTimeView: View {
     @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Every tab stays alive in the tab container, so coming back to the Book tab doesn't fire
-    /// `onAppear`: this does.
-    @Environment(\.isSelectedTab) private var isSelectedTab
     @State private var now: Date
     @State private var selectedDay: CalendarDay?
     @State private var selectedSlot: TimeSlot?
@@ -89,15 +86,11 @@ struct ChooseTimeView: View {
             isOnScreen = false
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, isOnScreen, isSelectedTab { refresh() }
-        }
-        .onChange(of: isSelectedTab) { _, isSelected in
-            if isSelected, isOnScreen { refresh() }
+            if phase == .active, isOnScreen { refresh() }
         }
         // Keeps today's times honest while the client lingers on the calendar. Restarted when the
         // Book tab comes back; stopped while another tab is showing.
-        .task(id: isSelectedTab) {
-            guard isSelectedTab else { return }
+        .task {
             while true {
                 do {
                     try await Task.sleep(for: .seconds(60))
@@ -337,7 +330,7 @@ private struct ChooseTimeTimes: View {
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("selectedDayLabel")
             Text(hoursText(for: day))
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -529,7 +522,7 @@ private struct ChooseTimeContinueBar: View {
     private var detail: some View {
         // Full white on red (5.24:1), from the button style.
         Text(summary ?? "Pick a time")
-            .textRole(.monoTag)
+            .textRole(.label)
             .fixedSize(horizontal: false, vertical: true)
     }
 }

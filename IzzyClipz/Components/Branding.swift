@@ -77,7 +77,7 @@ struct Wordmark: View {
 
     var body: some View {
         Text("\(Text("Izzy ").foregroundStyle(Theme.bone))\(Text("Clipz").foregroundStyle(Theme.hotRed))")
-            .textRole(isCompact ? .wordmarkCompact : .wordmark)
+            .font(.system(isCompact ? .headline : .title3, design: .default, weight: .heavy))
             .lineLimit(1)
             .accessibilityLabel(AppData.shop.name)
     }
@@ -120,7 +120,7 @@ struct MonogramTile: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius ?? min(size.width, size.height) * 0.27, style: .continuous)
         let letterSize = min(size.height * 0.76, size.width * 0.8)
         Text(Self.letters(for: barber))
-            .font(BrandFont.extraCondensedBlack.font(fixedSize: letterSize))
+            .font(.system(size: letterSize * 0.8, weight: .heavy, design: .default))
             .tracking(-0.01 * letterSize)
             .foregroundStyle(palette.letters)
             .lineLimit(1)
@@ -213,7 +213,7 @@ struct StatusPill: View {
                 .padding(3)
                 .background(Theme.color(for: status.tone).opacity(0.22), in: Circle())
             Text(status.text)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.bone)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

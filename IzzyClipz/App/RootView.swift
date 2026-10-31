@@ -1,71 +1,31 @@
 import SwiftUI
 
-/// The five tabs in a `PoleTabContainer`, the floating Street Drip tab bar over them, and every
-/// sheet the app presents.
+/// The five tabs in the system tab bar, and every sheet the app presents.
 ///
-/// Each tab root stays alive (its scroll position and navigation path survive a tab switch) and
-/// reserves room at the bottom for the floating bar. Sheets present above everything, one at a
-/// time, through the router.
+/// A plain `TabView`: the system bar at the bottom (dark, the selected tab in red), no animation
+/// between tabs, and the standard behavior when a tab is tapped again. Each tab owns its
+/// `NavigationStack`, so it keeps its pushed screens and scroll position while another tab is
+/// showing. Sheets present above everything, one at a time, through the router.
 struct RootView: View {
     @Environment(AppRouter.self) private var router
     @Environment(BagStore.self) private var bag
-    /// How many times each tab has been tapped again while selected, for `onTabReselect`.
-    @State private var reselections: [AppTab: Int] = [:]
-    /// The home indicator's inset (without the keyboard), which places the floating bar.
-    @State private var bottomInset: CGFloat = 0
-    /// The bar steps aside while typing (the Services search), rather than riding on the keyboard.
-    @State private var isKeyboardVisible = false
 
     var body: some View {
         @Bindable var router = router
 
-        PoleTabContainer(tabs: AppTab.barOrder, selection: $router.selectedTab) { tab in
-            tabRoot(tab)
-                // Bone, not red, for back buttons and plain buttons: red is each screen's main action.
-                .tint(Theme.bone)
-                // Applied inside each tab's NavigationStack by `tabScreen()`.
-                .environment(\.tabBarReserve, isKeyboardVisible ? 0 : StreetTabBar.contentReserve(for: tab, safeAreaBottom: bottomInset))
-                .environment(\.tabReselection, reselections[tab, default: 0])
-        }
-        .overlay(alignment: .bottom) {
-            // Gone, not just transparent, while typing: a see-through bar stayed in the
-            // accessibility tree.
-            if !isKeyboardVisible {
-                StreetTabBar(selection: $router.selectedTab, safeAreaBottom: bottomInset) { tab in
-                    reselect(tab)
-                }
-                // The overlay ends where the safe area does, above the home indicator, and
-                // `ignoresSafeArea` doesn't reach past it (on iOS 26 the bar sat 34 pt too high). Moving
-                // the bar down by the measured inset puts it, and the scrim under it, on the screen's edge.
-                .offset(y: bottomInset)
-            }
-        }
-        // Only a keyboard over the tabs moves the bar. One in a sheet (Squire's or Bravo's pages,
-        // the calendar editor) leaves the bar and the five tab layouts alone under it.
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            if router.sheet == nil {
-                isKeyboardVisible = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            isKeyboardVisible = false
-        }
-        // Every tab stays alive, so a text field on one keeps the keyboard when another is
-        // selected, and with the bar hidden there would be no way back. A switch the app makes
-        // while the client types (a notification tap that opens Book) ends the typing first.
-        .onChange(of: router.selectedTab) {
-            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
-        }
-        .background {
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear { bottomInset = proxy.safeAreaInsets.bottom }
-                    .onChange(of: proxy.safeAreaInsets.bottom) { _, inset in
-                        bottomInset = inset
+        TabView(selection: $router.selectedTab) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+                tabRoot(tab)
+                    // Bone, not red, for back buttons and plain buttons: red is each screen's main action.
+                    .tint(Theme.bone)
+                    .tabItem {
+                        Label(tab.title, systemImage: tab.symbol)
                     }
+                    .tag(tab)
             }
-            .ignoresSafeArea(.keyboard)
         }
+        // The selected tab in red; the system draws the rest of the bar.
+        .tint(Theme.dripRed)
         .background(Theme.ink.ignoresSafeArea())
         .sheet(item: $router.sheet, onDismiss: { router.sheetDidDismiss() }) { sheet in
             sheetContent(sheet)
@@ -113,18 +73,30 @@ struct RootView: View {
             WebSheet(url: url)
         }
     }
+}
 
-    /// The selected tab tapped again: back to its first screen. Home and Book keep their paths in
-    /// the router; the other tabs pop their own through `onTabReselect`.
-    private func reselect(_ tab: AppTab) {
-        switch tab {
-        case .home:
-            router.homePath = NavigationPath()
-        case .book:
-            router.bookingPath = []
-        case .services, .shop, .visit:
-            break
+extension AppTab: CaseIterable {
+    /// Left to right, as the tab bar shows them.
+    static let allCases: [AppTab] = [.home, .services, .book, .shop, .visit]
+
+    /// The tab's label in the bar, and what VoiceOver (and the UI tests) read.
+    var title: String {
+        switch self {
+        case .home: return "Home"
+        case .services: return "Services"
+        case .book: return "Book"
+        case .shop: return "Shop"
+        case .visit: return "Visit"
         }
-        reselections[tab, default: 0] += 1
+    }
+
+    var symbol: String {
+        switch self {
+        case .home: return Symbol.home
+        case .services: return Symbol.services
+        case .book: return Symbol.book
+        case .shop: return Symbol.shop
+        case .visit: return Symbol.visit
+        }
     }
 }

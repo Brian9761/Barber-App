@@ -76,7 +76,7 @@ struct HomeHero: View {
         // the next line up by a point leaves the 2–4 pt gap the spec asks for.
         VStack(alignment: .leading, spacing: -1) {
             Text("Fresh")
-                .textRole(.dripWord)
+                .textRole(.displayXL)
             Text("Out the chair.")
                 .textRole(.displayL)
         }
@@ -147,12 +147,12 @@ struct HomeHero: View {
     private func caption(for photo: GalleryPhoto, index: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
             Text(photo.caption)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
             Text("\(index + 1) / \(Self.photos.count)")
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.bone)
                 .fixedSize()
         }
@@ -245,7 +245,7 @@ struct HomeBookSection: View {
         let walkIns = AppData.shop.highlights.first { $0.localizedCaseInsensitiveContains("walk-in") }
         let parts = [walkIns, hours].compactMap { $0 }
         return Text(parts.joined(separator: " · "))
-            .textRole(.monoTag)
+            .textRole(.label)
             .foregroundStyle(Theme.smoke)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, Theme.Space.xxs)
@@ -337,7 +337,7 @@ struct HomePopularCard: View {
                 .foregroundStyle(primary)
                 .padding(.top, 2)
             Text(AppData.catalog.durationSummary(forService: service.id))
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
@@ -454,13 +454,13 @@ private struct HomeBarberMeta: View {
                     .font(.system(size: 10, weight: .bold))
                     .foregroundStyle(tone.primary)
                 Text("\(rating.averageLabel) · \(rating.count)")
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(tone.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         } else {
             Text(barber.title)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(tone.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
@@ -482,7 +482,7 @@ struct HomeFavoriteBarberCard: View {
                     .foregroundStyle(Theme.bone)
                     .accessibilityHidden(true)
                 Text("Your barber")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     // UI tests look for this exact text; the role sets it in capitals.
                     .accessibilityLabel("Your barber")
@@ -611,7 +611,7 @@ struct HomeReviewsCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 RatingStars(average: sourced.rating.average, size: 11, color: Theme.ink)
                 Text("\(sourced.rating.count) on \(sourced.source)")
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smokeDark)
                     .fixedSize(horizontal: !wraps, vertical: true)
             }
@@ -631,7 +631,7 @@ struct HomeReviewsCard: View {
                     .multilineTextAlignment(.leading)
                 HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
                     Text(byline(for: review))
-                        .textRole(.monoTag)
+                        .textRole(.label)
                         .foregroundStyle(Theme.smokeDark)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
@@ -716,7 +716,7 @@ struct HomeBravoCard: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: Theme.Space.xs) {
                 Text("Shop \(sponsor.name)")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                 Image(systemName: Symbol.forward)
                     .font(.system(size: 12, weight: .bold))
             }

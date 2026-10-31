@@ -71,7 +71,7 @@ struct ProductCard: View {
     @ViewBuilder private var size: some View {
         if let size = product.size {
             Text(size)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
                 .lineLimit(1)
         }

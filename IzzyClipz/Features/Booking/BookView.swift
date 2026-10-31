@@ -30,19 +30,13 @@ struct BookView: View {
                     // Just saved: the new appointment is at the top.
                     proxy.scrollTo(Self.topID, anchor: .top)
                 }
-                .onTabReselect {
-                    withAnimation(reduceMotion ? nil : .snappy) {
-                        proxy.scrollTo(Self.topID, anchor: .top)
-                    }
-                }
             }
             .screenBackground()
-            .tabScreen()
             .bookingStepChrome(step: 1, name: "Service", title: "Book")
             .navigationDestination(for: BookingStep.self) { step in
                 BookStepDestination(step: step)
-                    .barberPolePushRide()
-                    .tabScreen()
+                    
+                    
             }
         }
     }

@@ -20,7 +20,7 @@ struct ShopQuantityStepper: View {
                 value = max(range.lowerBound, value - 1)
             }
             Text("\(value)")
-                .font(BrandFont.monoBold.font(size: 16, relativeTo: .body))
+                .font(.body.weight(.bold))
                 .monospacedDigit()
                 .foregroundStyle(Theme.bone)
                 .lineLimit(1)
@@ -85,7 +85,7 @@ struct ShopToolbarBagButton: View {
                     .font(.system(size: 17, weight: .semibold))
                 if !bag.isEmpty {
                     Text(ShopBagFeedback.badgeText(bag.count))
-                        .font(BrandFont.monoBold.font(size: 13, relativeTo: .body))
+                        .font(.footnote.weight(.bold))
                         .monospacedDigit()
                         .lineLimit(1)
                         .foregroundStyle(Color.white)

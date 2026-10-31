@@ -30,7 +30,7 @@ struct ServiceRow: View {
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(AppData.catalog.durationSummary(forService: service.id))
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 // At the largest text sizes the price moves under the name,
                 // so neither has to break mid-word.
@@ -78,7 +78,7 @@ struct FirstAvailableRow: View {
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                 Text(option.durationLabel)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 if dynamicTypeSize.isAccessibilitySize {
                     price
@@ -145,7 +145,7 @@ struct OfferingRow: View {
                     }
                 }
                 Text(offering.durationLabel)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 if let note = offering.note {
                     Text(note)
@@ -183,7 +183,7 @@ struct OfferingRow: View {
     private var action: some View {
         HStack(spacing: 3) {
             Text(actionLabel)
-                .textRole(.monoTag)
+                .textRole(.label)
             Image(systemName: Symbol.chevron)
                 .font(.system(size: 10, weight: .heavy))
         }

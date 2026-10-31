@@ -87,7 +87,7 @@ private struct ChooseServiceBarberCard: View {
                     RatingLine(rating: rating, source: "Squire")
                 } else {
                     Text(barber.title)
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.smoke)
                 }
             }
@@ -158,7 +158,7 @@ private struct ChooseServiceOfferingLink: View {
                 .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
             Text(offering.durationLabel)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
     }

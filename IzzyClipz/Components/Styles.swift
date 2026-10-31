@@ -22,7 +22,6 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous)
         let fill = isEnabled ? Theme.dripRed : Theme.ink3
-        let dripDepth = DripEdge.depth(of: DripEdge.underButton)
         return HStack(spacing: 12) {
             configuration.label
                 .textRole(.button)
@@ -45,21 +44,10 @@ struct PrimaryButtonStyle: ButtonStyle {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, minHeight: 60)
         .background(fill, in: shape)
-        .overlay(alignment: .bottom) {
-            if drips && isEnabled {
-                // Hangs from the bottom edge, overlapping it by 1 pt so there's no seam.
-                DripEdge(drips: DripEdge.underButton)
-                    .fill(fill)
-                    .frame(height: dripDepth)
-                    .offset(y: dripDepth - 1)
-                    .accessibilityHidden(true)
-            }
-        }
         .contentShape(shape)
         .brightness(configuration.isPressed ? -0.08 : 0)
         .scaleEffect(configuration.isPressed ? 0.98 : 1)
         .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
-        .padding(.bottom, drips && isEnabled ? dripDepth : 0)
     }
 }
 
@@ -177,7 +165,7 @@ struct ChipButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius ?? minHeight / 2, style: .continuous)
         return configuration.label
-            .font((isSelected ? BrandFont.bold : BrandFont.semiBold).font(size: 14, relativeTo: .subheadline).monospacedDigit())
+            .font(.system(.subheadline, design: .default, weight: isSelected ? .bold : .semibold).monospacedDigit())
             .foregroundStyle(isSelected ? Theme.ink : (isEnabled ? Theme.bone : Theme.boneDisabled))
             .padding(.horizontal, 14)
             .frame(minHeight: minHeight)

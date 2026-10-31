@@ -136,7 +136,7 @@ struct ProductDetailView: View {
             }
         } else if let size = selected.size {
             Text(size)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
     }
@@ -195,7 +195,7 @@ struct ProductDetailView: View {
                 .foregroundStyle(Theme.bone)
                 .lineLimit(1)
             Text("Price from \(BravoShopCopy.storeHost)")
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
         }
         .accessibilityElement(children: .ignore)

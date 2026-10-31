@@ -48,7 +48,7 @@ private struct MenuNavigationTitle: ViewModifier {
                 ToolbarItem(placement: .principal) {
                     // Set like the system's inline title (NavigationBarAppearance), which this replaces.
                     Text(title)
-                        .font(BrandFont.condensedExtraBold.font(size: 19, relativeTo: .headline))
+                        .font(.headline)
                         .foregroundStyle(Theme.bone)
                         .lineLimit(1)
                         // The bar has a fixed height.

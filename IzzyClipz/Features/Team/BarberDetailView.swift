@@ -100,7 +100,7 @@ private struct BarberNameBlock: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 if barber.listedName != barber.name {
                     Text("Listed as \(barber.listedName) on Squire")
-                        .textRole(.monoTag)
+                        .textRole(.label)
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -176,7 +176,7 @@ private struct BarberInstagramRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Kicker("\(barberName) on Instagram")
                     Text(verbatim: handleText)
-                        .font(BrandFont.condensedExtraBold.font(size: 21, relativeTo: .title3))
+                        .textRole(.displayS)
                         .foregroundStyle(Theme.bone)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -219,7 +219,7 @@ private struct BarberAbout: View {
                     Kicker("Specialties")
                         .accessibilityAddTraits(.isHeader)
                     specialties
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.bone)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(barber.specialties.joined(separator: ", "))
@@ -302,7 +302,7 @@ private struct BarberMenuRow: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 MenuNamePriceLine(name: service.name, price: offering.price.label)
                 Text(offering.durationLabel)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 if let note = offering.note {
                     Text(note)

@@ -11,9 +11,8 @@ struct HomeView: View {
 
         NavigationStack(path: $router.homePath) {
             HomeScreen()
-                .tabScreen()
-                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide().tabScreen() }
-                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide().tabScreen() }
+                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0) }
+                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0) }
                 .navigationDestination(for: HomeRoute.self) { route in
                     Group {
                         switch route {
@@ -22,8 +21,8 @@ struct HomeView: View {
                         case .reviews: ReviewsView()
                         }
                     }
-                    .barberPolePushRide()
-                    .tabScreen()
+                    
+                    
                 }
         }
     }
@@ -46,11 +45,6 @@ private struct HomeScreen: View {
                 ScrollView {
                     HomeContent(heroHeight: HomeHero.height(forScreenHeight: screenHeight))
                         .id(Self.top)
-                }
-                .onTabReselect {
-                    withAnimation(reduceMotion ? nil : .snappy) {
-                        scroller.scrollTo(Self.top, anchor: .top)
-                    }
                 }
             }
             // Content scrolls up under the header, which is frosted ink.
@@ -111,7 +105,7 @@ private struct HomeHeader: View {
             VStack(alignment: .leading, spacing: 3) {
                 Wordmark()
                 Text("Barbershop · \(shop.address.city), \(shop.address.state)")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

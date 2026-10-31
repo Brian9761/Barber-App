@@ -61,11 +61,11 @@ struct BookingStepIndicator: View {
     var body: some View {
         VStack(spacing: 5) {
             Text(Self.tag(step: step, name: name))
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
                 .lineLimit(1)
                 .fixedSize()
-            PoleProgressBar(step: step, total: Self.totalSteps)
+            StepProgressBar(step: step, total: Self.totalSteps)
         }
         .dynamicTypeSize(...DynamicTypeSize.xLarge)
         .accessibilityElement(children: .ignore)
@@ -128,7 +128,7 @@ struct BookingSectionLabel: View {
                     .accessibilityHidden(true)
             }
             Text(title)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
@@ -223,7 +223,7 @@ struct BookingTicket: View {
                 .minimumScaleFactor(0.5)
                 .multilineTextAlignment(isStacked ? .leading : .center)
             Text(DurationText.short(minutes: durationMinutes))
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smokeDark)
                 .multilineTextAlignment(isStacked ? .leading : .center)
         }

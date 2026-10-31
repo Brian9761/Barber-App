@@ -44,7 +44,7 @@ struct BagView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityAddTraits(.isHeader)
                     Text(ShopBagFeedback.itemCount(bag.count))
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.smoke)
                 }
             }
@@ -134,7 +134,7 @@ private struct BagShippingMeter: View {
                         .frame(width: 8, height: 8)
                 }
                 Text(headline)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -250,7 +250,7 @@ private struct BagLineRow: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let size = line.product.size {
                 Text(size)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
             }
         }
@@ -262,7 +262,7 @@ private struct BagLineRow: View {
                 .foregroundStyle(line.isSoldOut ? Theme.smoke : Theme.bone)
             if line.quantity > 1 {
                 Text("\(line.unitPrice.label) each")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     .lineLimit(1)
             }
@@ -357,7 +357,7 @@ private struct BagTotals: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
                 Text("Subtotal")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                 Spacer(minLength: 0)
                 Text(bag.subtotal.label)

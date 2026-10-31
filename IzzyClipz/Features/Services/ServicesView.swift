@@ -17,7 +17,6 @@ struct ServicesView: View {
         let results = catalog.search(query)
         NavigationStack(path: $path) {
             ServicesMenu(results: results, isSearching: isSearching, scrollToTop: scrollToTop)
-                .tabScreen()
                 .overlay {
                     if results.isEmpty {
                         noResults
@@ -34,15 +33,8 @@ struct ServicesView: View {
                 // field, which is where search belongs; it folds into the bar as the menu scrolls.
                 .navigationTitle("Services")
                 .navigationBarTitleDisplayMode(.large)
-                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide().tabScreen() }
-                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide().tabScreen() }
-        }
-        .onTabReselect {
-            if path.isEmpty {
-                scrollToTop += 1
-            } else {
-                path = NavigationPath()
-            }
+                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0) }
+                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0) }
         }
     }
 
@@ -193,7 +185,7 @@ private struct ServicesMenu: View {
 
     private func categoryCount(_ count: Int) -> some View {
         Text(Self.count(count))
-            .textRole(.monoTag)
+            .textRole(.label)
             .foregroundStyle(Theme.smoke)
             .lineLimit(1)
     }
@@ -316,7 +308,7 @@ private struct ServiceLengthAndPrice: View {
 
     private var durationText: some View {
         Text(duration.menuKeepingUnits)
-            .textRole(.monoNumber)
+            .textRole(.detail)
             .foregroundStyle(tone.secondary)
             .accessibilityLabel(duration.spokenRanges)
     }

@@ -167,7 +167,7 @@ struct ServiceDetailView: View {
                 } else {
                     // No published rating: their title ("BARBER"), never "0 reviews".
                     Text(barber.title)
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.smoke)
                 }
             }
@@ -257,10 +257,9 @@ private struct ServiceStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             Text(label)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
             MenuTitleText(value, role: .price)
-                .textCase(.uppercase)
                 .foregroundStyle(Theme.bone)
         }
         .padding(Theme.Space.l)
@@ -400,7 +399,7 @@ private struct BookWithRow<Leading: View, Detail: View>: View {
                 .multilineTextAlignment(isStacked ? .leading : .trailing)
                 .fixedSize(horizontal: false, vertical: true)
             Text(duration)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
     }
