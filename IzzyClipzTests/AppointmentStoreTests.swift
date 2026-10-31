@@ -341,6 +341,61 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertTrue(store.appointment(withID: id)?.isCancelledByShop ?? false)
     }
 
+    /// The first cancel went through but its answer was lost, so the card still says booked. The
+    /// second finds it already cancelled by the client: that's what was asked, so it succeeds and
+    /// shows it cancelled, without "Couldn't cancel".
+    func testCancellingAgainAfterALostAnswerShowsItCancelled() async throws {
+        scheduler.status = .authorized
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(token: "t1"), remind: true)
+        await store.settle()
+        XCTAssertFalse(scheduler.pending.isEmpty)
+        api.cancelHandler = { _, _ in throw APIError.offline }
+        do {
+            try await store.cancel(id)
+            XCTFail("The answer was lost")
+        } catch {
+            XCTAssertEqual(error as? AppointmentActionError, .server(.offline))
+        }
+        XCTAssertEqual(store.appointment(withID: id)?.status, .booked)
+
+        api.cancelHandler = { _, _ in throw APIError.notCancellable }
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id, status: .cancelled, cancelledBy: .customer) }
+        now = now.addingTimeInterval(30)
+        try await store.cancel(id)
+        await store.settle()
+        XCTAssertEqual(api.lookups.map(\.token), ["t1"])
+        let saved = try XCTUnwrap(store.appointment(withID: id))
+        XCTAssertEqual(saved.status, .cancelled)
+        XCTAssertEqual(saved.checkedAt, now)
+        XCTAssertNil(store.next)
+        XCTAssertTrue(scheduler.pending.isEmpty, "No reminders for a cancelled appointment")
+    }
+
+    /// The same on the in-memory server: the first cancel reached it, the second is turned down
+    /// as already cancelled, and the app shows it cancelled.
+    func testCancellingAgainOnTheInMemoryServer() async throws {
+        var options = FakeShopAPI.Options()
+        options.latency = .zero
+        let fake = FakeShopAPI(options: options, now: TestData.now)
+        let tomorrow = TestData.calendarDay(2026, 10, 29)
+        let target = IzzyAPI.BookingTarget.offering(id: TestData.carlosHaircutID)
+        let slots = try await fake.availability(IzzyAPI.AvailabilityQuery(target: target, from: tomorrow, days: 1))
+        let start = try XCTUnwrap(slots.slots(on: tomorrow).first?.start)
+        let request = IzzyAPI.NewAppointment(target: target, start: start, customer: IzzyAPI.NewCustomer(name: "Alex", phone: "4425550123"))
+        let confirmation = try await fake.book(request, token: .generate())
+        let store = AppointmentStore(api: fake, tokens: tokens, scheduler: scheduler, defaults: TestData.defaults(), calendar: AppData.bookingCalendar, now: { [unowned self] in self.now })
+        let id = store.add(confirmation, remind: false).id
+
+        // The first try, whose answer never came back.
+        _ = try await fake.cancelAppointment(id: id, manageToken: confirmation.manageToken)
+        XCTAssertEqual(store.appointment(withID: id)?.status, .booked)
+
+        try await store.cancel(id)
+        XCTAssertEqual(store.appointment(withID: id)?.status, .cancelled)
+        XCTAssertEqual(store.appointment(withID: id)?.snapshot.cancelledBy, .customer)
+    }
+
     func testCancellingWithoutATokenSaysToCall() async {
         let store = makeStore(defaults: TestData.defaults())
         store.add(TestData.confirmation(), remind: false)

@@ -433,7 +433,8 @@ final class AppointmentStore {
         sync()
     }
 
-    /// Cancels an appointment booked in the app.
+    /// Cancels an appointment booked in the app. Cancelling again after an answer was lost, when
+    /// the first try went through, finds it cancelled and succeeds.
     func cancel(_ id: String) async throws {
         guard let saved = appointment(withID: id), saved.origin == .app else { throw AppointmentActionError.cannotManage }
         let token: String
@@ -464,9 +465,15 @@ final class AppointmentStore {
             if apiError == .notCancellable {
                 // It changed at the shop (or has started): show how it is now.
                 if let fresh = try? await api.appointment(id: id, manageToken: token) {
-                    update(id) { $0.snapshot = fresh }
+                    update(id) { saved in
+                        saved.snapshot = fresh
+                        saved.checkedAt = self.now()
+                    }
                     persist()
                     sync()
+                    // Cancelled by the client (that takes this appointment's token): an earlier
+                    // try went through but its answer was lost. It's cancelled, as asked.
+                    if fresh.status == .cancelled, fresh.cancelledBy == .customer { return }
                 }
             }
             throw AppointmentActionError.server(apiError)
