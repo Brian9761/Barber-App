@@ -1,0 +1,920 @@
+Command line invocation:
+    /Applications/Xcode_26.6.app/Contents/Developer/usr/bin/xcodebuild test-without-building -project IzzyClipz.xcodeproj -scheme IzzyClipz -destination id=F0C70C77-E423-4478-B648-3D25045B311B -derivedDataPath build/DerivedData "-only-testing:IzzyClipzUITests/DemoTour" -resultBundlePath build/Demo.xcresult CODE_SIGNING_ALLOWED=NO
+
+Build settings from command line:
+    CODE_SIGNING_ALLOWED = NO
+
+Resolve Package Graph
+
+
+Resolved source packages:
+  IzzyClipzKit: /Users/runner/work/Barber-App/Barber-App/Packages/IzzyClipzKit
+
+Writing result bundle at path:
+	/Users/runner/work/Barber-App/Barber-App/build/Demo.xcresult
+
+--- xcodebuild: WARNING: Using the first of multiple matching destinations:
+{ platform:iOS Simulator, arch:arm64, id:F0C70C77-E423-4478-B648-3D25045B311B, OS:26.5, name:iPhone 17 Pro }
+{ platform:iOS Simulator, arch:x86_64, id:F0C70C77-E423-4478-B648-3D25045B311B, OS:26.5, name:iPhone 17 Pro }
+2026-10-31 03:51:34.495963+0000 IzzyClipzUITests-Runner[10923:36591] [Default] Running tests...
+objc[10923]: Class UIAccessibilityLoaderWebShared is implemented in both /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x10875c310) and /Library/Developer/CoreSimulator/Volumes/iOS_23F77/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 26.5.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x1086c0398). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+    t =      nans Interface orientation changed to Portrait
+Test Suite 'Selected tests' started at 2026-10-31 03:51:51.902.
+Test Suite 'IzzyClipzUITests.xctest' started at 2026-10-31 03:51:51.903.
+Test Suite 'DemoTour' started at 2026-10-31 03:51:51.903.
+Test Case '-[IzzyClipzUITests.DemoTour testTour]' started.
+    t =     0.00s Start Test at 2026-10-31 03:51:51.904
+    t =     1.59s Set Up
+    t =     1.60s     Open com.izzyclipz.app
+    t =     1.60s         Launch com.izzyclipz.app
+2026-10-31 03:51:54.335 xcodebuild[8038:29396] [MT] IDELaunchParametersSnapshot: The operation couldn’t be completed. (DebuggerLLDB.DebuggerVersionStore.StoreError error 0.)
+2026-10-31 03:51:54.336 xcodebuild[8038:29396] [MT] IDELaunchParametersSnapshot: no debugger version
+    t =    32.61s             Setting up automation session
+    t =    55.06s             Wait for com.izzyclipz.app to idle
+    t =    77.16s Waiting 10.0s for "homeBookButton" Any to exist
+    t =    78.24s     Checking `Expect predicate `existsNoRetry == 1` for object "homeBookButton" Any`
+    t =    78.24s         Checking existence of `"homeBookButton" Any`
+    t =    81.94s Find the Target Application 'com.izzyclipz.app'
+    t =    82.48s Added attachment named 'Home'
+    t =    82.48s Waiting 5.0s for "tab.services" Button to exist
+    t =    83.52s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.services" Button`
+    t =    83.52s         Checking existence of `"tab.services" Button`
+    t =    83.65s Tap "tab.services" Button
+    t =    83.65s     Wait for com.izzyclipz.app to idle
+    t =    83.65s     Find the "tab.services" Button
+    t =    83.78s     Check for interrupting elements affecting "tab.services" Button
+    t =    84.43s     Synthesize event
+    t =    85.05s     Wait for com.izzyclipz.app to idle
+    t =    86.41s Checking `Expect predicate `isSelected == 1` for object "tab.services" Button`
+    t =    86.42s     Find the "tab.services" Button
+    t =    89.39s Waiting 5.0s for "tab.book" Button to exist
+    t =    90.43s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.book" Button`
+    t =    90.43s         Checking existence of `"tab.book" Button`
+    t =    90.66s Tap "tab.book" Button
+    t =    90.66s     Wait for com.izzyclipz.app to idle
+    t =    90.67s     Find the "tab.book" Button
+    t =    90.86s     Check for interrupting elements affecting "tab.book" Button
+    t =    91.00s     Synthesize event
+    t =    91.33s     Wait for com.izzyclipz.app to idle
+    t =    92.78s Checking `Expect predicate `isSelected == 1` for object "tab.book" Button`
+    t =    92.78s     Find the "tab.book" Button
+    t =    95.39s Waiting 5.0s for "tab.shop" Button to exist
+    t =    96.46s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.shop" Button`
+    t =    96.46s         Checking existence of `"tab.shop" Button`
+    t =    96.72s Tap "tab.shop" Button
+    t =    96.72s     Wait for com.izzyclipz.app to idle
+    t =    96.73s     Find the "tab.shop" Button
+    t =    96.86s     Check for interrupting elements affecting "tab.shop" Button
+    t =    96.96s     Synthesize event
+    t =    97.38s     Wait for com.izzyclipz.app to idle
+    t =    98.49s Checking `Expect predicate `isSelected == 1` for object "tab.shop" Button`
+    t =    98.52s     Find the "tab.shop" Button
+    t =   101.79s Waiting 5.0s for "tab.visit" Button to exist
+    t =   102.80s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.visit" Button`
+    t =   102.80s         Checking existence of `"tab.visit" Button`
+    t =   102.90s Tap "tab.visit" Button
+    t =   102.90s     Wait for com.izzyclipz.app to idle
+    t =   102.90s     Find the "tab.visit" Button
+    t =   103.03s     Check for interrupting elements affecting "tab.visit" Button
+    t =   103.15s     Synthesize event
+    t =   103.53s     Wait for com.izzyclipz.app to idle
+    t =   104.82s Checking `Expect predicate `isSelected == 1` for object "tab.visit" Button`
+    t =   104.82s     Find the "tab.visit" Button
+    t =   107.66s Waiting 5.0s for "tab.home" Button to exist
+    t =   108.71s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.home" Button`
+    t =   108.71s         Checking existence of `"tab.home" Button`
+    t =   108.98s Tap "tab.home" Button
+    t =   108.98s     Wait for com.izzyclipz.app to idle
+    t =   108.98s     Find the "tab.home" Button
+    t =   109.21s     Check for interrupting elements affecting "tab.home" Button
+    t =   109.36s     Synthesize event
+    t =   109.74s     Wait for com.izzyclipz.app to idle
+    t =   110.79s Checking `Expect predicate `isSelected == 1` for object "tab.home" Button`
+    t =   110.80s     Find the "tab.home" Button
+    t =   113.83s Swipe up Target Application 'com.izzyclipz.app'
+    t =   113.83s     Wait for com.izzyclipz.app to idle
+    t =   113.84s     Find the Target Application 'com.izzyclipz.app'
+    t =   113.95s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   114.09s     Synthesize event
+    t =   114.62s     Wait for com.izzyclipz.app to idle
+    t =   117.76s Swipe up Target Application 'com.izzyclipz.app'
+    t =   117.76s     Wait for com.izzyclipz.app to idle
+    t =   117.81s     Find the Target Application 'com.izzyclipz.app'
+    t =   117.96s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   118.09s     Synthesize event
+    t =   118.62s     Wait for com.izzyclipz.app to idle
+    t =   120.96s Swipe up Target Application 'com.izzyclipz.app'
+    t =   120.96s     Wait for com.izzyclipz.app to idle
+    t =   121.02s     Find the Target Application 'com.izzyclipz.app'
+    t =   121.16s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   121.27s     Synthesize event
+    t =   121.79s     Wait for com.izzyclipz.app to idle
+    t =   123.43s Find the Target Application 'com.izzyclipz.app'
+    t =   123.76s Added attachment named 'Home-Crew'
+    t =   123.77s Checking existence of `"instagramButton" Any`
+    t =   124.31s Find the "instagramButton" Any
+    t =   126.16s Find the Target Application 'com.izzyclipz.app'
+    t =   126.70s Added attachment named 'Home-Instagram'
+    t =   126.70s Swipe up Target Application 'com.izzyclipz.app'
+    t =   126.70s     Wait for com.izzyclipz.app to idle
+    t =   126.71s     Find the Target Application 'com.izzyclipz.app'
+    t =   126.81s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   126.92s     Synthesize event
+    t =   127.43s     Wait for com.izzyclipz.app to idle
+    t =   129.09s Find the Target Application 'com.izzyclipz.app'
+    t =   129.40s Added attachment named 'Home-Bravo'
+    t =   129.41s Waiting 5.0s for "tab.services" Button to exist
+    t =   130.44s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.services" Button`
+    t =   130.44s         Checking existence of `"tab.services" Button`
+    t =   130.58s Tap "tab.services" Button
+    t =   130.58s     Wait for com.izzyclipz.app to idle
+    t =   130.58s     Find the "tab.services" Button
+    t =   130.73s     Check for interrupting elements affecting "tab.services" Button
+    t =   130.81s     Synthesize event
+    t =   131.13s     Wait for com.izzyclipz.app to idle
+    t =   132.20s Checking `Expect predicate `isSelected == 1` for object "tab.services" Button`
+    t =   132.21s     Find the "tab.services" Button
+    t =   134.80s Waiting 8.0s for "service-haircut" Any to exist
+    t =   135.84s     Checking `Expect predicate `existsNoRetry == 1` for object "service-haircut" Any`
+    t =   135.84s         Checking existence of `"service-haircut" Any`
+    t =   136.54s Checking existence of `"service-haircut" Any`
+    t =   147.00s Checking existence of `"service-haircut" Any`
+    t =   152.62s Find the "service-haircut" Any
+    t =   153.37s Tap "service-haircut" Button
+    t =   153.37s     Wait for com.izzyclipz.app to idle
+    t =   153.37s     Find the "service-haircut" Button
+    t =   153.94s     Check for interrupting elements affecting "service-haircut" Button
+    t =   154.12s     Synthesize event
+    t =   154.46s     Wait for com.izzyclipz.app to idle
+    t =   157.54s Checking existence of `"book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Any`
+    t =   158.08s Find the "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Any
+    t =   158.52s Swipe up Target Application 'com.izzyclipz.app'
+    t =   158.52s     Wait for com.izzyclipz.app to idle
+    t =   158.52s     Find the Target Application 'com.izzyclipz.app'
+    t =   158.61s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   158.72s     Synthesize event
+    t =   159.23s     Wait for com.izzyclipz.app to idle
+    t =   161.34s Checking existence of `"book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button`
+    t =   162.23s Find the "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button
+    t =   163.89s Find the Target Application 'com.izzyclipz.app'
+    t =   164.19s Added attachment named 'Haircut-Detail'
+    t =   164.19s Waiting 8.0s for "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button to exist
+    t =   165.24s     Checking `Expect predicate `existsNoRetry == 1` for object "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button`
+    t =   165.25s         Checking existence of `"book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button`
+    t =   165.55s Checking existence of `"book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button`
+    t =   165.87s Checking existence of `"book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button`
+    t =   166.17s Find the "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button
+    t =   166.51s Tap "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button
+    t =   166.51s     Wait for com.izzyclipz.app to idle
+    t =   166.51s     Find the "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button
+    t =   166.82s     Check for interrupting elements affecting "book-carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41" Button
+    t =   166.95s     Synthesize event
+    t =   167.27s     Wait for com.izzyclipz.app to idle
+    t =   169.27s Waiting 10.0s for "continueToReview" Any to exist
+    t =   170.31s     Checking `Expect predicate `existsNoRetry == 1` for object "continueToReview" Any`
+    t =   170.32s         Checking existence of `"continueToReview" Any`
+    t =   173.16s Find the Target Application 'com.izzyclipz.app'
+    t =   173.45s Added attachment named 'Calendar'
+    t =   173.46s Waiting 8.0s for "calendarNextMonth" Any to exist
+    t =   174.50s     Checking `Expect predicate `existsNoRetry == 1` for object "calendarNextMonth" Any`
+    t =   174.50s         Checking existence of `"calendarNextMonth" Any`
+    t =   174.97s Checking existence of `"calendarNextMonth" Any`
+    t =   175.38s Checking existence of `"calendarNextMonth" Any`
+    t =   175.76s Find the "calendarNextMonth" Any
+    t =   176.22s Tap "calendarNextMonth" Button
+    t =   176.22s     Wait for com.izzyclipz.app to idle
+    t =   176.23s     Find the "calendarNextMonth" Button
+    t =   176.62s     Check for interrupting elements affecting "calendarNextMonth" Button
+    t =   176.79s     Synthesize event
+    t =   177.15s     Wait for com.izzyclipz.app to idle
+    t =   178.67s Waiting 8.0s for "calendarPrevMonth" Any to exist
+    t =   179.70s     Checking `Expect predicate `existsNoRetry == 1` for object "calendarPrevMonth" Any`
+    t =   179.70s         Checking existence of `"calendarPrevMonth" Any`
+    t =   180.12s Checking existence of `"calendarPrevMonth" Any`
+    t =   180.58s Checking existence of `"calendarPrevMonth" Any`
+    t =   181.12s Find the "calendarPrevMonth" Any
+    t =   181.54s Tap "calendarPrevMonth" Button
+    t =   181.54s     Wait for com.izzyclipz.app to idle
+    t =   181.54s     Find the "calendarPrevMonth" Button
+    t =   181.93s     Check for interrupting elements affecting "calendarPrevMonth" Button
+    t =   182.06s     Synthesize event
+    t =   182.39s     Wait for com.izzyclipz.app to idle
+    t =   183.90s Waiting 8.0s for Button (First Match) to exist
+    t =   184.92s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   184.92s         Checking existence of `Button (First Match)`
+    t =   185.16s Checking existence of `Button (First Match)`
+    t =   185.37s Checking existence of `Button (First Match)`
+    t =   185.64s Find the Button (First Match)
+    t =   185.91s Tap "time-1000" Button
+    t =   185.91s     Wait for com.izzyclipz.app to idle
+    t =   185.92s     Find the "time-1000" Button
+    t =   186.20s     Check for interrupting elements affecting "time-1000" Button
+    t =   186.30s     Synthesize event
+    t =   186.61s     Wait for com.izzyclipz.app to idle
+    t =   188.14s Find the Target Application 'com.izzyclipz.app'
+    t =   188.44s Added attachment named 'Time-Picked'
+    t =   188.45s Waiting 8.0s for "continueToReview" Any to exist
+    t =   189.48s     Checking `Expect predicate `existsNoRetry == 1` for object "continueToReview" Any`
+    t =   189.48s         Checking existence of `"continueToReview" Any`
+    t =   189.72s Tap "continueToReview" Any
+    t =   189.72s     Wait for com.izzyclipz.app to idle
+    t =   189.72s     Find the "continueToReview" Any
+    t =   189.96s     Check for interrupting elements affecting "continueToReview" Button
+    t =   190.10s     Synthesize event
+    t =   190.41s     Wait for com.izzyclipz.app to idle
+    t =   193.06s Find the Target Application 'com.izzyclipz.app'
+    t =   193.38s Added attachment named 'Review'
+    t =   193.38s Waiting 8.0s for "confirmOnSquireButton" Any to exist
+    t =   194.39s     Checking `Expect predicate `existsNoRetry == 1` for object "confirmOnSquireButton" Any`
+    t =   194.39s         Checking existence of `"confirmOnSquireButton" Any`
+    t =   194.83s Checking existence of `"confirmOnSquireButton" Any`
+    t =   195.32s Checking existence of `"confirmOnSquireButton" Any`
+    t =   195.69s Find the "confirmOnSquireButton" Any
+    t =   196.40s Tap "confirmOnSquireButton" Button
+    t =   196.40s     Wait for com.izzyclipz.app to idle
+    t =   196.40s     Find the "confirmOnSquireButton" Button
+    t =   196.98s     Check for interrupting elements affecting "confirmOnSquireButton" Button
+    t =   197.14s     Synthesize event
+    t =   197.46s     Wait for com.izzyclipz.app to idle
+    t =   210.05s Find the Target Application 'com.izzyclipz.app'
+    t =   212.36s Added attachment named 'Squire-Carlos-Haircut-12s'
+    t =   230.46s Find the Target Application 'com.izzyclipz.app'
+    t =   238.10s Added attachment named 'Squire-Carlos-Haircut'
+    t =   238.12s Waiting 5.0s for Button (First Match) to exist
+    t =   239.15s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   239.17s         Checking existence of `Button (First Match)`
+    t =   240.83s Tap Button (First Match)
+    t =   240.83s     Wait for com.izzyclipz.app to idle
+    t =   240.84s     Find the Button (First Match)
+    t =   242.12s     Check for interrupting elements affecting "Close" Button
+    t =   242.36s     Synthesize event
+    t =   242.86s     Wait for com.izzyclipz.app to idle
+    t =   245.44s Waiting 10.0s for "confirmBookingSheet" Any to exist
+    t =   246.49s     Checking `Expect predicate `existsNoRetry == 1` for object "confirmBookingSheet" Any`
+    t =   246.49s         Checking existence of `"confirmBookingSheet" Any`
+    t =   250.86s Find the Target Application 'com.izzyclipz.app'
+    t =   251.17s Added attachment named 'Did-You-Book'
+    t =   251.17s Waiting 8.0s for "saveAppointmentButton" Any to exist
+    t =   252.23s     Checking `Expect predicate `existsNoRetry == 1` for object "saveAppointmentButton" Any`
+    t =   252.24s         Checking existence of `"saveAppointmentButton" Any`
+    t =   252.97s Tap "saveAppointmentButton" Any
+    t =   252.97s     Wait for com.izzyclipz.app to idle
+    t =   253.01s     Find the "saveAppointmentButton" Any
+    t =   253.60s     Check for interrupting elements affecting "saveAppointmentButton" Button
+    t =   253.79s     Synthesize event
+    t =   254.11s     Wait for com.izzyclipz.app to idle
+    t =   254.78s Waiting 5.0s for "Allow" Button to exist
+    t =   255.81s     Checking `Expect predicate `existsNoRetry == 1` for object "Allow" Button`
+    t =   255.81s         Checking existence of `"Allow" Button`
+    t =   260.08s         Capturing element debug description
+    t =   260.08s     Checking existence of `"Allow" Button`
+    t =   261.92s Tap "Allow" Button
+    t =   261.92s     Wait for com.apple.springboard to idle
+    t =   261.93s     Find the "Allow" Button
+    t =   261.98s     Check for interrupting elements affecting "Allow" Button
+    t =   262.05s     Synthesize event
+    t =   262.59s     Wait for com.apple.springboard to idle
+    t =   265.38s Find the Target Application 'com.izzyclipz.app'
+    t =   265.83s Added attachment named 'Booked'
+    t =   265.83s Waiting 8.0s for "confirmDoneButton" Any to exist
+    t =   266.84s     Checking `Expect predicate `existsNoRetry == 1` for object "confirmDoneButton" Any`
+    t =   266.84s         Checking existence of `"confirmDoneButton" Any`
+    t =   267.32s Tap "confirmDoneButton" Any
+    t =   267.32s     Wait for com.izzyclipz.app to idle
+    t =   267.32s     Find the "confirmDoneButton" Any
+    t =   267.96s     Check for interrupting elements affecting "confirmDoneButton" Button
+    t =   268.16s     Synthesize event
+    t =   268.61s     Wait for com.izzyclipz.app to idle
+    t =   271.01s Find the Target Application 'com.izzyclipz.app'
+    t =   272.20s Added attachment named 'Book-Appointments'
+    t =   272.21s Waiting 5.0s for "tab.home" Button to exist
+    t =   273.24s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.home" Button`
+    t =   273.24s         Checking existence of `"tab.home" Button`
+    t =   273.42s Tap "tab.home" Button
+    t =   273.43s     Wait for com.izzyclipz.app to idle
+    t =   273.43s     Find the "tab.home" Button
+    t =   273.56s     Check for interrupting elements affecting "tab.home" Button
+    t =   273.76s     Synthesize event
+    t =   274.13s     Wait for com.izzyclipz.app to idle
+    t =   275.14s Checking `Expect predicate `isSelected == 1` for object "tab.home" Button`
+    t =   275.15s     Find the "tab.home" Button
+    t =   276.98s Swipe down Target Application 'com.izzyclipz.app'
+    t =   276.99s     Wait for com.izzyclipz.app to idle
+    t =   276.99s     Find the Target Application 'com.izzyclipz.app'
+    t =   277.09s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   277.20s     Synthesize event
+    t =   277.60s     Wait for com.izzyclipz.app to idle
+    t =   279.84s Swipe down Target Application 'com.izzyclipz.app'
+    t =   279.84s     Wait for com.izzyclipz.app to idle
+    t =   279.84s     Find the Target Application 'com.izzyclipz.app'
+    t =   279.93s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   280.02s     Synthesize event
+    t =   280.42s     Wait for com.izzyclipz.app to idle
+    t =   283.42s Find the Target Application 'com.izzyclipz.app'
+    t =   283.67s Added attachment named 'Home-Appointment'
+    t =   283.67s Waiting 8.0s for "meetTeamButton" Any to exist
+    t =   284.70s     Checking `Expect predicate `existsNoRetry == 1` for object "meetTeamButton" Any`
+    t =   284.71s         Checking existence of `"meetTeamButton" Any`
+    t =   285.01s Checking existence of `"meetTeamButton" Any`
+    t =   285.24s Checking existence of `"meetTeamButton" Any`
+    t =   285.55s Find the "meetTeamButton" Any
+    t =   285.79s Swipe up Target Application 'com.izzyclipz.app'
+    t =   285.79s     Wait for com.izzyclipz.app to idle
+    t =   285.79s     Find the Target Application 'com.izzyclipz.app'
+    t =   285.86s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   285.95s     Synthesize event
+    t =   286.46s     Wait for com.izzyclipz.app to idle
+    t =   288.40s Checking existence of `"meetTeamButton" Button`
+    t =   289.14s Find the "meetTeamButton" Button
+    t =   289.51s Tap "meetTeamButton" Button
+    t =   289.51s     Wait for com.izzyclipz.app to idle
+    t =   289.73s     Find the "meetTeamButton" Button
+    t =   290.00s     Check for interrupting elements affecting "meetTeamButton" Button
+    t =   290.11s     Synthesize event
+    t =   290.42s     Wait for com.izzyclipz.app to idle
+    t =   293.06s Find the Target Application 'com.izzyclipz.app'
+    t =   293.34s Added attachment named 'Team'
+    t =   293.34s Waiting 8.0s for "barber-israel-flores" Any to exist
+    t =   294.38s     Checking `Expect predicate `existsNoRetry == 1` for object "barber-israel-flores" Any`
+    t =   294.38s         Checking existence of `"barber-israel-flores" Any`
+    t =   294.68s Checking existence of `"barber-israel-flores" Any`
+    t =   294.99s Checking existence of `"barber-israel-flores" Any`
+    t =   295.22s Find the "barber-israel-flores" Any
+    t =   295.46s Tap "barber-israel-flores" Button
+    t =   295.46s     Wait for com.izzyclipz.app to idle
+    t =   295.47s     Find the "barber-israel-flores" Button
+    t =   295.68s     Check for interrupting elements affecting "barber-israel-flores" Button
+    t =   295.78s     Synthesize event
+    t =   296.09s     Wait for com.izzyclipz.app to idle
+    t =   298.79s Waiting 8.0s for "favoriteButton" Any to exist
+    t =   299.85s     Checking `Expect predicate `existsNoRetry == 1` for object "favoriteButton" Any`
+    t =   299.85s         Checking existence of `"favoriteButton" Any`
+    t =   300.14s Tap "favoriteButton" Any
+    t =   300.14s     Wait for com.izzyclipz.app to idle
+    t =   300.15s     Find the "favoriteButton" Any
+    t =   300.38s     Check for interrupting elements affecting "favoriteButton" Button
+    t =   300.52s     Synthesize event
+    t =   300.83s     Wait for com.izzyclipz.app to idle
+    t =   302.47s Find the Target Application 'com.izzyclipz.app'
+    t =   302.73s Added attachment named 'Izzy-Profile'
+    t =   302.74s Swipe up Target Application 'com.izzyclipz.app'
+    t =   302.74s     Wait for com.izzyclipz.app to idle
+    t =   302.74s     Find the Target Application 'com.izzyclipz.app'
+    t =   302.84s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   302.93s     Synthesize event
+    t =   303.58s     Wait for com.izzyclipz.app to idle
+    t =   307.60s Waiting 5.0s for Button (First Match) to exist
+    t =   308.65s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   308.66s         Checking existence of `Button (First Match)`
+    t =   308.73s Get all elements bound by index for: Descendants matching type NavigationBar
+    t =   308.82s Checking existence of `Button (Element at index 0)`
+    t =   308.89s Checking existence of `Button (Element at index 0)`
+    t =   309.00s Checking existence of `Button (Element at index 0)`
+    t =   309.06s Checking existence of `Button (Element at index 0)`
+    t =   309.13s Checking existence of `Button (Element at index 0)`
+    t =   309.20s Find the Button (Element at index 0)
+    t =   309.32s Tap "BackButton" Button
+    t =   309.32s     Wait for com.izzyclipz.app to idle
+    t =   309.32s     Find the "BackButton" Button
+    t =   309.40s     Check for interrupting elements affecting "BackButton" Button
+    t =   309.50s     Synthesize event
+    t =   309.83s     Wait for com.izzyclipz.app to idle
+    t =   311.33s Waiting 5.0s for Button (First Match) to exist
+    t =   312.37s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   312.37s         Checking existence of `Button (First Match)`
+    t =   312.49s Get all elements bound by index for: Descendants matching type NavigationBar
+    t =   312.60s Checking existence of `Button (Element at index 0)`
+    t =   312.67s Checking existence of `Button (Element at index 0)`
+    t =   312.74s Checking existence of `Button (Element at index 0)`
+    t =   312.81s Checking existence of `Button (Element at index 0)`
+    t =   312.88s Checking existence of `Button (Element at index 0)`
+    t =   312.97s Find the Button (Element at index 0)
+    t =   313.07s Tap "BackButton" Button
+    t =   313.07s     Wait for com.izzyclipz.app to idle
+    t =   313.07s     Find the "BackButton" Button
+    t =   313.15s     Check for interrupting elements affecting "BackButton" Button
+    t =   313.25s     Synthesize event
+    t =   313.57s     Wait for com.izzyclipz.app to idle
+    t =   315.14s Waiting 5.0s for "tab.shop" Button to exist
+    t =   316.19s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.shop" Button`
+    t =   316.20s         Checking existence of `"tab.shop" Button`
+    t =   316.37s Tap "tab.shop" Button
+    t =   316.37s     Wait for com.izzyclipz.app to idle
+    t =   316.38s     Find the "tab.shop" Button
+    t =   316.53s     Check for interrupting elements affecting "tab.shop" Button
+    t =   316.64s     Synthesize event
+    t =   316.98s     Wait for com.izzyclipz.app to idle
+    t =   318.21s Checking `Expect predicate `isSelected == 1` for object "tab.shop" Button`
+    t =   318.23s     Find the "tab.shop" Button
+    t =   321.67s Find the Target Application 'com.izzyclipz.app'
+    t =   321.98s Added attachment named 'Shop'
+    t =   321.98s Waiting 8.0s for "quickAdd-blue-bravo-hair-gel-16oz" Any to exist
+    t =   323.02s     Checking `Expect predicate `existsNoRetry == 1` for object "quickAdd-blue-bravo-hair-gel-16oz" Any`
+    t =   323.02s         Checking existence of `"quickAdd-blue-bravo-hair-gel-16oz" Any`
+    t =   323.62s Checking existence of `"quickAdd-blue-bravo-hair-gel-16oz" Any`
+    t =   324.23s Checking existence of `"quickAdd-blue-bravo-hair-gel-16oz" Any`
+    t =   324.83s Find the "quickAdd-blue-bravo-hair-gel-16oz" Any
+    t =   325.56s Tap "quickAdd-blue-bravo-hair-gel-16oz" Button
+    t =   325.56s     Wait for com.izzyclipz.app to idle
+    t =   325.56s     Find the "quickAdd-blue-bravo-hair-gel-16oz" Button
+    t =   326.18s     Check for interrupting elements affecting "quickAdd-blue-bravo-hair-gel-16oz" Button
+    t =   326.38s     Synthesize event
+    t =   326.72s     Wait for com.izzyclipz.app to idle
+    t =   328.42s Waiting 8.0s for "quickAdd-bravo-matte-clay" Any to exist
+    t =   329.46s     Checking `Expect predicate `existsNoRetry == 1` for object "quickAdd-bravo-matte-clay" Any`
+    t =   329.46s         Checking existence of `"quickAdd-bravo-matte-clay" Any`
+    t =   330.11s Checking existence of `"quickAdd-bravo-matte-clay" Any`
+    t =   330.74s Checking existence of `"quickAdd-bravo-matte-clay" Any`
+    t =   331.11s Find the "quickAdd-bravo-matte-clay" Any
+    t =   331.47s Tap "quickAdd-bravo-matte-clay" Button
+    t =   331.47s     Wait for com.izzyclipz.app to idle
+    t =   331.48s     Find the "quickAdd-bravo-matte-clay" Button
+    t =   331.84s     Check for interrupting elements affecting "quickAdd-bravo-matte-clay" Button
+    t =   331.98s     Synthesize event
+    t =   332.29s     Wait for com.izzyclipz.app to idle
+    t =   333.93s Swipe down Target Application 'com.izzyclipz.app'
+    t =   333.93s     Wait for com.izzyclipz.app to idle
+    t =   333.94s     Find the Target Application 'com.izzyclipz.app'
+    t =   334.20s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   334.34s     Synthesize event
+    t =   334.73s     Wait for com.izzyclipz.app to idle
+    t =   335.24s Swipe down Target Application 'com.izzyclipz.app'
+    t =   335.24s     Wait for com.izzyclipz.app to idle
+    t =   335.24s     Find the Target Application 'com.izzyclipz.app'
+    t =   335.36s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   335.47s     Synthesize event
+    t =   335.87s     Wait for com.izzyclipz.app to idle
+    t =   337.39s Waiting 8.0s for "product-blue-bravo-hair-gel-16oz" Any to exist
+    t =   338.41s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   338.42s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   339.04s         Capturing element debug description
+    t =   339.45s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   339.46s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   339.98s         Capturing element debug description
+    t =   340.40s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   340.40s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   341.04s         Capturing element debug description
+    t =   341.45s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   341.45s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   342.02s         Capturing element debug description
+    t =   342.42s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   342.42s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   342.85s         Capturing element debug description
+    t =   343.45s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   343.45s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   343.86s         Capturing element debug description
+    t =   344.40s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   344.40s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   344.78s         Capturing element debug description
+    t =   345.40s     Checking `Expect predicate `existsNoRetry == 1` for object "product-blue-bravo-hair-gel-16oz" Any`
+    t =   345.40s         Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   345.72s         Capturing element debug description
+    t =   345.72s     Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   346.22s Collecting debug information to assist test failure triage
+    t =   346.22s     Requesting snapshot of accessibility hierarchy for app with pid 13614
+    t =   346.34s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   346.68s Swipe up Target Application 'com.izzyclipz.app'
+    t =   346.68s     Wait for com.izzyclipz.app to idle
+    t =   346.68s     Find the Target Application 'com.izzyclipz.app'
+    t =   346.75s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   346.82s     Synthesize event
+    t =   347.34s     Wait for com.izzyclipz.app to idle
+    t =   348.95s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   349.90s Swipe up Target Application 'com.izzyclipz.app'
+    t =   349.90s     Wait for com.izzyclipz.app to idle
+    t =   350.14s     Find the Target Application 'com.izzyclipz.app'
+    t =   350.19s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   350.27s     Synthesize event
+    t =   350.81s     Wait for com.izzyclipz.app to idle
+    t =   351.22s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   352.38s Swipe up Target Application 'com.izzyclipz.app'
+    t =   352.38s     Wait for com.izzyclipz.app to idle
+    t =   352.58s     Find the Target Application 'com.izzyclipz.app'
+    t =   352.78s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   352.95s     Synthesize event
+    t =   353.53s     Wait for com.izzyclipz.app to idle
+    t =   354.28s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   355.58s Swipe up Target Application 'com.izzyclipz.app'
+    t =   355.58s     Wait for com.izzyclipz.app to idle
+    t =   355.83s     Find the Target Application 'com.izzyclipz.app'
+    t =   355.97s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   356.08s     Synthesize event
+    t =   356.59s     Wait for com.izzyclipz.app to idle
+    t =   357.04s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   357.80s Swipe up Target Application 'com.izzyclipz.app'
+    t =   357.80s     Wait for com.izzyclipz.app to idle
+    t =   357.81s     Find the Target Application 'com.izzyclipz.app'
+    t =   357.90s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   357.98s     Synthesize event
+    t =   358.48s     Wait for com.izzyclipz.app to idle
+    t =   359.38s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   360.00s Swipe up Target Application 'com.izzyclipz.app'
+    t =   360.00s     Wait for com.izzyclipz.app to idle
+    t =   360.24s     Find the Target Application 'com.izzyclipz.app'
+    t =   360.32s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   360.41s     Synthesize event
+    t =   360.92s     Wait for com.izzyclipz.app to idle
+    t =   361.37s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   362.08s Swipe up Target Application 'com.izzyclipz.app'
+    t =   362.08s     Wait for com.izzyclipz.app to idle
+    t =   362.09s     Find the Target Application 'com.izzyclipz.app'
+    t =   362.16s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   362.25s     Synthesize event
+    t =   362.75s     Wait for com.izzyclipz.app to idle
+    t =   363.34s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   363.85s Swipe up Target Application 'com.izzyclipz.app'
+    t =   363.85s     Wait for com.izzyclipz.app to idle
+    t =   363.85s     Find the Target Application 'com.izzyclipz.app'
+    t =   363.91s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   364.00s     Synthesize event
+    t =   364.50s     Wait for com.izzyclipz.app to idle
+    t =   365.35s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+    t =   365.82s Checking existence of `"product-blue-bravo-hair-gel-16oz" Any`
+DEMO TOUR: Couldn't find product-blue-bravo-hair-gel-16oz
+    t =   366.27s Find the Target Application 'com.izzyclipz.app'
+    t =   366.56s Added attachment named 'Problem-Couldn't find product-blue-bravo-hair-gel-16oz'
+    t =   369.06s Waiting 8.0s for "productSize-blue-bravo-hair-gel-4oz" Any to exist
+    t =   370.08s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   370.08s         Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   370.56s         Capturing element debug description
+    t =   371.08s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   371.08s         Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   371.67s         Capturing element debug description
+    t =   372.08s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   372.08s         Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   372.42s         Capturing element debug description
+    t =   373.13s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   373.13s         Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   373.60s         Capturing element debug description
+    t =   374.09s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   374.09s         Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   374.47s         Capturing element debug description
+    t =   375.08s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   375.09s         Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   375.93s         Capturing element debug description
+    t =   376.09s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   376.09s         Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   377.01s         Capturing element debug description
+    t =   377.07s     Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   377.88s Collecting debug information to assist test failure triage
+    t =   377.88s     Requesting snapshot of accessibility hierarchy for app with pid 13614
+    t =   378.03s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   378.72s Swipe up Target Application 'com.izzyclipz.app'
+    t =   378.72s     Wait for com.izzyclipz.app to idle
+    t =   378.72s     Find the Target Application 'com.izzyclipz.app'
+    t =   378.81s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   378.90s     Synthesize event
+    t =   379.41s     Wait for com.izzyclipz.app to idle
+    t =   379.89s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   381.04s Swipe up Target Application 'com.izzyclipz.app'
+    t =   381.04s     Wait for com.izzyclipz.app to idle
+    t =   381.29s     Find the Target Application 'com.izzyclipz.app'
+    t =   381.37s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   381.43s     Synthesize event
+    t =   381.93s     Wait for com.izzyclipz.app to idle
+    t =   382.43s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   383.09s Swipe up Target Application 'com.izzyclipz.app'
+    t =   383.09s     Wait for com.izzyclipz.app to idle
+    t =   383.10s     Find the Target Application 'com.izzyclipz.app'
+    t =   383.19s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   383.30s     Synthesize event
+    t =   383.81s     Wait for com.izzyclipz.app to idle
+    t =   384.28s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   384.80s Swipe up Target Application 'com.izzyclipz.app'
+    t =   384.80s     Wait for com.izzyclipz.app to idle
+    t =   384.80s     Find the Target Application 'com.izzyclipz.app'
+    t =   384.92s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   385.04s     Synthesize event
+    t =   385.53s     Wait for com.izzyclipz.app to idle
+    t =   385.99s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   386.94s Swipe up Target Application 'com.izzyclipz.app'
+    t =   386.94s     Wait for com.izzyclipz.app to idle
+    t =   386.94s     Find the Target Application 'com.izzyclipz.app'
+    t =   387.08s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   387.18s     Synthesize event
+    t =   387.69s     Wait for com.izzyclipz.app to idle
+    t =   388.33s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   389.13s Swipe up Target Application 'com.izzyclipz.app'
+    t =   389.13s     Wait for com.izzyclipz.app to idle
+    t =   389.14s     Find the Target Application 'com.izzyclipz.app'
+    t =   389.21s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   389.27s     Synthesize event
+    t =   389.78s     Wait for com.izzyclipz.app to idle
+    t =   390.58s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   391.15s Swipe up Target Application 'com.izzyclipz.app'
+    t =   391.15s     Wait for com.izzyclipz.app to idle
+    t =   391.15s     Find the Target Application 'com.izzyclipz.app'
+    t =   391.21s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   391.27s     Synthesize event
+    t =   391.77s     Wait for com.izzyclipz.app to idle
+    t =   392.68s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   392.96s Swipe up Target Application 'com.izzyclipz.app'
+    t =   392.96s     Wait for com.izzyclipz.app to idle
+    t =   392.97s     Find the Target Application 'com.izzyclipz.app'
+    t =   393.03s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   393.08s     Synthesize event
+    t =   393.57s     Wait for com.izzyclipz.app to idle
+    t =   394.03s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+    t =   394.30s Checking existence of `"productSize-blue-bravo-hair-gel-4oz" Any`
+DEMO TOUR: Couldn't find productSize-blue-bravo-hair-gel-4oz
+    t =   394.62s Find the Target Application 'com.izzyclipz.app'
+    t =   394.82s Added attachment named 'Problem-Couldn't find productSize-blue-bravo-hair-gel-4oz'
+    t =   396.83s Find the Target Application 'com.izzyclipz.app'
+    t =   397.01s Added attachment named 'Bravo-Gel-4oz'
+    t =   397.01s Waiting 8.0s for "productSize-blue-bravo-hair-gel-16oz" Any to exist
+    t =   398.03s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   398.03s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   398.32s         Capturing element debug description
+    t =   399.04s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   399.04s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   399.33s         Capturing element debug description
+    t =   400.06s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   400.06s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   400.35s         Capturing element debug description
+    t =   401.09s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   401.09s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   401.45s         Capturing element debug description
+    t =   402.08s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   402.08s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   402.60s         Capturing element debug description
+    t =   403.02s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   403.02s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   403.51s         Capturing element debug description
+    t =   404.03s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   404.03s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   404.47s         Capturing element debug description
+    t =   405.02s     Checking `Expect predicate `existsNoRetry == 1` for object "productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   405.02s         Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   405.30s         Capturing element debug description
+    t =   405.30s     Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   406.42s Collecting debug information to assist test failure triage
+    t =   406.42s     Requesting snapshot of accessibility hierarchy for app with pid 13614
+    t =   406.56s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   408.02s Swipe up Target Application 'com.izzyclipz.app'
+    t =   408.02s     Wait for com.izzyclipz.app to idle
+    t =   408.02s     Find the Target Application 'com.izzyclipz.app'
+    t =   408.19s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   408.37s     Synthesize event
+    t =   408.90s     Wait for com.izzyclipz.app to idle
+    t =   409.35s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   410.82s Swipe up Target Application 'com.izzyclipz.app'
+    t =   410.82s     Wait for com.izzyclipz.app to idle
+    t =   411.07s     Find the Target Application 'com.izzyclipz.app'
+    t =   411.18s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   411.31s     Synthesize event
+    t =   411.81s     Wait for com.izzyclipz.app to idle
+    t =   412.28s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   414.04s Swipe up Target Application 'com.izzyclipz.app'
+    t =   414.04s     Wait for com.izzyclipz.app to idle
+    t =   414.27s     Find the Target Application 'com.izzyclipz.app'
+    t =   414.38s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   414.50s     Synthesize event
+    t =   415.01s     Wait for com.izzyclipz.app to idle
+    t =   415.95s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   416.89s Swipe up Target Application 'com.izzyclipz.app'
+    t =   416.89s     Wait for com.izzyclipz.app to idle
+    t =   417.13s     Find the Target Application 'com.izzyclipz.app'
+    t =   417.28s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   417.43s     Synthesize event
+    t =   417.93s     Wait for com.izzyclipz.app to idle
+    t =   418.73s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   420.16s Swipe up Target Application 'com.izzyclipz.app'
+    t =   420.16s     Wait for com.izzyclipz.app to idle
+    t =   420.36s     Find the Target Application 'com.izzyclipz.app'
+    t =   420.45s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   420.59s     Synthesize event
+    t =   421.10s     Wait for com.izzyclipz.app to idle
+    t =   421.85s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   423.42s Swipe up Target Application 'com.izzyclipz.app'
+    t =   423.43s     Wait for com.izzyclipz.app to idle
+    t =   423.63s     Find the Target Application 'com.izzyclipz.app'
+    t =   423.78s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   423.97s     Synthesize event
+    t =   424.50s     Wait for com.izzyclipz.app to idle
+    t =   425.50s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   426.91s Swipe up Target Application 'com.izzyclipz.app'
+    t =   426.91s     Wait for com.izzyclipz.app to idle
+    t =   427.14s     Find the Target Application 'com.izzyclipz.app'
+    t =   427.32s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   427.59s     Synthesize event
+    t =   428.18s     Wait for com.izzyclipz.app to idle
+    t =   428.99s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   431.59s Swipe up Target Application 'com.izzyclipz.app'
+    t =   431.59s     Wait for com.izzyclipz.app to idle
+    t =   431.77s     Find the Target Application 'com.izzyclipz.app'
+    t =   431.97s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   432.13s     Synthesize event
+    t =   432.67s     Wait for com.izzyclipz.app to idle
+    t =   433.14s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+    t =   435.17s Checking existence of `"productSize-blue-bravo-hair-gel-16oz" Any`
+DEMO TOUR: Couldn't find productSize-blue-bravo-hair-gel-16oz
+    t =   436.93s Find the Target Application 'com.izzyclipz.app'
+    t =   437.34s Added attachment named 'Problem-Couldn't find productSize-blue-bravo-hair-gel-16oz'
+    t =   438.85s Waiting 8.0s for "productBagButton" Any to exist
+    t =   439.86s     Checking `Expect predicate `existsNoRetry == 1` for object "productBagButton" Any`
+    t =   439.87s         Checking existence of `"productBagButton" Any`
+    t =   440.26s Tap "productBagButton" Any
+    t =   440.26s     Wait for com.izzyclipz.app to idle
+    t =   440.27s     Find the "productBagButton" Any
+    t =   440.65s     Check for interrupting elements affecting "productBagButton" Other
+    t =   440.87s     Synthesize event
+    t =   441.26s     Wait for com.izzyclipz.app to idle
+    t =   443.65s Waiting 10.0s for "bagSheet" Any to exist
+    t =   444.68s     Checking `Expect predicate `existsNoRetry == 1` for object "bagSheet" Any`
+    t =   444.68s         Checking existence of `"bagSheet" Any`
+    t =   448.06s Find the Target Application 'com.izzyclipz.app'
+    t =   448.69s Added attachment named 'Bag'
+    t =   448.69s Waiting 5.0s for "bagStepper-blue-bravo-hair-gel-16oz" Any to exist
+    t =   449.74s     Checking `Expect predicate `existsNoRetry == 1` for object "bagStepper-blue-bravo-hair-gel-16oz" Any`
+    t =   449.74s         Checking existence of `"bagStepper-blue-bravo-hair-gel-16oz" Any`
+    t =   450.94s Tap "bagStepper-blue-bravo-hair-gel-16oz" Any[1.00, 0.50] -> (-22.0, 0.0)
+    t =   450.94s     Wait for com.izzyclipz.app to idle
+    t =   450.95s     Find the "bagStepper-blue-bravo-hair-gel-16oz" Any
+    t =   451.98s     Check for interrupting elements affecting "bagStepper-blue-bravo-hair-gel-16oz" Stepper
+    t =   452.50s     Synthesize event
+    t =   452.50s         Find the "bagStepper-blue-bravo-hair-gel-16oz" Stepper
+    t =   454.18s         Find the "bagStepper-blue-bravo-hair-gel-16oz" Stepper
+    t =   455.24s         Find the "bagStepper-blue-bravo-hair-gel-16oz" Stepper
+    t =   456.83s     Wait for com.izzyclipz.app to idle
+    t =   458.86s Find the Target Application 'com.izzyclipz.app'
+    t =   459.22s Added attachment named 'Bag-Two-Gels'
+    t =   459.22s Waiting 8.0s for "bagCheckoutButton" Any to exist
+    t =   460.27s     Checking `Expect predicate `existsNoRetry == 1` for object "bagCheckoutButton" Any`
+    t =   460.27s         Checking existence of `"bagCheckoutButton" Any`
+    t =   461.91s Tap "bagCheckoutButton" Any
+    t =   461.91s     Wait for com.izzyclipz.app to idle
+    t =   461.94s     Find the "bagCheckoutButton" Any
+    t =   463.44s     Check for interrupting elements affecting "bagCheckoutButton" Button
+    t =   463.80s     Synthesize event
+    t =   464.22s     Wait for com.izzyclipz.app to idle
+    t =   470.59s Find the Target Application 'com.izzyclipz.app'
+    t =   481.17s Added attachment named 'Bravo-Checkout-6s'
+    t =   489.22s Find the Target Application 'com.izzyclipz.app'
+    t =   490.04s Added attachment named 'Bravo-Checkout'
+    t =   490.05s Waiting 5.0s for Button (First Match) to exist
+    t =   491.11s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   491.12s         Checking existence of `Button (First Match)`
+    t =   491.96s Tap Button (First Match)
+    t =   491.96s     Wait for com.izzyclipz.app to idle
+    t =   491.97s     Find the Button (First Match)
+    t =   493.50s     Check for interrupting elements affecting "Close" Button
+    t =   493.79s     Synthesize event
+    t =   494.71s     Wait for com.izzyclipz.app to idle
+    t =   496.69s Waiting 10.0s for "Yes, empty my bag" Button to exist
+    t =   497.73s     Checking `Expect predicate `existsNoRetry == 1` for object "Yes, empty my bag" Button`
+    t =   497.74s         Checking existence of `"Yes, empty my bag" Button`
+    t =   501.03s Tap "Yes, empty my bag" Button
+    t =   501.03s     Wait for com.izzyclipz.app to idle
+    t =   501.04s     Find the "Yes, empty my bag" Button
+    t =   501.19s     Check for interrupting elements affecting "Yes, empty my bag" Button
+    t =   501.30s     Synthesize event
+    t =   501.63s     Wait for com.izzyclipz.app to idle
+    t =   504.20s Waiting 5.0s for Button (First Match) to exist
+    t =   505.26s     Checking `Expect predicate `existsNoRetry == 1` for object Button (First Match)`
+    t =   505.27s         Checking existence of `Button (First Match)`
+    t =   505.33s Get all elements bound by index for: Descendants matching type NavigationBar
+    t =   505.40s Checking existence of `Button (Element at index 0)`
+    t =   505.46s Checking existence of `Button (Element at index 0)`
+    t =   505.54s Checking existence of `Button (Element at index 0)`
+    t =   505.64s Checking existence of `Button (Element at index 0)`
+    t =   505.78s Find the Button (Element at index 0)
+    t =   505.94s Tap "BackButton" Button
+    t =   505.94s     Wait for com.izzyclipz.app to idle
+    t =   505.94s     Find the "BackButton" Button
+    t =   506.05s     Check for interrupting elements affecting "BackButton" Button
+    t =   506.15s     Synthesize event
+    t =   506.49s     Wait for com.izzyclipz.app to idle
+    t =   508.26s Waiting 5.0s for "tab.visit" Button to exist
+    t =   509.30s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.visit" Button`
+    t =   509.30s         Checking existence of `"tab.visit" Button`
+    t =   509.39s Tap "tab.visit" Button
+    t =   509.39s     Wait for com.izzyclipz.app to idle
+    t =   509.39s     Find the "tab.visit" Button
+    t =   509.46s     Check for interrupting elements affecting "tab.visit" Button
+    t =   509.56s     Synthesize event
+    t =   509.89s     Wait for com.izzyclipz.app to idle
+    t =   511.02s Checking `Expect predicate `isSelected == 1` for object "tab.visit" Button`
+    t =   511.08s     Find the "tab.visit" Button
+    t =   514.98s Find the Target Application 'com.izzyclipz.app'
+    t =   515.33s Added attachment named 'Visit'
+    t =   515.34s Swipe up Target Application 'com.izzyclipz.app'
+    t =   515.34s     Wait for com.izzyclipz.app to idle
+    t =   515.34s     Find the Target Application 'com.izzyclipz.app'
+    t =   515.45s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   515.54s     Synthesize event
+    t =   516.04s     Wait for com.izzyclipz.app to idle
+    t =   519.48s Swipe up Target Application 'com.izzyclipz.app'
+    t =   519.48s     Wait for com.izzyclipz.app to idle
+    t =   519.49s     Find the Target Application 'com.izzyclipz.app'
+    t =   519.54s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   519.62s     Synthesize event
+    t =   520.13s     Wait for com.izzyclipz.app to idle
+    t =   523.56s Swipe up Target Application 'com.izzyclipz.app'
+    t =   523.56s     Wait for com.izzyclipz.app to idle
+    t =   523.57s     Find the Target Application 'com.izzyclipz.app'
+    t =   523.66s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   523.72s     Synthesize event
+    t =   524.22s     Wait for com.izzyclipz.app to idle
+    t =   527.68s Swipe up Target Application 'com.izzyclipz.app'
+    t =   527.68s     Wait for com.izzyclipz.app to idle
+    t =   527.68s     Find the Target Application 'com.izzyclipz.app'
+    t =   527.78s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   527.90s     Synthesize event
+    t =   528.40s     Wait for com.izzyclipz.app to idle
+    t =   530.63s Find the Target Application 'com.izzyclipz.app'
+    t =   530.88s Added attachment named 'Visit-Info'
+    t =   530.88s Checking existence of `"visitInstagramMessage" Any`
+    t =   531.29s Find the "visitInstagramMessage" Any
+    t =   533.14s Find the Target Application 'com.izzyclipz.app'
+    t =   533.37s Added attachment named 'Visit-Instagram'
+    t =   533.37s Waiting 5.0s for "tab.home" Button to exist
+    t =   534.42s     Checking `Expect predicate `existsNoRetry == 1` for object "tab.home" Button`
+    t =   534.42s         Checking existence of `"tab.home" Button`
+    t =   534.53s Tap "tab.home" Button
+    t =   534.53s     Wait for com.izzyclipz.app to idle
+    t =   534.54s     Find the "tab.home" Button
+    t =   534.65s     Check for interrupting elements affecting "tab.home" Button
+    t =   534.73s     Synthesize event
+    t =   535.05s     Wait for com.izzyclipz.app to idle
+    t =   536.12s Checking `Expect predicate `isSelected == 1` for object "tab.home" Button`
+    t =   536.13s     Find the "tab.home" Button
+    t =   537.64s Swipe down Target Application 'com.izzyclipz.app'
+    t =   537.64s     Wait for com.izzyclipz.app to idle
+    t =   537.64s     Find the Target Application 'com.izzyclipz.app'
+    t =   537.75s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   537.85s     Synthesize event
+    t =   538.28s     Wait for com.izzyclipz.app to idle
+    t =   539.11s Swipe down Target Application 'com.izzyclipz.app'
+    t =   539.11s     Wait for com.izzyclipz.app to idle
+    t =   539.11s     Find the Target Application 'com.izzyclipz.app'
+    t =   539.20s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   539.31s     Synthesize event
+    t =   539.71s     Wait for com.izzyclipz.app to idle
+    t =   541.20s Waiting 8.0s for "seeAllPhotos" Any to exist
+    t =   542.25s     Checking `Expect predicate `existsNoRetry == 1` for object "seeAllPhotos" Any`
+    t =   542.25s         Checking existence of `"seeAllPhotos" Any`
+    t =   542.69s Checking existence of `"seeAllPhotos" Any`
+    t =   543.10s Checking existence of `"seeAllPhotos" Any`
+    t =   543.42s Find the "seeAllPhotos" Any
+    t =   543.67s Tap "seeAllPhotos" Button
+    t =   543.67s     Wait for com.izzyclipz.app to idle
+    t =   543.67s     Find the "seeAllPhotos" Button
+    t =   544.04s     Check for interrupting elements affecting "seeAllPhotos" Button
+    t =   544.15s     Synthesize event
+    t =   544.46s     Wait for com.izzyclipz.app to idle
+    t =   547.04s Waiting 8.0s for "photo-2" Any to exist
+    t =   548.05s     Checking `Expect predicate `existsNoRetry == 1` for object "photo-2" Any`
+    t =   548.05s         Checking existence of `"photo-2" Any`
+    t =   548.53s Checking existence of `"photo-2" Any`
+    t =   548.92s Checking existence of `"photo-2" Any`
+    t =   549.25s Find the "photo-2" Any
+    t =   549.67s Tap "photo-2" Button
+    t =   549.67s     Wait for com.izzyclipz.app to idle
+    t =   549.67s     Find the "photo-2" Button
+    t =   549.97s     Check for interrupting elements affecting "photo-2" Button
+    t =   550.10s     Synthesize event
+    t =   550.41s     Wait for com.izzyclipz.app to idle
+    t =   552.93s Swipe left Target Application 'com.izzyclipz.app'
+    t =   552.93s     Wait for com.izzyclipz.app to idle
+    t =   552.93s     Find the Target Application 'com.izzyclipz.app'
+    t =   553.01s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   553.06s     Synthesize event
+    t =   553.49s     Wait for com.izzyclipz.app to idle
+    t =   555.63s Swipe left Target Application 'com.izzyclipz.app'
+    t =   555.63s     Wait for com.izzyclipz.app to idle
+    t =   555.64s     Find the Target Application 'com.izzyclipz.app'
+    t =   555.73s     Check for interrupting elements affecting "Izzy Clipz" Application
+    t =   555.78s     Synthesize event
+    t =   556.21s     Wait for com.izzyclipz.app to idle
+    t =   558.37s Find the Target Application 'com.izzyclipz.app'
+    t =   558.71s Added attachment named 'Photo-Viewer'
+    t =   558.71s Waiting 5.0s for "closePhoto" Any to exist
+    t =   559.71s     Checking `Expect predicate `existsNoRetry == 1` for object "closePhoto" Any`
+    t =   559.72s         Checking existence of `"closePhoto" Any`
+    t =   559.76s Tap "closePhoto" Any[0.50, 0.50]
+    t =   559.76s     Wait for com.izzyclipz.app to idle
+    t =   559.77s     Find the "closePhoto" Any
+    t =   559.84s     Check for interrupting elements affecting "closePhoto" Button
+    t =   559.95s     Synthesize event
+    t =   559.96s         Find the "closePhoto" Button
+    t =   560.01s         Find the "closePhoto" Button
+    t =   560.07s         Find the "closePhoto" Button
+    t =   560.41s     Wait for com.izzyclipz.app to idle
+    t =   562.81s Tear Down
+Test Case '-[IzzyClipzUITests.DemoTour testTour]' passed (563.674 seconds).
+Test Suite 'DemoTour' passed at 2026-10-31 04:01:15.580.
+	 Executed 1 test, with 0 failures (0 unexpected) in 563.674 (563.677) seconds
+Test Suite 'IzzyClipzUITests.xctest' passed at 2026-10-31 04:01:15.581.
+	 Executed 1 test, with 0 failures (0 unexpected) in 563.674 (563.678) seconds
+Test Suite 'Selected tests' passed at 2026-10-31 04:01:15.581.
+	 Executed 1 test, with 0 failures (0 unexpected) in 563.674 (563.679) seconds
+2026-10-31 04:01:19.775 xcodebuild[8038:29396] [MT] IDETestOperationsObserverDebug: 625.358 elapsed -- Testing started completed.
+2026-10-31 04:01:19.775 xcodebuild[8038:29396] [MT] IDETestOperationsObserverDebug: 0.000 sec, +0.000 sec -- start
+2026-10-31 04:01:19.775 xcodebuild[8038:29396] [MT] IDETestOperationsObserverDebug: 625.358 sec, +625.358 sec -- end
+
+Test session results, code coverage, and logs:
+	/Users/runner/work/Barber-App/Barber-App/build/Demo.xcresult
+
+** TEST EXECUTE SUCCEEDED **
+
+Testing started
