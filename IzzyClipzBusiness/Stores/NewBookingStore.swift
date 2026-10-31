@@ -269,13 +269,14 @@ final class NewBookingStore {
         do {
             let appointment = try await api.createAppointment(request, idempotencyKey: key)
             attempt = nil
-            onBooked?(appointment)
             guard appointment.status == .booked else {
                 // An earlier try went through, but it has been cancelled (or closed) since.
+                onBooked?(appointment)
                 formError = "Your first try went through, but that appointment isn't booked any more. Book again to add it back."
                 return
             }
             booked = appointment
+            onBooked?(appointment)
         } catch APIError.slotTaken {
             formError = "Someone just took that time. Pick another one."
             selectedSlot = nil
