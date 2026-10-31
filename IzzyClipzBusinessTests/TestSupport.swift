@@ -16,6 +16,15 @@ enum TestClock {
     }
 }
 
+/// A clock a test can move on, e.g. to the next morning after the app sat open overnight.
+final class MovableClock {
+    var now: Date
+
+    init(_ now: Date) {
+        self.now = now
+    }
+}
+
 /// A sample server, and an API signed in to it.
 @MainActor
 struct Harness {

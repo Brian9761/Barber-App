@@ -173,8 +173,12 @@ final class FakeServer {
     /// Books like the server: with a key it already booked and the same booking (Book again
     /// after a lost answer), the appointment as it is now; with that key and another booking, a
     /// 400; otherwise a new appointment, kept under the key.
+    ///
+    /// Like the server, the shop can book any whole minute inside opening hours ("now" for a
+    /// walk-in, or earlier today to record one late), from today to 60 days ahead.
     func createAppointment(_ request: IzzyAPI.NewAppointment, idempotencyKey: IzzyAPI.IdempotencyKey? = nil) throws -> IzzyAPI.Appointment {
         if let idempotencyKey { bookingKeys.append(idempotencyKey) }
+        let request = Self.toTheMinute(request)
         let start = request.start
         let name = request.customer.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -205,6 +209,9 @@ final class FakeServer {
         }
         let candidates = try offerings(for: request.target)
         let day = shopTime.day(containing: start)
+        let today = shopTime.day(containing: now())
+        guard day >= today else { throw APIError.tooSoon }
+        guard day <= today.adding(days: shopTime.bookingCalendar.windowDays) else { throw APIError.tooFar }
         guard let open = shopTime.openInterval(on: day) else { throw APIError.outsideHours }
 
         if options.takeNextSlot {
@@ -243,6 +250,13 @@ final class FakeServer {
             throw APIError.offline
         }
         return appointment
+    }
+
+    /// The request with its start's seconds dropped, as the server takes it.
+    private static func toTheMinute(_ request: IzzyAPI.NewAppointment) -> IzzyAPI.NewAppointment {
+        var request = request
+        request.start = Date(timeIntervalSince1970: (request.start.timeIntervalSince1970 / 60).rounded(.down) * 60)
+        return request
     }
 
     /// The server's rule for Book again: the same target asked for the same way, the same start,

@@ -2,7 +2,8 @@ import IzzyClipzKit
 import SwiftUI
 
 /// New booking for walk-ins and phone bookings: service, barber, day and
-/// time (with a "Next open slot" shortcut), client name and optional phone.
+/// time (with "Now" and "Next open slot" for walk-ins), client name and
+/// optional phone.
 struct NewBookingView: View {
     @Bindable var store: NewBookingStore
     let workspace: Workspace
@@ -16,13 +17,16 @@ struct NewBookingView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
-                serviceSection
-                if store.serviceID != nil {
-                    barberSection
-                    timeSection
-                    clientSection
-                    bookSection
+            // Every minute, so "Now" shows the time it is and goes when the shop closes.
+            TimelineView(.everyMinute) { _ in
+                Form {
+                    serviceSection
+                    if store.serviceID != nil {
+                        barberSection
+                        timeSection
+                        clientSection
+                        bookSection
+                    }
                 }
             }
             .navigationTitle("New booking")
@@ -93,16 +97,45 @@ struct NewBookingView: View {
             .environment(\.timeZone, store.shopTime.timeZone)
             .accessibilityIdentifier("bookingDay")
 
+            if let start = store.nowStart {
+                nowButton(start)
+            }
+
             slots
         } header: {
             Text("Day and time")
         } footer: {
             if let slot = store.selectedSlot, store.choice == .anyBarber {
-                Text("Free at \(store.shopTime.time(slot.start)): \(store.barberNames(for: slot)). The one with the fewest bookings that day gets it.")
+                if NewBookingStore.isNow(slot) {
+                    Text("A barber who's free now gets it: the one with the fewest bookings today.")
+                } else {
+                    Text("Free at \(store.shopTime.time(slot.start)): \(store.barberNames(for: slot)). The one with the fewest bookings that day gets it.")
+                }
+            } else if store.nowStart != nil {
+                Text("Times are the shop's. Pick Now for a walk-in who's here.")
             } else {
-                Text("Times are the shop's. A walk-in can take a time that's starting now.")
+                Text("Times are the shop's.")
             }
         }
+    }
+
+    /// "Now (11:10 AM)": books the walk-in from this minute, not the next half hour.
+    private func nowButton(_ start: Date) -> some View {
+        // Once picked, the minute it was picked; until then, the time it is.
+        let picked = store.isNowSelected ? store.selectedSlot?.start : nil
+        let selected = picked != nil
+        let text = "Now (\(store.shopTime.time(picked ?? start)))"
+        return Button {
+            store.selectNow()
+        } label: {
+            TimeChip(text: text, selected: selected)
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 4)
+        .accessibilityLabel(text)
+        .accessibilityHint("Books it from now, for a walk-in who's here.")
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier("bookNow")
     }
 
     @ViewBuilder
@@ -121,24 +154,19 @@ struct NewBookingView: View {
             }
         case .loaded:
             if store.slots.isEmpty {
-                Text("No open times on \(store.shopTime.longDay(store.day)). Try another day or barber.")
+                Text(store.nowStart == nil
+                    ? "No open times on \(store.shopTime.longDay(store.day)). Try another day or barber."
+                    : "No other open times today. Pick Now, or try another day or barber.")
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("noSlots")
             } else {
                 LazyVGrid(columns: timeColumns, spacing: 8) {
                     ForEach(store.slots) { slot in
-                        let selected = store.selectedSlot?.start == slot.start
+                        let selected = !store.isNowSelected && store.selectedSlot?.start == slot.start
                         Button {
                             store.selectedSlot = slot
                         } label: {
-                            Text(store.shopTime.time(slot.start))
-                                .font(.body.monospacedDigit().weight(selected ? .semibold : .regular))
-                                .frame(maxWidth: .infinity, minHeight: BusinessTheme.minimumTapSize)
-                                .foregroundStyle(selected ? Color.white : Color.primary)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                        .fill(selected ? BusinessTheme.red : Color(.tertiarySystemFill))
-                                )
+                            TimeChip(text: store.shopTime.time(slot.start), selected: selected)
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(store.shopTime.time(slot.start))
@@ -215,6 +243,23 @@ struct NewBookingView: View {
 private extension String {
     var lowercasedIfRelative: String {
         ["Today", "Tomorrow", "Yesterday"].contains(self) ? lowercased() : self
+    }
+}
+
+/// One time to pick: red when it's the one picked.
+private struct TimeChip: View {
+    let text: String
+    let selected: Bool
+
+    var body: some View {
+        Text(text)
+            .font(.body.monospacedDigit().weight(selected ? .semibold : .regular))
+            .frame(maxWidth: .infinity, minHeight: BusinessTheme.minimumTapSize)
+            .foregroundStyle(selected ? Color.white : Color.primary)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(selected ? BusinessTheme.red : Color(.tertiarySystemFill))
+            )
     }
 }
 
