@@ -116,11 +116,13 @@ final class Workspace {
             ownerStatus = status
             statusError = nil
             checkout.update(stripe: status.stripe)
+            checkout.statusCheckFinished()
         } catch is CancellationError {
             return
         } catch {
             if case .unauthorized? = error as? APIError { keyWasRejected = true }
             statusError = AppModel.signInMessage(for: error)
+            checkout.statusCheckFinished()
         }
     }
 

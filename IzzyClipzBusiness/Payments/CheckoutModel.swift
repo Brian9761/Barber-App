@@ -219,6 +219,15 @@ final class CheckoutModel {
         self.stripe = stripe
     }
 
+    static let stillCheckingMessage = "Still checking whether card payments are set up. Try again in a moment."
+
+    /// A check of Stripe's status with the server finished, so "Still
+    /// checking…" is out of date: either a card on Take payment says what's
+    /// wrong, or Tap to Pay on iPhone works.
+    func statusCheckFinished() {
+        if validationMessage == Self.stillCheckingMessage { validationMessage = nil }
+    }
+
     /// Switches to the simulated reader: nothing is sent to the server.
     func startPractice() {
         guard !phase.isInFlight else { return }
@@ -293,7 +302,7 @@ final class CheckoutModel {
             return
         }
         if case .checking = mode {
-            validationMessage = "Still checking whether card payments are set up. Try again in a moment."
+            validationMessage = Self.stillCheckingMessage
             // The last check may have failed (offline at launch): check again now.
             onStatusNeeded?()
             return
