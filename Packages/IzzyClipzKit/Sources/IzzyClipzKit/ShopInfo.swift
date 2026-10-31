@@ -89,7 +89,6 @@ public struct ShopInfo: Sendable {
     public let schedule: WeeklySchedule
     public let instagramHandle: String
     public let websiteURL: URL
-    public let booking: BookingLinks
     public let paymentMethods: [String]
     public let highlights: [String]
     public let accessibility: [String]
@@ -111,7 +110,6 @@ public struct ShopInfo: Sendable {
         schedule: WeeklySchedule,
         instagramHandle: String,
         websiteURL: URL,
-        booking: BookingLinks,
         paymentMethods: [String],
         highlights: [String],
         accessibility: [String],
@@ -133,7 +131,6 @@ public struct ShopInfo: Sendable {
         self.schedule = schedule
         self.instagramHandle = instagramHandle
         self.websiteURL = websiteURL
-        self.booking = booking
         self.paymentMethods = paymentMethods
         self.highlights = highlights
         self.accessibility = accessibility
@@ -199,11 +196,6 @@ public struct ShopInfo: Sendable {
     /// Google's "Write a review" page for the shop.
     public var googleReviewURL: URL {
         ShopInfo.googleReviewURL(placeID: googlePlaceID)
-    }
-
-    /// The shop's public Squire page, with its Squire reviews.
-    public var squireDiscoverURL: URL {
-        ShopInfo.squireDiscoverURL(shopSlug: booking.shopSlug)
     }
 
     static func googleMapsURL(name: String, placeID: String) -> URL {

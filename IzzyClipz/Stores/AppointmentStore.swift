@@ -2,135 +2,545 @@ import Foundation
 import Observation
 import UserNotifications
 
-/// Appointments the client saved after booking on Squire, and their
-/// "tomorrow" and "in an hour" reminders.
+/// An appointment this iPhone knows about, as the shop's server last described it.
+struct SavedAppointment: Codable, Hashable, Identifiable {
+    enum Origin: String, Codable {
+        /// Booked in this app: the server knows it, and this iPhone holds its manage token.
+        case app
+        /// Saved in an earlier version of the app after booking on Squire. Shown, read-only, until
+        /// it's over; the shop has it, the server doesn't.
+        case squire
+    }
+
+    /// Why the app can't keep this appointment up to date.
+    enum Problem: String, Codable {
+        /// The shop's server doesn't recognize it (or its token) any more.
+        case notFound
+        /// Its manage token isn't on this iPhone (e.g. restored from an unencrypted backup).
+        case tokenMissing
+        /// The token couldn't be saved securely when it was booked. It works until the app closes.
+        case tokenNotSaved
+    }
+
+    var snapshot: IzzyAPI.Appointment
+    var origin: Origin
+    /// Whether the client wants the day-before and hour-before reminders.
+    var remind: Bool
+    /// When the shop's server last confirmed it.
+    var checkedAt: Date?
+    var problem: Problem?
+
+    var id: String { snapshot.id }
+
+    var start: Date { snapshot.start }
+    var end: Date { snapshot.end }
+    var status: IzzyAPI.AppointmentStatus { snapshot.status }
+
+    /// Hasn't finished yet: it's later, or happening right now.
+    func isUpcoming(at now: Date) -> Bool {
+        snapshot.end > now
+    }
+
+    var isCancelledByShop: Bool {
+        snapshot.status == .cancelled && snapshot.cancelledBy == .shop
+    }
+
+    /// Whether the client can cancel it from the app: booked here, not started, and this iPhone
+    /// still has its token.
+    func canCancelInApp(at now: Date) -> Bool {
+        origin == .app && problem != .notFound && problem != .tokenMissing && snapshot.isCancellable(at: now)
+    }
+
+    /// "Carlos", or "the first available barber" for a Squire booking without one.
+    var barberName: String {
+        snapshot.barberId.isEmpty ? "the first available barber" : snapshot.barberName
+    }
+
+    /// "Haircut with Carlos".
+    var title: String {
+        "\(snapshot.serviceName) with \(barberName)"
+    }
+
+    /// For Add to Calendar.
+    var calendarEvent: CalendarEvent {
+        CalendarEvent(
+            id: id,
+            title: "\(snapshot.serviceName) at \(AppData.shop.name)",
+            start: snapshot.start,
+            end: snapshot.end,
+            notes: [
+                title,
+                "\(snapshot.priceLabel) · \(DurationText.short(minutes: snapshot.durationMinutes)) · Pay at the shop",
+                "To change or cancel, open the \(AppData.shop.name) app or call \(AppData.shop.phone.display).",
+            ].joined(separator: "\n")
+        )
+    }
+
+    /// The Kit's appointment, which the reminder planner words reminders for.
+    var reminderAppointment: Appointment {
+        Appointment(
+            serviceID: snapshot.serviceId,
+            serviceName: snapshot.serviceName,
+            barberID: snapshot.barberId.isEmpty ? nil : snapshot.barberId,
+            barberName: snapshot.barberName,
+            start: snapshot.start,
+            durationMinutes: max(snapshot.durationMinutes, 1),
+            priceLabel: snapshot.priceLabel,
+            createdAt: snapshot.createdAt
+        )
+    }
+}
+
+extension SavedAppointment {
+    /// A v3 appointment, saved after booking on Squire, in the same shape as the server's. Its ID
+    /// stays the same, so the reminders already scheduled for it are the ones kept up to date.
+    init(squire appointment: Appointment, remind: Bool) {
+        self.init(
+            snapshot: IzzyAPI.Appointment(
+                id: appointment.id.uuidString,
+                offeringId: "",
+                serviceId: appointment.serviceID,
+                serviceName: appointment.serviceName,
+                barberId: appointment.barberID ?? "",
+                barberName: appointment.barberID == nil ? Appointment.firstAvailableName : appointment.barberName,
+                start: appointment.start,
+                end: appointment.end,
+                durationMinutes: appointment.durationMinutes,
+                priceLabel: appointment.priceLabel,
+                customer: IzzyAPI.Customer(name: ""),
+                createdAt: appointment.createdAt
+            ),
+            origin: .squire,
+            remind: remind,
+            checkedAt: nil,
+            problem: nil
+        )
+    }
+}
+
+/// What Add to Calendar puts in the client's calendar.
+struct CalendarEvent: Hashable, Identifiable {
+    let id: String
+    let title: String
+    let start: Date
+    let end: Date
+    let notes: String
+}
+
+/// Why the app couldn't do something with an appointment, in words for the client.
+enum AppointmentActionError: Error, Equatable {
+    /// This iPhone can't manage it any more (its token is gone, or the server doesn't know it).
+    case cannotManage
+    /// The Keychain couldn't be read right now.
+    case tokenUnreadable
+    case server(APIError)
+
+    var userMessage: String {
+        switch self {
+        case .cannotManage:
+            return "This iPhone can't change this appointment anymore. Call the shop at \(AppData.shop.phone.display) to cancel it."
+        case .tokenUnreadable:
+            return "Unlock your iPhone and try again, or call the shop."
+        case .server(let error):
+            return error.userMessage
+        }
+    }
+}
+
+/// The client's appointments: kept on this iPhone with their manage tokens (in the Keychain),
+/// checked with the shop's server when the app opens and on pull to refresh, cancellable from the
+/// app, and reminded about the day before and an hour before.
 ///
-/// Everything stays on this iPhone. Squire remains the real booking; this is
-/// the client's own note of it.
+/// Appointments stay listed until 30 days after they end. Nothing is dropped because the server
+/// couldn't be reached or didn't recognize it: those are shown with what went wrong instead.
 @MainActor
 @Observable
 final class AppointmentStore {
     private enum Keys {
-        static let appointments = "appointments.v1"
-        static let reminding = "appointments.reminding.v1"
+        static let saved = "appointments.v2"
+        /// v3's appointments, saved after booking on Squire.
+        static let squire = "appointments.v1"
+        static let squireReminding = "appointments.reminding.v1"
     }
 
-    /// Every saved appointment, earliest first, including recent past ones.
-    private(set) var appointments: [Appointment] = []
+    /// How long a finished appointment stays listed.
+    static let keepDays = 30
+
+    /// Every saved appointment, earliest first.
+    private(set) var appointments: [SavedAppointment] = []
     /// Set when reminders were asked for but notifications are turned off.
     private(set) var remindersPermissionDenied = false
+    private(set) var isRefreshing = false
+    /// Why the last check with the shop failed; `nil` once one works.
+    private(set) var refreshError: APIError?
+    /// When the appointments were last checked with the shop.
+    private(set) var lastRefreshed: Date?
 
-    @ObservationIgnored private var reminding: Set<UUID> = []
+    private let api: any ShopAPI
+    private let tokens: SecretStore
     private let scheduler: NotificationScheduling
     private let defaults: UserDefaults
     private let calendar: BookingCalendar
     private let now: () -> Date
+    /// Tokens the Keychain wouldn't take, for this launch only (see `Problem.tokenNotSaved`).
+    @ObservationIgnored private var unsavedTokens: [String: String] = [:]
     @ObservationIgnored private var syncTask: Task<Void, Never>?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
 
     init(
+        api: any ShopAPI,
+        tokens: SecretStore,
         scheduler: NotificationScheduling,
         defaults: UserDefaults,
         calendar: BookingCalendar = AppData.bookingCalendar,
         now: @escaping () -> Date = Date.init
     ) {
+        self.api = api
+        self.tokens = tokens
         self.scheduler = scheduler
         self.defaults = defaults
         self.calendar = calendar
         self.now = now
 
-        if let data = defaults.data(forKey: Keys.appointments),
-           let stored = try? AppointmentPlanner.decode(data) {
-            appointments = AppointmentPlanner.pruned(stored, now: now()).sorted { $0.start < $1.start }
+        if let data = defaults.data(forKey: Keys.saved),
+           let stored = try? Self.decode(data) {
+            appointments = stored
         }
-        let ids = defaults.stringArray(forKey: Keys.reminding) ?? []
-        reminding = Set(ids.compactMap(UUID.init(uuidString:)))
-            .intersection(appointments.map(\.id))
+        migrateSquireAppointments()
+        prune()
+        sortAppointments()
     }
 
-    /// Appointments that haven't ended yet, soonest first.
-    var upcoming: [Appointment] {
-        AppointmentPlanner.upcoming(appointments, now: now())
+    // MARK: Reading
+
+    func appointment(withID id: String) -> SavedAppointment? {
+        appointments.first { $0.id == id }
     }
 
-    var next: Appointment? { upcoming.first }
+    /// Appointments that haven't ended, soonest first, whatever their status.
+    var upcoming: [SavedAppointment] {
+        let current = now()
+        return appointments.filter { $0.isUpcoming(at: current) }
+    }
 
-    /// When the most recent appointment that's already over started. Used as
-    /// the client's last cut for "time for a fresh cut" reminders.
+    /// Finished ones from the last 30 days, latest first.
+    var past: [SavedAppointment] {
+        let current = now()
+        return Array(appointments.filter { !$0.isUpcoming(at: current) }.reversed())
+    }
+
+    /// The next appointment that's still on.
+    var next: SavedAppointment? {
+        upcoming.first { $0.status == .booked }
+    }
+
+    /// What Home shows: the next appointment that's on, or one the shop cancelled, so the client
+    /// hears about it.
+    var homeAppointment: SavedAppointment? {
+        upcoming.first { $0.status == .booked || $0.isCancelledByShop }
+    }
+
+    /// When the most recent appointment that's over started, for "time for a fresh cut"
+    /// reminders. Cancelled ones and no-shows don't count.
     var latestFinishedStart: Date? {
-        AppointmentPlanner.latestFinishedStart(appointments, now: now())
+        let current = now()
+        return appointments
+            .filter { !$0.isUpcoming(at: current) && ($0.status == .booked || $0.status == .completed) }
+            .map(\.start)
+            .max()
     }
 
-    func isReminding(_ id: UUID) -> Bool {
-        reminding.contains(id)
-    }
-
-    /// Whether this app will send the appointment's hour-before reminder: the
-    /// client asked for reminders, notifications aren't off, and that moment
-    /// is still ahead. Only then would a calendar alarm double it.
-    func willSendHourBeforeReminder(for id: UUID) -> Bool {
+    /// Whether this app will send the appointment's hour-before reminder, so Add to Calendar
+    /// shouldn't add an alert of its own at the same time.
+    func willSendHourBeforeReminder(for id: String) -> Bool {
         guard !remindersPermissionDenied else { return false }
         return pendingReminders(now: now()).contains { $0.appointmentID == id && $0.reminder.kind == .hourBefore }
     }
 
-    func save(_ appointment: Appointment, remind: Bool) {
-        appointments.removeAll { $0.id == appointment.id }
-        appointments.append(appointment)
-        appointments.sort { $0.start < $1.start }
-        if remind {
-            reminding.insert(appointment.id)
-        } else {
-            reminding.remove(appointment.id)
+    // MARK: Booking
+
+    /// Saves a booking the server just confirmed, with its token in the Keychain.
+    @discardableResult
+    func add(_ confirmation: IzzyAPI.BookingConfirmation, remind: Bool) -> SavedAppointment {
+        var saved = SavedAppointment(snapshot: confirmation.appointment, origin: .app, remind: remind, checkedAt: now(), problem: nil)
+        if !storeToken(confirmation.manageToken, for: saved.id) {
+            // Never dropped silently: it's kept for this launch and the appointment says so.
+            unsavedTokens[saved.id] = confirmation.manageToken
+            saved.problem = .tokenNotSaved
         }
+        upsert(saved)
+        persist()
+        sync()
+        return saved
+    }
+
+    func setReminders(_ remind: Bool, for id: String) {
+        guard let index = appointments.firstIndex(where: { $0.id == id }) else { return }
+        appointments[index].remind = remind
         persist()
         sync()
     }
 
-    func remove(_ id: UUID) {
-        appointments.removeAll { $0.id == id }
-        reminding.remove(id)
-        scheduler.removePendingRequests(withIdentifiers: Self.identifiers(for: id))
+    /// Takes an appointment off the list: one that's finished or cancelled, or one saved from
+    /// Squire (the shop handles changes to those). One booked here that's still on has to be
+    /// cancelled first.
+    func remove(_ id: String) {
+        guard let saved = appointment(withID: id) else { return }
+        let isOn = saved.status == .booked && saved.isUpcoming(at: now())
+        guard saved.origin == .squire || !isOn else { return }
+        forget([id])
         persist()
         sync()
     }
 
-    /// Drops old appointments and re-checks reminders. Call when the app becomes active.
-    func refresh() {
-        let pruned = AppointmentPlanner.pruned(appointments, now: now())
-        if pruned.count != appointments.count {
-            let removed = Set(appointments.map(\.id)).subtracting(pruned.map(\.id))
-            appointments = pruned
-            reminding.subtract(removed)
+    // MARK: Checking with the shop
+
+    /// Drops appointments that ended long ago and re-checks reminders. Call when the app becomes
+    /// active (`refresh` then asks the server).
+    func refreshLocally() {
+        prune()
+        persist()
+        sync()
+    }
+
+    /// Asks the shop's server about each appointment booked here that's still on or just ended: it
+    /// may have been cancelled by the shop, completed or moved back. At most once a minute unless
+    /// `force` (pull to refresh).
+    func refresh(force: Bool = false) async {
+        if let refreshTask {
+            await refreshTask.value
+            return
+        }
+        if !force, let lastRefreshed, now().timeIntervalSince(lastRefreshed) < 60 { return }
+        let task = Task { await self.performRefresh() }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
+    }
+
+    private func performRefresh() async {
+        let current = now()
+        let candidates = appointments.filter { saved in
+            saved.origin == .app && saved.problem != .notFound
+                && (saved.isUpcoming(at: current) || saved.end > current.addingTimeInterval(-24 * 60 * 60))
+        }
+        guard !candidates.isEmpty else {
+            lastRefreshed = current
+            refreshError = nil
+            return
+        }
+        isRefreshing = true
+        defer { isRefreshing = false }
+        var failure: APIError?
+        checking: for saved in candidates {
+            let id = saved.id
+            switch token(for: id) {
+            case .unreadable:
+                continue
+            case .missing:
+                setProblem(.tokenMissing, for: id)
+            case .found(let token):
+                do {
+                    let fresh = try await api.appointment(id: id, manageToken: token)
+                    update(id) { saved in
+                        saved.snapshot = fresh
+                        saved.checkedAt = self.now()
+                        if saved.problem != .tokenNotSaved { saved.problem = nil }
+                    }
+                } catch where error.isCancellation {
+                    return
+                } catch {
+                    let apiError = error.asAPIError
+                    if Self.isUnknownToServer(apiError) {
+                        setProblem(.notFound, for: id)
+                    } else {
+                        failure = apiError
+                        // Offline: every other one would fail the same way.
+                        if apiError == .offline { break checking }
+                    }
+                }
+            }
+        }
+        refreshError = failure
+        lastRefreshed = now()
+        persist()
+        sync()
+    }
+
+    /// Cancels an appointment booked in the app.
+    func cancel(_ id: String) async throws {
+        guard let saved = appointment(withID: id), saved.origin == .app else { throw AppointmentActionError.cannotManage }
+        let token: String
+        switch self.token(for: id) {
+        case .found(let found): token = found
+        case .missing:
+            setProblem(.tokenMissing, for: id)
             persist()
+            throw AppointmentActionError.cannotManage
+        case .unreadable:
+            throw AppointmentActionError.tokenUnreadable
         }
-        sync()
+        do {
+            let cancelled = try await api.cancelAppointment(id: id, manageToken: token)
+            update(id) { saved in
+                saved.snapshot = cancelled
+                saved.checkedAt = self.now()
+            }
+            persist()
+            sync()
+        } catch {
+            let apiError = error.asAPIError
+            if Self.isUnknownToServer(apiError) {
+                setProblem(.notFound, for: id)
+                persist()
+                throw AppointmentActionError.cannotManage
+            }
+            if apiError == .notCancellable {
+                // It changed at the shop (or has started): show how it is now.
+                if let fresh = try? await api.appointment(id: id, manageToken: token) {
+                    update(id) { $0.snapshot = fresh }
+                    persist()
+                    sync()
+                }
+            }
+            throw AppointmentActionError.server(apiError)
+        }
     }
 
-    /// Waits for pending work. For tests.
+    /// Waits for pending notification work. For tests.
     func settle() async {
         await syncTask?.value
     }
 
-    static func identifiers(for id: UUID) -> [String] {
+    // MARK: Reminders
+
+    static func identifiers(for id: String) -> [String] {
         AppointmentReminderKind.allCases.map { identifier(for: id, kind: $0) }
     }
 
-    static func identifier(for id: UUID, kind: AppointmentReminderKind) -> String {
-        "\(identifierPrefix)\(id.uuidString)-\(kind.rawValue)"
+    static func identifier(for id: String, kind: AppointmentReminderKind) -> String {
+        "\(identifierPrefix)\(id)-\(kind.rawValue)"
     }
 
     static let identifierPrefix = "appointment-"
 
     // MARK: Private
 
-    private func persist() {
-        if let data = try? AppointmentPlanner.encode(appointments) {
-            defaults.set(data, forKey: Keys.appointments)
-        }
-        defaults.set(reminding.map(\.uuidString).sorted(), forKey: Keys.reminding)
+    private enum TokenLookup {
+        case found(String)
+        case missing
+        case unreadable
     }
 
-    /// Makes the scheduled notifications match the saved appointments. Each
-    /// sync waits for the previous one, so the latest state always wins.
+    private func token(for id: String) -> TokenLookup {
+        if let token = unsavedTokens[id] { return .found(token) }
+        do {
+            if let token = try tokens.secret(for: id) { return .found(token) }
+            return .missing
+        } catch {
+            return .unreadable
+        }
+    }
+
+    /// Saves a token, trying twice: the Keychain can fail once and work the next time.
+    private func storeToken(_ token: String, for id: String) -> Bool {
+        for _ in 0..<2 {
+            if (try? tokens.setSecret(token, for: id)) != nil { return true }
+        }
+        return false
+    }
+
+    private static func isUnknownToServer(_ error: APIError) -> Bool {
+        if error == .unauthorized { return true }
+        if case .server(let code, _, _) = error, code == IzzyAPI.ErrorCode.notFound { return true }
+        return false
+    }
+
+    private func setProblem(_ problem: SavedAppointment.Problem, for id: String) {
+        update(id) { $0.problem = problem }
+    }
+
+    private func update(_ id: String, _ change: (inout SavedAppointment) -> Void) {
+        guard let index = appointments.firstIndex(where: { $0.id == id }) else { return }
+        change(&appointments[index])
+        sortAppointments()
+    }
+
+    private func upsert(_ saved: SavedAppointment) {
+        appointments.removeAll { $0.id == saved.id }
+        appointments.append(saved)
+        sortAppointments()
+    }
+
+    private func sortAppointments() {
+        appointments.sort { lhs, rhs in
+            if lhs.start != rhs.start { return lhs.start < rhs.start }
+            return lhs.id < rhs.id
+        }
+    }
+
+    /// Drops appointments that ended more than `keepDays` ago, with their tokens and reminders.
+    private func prune() {
+        let cutoff = now().addingTimeInterval(-TimeInterval(Self.keepDays) * 24 * 60 * 60)
+        forget(appointments.filter { $0.end < cutoff }.map(\.id))
+    }
+
+    private func forget(_ ids: [String]) {
+        guard !ids.isEmpty else { return }
+        for id in ids {
+            try? tokens.removeSecret(for: id)
+            unsavedTokens[id] = nil
+        }
+        scheduler.removePendingRequests(withIdentifiers: ids.flatMap(Self.identifiers(for:)))
+        let gone = Set(ids)
+        appointments.removeAll { gone.contains($0.id) }
+    }
+
+    /// v3 kept appointments booked on Squire under another key. The ones still ahead come along,
+    /// read-only, with their reminder setting; the rest are over and aren't needed.
+    private func migrateSquireAppointments() {
+        guard let data = defaults.data(forKey: Keys.squire) else { return }
+        let reminding = Set(defaults.stringArray(forKey: Keys.squireReminding) ?? [])
+        let current = now()
+        let old = (try? AppointmentPlanner.decode(data)) ?? []
+        for appointment in old where appointment.isUpcoming(at: current) {
+            let id = appointment.id.uuidString
+            guard !appointments.contains(where: { $0.id == id }) else { continue }
+            appointments.append(SavedAppointment(squire: appointment, remind: reminding.contains(id)))
+        }
+        // Their reminders were scheduled under the same IDs; finished ones' are cleared here.
+        let dropped = old.filter { !$0.isUpcoming(at: current) }.map(\.id.uuidString)
+        scheduler.removePendingRequests(withIdentifiers: dropped.flatMap(Self.identifiers(for:)))
+        defaults.removeObject(forKey: Keys.squire)
+        defaults.removeObject(forKey: Keys.squireReminding)
+        persist()
+    }
+
+    private func persist() {
+        if let data = try? Self.encode(appointments) {
+            defaults.set(data, forKey: Keys.saved)
+        }
+    }
+
+    static func encode(_ appointments: [SavedAppointment]) throws -> Data {
+        try IzzyAPI.makeEncoder().encode(appointments)
+    }
+
+    /// Reads what `encode` wrote. One entry that can't be read doesn't lose the rest.
+    static func decode(_ data: Data) throws -> [SavedAppointment] {
+        try IzzyAPI.makeDecoder().decode([LossyEntry].self, from: data).compactMap(\.value)
+    }
+
+    private struct LossyEntry: Decodable {
+        let value: SavedAppointment?
+
+        init(from decoder: Decoder) throws {
+            value = try? SavedAppointment(from: decoder)
+        }
+    }
+
+    /// Makes the scheduled notifications match the saved appointments. Each sync waits for the
+    /// previous one, so the latest state always wins.
     private func sync() {
         let previous = syncTask
         syncTask = Task { [weak self] in
@@ -162,12 +572,10 @@ final class AppointmentStore {
             return
         }
 
-        // The client may have spent a while on the permission alert, and
-        // appointments may have changed meanwhile: plan from what's true now.
+        // The client may have spent a while on the permission alert, and appointments may have
+        // changed meanwhile: plan from what's true now.
         let current = now()
         for (appointmentID, reminder) in pendingReminders(now: current) {
-            // Removed, or reminders turned off, while an earlier one was being added.
-            guard reminding.contains(appointmentID) else { continue }
             let interval = reminder.date.timeIntervalSince(current)
             guard interval > 0 else { continue }
             let content = UNMutableNotificationContent()
@@ -185,25 +593,25 @@ final class AppointmentStore {
         }
     }
 
-    /// The reminders still ahead for upcoming appointments that want them.
-    private func pendingReminders(now current: Date) -> [(appointmentID: UUID, reminder: AppointmentReminder)] {
-        upcoming
-            .filter { reminding.contains($0.id) }
-            .flatMap { appointment in
+    /// The reminders still ahead for appointments that are on and want them.
+    private func pendingReminders(now current: Date) -> [(appointmentID: String, reminder: AppointmentReminder)] {
+        appointments
+            .filter { $0.isUpcoming(at: current) && $0.remind && $0.status == .booked }
+            .flatMap { saved in
                 AppointmentPlanner.reminders(
-                    for: appointment,
+                    for: saved.reminderAppointment,
                     shopName: AppData.shop.name,
                     address: AppData.shop.address.street,
                     calendar: calendar,
                     now: current
                 )
-                .map { (appointmentID: appointment.id, reminder: $0) }
+                .map { (appointmentID: saved.id, reminder: $0) }
             }
     }
 }
 
-/// Grants every notification request without asking. UI tests use it so a
-/// system permission alert never covers the screen.
+/// Grants every notification request without asking. UI tests use it so a system permission
+/// alert never covers the screen.
 final class AlwaysAllowedNotificationScheduler: NotificationScheduling {
     func authorizationStatus() async -> UNAuthorizationStatus { .authorized }
     func requestAuthorization() async throws -> Bool { true }

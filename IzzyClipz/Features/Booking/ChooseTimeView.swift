@@ -1,390 +1,332 @@
 import SwiftUI
+import UIKit
 
-/// Step 3: the day and start time, on the app's own calendar.
+/// Step 3: the day and time, from the shop's live calendar.
 ///
-/// The calendar knows the shop's hours, not each barber's bookings, so it offers every start time
-/// that fits before closing (from `BookingCalendar`, never a hard-coded list) and shows no "taken"
-/// times. Squire confirms the real opening in the last step. Everything is in the shop's time zone.
+/// The month grid marks the days with open times (asked from the server two weeks at a time);
+/// picking one lists its times by part of the day, all in the shop's time zone. The first day
+/// with openings is picked to start with. If someone else books the picked time first, the client
+/// lands back here with the list refreshed and a note saying so.
 ///
-/// The screen's one red is the Continue bar pinned above the tab bar; it stays `ink3` until a time
-/// is picked. The picked day and time are bone, never red.
+/// The screen's one red is the Continue bar; it stays `ink3` until a time is picked.
 struct ChooseTimeView: View {
     let choice: BookingChoice
 
+    @Environment(\.shopAPI) private var api
+    @State private var loader: AvailabilityLoader?
+
+    var body: some View {
+        Group {
+            if let loader {
+                ChooseTimeScreen(choice: choice, loader: loader)
+            } else {
+                Theme.ink.ignoresSafeArea()
+            }
+        }
+        .bookingStepChrome(title: "Day and time")
+        .onAppear {
+            if loader == nil {
+                loader = AvailabilityLoader(target: choice.target, api: api)
+            }
+        }
+    }
+}
+
+private struct ChooseTimeScreen: View {
+    let choice: BookingChoice
+    let loader: AvailabilityLoader
+
     @Environment(AppRouter.self) private var router
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var now: Date
-    @State private var selectedDay: CalendarDay?
-    @State private var selectedSlot: TimeSlot?
     /// The month on screen, as `MonthPage.id` ("2026-10").
     @State private var displayedMonthID: String
-    /// Counts the client's own day taps, so the app moving the day on by
-    /// itself doesn't make the phone tick.
-    @State private var dayPickCount = 0
-    /// Why the picked time went away, when the clock took it.
-    @State private var expiredNote: String?
-    /// Between `onAppear` and `onDisappear`: not covered by the review. (A tab switch doesn't make
-    /// it disappear; `isSelectedTab` covers that.) The clock only catches up while it's seen, so
-    /// VoiceOver never hears about a dropped time on another screen.
-    @State private var isOnScreen = false
+    @State private var selectedDay: LocalDate?
+    @State private var selectedStart: Date?
+    /// Why the client is looking at this again, e.g. the time was taken.
+    @State private var notice: String?
+    /// Once the client picks a day, the screen stops picking one for them.
+    @State private var hasPickedDay = false
+    /// The first look moves on to next month when this one has no openings left.
+    @State private var hasLookedAhead = false
 
     private let calendar = AppData.bookingCalendar
 
-    init(choice: BookingChoice) {
+    /// How old the times may get before they're asked for again when the client comes back.
+    private static let maxAge: TimeInterval = 2 * 60
+
+    init(choice: BookingChoice, loader: AvailabilityLoader) {
         self.choice = choice
-        let calendar = AppData.bookingCalendar
-        let now = Date()
-        let first = calendar.firstBookableDay(durationMinutes: choice.durationMinutes, now: now)
-        _now = State(initialValue: now)
-        _selectedDay = State(initialValue: first)
-        _selectedSlot = State(initialValue: nil)
-        _displayedMonthID = State(initialValue: Self.monthID(for: first ?? calendar.day(containing: now)))
+        self.loader = loader
+        _displayedMonthID = State(initialValue: MonthPage(year: loader.today.year, month: loader.today.month).id)
     }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xxl) {
-                VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    BookingStepTitle(step: 3, name: "Time", title: "Pick a time")
+                VStack(alignment: .leading, spacing: Theme.Space.m) {
+                    BookingStepHeader(step: 3, title: "Pick a day and time")
                     ChooseTimeChoiceSummary(choice: choice)
                 }
-                monthCalendar
-                ChooseTimeTimes(
-                    calendar: calendar,
-                    notice: expiredNote,
-                    day: selectedDay,
-                    today: today,
-                    durationMinutes: durationMinutes,
-                    now: now,
-                    selectedSlot: selectedSlot,
-                    onSelect: selectSlot
-                )
-                Text(footnote)
-                    .textRole(.caption)
-                    .foregroundStyle(Theme.smoke)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let notice {
+                    ChooseTimeNotice(text: notice)
+                }
+                if let page = displayedPage {
+                    CalendarMonthView(
+                        page: page,
+                        today: loader.today.calendarDay,
+                        selectedDay: selectedDay?.calendarDay,
+                        status: { loader.status(of: LocalDate($0)) },
+                        canShowPrevious: pageIndex > 0,
+                        canShowNext: pageIndex < pages.count - 1,
+                        onPrevious: { showMonth(at: pageIndex - 1) },
+                        onNext: { showMonth(at: pageIndex + 1) },
+                        onSelect: { selectDay(LocalDate($0)) }
+                    )
+                }
+                times
+                if let zone = BookingFlowCopy.timeZoneNote(at: selectedStart ?? Date()) {
+                    Text(zone)
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("timeZoneNote")
+                }
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, Theme.Space.s)
             .padding(.bottom, Theme.Space.xl)
         }
         .screenBackground()
-        .bookingStepChrome(step: 3, name: "Time", title: "Day & Time")
+        .refreshable {
+            await reload(saying: nil)
+        }
         .stickyBottomBar {
             ChooseTimeContinueBar(
-                summary: continueSummary,
-                spokenSummary: selectedSlot.map { calendar.dateTimeLabel(for: $0.start) },
-                onContinue: continueToReview
+                summary: selectedStart.map { calendar.dateTimeLabel(for: $0) },
+                onContinue: continueToDetails
             )
+        }
+        .task(id: displayedMonthID) {
+            guard let page = displayedPage else { return }
+            await loader.load(page)
+            pickFirstOpenDayIfNeeded()
+        }
+        .task(id: router.timeStepNotice?.id) {
+            guard let sent = router.timeStepNotice else { return }
+            router.clearTimeStepNotice()
+            if let dropped = sent.droppedStart, dropped == selectedStart {
+                selectedStart = nil
+            }
+            await reload(saying: sent.message)
         }
         .onAppear {
-            isOnScreen = true
-            refresh()
-        }
-        .onDisappear {
-            isOnScreen = false
+            if loader.isStale(maxAge: Self.maxAge), loader.loadedAt != nil {
+                Task { await reload(saying: nil) }
+            }
         }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active, isOnScreen { refresh() }
+            if phase == .active, loader.isStale(maxAge: Self.maxAge) {
+                Task { await reload(saying: nil) }
+            }
         }
-        // Keeps today's times honest while the client lingers on the calendar. Restarted when the
-        // Book tab comes back; stopped while another tab is showing.
-        .task {
-            while true {
-                do {
-                    try await Task.sleep(for: .seconds(60))
-                } catch {
-                    return
+        .sensoryFeedback(.selection, trigger: selectedStart) { _, newValue in newValue != nil }
+    }
+
+    // MARK: Times
+
+    @ViewBuilder private var times: some View {
+        if let day = selectedDay {
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                Text(calendar.longLabel(for: day.calendarDay))
+                    .textRole(.displayS)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+                    .accessibilityIdentifier("selectedDayLabel")
+                dayContent(day)
+            }
+        } else if let error = loader.error {
+            loadError(error)
+        } else if loader.isLoading || !hasLoadedDisplayedMonth {
+            LoadingStateView(text: "Checking open times…")
+                .accessibilityIdentifier("timesLoading")
+        } else {
+            ChooseTimeEmptyMessage(text: noDaysText, offersNextMonth: pageIndex < pages.count - 1) {
+                showMonth(at: pageIndex + 1)
+            }
+        }
+    }
+
+    @ViewBuilder private func dayContent(_ day: LocalDate) -> some View {
+        switch loader.status(of: day) {
+        case .open(let slots):
+            ForEach(ChooseTimeSlotGroup.groups(of: slots)) { group in
+                ChooseTimeGroupView(group: group, selectedStart: selectedStart) { slot in
+                    selectedStart = slot.start
+                    notice = nil
                 }
-                if isOnScreen { refresh() }
+            }
+        case .noOpenings:
+            ChooseTimeEmptyMessage(text: "No openings left on this day. Pick another day.", offersNextMonth: false) {}
+        case .closed:
+            ChooseTimeEmptyMessage(text: "The shop is closed on \(day.weekday.name)s. Pick another day.", offersNextMonth: false) {}
+        case .past, .tooFar:
+            ChooseTimeEmptyMessage(text: "This day can't be booked. Pick another day.", offersNextMonth: false) {}
+        case .notLoaded:
+            if let error = loader.error {
+                loadError(error)
+            } else {
+                LoadingStateView(text: "Checking open times…")
+                    .accessibilityIdentifier("timesLoading")
             }
         }
-        .sensoryFeedback(.selection, trigger: dayPickCount)
-        .sensoryFeedback(.selection, trigger: selectedSlot) { _, newValue in
-            newValue != nil
-        }
     }
 
-    // MARK: Calendar
-
-    @ViewBuilder private var monthCalendar: some View {
-        let pages = months
-        if let index = displayedIndex(in: pages) {
-            CalendarMonthView(
-                page: pages[index],
-                calendar: calendar,
-                durationMinutes: durationMinutes,
-                now: now,
-                today: today,
-                selectedDay: selectedDay,
-                canShowPrevious: index > 0,
-                canShowNext: index < pages.count - 1,
-                onPrevious: { showMonth(at: index - 1, in: pages) },
-                onNext: { showMonth(at: index + 1, in: pages) },
-                onSelect: selectDay
-            )
-        }
+    private func loadError(_ error: APIError) -> some View {
+        ErrorStateView(
+            title: "Couldn't load the times",
+            message: error.userMessage,
+            onRetry: { Task { await reload(saying: nil) } },
+            isRetrying: loader.isLoading
+        )
+        .accessibilityIdentifier("timesError")
     }
 
-    private var durationMinutes: Int {
-        choice.durationMinutes
+    // MARK: Months
+
+    private var pages: [MonthPage] {
+        calendar.months(now: Date())
     }
 
-    private var today: CalendarDay {
-        calendar.day(containing: now)
+    private var pageIndex: Int {
+        pages.firstIndex { $0.id == displayedMonthID } ?? 0
     }
 
-    private var months: [MonthPage] {
-        calendar.months(now: now)
-    }
-
-    /// Where the displayed month is in `pages`, or the first month if it's gone.
-    private func displayedIndex(in pages: [MonthPage]) -> Int? {
+    private var displayedPage: MonthPage? {
+        let pages = pages
         guard !pages.isEmpty else { return nil }
-        return pages.firstIndex { $0.id == displayedMonthID } ?? 0
+        return pages[min(pageIndex, pages.count - 1)]
     }
 
-    /// "Thu, Oct 29 · 2:30 PM" for the Continue bar, or `nil` before a time is picked.
-    private var continueSummary: String? {
-        guard let slot = selectedSlot else { return nil }
-        return "\(calendar.shortLabel(for: calendar.day(containing: slot.start))) · \(slot.label)"
+    /// Whether every bookable day on screen has an answer.
+    private var hasLoadedDisplayedMonth: Bool {
+        guard let page = displayedPage, let range = loader.bookableRange(of: page) else { return true }
+        var day = range.lowerBound
+        while day <= range.upperBound {
+            if loader.status(of: day) == .notLoaded { return false }
+            day = day.adding(days: 1)
+        }
+        return true
     }
 
-    private var footnote: String {
-        let hours = "These are the shop's hours. Squire shows \(BookingFlowCopy.barberPossessive(choice)) real openings in the last step."
-        // Checked on the day being looked at, which may be across a daylight
-        // saving change from today. Noon is clear of the 2 AM switch.
-        let reference = selectedSlot?.start
-            ?? selectedDay.flatMap { calendar.date(on: $0, at: TimeOfDay(hour: 12)) }
-            ?? now
-        guard let zone = BookingFlowCopy.timeZoneNote(at: reference) else { return hours }
-        return "\(hours) \(zone)"
+    private var noDaysText: String {
+        if pageIndex < pages.count - 1 {
+            return "No openings left in \(displayedPage?.title ?? "this month"). Try next month."
+        }
+        return "No openings left in the next \(calendar.windowDays) days. Give the shop a call and they'll find you a time."
     }
 
-    static func monthID(for day: CalendarDay) -> String {
-        MonthPage(year: day.year, month: day.month).id
-    }
-
-    /// Small, quick changes; none with Reduce Motion.
-    private var selectionAnimation: Animation? {
-        reduceMotion ? nil : .snappy
-    }
-
-    // MARK: Actions
-
-    private func showMonth(at index: Int, in pages: [MonthPage]) {
+    private func showMonth(at index: Int) {
         guard pages.indices.contains(index) else { return }
-        withAnimation(selectionAnimation) {
-            displayedMonthID = pages[index].id
-        }
+        displayedMonthID = pages[index].id
     }
 
-    private func selectDay(_ day: CalendarDay) {
+    // MARK: Picking
+
+    private func selectDay(_ day: LocalDate) {
         guard day != selectedDay else { return }
-        withAnimation(selectionAnimation) {
-            selectedDay = day
-            // A time on another day doesn't carry over.
-            selectedSlot = nil
-            expiredNote = nil
-            dayPickCount += 1
+        hasPickedDay = true
+        selectedDay = day
+        // A time on another day doesn't carry over.
+        selectedStart = nil
+        notice = nil
+    }
+
+    /// Picks the first day with openings in the month on screen, unless a bookable day is already
+    /// picked (by the client, or on screen). On the first look, a month with nothing left moves on
+    /// to the next.
+    private func pickFirstOpenDayIfNeeded() {
+        let range = displayedPage.flatMap { loader.bookableRange(of: $0) }
+        if let day = selectedDay, loader.status(of: day).isBookable {
+            if hasPickedDay || range?.contains(day) == true { return }
         }
-    }
-
-    private func selectSlot(_ slot: TimeSlot) {
-        withAnimation(selectionAnimation) {
-            selectedSlot = slot
-            expiredNote = nil
-        }
-    }
-
-    private func continueToReview() {
-        // A second tap while the review slides in mustn't push it twice.
-        if let last = router.bookingPath.last, case .review = last { return }
-        // A time that has just slipped inside the lead time still goes
-        // through: the review warns about short-notice and passed times.
-        guard let slot = selectedSlot else { return }
-        router.bookingPath.append(.review(BookingPlan(choice: choice, start: slot.start)))
-    }
-
-    /// Catches up with the clock, e.g. after the app was in the background, the client came back
-    /// from the review or from another tab: a day or time that's no longer offered is dropped, and
-    /// the first open day is picked if needed.
-    private func refresh() {
-        let current = Date()
-        let droppedSlot = selectedSlot
-        let oldDay = selectedDay
-        let oldMonthID = oldDay.map(Self.monthID(for:))
-        now = current
-        if let day = selectedDay,
-           calendar.availability(of: day, durationMinutes: durationMinutes, now: current).isBookable {
-            if let slot = selectedSlot,
-               !calendar.slots(on: day, durationMinutes: durationMinutes, now: current).contains(slot) {
-                selectedSlot = nil
-            }
-        } else {
-            let first = calendar.firstBookableDay(durationMinutes: durationMinutes, now: current)
+        if let range, let first = loader.firstOpenDay(onOrAfter: range.lowerBound), range.contains(first) {
             selectedDay = first
-            selectedSlot = nil
-            // Follows the new day only if the client was looking at the old
-            // one's month, not browsing another.
-            if let first, oldMonthID == nil || displayedMonthID == oldMonthID {
-                displayedMonthID = Self.monthID(for: first)
-            }
+            selectedStart = nil
+            return
         }
-        let pages = calendar.months(now: current)
-        if !pages.contains(where: { $0.id == displayedMonthID }), let firstPage = pages.first {
-            displayedMonthID = firstPage.id
-        }
-        if let droppedSlot, selectedSlot == nil {
-            noteExpired(droppedSlot, on: oldDay)
+        if hasLoadedDisplayedMonth {
+            advanceIfNothingThisMonth()
         }
     }
 
-    /// Says why the picked time went away, on screen and to VoiceOver.
-    private func noteExpired(_ slot: TimeSlot, on oldDay: CalendarDay?) {
-        let note: String
-        if let oldDay, let newDay = selectedDay, newDay != oldDay {
-            note = "\(slot.label) on \(calendar.shortLabel(for: oldDay)) is no longer available. Pick a time on \(calendar.longLabel(for: newDay))."
-        } else {
-            note = "\(slot.label) is no longer available. Pick another time."
+    private func advanceIfNothingThisMonth() {
+        guard !hasLookedAhead, !hasPickedDay, loader.error == nil, pageIndex < pages.count - 1 else { return }
+        hasLookedAhead = true
+        showMonth(at: pageIndex + 1)
+    }
+
+    /// Asks for the month on screen again. A picked time that's gone is dropped, with a note.
+    private func reload(saying message: String?) async {
+        guard let page = displayedPage else { return }
+        await loader.reload(page)
+        if let message {
+            notice = message
+            UIAccessibility.post(notification: .announcement, argument: message)
         }
-        expiredNote = note
-        UIAccessibility.post(notification: .announcement, argument: note)
+        if let start = selectedStart, let day = selectedDay,
+           !(loader.slots(on: day) ?? []).contains(where: { $0.start == start }) {
+            selectedStart = nil
+            if message == nil, loader.error == nil {
+                let text = "\(calendar.timeLabel(for: start)) is no longer available. Pick another time."
+                notice = text
+                UIAccessibility.post(notification: .announcement, argument: text)
+            }
+        }
+        if let day = selectedDay, !loader.status(of: day).isBookable, loader.status(of: day) != .notLoaded {
+            // The picked day filled up: move to the next one with openings.
+            hasPickedDay = false
+            selectedDay = nil
+        }
+        pickFirstOpenDayIfNeeded()
+    }
+
+    private func continueToDetails() {
+        // A second tap while the next step slides in mustn't push it twice.
+        if let last = router.bookingPath.last, case .details = last { return }
+        guard let start = selectedStart else { return }
+        router.bookingPath.append(.details(BookingPlan(choice: choice, start: start)))
     }
 }
 
 // MARK: - What's being booked
 
-/// "Haircut · $45" over "with Carlos · 45 min", under the title (never beside it, where it collides
-/// with the title one size step up).
+/// "Haircut with Carlos" over "$45 · 45 min".
 private struct ChooseTimeChoiceSummary: View {
     let choice: BookingChoice
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(choice.serviceName) · \(choice.priceLabel)")
+            Text("\(choice.serviceName) \(BookingFlowCopy.withBarber(choice))")
                 .textRole(.callout)
                 .foregroundStyle(Theme.bone)
-            Text("\(BookingFlowCopy.withBarber(choice)) · \(choice.durationLabel)")
-                .textRole(.body)
+            Text("\(choice.priceLabel) · \(choice.durationLabel)")
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
         .fixedSize(horizontal: false, vertical: true)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(
-            "\(choice.serviceName) \(BookingFlowCopy.withBarber(choice)), \(choice.priceLabel.spokenRanges), \(choice.durationLabel.spokenRanges)"
-        )
+        .accessibilityLabel("\(choice.serviceName) \(BookingFlowCopy.withBarber(choice)), \(choice.priceLabel.spokenRanges), \(choice.durationLabel.spokenRanges)")
     }
 }
 
-// MARK: - Times for the selected day
-
-/// The start times in one part of the day.
-private struct ChooseTimeSlotGroup: Identifiable {
-    let part: DayPart
-    let slots: [TimeSlot]
-
-    var id: String { part.id }
-}
-
-/// The selected day's name and hours, then its start times under a mono heading for each part of
-/// the day. Every time comes from `BookingCalendar.slots`; there are no "taken" times, because the
-/// app can't see the barbers' calendars.
-private struct ChooseTimeTimes: View {
-    let calendar: BookingCalendar
-    /// Why the picked time went away, if it did.
-    let notice: String?
-    let day: CalendarDay?
-    let today: CalendarDay
-    let durationMinutes: Int
-    let now: Date
-    let selectedSlot: TimeSlot?
-    let onSelect: (TimeSlot) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xl) {
-            if let notice {
-                ChooseTimeExpiredNote(text: notice)
-            }
-            if let day {
-                dayHeader(day)
-            }
-            let slots = currentSlots
-            if slots.isEmpty {
-                ChooseTimeEmptyMessage(text: emptyText, offersCall: day == nil)
-            } else {
-                ForEach(groups(of: slots)) { group in
-                    ChooseTimeGroupView(group: group, selectedSlot: selectedSlot, onSelect: onSelect)
-                }
-            }
-        }
-    }
-
-    private func dayHeader(_ day: CalendarDay) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            Text(calendar.longLabel(for: day))
-                .textRole(.displayS)
-                .foregroundStyle(Theme.bone)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("selectedDayLabel")
-            Text(hoursText(for: day))
-                .textRole(.detail)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
-    private var currentSlots: [TimeSlot] {
-        guard let day else { return [] }
-        return calendar.slots(on: day, durationMinutes: durationMinutes, now: now)
-    }
-
-    private func groups(of slots: [TimeSlot]) -> [ChooseTimeSlotGroup] {
-        DayPart.allCases.compactMap { part -> ChooseTimeSlotGroup? in
-            let matching = slots.filter { $0.part == part }
-            return matching.isEmpty ? nil : ChooseTimeSlotGroup(part: part, slots: matching)
-        }
-    }
-
-    /// "Shop hours 10 AM – 7 PM", or "Closed".
-    private func hoursText(for day: CalendarDay) -> String {
-        guard let hours = calendar.clock.schedule.hours(on: day.weekday) else { return "Closed" }
-        return "Shop hours \(hours.label)"
-    }
-
-    private var emptyText: String {
-        guard let day else {
-            return "There are no open times in the next \(calendar.windowDays) days. Give the shop a call and they'll find you a time."
-        }
-        switch calendar.availability(of: day, durationMinutes: durationMinutes, now: now) {
-        case .open:
-            return "Pick a day above to see its times."
-        case .noTimesLeft:
-            if day == today {
-                return "That's it for today. Pick another day."
-            }
-            return "Nothing fits on this day. Pick another day."
-        case .closed:
-            return "The shop is closed on \(day.weekday.name)s. Pick another day."
-        case .past:
-            return "That day has passed. Pick another day."
-        case .outsideWindow:
-            let last = calendar.lastBookableDay(now: now)
-            return "You can book up to \(calendar.shortLabel(for: last)). Pick an earlier day."
-        }
-    }
-}
-
-/// The picked time is no longer offered, e.g. it slipped inside the lead time.
-private struct ChooseTimeExpiredNote: View {
+/// Why the client is back here, e.g. "Someone just booked 2:30 PM. Pick another time."
+private struct ChooseTimeNotice: View {
     let text: String
 
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Space.m) {
             Image(systemName: Symbol.warning)
-                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(Theme.caution)
                 .accessibilityHidden(true)
             Text(text)
@@ -395,24 +337,22 @@ private struct ChooseTimeExpiredNote: View {
         }
         .card(padding: Theme.Space.cardPadding)
         .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("slotExpiredNote")
+        .accessibilityIdentifier("timeNotice")
     }
 }
 
-/// A day with no times: an `ink3` card with the calendar symbol, and the shop's number when there's
-/// nothing in the whole booking window.
+/// A day or month with no times, with the shop's number, and "Next month" when there is one.
 private struct ChooseTimeEmptyMessage: View {
     let text: String
-    let offersCall: Bool
+    let offersNextMonth: Bool
+    let onNextMonth: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             HStack(alignment: .top, spacing: Theme.Space.l) {
                 Image(systemName: Symbol.calendar)
-                    .font(.title3.weight(.semibold))
+                    .font(.title3)
                     .foregroundStyle(Theme.bone)
-                    .frame(width: 44, height: 44)
-                    .background(Theme.ink4, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
                     .accessibilityHidden(true)
                 Text(text)
                     .textRole(.body)
@@ -421,31 +361,51 @@ private struct ChooseTimeEmptyMessage: View {
                 Spacer(minLength: 0)
             }
             .accessibilityElement(children: .combine)
-            if offersCall {
-                CallButton {
-                    Label("Call the shop", systemImage: Symbol.call)
-                }
-                .buttonStyle(.secondary)
+            .accessibilityIdentifier("noTimesMessage")
+            if offersNextMonth {
+                Button("Show next month", action: onNextMonth)
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("showNextMonth")
             }
+            CallButton {
+                Label("Call the shop", systemImage: Symbol.call)
+            }
+            .buttonStyle(.tertiary)
         }
         .card()
     }
 }
 
-/// "☀ AFTERNOON ———" and its time chips: as many columns as fit (5 on most phones at the default
-/// size, fewer as text grows).
+// MARK: - Times for the picked day
+
+/// The start times in one part of the day.
+private struct ChooseTimeSlotGroup: Identifiable {
+    let part: DayPart
+    let slots: [IzzyAPI.Slot]
+
+    var id: String { part.id }
+
+    static func groups(of slots: [IzzyAPI.Slot]) -> [ChooseTimeSlotGroup] {
+        DayPart.allCases.compactMap { part in
+            let matching = slots.filter { DayPart(time: ShopTime.timeOfDay(of: $0.start)) == part }
+            return matching.isEmpty ? nil : ChooseTimeSlotGroup(part: part, slots: matching)
+        }
+    }
+}
+
+/// "Afternoon" and its time chips: as many columns as fit.
 private struct ChooseTimeGroupView: View {
     let group: ChooseTimeSlotGroup
-    let selectedSlot: TimeSlot?
-    let onSelect: (TimeSlot) -> Void
-    @ScaledMetric(relativeTo: .subheadline) private var chipMinWidth: CGFloat = 64
+    let selectedStart: Date?
+    let onSelect: (IzzyAPI.Slot) -> Void
+    @ScaledMetric(relativeTo: .subheadline) private var chipMinWidth: CGFloat = 88
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             BookingSectionLabel(title: group.part.title, symbol: Symbol.symbol(for: group.part))
             LazyVGrid(columns: [GridItem(.adaptive(minimum: chipMinWidth), spacing: Theme.Space.s)], spacing: Theme.Space.s) {
                 ForEach(group.slots) { slot in
-                    ChooseTimeChip(slot: slot, isSelected: slot == selectedSlot) {
+                    ChooseTimeChip(slot: slot, isSelected: slot.start == selectedStart) {
                         onSelect(slot)
                     }
                 }
@@ -454,75 +414,61 @@ private struct ChooseTimeGroupView: View {
     }
 }
 
-/// One start time: "2:30" (the heading above says morning, afternoon or evening; VoiceOver hears
-/// "2:30 PM"). Selected, it's bone with ink, bold text and the selected trait, never red.
+/// One start time: "2:30 PM". Selected, it's bone with ink, bold text and the selected trait,
+/// never red.
 private struct ChooseTimeChip: View {
-    let slot: TimeSlot
+    let slot: IzzyAPI.Slot
     let isSelected: Bool
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            Text(verbatim: slot.clockLabel)
+            Text(verbatim: AppData.bookingCalendar.timeLabel(for: slot.start))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(ChipButtonStyle(isSelected: isSelected, cornerRadius: Theme.Radius.chip, minHeight: Theme.minimumTapSize))
-        .accessibilityLabel(slot.label)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
-        .accessibilityIdentifier("time-\(slot.id)")
+        .accessibilityIdentifier("time-\(ShopTime.identifier(for: slot.start))")
     }
 }
 
-private extension TimeSlot {
-    /// "2:30", "10:00": the 12-hour clock without AM or PM.
-    var clockLabel: String {
-        let hour = time.hour % 12 == 0 ? 12 : time.hour % 12
-        let minute = time.minute < 10 ? "0\(time.minute)" : "\(time.minute)"
-        return "\(hour):\(minute)"
+/// Wall-clock times in the shop's time zone, whatever the phone is set to.
+enum ShopTime {
+    static func timeOfDay(of date: Date) -> TimeOfDay {
+        let parts = AppData.clock.calendar.dateComponents([.hour, .minute], from: date)
+        return TimeOfDay(hour: parts.hour ?? 0, minute: parts.minute ?? 0)
+    }
+
+    /// "1430": 24-hour, zero-padded, for accessibility identifiers.
+    static func identifier(for date: Date) -> String {
+        let time = timeOfDay(of: date)
+        return String(format: "%02d%02d", time.hour, time.minute)
     }
 }
 
 // MARK: - Continue
 
-/// The red Continue bar pinned above the tab bar (`stickyBottomBar`): "CONTINUE", the picked day
-/// and time in mono, and the arrow square. When the three don't fit on one line (a small phone,
-/// bigger text) the time moves under "CONTINUE". Until a time is picked it's `ink3`, not red.
+/// The red Continue bar pinned above the tab bar, with the picked day and time under it. Until a
+/// time is picked it's `ink3`, not red, and says to pick one.
 private struct ChooseTimeContinueBar: View {
-    /// "Thu, Oct 29 · 2:30 PM", or `nil` before a time is picked.
+    /// "Thu, Oct 29 at 2:30 PM", or `nil` before a time is picked.
     let summary: String?
-    /// "Thu, Oct 29 at 2:30 PM".
-    let spokenSummary: String?
     let onContinue: () -> Void
 
     var body: some View {
         Button(action: onContinue) {
-            ViewThatFits(in: .horizontal) {
-                HStack(spacing: Theme.Space.l) {
-                    Text("Continue")
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    detail
-                        .lineLimit(1)
-                }
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Continue")
-                    detail
-                }
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Continue")
+                Text(summary ?? "Pick a time first")
+                    .textRole(.caption)
             }
         }
         .buttonStyle(.primary)
         .disabled(summary == nil)
         .accessibilityLabel("Continue")
-        .accessibilityValue(spokenSummary ?? "Pick a time first")
-        .accessibilityIdentifier("continueToReview")
-    }
-
-    private var detail: some View {
-        // Full white on red (5.24:1), from the button style.
-        Text(summary ?? "Pick a time")
-            .textRole(.label)
-            .fixedSize(horizontal: false, vertical: true)
+        .accessibilityValue(summary ?? "Pick a time first")
+        .accessibilityIdentifier("continueToDetails")
     }
 }

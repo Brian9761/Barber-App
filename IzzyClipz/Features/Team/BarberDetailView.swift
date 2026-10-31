@@ -273,7 +273,7 @@ private struct BarberMenuSection: View {
             if offerings.isEmpty {
                 InfoCallout(
                     title: "Nothing to book online yet",
-                    message: "\(barber.name) has no services on Squire right now. Call the shop at \(AppData.shop.phone.display)."
+                    message: "\(barber.name) has no services to book in the app right now. Call the shop at \(AppData.shop.phone.display)."
                 )
             }
         }

@@ -742,7 +742,7 @@ private struct VisitFooter: View {
         VStack(spacing: Theme.Space.m) {
             MascotSticker(size: 40)
             VStack(spacing: Theme.Space.xxs) {
-                Text("Appointments are confirmed on Squire")
+                Text("Book in the app, pay at the shop")
                 Text("Version \(VisitView.appVersion)")
             }
             .textRole(.label)

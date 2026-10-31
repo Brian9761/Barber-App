@@ -45,16 +45,14 @@ struct RootView: View {
 
     @ViewBuilder private func sheetContent(_ sheet: AppSheet) -> some View {
         switch sheet {
-        case .squire(let handoff):
-            WebSheet(url: handoff.url)
-        case .confirmBooking(let plan):
-            ConfirmBookingSheet(plan: plan)
         case .web(let url):
             WebSheet(url: url)
         case .reminders:
             ReminderSettingsView()
-        case .addToCalendar(let appointment):
-            AddToCalendarSheet(appointment: appointment)
+        case .addToCalendar(let event):
+            AddToCalendarSheet(event: event)
+        case .customerDetails:
+            CustomerDetailsSheet()
         }
     }
 }

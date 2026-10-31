@@ -18,41 +18,62 @@ enum HomeRoute: Hashable {
     case reviews
 }
 
-/// Screens in the Book tab's step-by-step flow.
+/// Screens in the Book tab's step-by-step flow. Step 1, the service, is the tab's first screen.
 enum BookingStep: Hashable {
     /// Step 2 when the service was picked first.
     case chooseBarber(serviceID: String)
     /// Step 2 when the barber was picked first (from their profile or Home).
     case chooseService(barberID: String)
-    /// Step 3: the day and time, on the app's calendar.
+    /// Step 3: the day and time, from the shop's live calendar.
     case chooseTime(BookingChoice)
-    /// Step 4: check everything, then confirm on Squire.
-    case review(BookingPlan)
+    /// Step 4: the client's name, mobile number and an optional note.
+    case details(BookingPlan)
+    /// Step 5: check everything, then book.
+    case review(BookingDraft)
+    /// Done: the appointment as the shop booked it.
+    case booked(appointmentID: String)
+
+    /// The step's number in "Step 2 of 5", or `nil` after booking.
+    var number: Int? {
+        switch self {
+        case .chooseBarber, .chooseService: return 2
+        case .chooseTime: return 3
+        case .details: return 4
+        case .review: return 5
+        case .booked: return nil
+        }
+    }
+
+    /// How many steps there are before an appointment is booked.
+    static let count = 5
 }
 
 /// Who the client picked for a service.
 enum BookingChoice: Hashable {
-    case firstAvailable(FirstAvailableOption)
+    /// Whoever is free first among the barbers who share the service's "first available" item.
+    case anyBarber(FirstAvailableOption)
+    /// One barber's version of the service.
     case offering(Offering)
 
-    var request: BookingRequest {
+    /// What the server books.
+    var target: IzzyAPI.BookingTarget {
         switch self {
-        case .firstAvailable(let option): return .firstAvailable(option)
+        case .anyBarber(let option): return .anyBarber(serviceId: option.serviceID)
         case .offering(let offering): return .offering(offering)
         }
     }
 
     var serviceID: String {
         switch self {
-        case .firstAvailable(let option): return option.serviceID
+        case .anyBarber(let option): return option.serviceID
         case .offering(let offering): return offering.serviceID
         }
     }
 
-    /// The barber's ID, or `nil` for whoever is free first.
+    /// The barber's ID, or `nil` for any barber.
     var barberID: String? {
         switch self {
-        case .firstAvailable: return nil
+        case .anyBarber: return nil
         case .offering(let offering): return offering.barberID
         }
     }
@@ -61,36 +82,22 @@ enum BookingChoice: Hashable {
         AppData.catalog.service(withID: serviceID)?.name ?? "Appointment"
     }
 
-    /// "Carlos", or "First available".
+    /// "Carlos", or "Any barber".
     var barberName: String {
-        guard let barberID else { return "First available" }
+        guard let barberID else { return "Any barber" }
         return AppData.catalog.barber(withID: barberID)?.name ?? "Your barber"
     }
 
     var priceLabel: String {
         switch self {
-        case .firstAvailable(let option): return option.priceLabel
+        case .anyBarber(let option): return option.priceLabel
         case .offering(let offering): return offering.price.label
-        }
-    }
-
-    /// How long to plan for. With "first available" the barbers' lengths can
-    /// differ, so this is the longest, which every barber can fit.
-    var durationMinutes: Int {
-        switch self {
-        case .offering(let offering):
-            return offering.durationMinutes
-        case .firstAvailable(let option):
-            let lengths = AppData.catalog.offerings
-                .filter { $0.squireServiceID == option.squireServiceID && option.barberIDs.contains($0.barberID) }
-                .map(\.durationMinutes)
-            return lengths.max() ?? 60
         }
     }
 
     var durationLabel: String {
         switch self {
-        case .firstAvailable(let option): return option.durationLabel
+        case .anyBarber(let option): return option.durationLabel
         case .offering(let offering): return offering.durationLabel
         }
     }
@@ -100,59 +107,52 @@ enum BookingChoice: Hashable {
         if case .offering(let offering) = self { return offering.note }
         return nil
     }
-}
 
-/// A choice plus the day and time the client picked on the app's calendar.
-struct BookingPlan: Hashable {
-    let choice: BookingChoice
-    let start: Date
-
-    /// The appointment to save once the client has booked it on Squire.
-    func appointment(at start: Date? = nil, createdAt: Date = Date()) -> Appointment {
-        Appointment(
-            id: UUID(),
-            serviceID: choice.serviceID,
-            serviceName: choice.serviceName,
-            barberID: choice.barberID,
-            barberName: choice.barberName,
-            start: start ?? self.start,
-            durationMinutes: choice.durationMinutes,
-            priceLabel: choice.priceLabel,
-            createdAt: createdAt
-        )
+    /// The barbers "Any barber" picks from, by name.
+    var anyBarberNames: [String] {
+        guard case .anyBarber(let option) = self else { return [] }
+        return option.barberIDs.compactMap { AppData.catalog.barber(withID: $0)?.name }
     }
 }
 
-/// Opening the shop's Squire booking page, and the plan it confirms (if any).
-struct SquireHandoff: Hashable {
-    let request: BookingRequest
-    /// The day and time picked in the app. `nil` when browsing Squire directly.
-    let plan: BookingPlan?
-
-    var url: URL { AppData.bookingURL(for: request) }
+/// A choice plus the start time the client picked from the shop's live calendar. `start` is the
+/// slot's start exactly as the server listed it, and goes back to it unchanged.
+struct BookingPlan: Hashable {
+    let choice: BookingChoice
+    let start: Date
 }
 
-/// Modal screens. They're all presented from the root, one at a time, so a
-/// sheet can never be asked to appear on top of another one and silently fail.
+/// Everything step 5 books: the plan, who it's for and an optional note for the barber.
+struct BookingDraft: Hashable {
+    let plan: BookingPlan
+    let customer: CustomerDetails
+    let note: String
+}
+
+/// What a booking step is told when the client is sent back to the times, e.g. after someone
+/// else booked the time first.
+struct TimeStepNotice: Equatable {
+    let id = UUID()
+    let message: String
+    /// The time that's gone, so it's no longer shown as picked.
+    let droppedStart: Date?
+}
+
+/// Modal screens. They're all presented from the root, one at a time, so a sheet can never be
+/// asked to appear on top of another one and silently fail.
 enum AppSheet: Identifiable, Hashable {
-    case squire(SquireHandoff)
-    case confirmBooking(BookingPlan)
     case web(URL)
     case reminders
-    case addToCalendar(Appointment)
+    case addToCalendar(CalendarEvent)
+    /// The name and number remembered for booking.
+    case customerDetails
 
     var id: String {
         switch self {
-        case .squire(let handoff):
-            return "squire/\(handoff.url.absoluteString)"
-        case .confirmBooking(let plan):
-            return "confirm/\(plan.choice.request.barberID ?? "any")/\(plan.choice.serviceID)/\(plan.start.timeIntervalSince1970)"
-        case .web(let url):
-            return "web/\(url.absoluteString)"
-        case .reminders:
-            return "reminders"
-        case .addToCalendar(let appointment):
-            return "calendar/\(appointment.id.uuidString)"
+        case .web(let url): return "web/\(url.absoluteString)"
+        case .reminders: return "reminders"
+        case .addToCalendar(let event): return "calendar/\(event.id)"
+        case .customerDetails: return "customerDetails"
         }
     }
 }
@@ -165,17 +165,18 @@ final class AppRouter {
     /// Home pushes services, barbers and `HomeRoute`s, so its path holds any of them.
     var homePath = NavigationPath()
     var bookingPath: [BookingStep] = []
-    /// Goes up by one each time a booking is saved, so the Book tab can
-    /// scroll back to the top, where the new appointment is.
+    /// Set when the client is sent back to the times; the time step shows it and refreshes.
+    private(set) var timeStepNotice: TimeStepNotice?
+    /// Goes up by one each time an appointment is booked.
     private(set) var finishedBookings = 0
-    /// The sheet on screen. Set it through `present(_:)` so dismissal knows
-    /// what was showing; SwiftUI sets it back to `nil` when it goes away.
+    /// The sheet on screen. Set it through `present(_:)` so dismissal knows what was showing;
+    /// SwiftUI sets it back to `nil` when it goes away.
     var sheet: AppSheet?
 
-    /// What was presented last, so its dismissal can lead somewhere.
-    @ObservationIgnored private var lastPresentedSheet: AppSheet?
     /// A sheet waiting for the one on screen to finish closing.
     @ObservationIgnored private var queuedSheet: AppSheet?
+
+    // MARK: Booking
 
     /// Switches to the Book tab at step 1.
     func startBooking() {
@@ -205,29 +206,57 @@ final class AppRouter {
         selectedTab = .book
     }
 
-    /// Switches to the Book tab at the calendar for a service on a barber's
-    /// own menu. Going back shows that barber's services, the way the client
-    /// came, not "Pick your barber".
+    /// Switches to the Book tab at the calendar for a service on a barber's own menu. Going back
+    /// shows that barber's services, the way the client came, not "Pick a barber".
     func startBooking(fromBarberMenu offering: Offering) {
         closeSheet()
         bookingPath = [.chooseService(barberID: offering.barberID), .chooseTime(.offering(offering))]
         selectedTab = .book
     }
 
-    /// Opens Squire to confirm a booking. With a plan, the client is asked
-    /// afterwards whether they booked it, so it can be saved in the app.
-    func openSquire(_ request: BookingRequest, plan: BookingPlan?) {
-        present(.squire(SquireHandoff(request: request, plan: plan)))
+    /// Back to the times (step 3), which reload and show `message`. Used when the picked time
+    /// was taken or can no longer be booked.
+    func returnToTimes(message: String, droppedStart: Date?) {
+        if let index = bookingPath.lastIndex(where: { if case .chooseTime = $0 { return true } else { return false } }) {
+            bookingPath = Array(bookingPath.prefix(through: index))
+        }
+        timeStepNotice = TimeStepNotice(message: message, droppedStart: droppedStart)
     }
+
+    /// The time step has shown the notice.
+    func clearTimeStepNotice() {
+        timeStepNotice = nil
+    }
+
+    /// Back to the details (step 4), to fix the name or number.
+    func returnToDetails() {
+        if let index = bookingPath.lastIndex(where: { if case .details = $0 { return true } else { return false } }) {
+            bookingPath = Array(bookingPath.prefix(through: index))
+        }
+    }
+
+    /// Booked: the flow is replaced by the confirmation, so going back can't book it twice.
+    func showBooked(appointmentID: String) {
+        bookingPath = [.booked(appointmentID: appointmentID)]
+        finishedBookings += 1
+    }
+
+    /// Back to the start of the Book tab.
+    func finishBooking() {
+        bookingPath = []
+        timeStepNotice = nil
+    }
+
+    // MARK: Pages and sheets
 
     /// Opens a web page in the in-app browser.
     func openWeb(_ url: URL) {
         present(.web(url))
     }
 
-    /// Opens a page outside the app: in Safari, or in the site's own app (Google
-    /// Maps for Google reviews), where the client is already signed in. UI tests
-    /// get the in-app preview instead, so they never leave the app.
+    /// Opens a page outside the app: in Safari, or in the site's own app (Google Maps for Google
+    /// reviews, Instagram), where the client is already signed in. UI tests get the in-app preview
+    /// instead, so they never leave the app.
     func openOutside(_ url: URL) {
         if LaunchOptions.isUITesting {
             present(.web(url))
@@ -240,33 +269,30 @@ final class AppRouter {
         present(.reminders)
     }
 
-    func addToCalendar(_ appointment: Appointment) {
-        present(.addToCalendar(appointment))
+    func addToCalendar(_ event: CalendarEvent) {
+        present(.addToCalendar(event))
     }
 
-    /// Shows a sheet. If another one is up (e.g. "Add to Calendar" from the
-    /// "Did you book it?" sheet), that one closes first and the new one opens
-    /// once it has gone: swapping sheets mid-presentation is unreliable on
-    /// some iOS versions.
+    func editCustomerDetails() {
+        present(.customerDetails)
+    }
+
+    /// Shows a sheet. If another one is up, that one closes first and the new one opens once it
+    /// has gone: swapping sheets mid-presentation is unreliable on some iOS versions.
     func present(_ sheet: AppSheet) {
-        // A second tap while the sheet it replaces is still closing: it's
-        // already on its way.
+        // A second tap while the sheet it replaces is still closing: it's already on its way.
         if sheet == queuedSheet { return }
         if let current = self.sheet, current != sheet {
             queuedSheet = sheet
-            // The sheet being closed for this shouldn't trigger its own follow-up.
-            lastPresentedSheet = nil
             self.sheet = nil
             return
         }
-        lastPresentedSheet = sheet
         self.sheet = sheet
     }
 
     /// Closes whatever sheet is up without anything following it.
     func closeSheet() {
         queuedSheet = nil
-        lastPresentedSheet = nil
         sheet = nil
     }
 
@@ -277,23 +303,6 @@ final class AppRouter {
         if let next = queuedSheet {
             queuedSheet = nil
             present(next)
-            return
         }
-        let dismissed = lastPresentedSheet
-        lastPresentedSheet = nil
-        switch dismissed {
-        case .squire(let handoff)?:
-            if let plan = handoff.plan {
-                present(.confirmBooking(plan))
-            }
-        default:
-            break
-        }
-    }
-
-    /// After an appointment is saved: back to the start of the Book tab.
-    func finishBooking() {
-        bookingPath = []
-        finishedBookings += 1
     }
 }

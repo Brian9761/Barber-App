@@ -7,10 +7,6 @@ enum AppData {
     static let clock = shop.clock
     /// Day and time picking for appointments, in the shop's time zone.
     static let bookingCalendar = BookingCalendar(clock: clock)
-
-    static func bookingURL(for request: BookingRequest) -> URL {
-        shop.booking.url(for: request)
-    }
 }
 
 /// Where the shop's reviews live on Google and Yelp.

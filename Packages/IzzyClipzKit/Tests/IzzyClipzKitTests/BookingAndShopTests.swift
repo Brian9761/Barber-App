@@ -1,62 +1,6 @@
 import XCTest
 @testable import IzzyClipzKit
 
-final class BookingLinksTests: XCTestCase {
-    let links = ShopInfo.izzyClipz.booking
-    let tracking = "utm_source=izzyclipz-app&utm_medium=ios"
-
-    func testShopPage() {
-        XCTAssertEqual(
-            links.url(for: .anything).absoluteString,
-            "https://getsquire.com/booking/book/izzy-clipz-oceanside?\(tracking)"
-        )
-    }
-
-    func testBarberPage() {
-        XCTAssertEqual(
-            links.url(for: .barber("carlos-rafael")).absoluteString,
-            "https://getsquire.com/booking/book/izzy-clipz-oceanside/barber/carlos-rafael/services?\(tracking)"
-        )
-    }
-
-    func testSpecificOfferingPreselectsTheMenuItem() throws {
-        let offering = try XCTUnwrap(Catalog.izzyClipz.offerings(forBarber: "carlos-rafael").first)
-        XCTAssertEqual(
-            links.url(for: .offering(offering)).absoluteString,
-            "https://getsquire.com/booking/book/izzy-clipz-oceanside/barber/carlos-rafael/services?preselect=9343fc67-b196-4604-987e-a4a9b6b4cc41&\(tracking)"
-        )
-    }
-
-    func testFirstAvailableUsesAnyBarber() throws {
-        let option = try XCTUnwrap(Catalog.izzyClipz.firstAvailableOption(forService: "haircut-and-beard"))
-        XCTAssertEqual(
-            links.url(for: .firstAvailable(option)).absoluteString,
-            "https://getsquire.com/booking/book/izzy-clipz-oceanside/barber/any/services?preselect=23936782-15f7-4ed5-9cde-ece8cc1d730c&\(tracking)"
-        )
-    }
-
-    func testServiceIDsAreLowercased() {
-        let request = BookingRequest(barberID: nil, squireServiceID: "23936782-15F7-4ED5-9CDE-ECE8CC1D730C")
-        XCTAssertEqual(request.squireServiceID, "23936782-15f7-4ed5-9cde-ece8cc1d730c")
-    }
-
-    func testWithoutTracking() {
-        let plain = BookingLinks(shopSlug: "izzy-clipz-oceanside", tracking: [])
-        XCTAssertEqual(plain.url(for: .anything).absoluteString, "https://getsquire.com/booking/book/izzy-clipz-oceanside")
-    }
-
-    func testEveryOfferingLinksToItsOwnMenuItem() throws {
-        for offering in Catalog.izzyClipz.offerings {
-            let url = links.url(for: .offering(offering))
-            let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
-            XCTAssertEqual(components.scheme, "https")
-            XCTAssertEqual(components.host, "getsquire.com")
-            XCTAssertEqual(components.path, "/booking/book/izzy-clipz-oceanside/barber/\(offering.barberID)/services")
-            XCTAssertEqual(components.queryItems?.first { $0.name == "preselect" }?.value, offering.squireServiceID)
-        }
-    }
-}
-
 final class ShopInfoTests: XCTestCase {
     let shop = ShopInfo.izzyClipz
 
@@ -162,13 +106,13 @@ final class ShopInfoTests: XCTestCase {
         XCTAssertEqual(shop.ratings.map(\.rating.averageLabel), ["5.0", "4.9"])
         XCTAssertEqual(shop.ratings.map(\.rating.countLabel), ["115 reviews", "59 reviews"])
         XCTAssertEqual(shop.ratings[0].rating, shop.rating)
-        XCTAssertEqual(shop.ratings[0].url, shop.squireDiscoverURL)
+        XCTAssertEqual(shop.ratings[0].url, ShopInfo.squireDiscoverURL(shopSlug: "izzy-clipz-oceanside"))
         XCTAssertEqual(shop.ratings[1].url, shop.googleMapsURL)
     }
 
     func testSquireDiscoverPage() {
         XCTAssertEqual(
-            shop.squireDiscoverURL.absoluteString,
+            ShopInfo.squireDiscoverURL(shopSlug: "izzy-clipz-oceanside").absoluteString,
             "https://getsquire.com/discover/barbershop/izzy-clipz-oceanside"
         )
     }

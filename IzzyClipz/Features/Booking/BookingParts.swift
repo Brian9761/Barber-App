@@ -1,24 +1,22 @@
 import SwiftUI
 
-// Pieces the four booking steps and the "Did you book it?" sheet share: the step indicator in the
-// navigation bar, the step title, the mono section labels and the bone ticket.
+// Pieces the booking steps share: the step header ("Step 2 of 5" over a thin bar, then the
+// step's question), the navigation bar with "Start over", section labels and summary rows.
 
 // MARK: - Step chrome
 
 extension View {
-    /// A booking step's navigation bar: "STEP 3 / 4 · TIME" over the pole progress bar where the
-    /// title would be, and on steps 2–4 an ✕ that goes back to step 1. The bar stays native, so
-    /// the back button and swipe-back work as everywhere else; `title` is what the next step's back
-    /// button and VoiceOver's screen change use.
-    func bookingStepChrome(step: Int, name: String, title: String) -> some View {
-        modifier(BookingStepChrome(step: step, name: name, title: title))
+    /// A booking step's navigation bar: its short name as the title (what the next step's back
+    /// button and VoiceOver's screen change use), and on steps 2–5 a "Start over" button that goes
+    /// back to step 1. The bar stays native, so the back button and swipe-back work as everywhere.
+    func bookingStepChrome(title: String, showsStartOver: Bool = true) -> some View {
+        modifier(BookingStepChrome(title: title, showsStartOver: showsStartOver))
     }
 }
 
 private struct BookingStepChrome: ViewModifier {
-    let step: Int
-    let name: String
     let title: String
+    let showsStartOver: Bool
 
     @Environment(AppRouter.self) private var router
 
@@ -27,19 +25,11 @@ private struct BookingStepChrome: ViewModifier {
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .principal) {
-                    BookingStepIndicator(step: step, name: name)
-                }
-                if step > 1 {
+                if showsStartOver {
                     ToolbarItem(placement: .topBarTrailing) {
-                        // A plain symbol: on iOS 26 the bar draws its own glass circle around it.
-                        Button {
-                            router.bookingPath = []
-                        } label: {
-                            Image(systemName: Symbol.close)
-                                .fontWeight(.semibold)
+                        Button("Start over") {
+                            router.finishBooking()
                         }
-                        .accessibilityLabel("Start over")
                         .accessibilityHint("Goes back to picking a service")
                         .accessibilityIdentifier("bookingStartOver")
                     }
@@ -48,55 +38,26 @@ private struct BookingStepChrome: ViewModifier {
     }
 }
 
-/// "STEP 3 / 4 · TIME" over the pole progress bar (finished steps striped, the current one spins
-/// once as it arrives). It lives in the navigation bar, which has a fixed height, so it stops
-/// growing at xLarge; `BookingStepTitle` repeats the tag in the content at accessibility sizes.
-struct BookingStepIndicator: View {
-    static let totalSteps = 4
-
+/// The top of a booking step: "Step 2 of 5" and a thin bar showing how far along it is, the step's
+/// question in a title, and a line under it.
+struct BookingStepHeader: View {
     let step: Int
-    /// The step's short name: "Service", "Barber", "Time", "Review".
-    let name: String
-
-    var body: some View {
-        VStack(spacing: 5) {
-            Text(Self.tag(step: step, name: name))
-                .textRole(.label)
-                .foregroundStyle(Theme.smoke)
-                .lineLimit(1)
-                .fixedSize()
-            StepProgressBar(step: step, total: Self.totalSteps)
-        }
-        .dynamicTypeSize(...DynamicTypeSize.xLarge)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Step \(step) of \(Self.totalSteps): \(name)")
-    }
-
-    /// "Step 3 / 4 · Time" (set in capitals).
-    static func tag(step: Int, name: String) -> String {
-        "Step \(step) / \(totalSteps) · \(name)"
-    }
-}
-
-// MARK: - Titles and labels
-
-/// A step's title in Display L ("PICK A TIME"), with an optional line under it.
-struct BookingStepTitle: View {
-    let step: Int
-    let name: String
     let title: String
     var subtitle: String?
 
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            if dynamicTypeSize.isAccessibilitySize {
-                // The navigation bar's tag stops at xLarge; here it grows with the text.
-                // VoiceOver already heard it from the bar.
-                Kicker(BookingStepIndicator.tag(step: step, name: name))
-                    .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Theme.Space.xs) {
+                Text("Step \(step) of \(BookingStep.count)")
+                    .textRole(.label)
+                    .foregroundStyle(Theme.smoke)
+                StepProgressBar(step: step, total: BookingStep.count)
+                    .frame(maxWidth: 160)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Step \(step) of \(BookingStep.count)")
+            .accessibilityIdentifier("bookingStep")
+
             Text(title)
                 .textRole(.displayL)
                 .foregroundStyle(Theme.bone)
@@ -113,8 +74,7 @@ struct BookingStepTitle: View {
     }
 }
 
-/// A mono label over a group of rows, with a hairline running to the edge: "✂ HAIRCUTS ———".
-/// The hairline is decoration only.
+/// A label over a group of rows, "Haircuts", with its symbol.
 struct BookingSectionLabel: View {
     let title: String
     var symbol: String?
@@ -123,20 +83,13 @@ struct BookingSectionLabel: View {
         HStack(spacing: Theme.Space.s) {
             if let symbol {
                 Image(systemName: symbol)
-                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(Theme.smoke)
                     .accessibilityHidden(true)
             }
             Text(title)
-                .textRole(.label)
+                .textRole(.headline)
                 .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
-                .layoutPriority(1)
-            Rectangle()
-                .fill(Theme.line)
-                .frame(minWidth: 12, maxWidth: .infinity)
-                .frame(height: 1)
-                .accessibilityHidden(true)
         }
         .padding(.top, Theme.Space.xs)
         .accessibilityElement(children: .combine)
@@ -144,168 +97,87 @@ struct BookingSectionLabel: View {
     }
 }
 
-// MARK: - Ticket
+// MARK: - Summary
 
-/// A booking on a bone ticket: the day and the time on two lines in Display M, "Haircut with
-/// Carlos" under them, and a stub with the price and length behind a perforated rule with two
-/// notches. At accessibility sizes the stub moves under the date. VoiceOver reads it as one line.
-///
-/// It never shows the time in red (red is for actions) and claims no more than the app knows: the
-/// tag is "Your pick" before Squire, "Saved on this iPhone" after.
-struct BookingTicket: View {
-    /// A short mono tag above the date, e.g. "Your pick".
-    var kicker: String?
-    let start: Date
-    let serviceName: String
-    /// "with Carlos", or "with whoever's free first".
-    let withBarber: String
-    let priceLabel: String
-    let durationMinutes: Int
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// Wide enough for "$55–$60" or "From $80" on two lines.
-    @ScaledMetric(relativeTo: .title2) private var stubWidth: CGFloat = 104
-    private let calendar = AppData.bookingCalendar
-
-    /// The perforation's notches.
-    private static let notchDiameter: CGFloat = 18
+/// A label and a value on one line ("Barber  Carlos"), or stacked when they don't fit, with an
+/// optional "Change" button.
+struct SummaryRow: View {
+    let label: String
+    let value: String
+    var detail: String?
+    var changeLabel: String?
+    var onChange: (() -> Void)?
+    var identifier: String?
 
     var body: some View {
-        let isStacked = dynamicTypeSize.isAccessibilitySize
-        let layout = isStacked
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 0))
-        layout {
-            details
-            stub(isStacked: isStacked)
-                .overlay(alignment: isStacked ? .top : .leading) {
-                    perforation(isStacked: isStacked)
-                }
-        }
-        // Equal-height columns, so the stub (and its rule) runs the ticket's full height.
-        .fixedSize(horizontal: false, vertical: true)
-        .foregroundStyle(Theme.ink)
-        .environment(\.surfaceTone, .bone)
-        .background(Theme.bone, in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
-        // The notches cut through the bone (`destinationOut`) within this group only.
-        .compositingGroup()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var details: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            if let kicker {
-                Kicker(kicker)
-            }
-            // The day over the time, never on one line: "WED, NOV 25 · 12:30 PM" overflows.
-            VStack(alignment: .leading, spacing: 0) {
-                Text(dayLine)
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(label)
+                    .textRole(.label)
+                    .foregroundStyle(Theme.smoke)
+                Text(value)
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
-                Text(calendar.timeLabel(for: start))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                if let detail {
+                    Text(detail)
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            .textRole(.displayM)
-            Text("\(serviceName) \(withBarber)")
-                .textRole(.callout)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    @ViewBuilder private func stub(isStacked: Bool) -> some View {
-        let content = VStack(alignment: isStacked ? .leading : .center, spacing: Theme.Space.xxs) {
-            Text(priceLabel)
-                .textRole(.priceL)
-                .lineLimit(2)
-                .minimumScaleFactor(0.5)
-                .multilineTextAlignment(isStacked ? .leading : .center)
-            Text(DurationText.short(minutes: durationMinutes))
-                .textRole(.detail)
-                .foregroundStyle(Theme.smokeDark)
-                .multilineTextAlignment(isStacked ? .leading : .center)
-        }
-        .padding(isStacked ? 18 : 12)
-        if isStacked {
-            content
-                .frame(maxWidth: .infinity, alignment: .leading)
-        } else {
-            content
-                .frame(width: stubWidth)
-                .frame(maxHeight: .infinity)
-        }
-    }
-
-    /// The dashed rule between the ticket and its stub, with a notch where it meets each edge.
-    @ViewBuilder private func perforation(isStacked: Bool) -> some View {
-        let d = Self.notchDiameter
-        let dash = StrokeStyle(lineWidth: 2, dash: [5, 4])
-        if isStacked {
-            HStack(spacing: 0) {
-                notch.offset(x: -d / 2)
-                TicketRule(isVertical: false)
-                    .stroke(Theme.ink.opacity(0.25), style: dash)
-                    .frame(height: 2)
-                    .padding(.horizontal, 4)
-                notch.offset(x: d / 2)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            if let onChange {
+                Button(changeLabel ?? "Change", action: onChange)
+                    .buttonStyle(.textLink(color: Theme.electric))
+                    .accessibilityLabel("\(changeLabel ?? "Change") \(label.lowercased())")
+                    .accessibilityIdentifier(identifier.map { "change-\($0)" } ?? "change")
             }
-            .frame(height: d)
-            .offset(y: -d / 2)
-        } else {
-            VStack(spacing: 0) {
-                notch.offset(y: -d / 2)
-                TicketRule(isVertical: true)
-                    .stroke(Theme.ink.opacity(0.25), style: dash)
-                    .frame(width: 2)
-                    .padding(.vertical, 4)
-                notch.offset(y: d / 2)
-            }
-            .frame(width: d)
-            .offset(x: -d / 2)
         }
-    }
-
-    private var notch: some View {
-        Circle()
-            .frame(width: Self.notchDiameter, height: Self.notchDiameter)
-            .blendMode(.destinationOut)
-    }
-
-    /// "Thu, Oct 30", with "Oct 30" held together so a long date breaks after the comma.
-    private var dayLine: String {
-        calendar.shortLabel(for: calendar.day(containing: start))
-            .replacingOccurrences(of: " ", with: "\u{00A0}")
-            .replacingOccurrences(of: ",\u{00A0}", with: ", ")
-    }
-
-    private var accessibilityText: String {
-        [
-            kicker,
-            "\(serviceName) \(withBarber)",
-            calendar.dateTimeLabel(for: start),
-            priceLabel.spokenRanges,
-            DurationText.spoken(minutes: durationMinutes),
-        ]
-        .compactMap { $0 }
-        .joined(separator: ", ")
+        .padding(.vertical, Theme.Space.xs)
     }
 }
 
-/// A straight line down the middle of its frame, for the ticket's dashed rule.
-private struct TicketRule: Shape {
-    let isVertical: Bool
+/// A hairline between summary rows. Decoration only.
+struct SummaryDivider: View {
+    var body: some View {
+        Rectangle()
+            .fill(Theme.line)
+            .frame(height: 1)
+            .accessibilityHidden(true)
+    }
+}
 
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        if isVertical {
-            path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
-        } else {
-            path.move(to: CGPoint(x: rect.minX, y: rect.midY))
-            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+// MARK: - Wording
+
+/// Wording the booking screens share.
+enum BookingFlowCopy {
+    /// "with Carlos", or "with any barber".
+    static func withBarber(_ choice: BookingChoice) -> String {
+        choice.barberID == nil ? "with any barber" : "with \(choice.barberName)"
+    }
+
+    /// "Flowxbori, Cristian or Julian".
+    static func list(_ names: [String], conjunction: String = "or") -> String {
+        switch names.count {
+        case 0: return ""
+        case 1: return names[0]
+        default: return names.dropLast().joined(separator: ", ") + " \(conjunction) " + (names.last ?? "")
         }
-        return path
+    }
+
+    /// "Times are in Oceanside time (Pacific).", but only when this iPhone is set to another time
+    /// zone, where shop times could pass for local ones.
+    static func timeZoneNote(at date: Date, deviceTimeZone: TimeZone = .current) -> String? {
+        let shopOffset = AppData.shop.timeZone.secondsFromGMT(for: date)
+        guard deviceTimeZone.secondsFromGMT(for: date) != shopOffset else { return nil }
+        return "Times are in Oceanside time (Pacific), where the shop is."
+    }
+
+    /// "Pay at the shop with a credit card or gift card."
+    static var payAtShop: String {
+        let methods = AppData.shop.paymentMethods.map { $0.lowercased() }
+        return "Pay at the shop with a \(list(methods))."
     }
 }

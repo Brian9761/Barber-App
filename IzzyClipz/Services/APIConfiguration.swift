@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// Where the shop's server is, and which `ShopAPI` the app talks to.
 enum APIConfiguration {
@@ -59,5 +60,17 @@ extension Error {
 
     var isCancellation: Bool {
         self is CancellationError || (self as? URLError)?.code == .cancelled
+    }
+}
+
+private struct ShopAPIKey: EnvironmentKey {
+    static let defaultValue: any ShopAPI = UnconfiguredShopAPI()
+}
+
+extension EnvironmentValues {
+    /// The shop's server, for views that make their own requests (the booking steps).
+    var shopAPI: any ShopAPI {
+        get { self[ShopAPIKey.self] }
+        set { self[ShopAPIKey.self] = newValue }
     }
 }

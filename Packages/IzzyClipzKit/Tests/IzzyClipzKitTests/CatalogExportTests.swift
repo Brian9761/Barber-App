@@ -37,7 +37,7 @@ final class CatalogExportTests: XCTestCase {
             schedule: WeeklySchedule([
                 .tuesday: OpeningHours(opens: TimeOfDay(hour: 9, minute: 30), closes: TimeOfDay(hour: 17, minute: 5)),
             ]),
-            instagramHandle: shop.instagramHandle, websiteURL: shop.websiteURL, booking: shop.booking,
+            instagramHandle: shop.instagramHandle, websiteURL: shop.websiteURL,
             paymentMethods: shop.paymentMethods, highlights: shop.highlights, accessibility: shop.accessibility,
             ratings: shop.ratings, reviews: shop.reviews, googlePlaceID: shop.googlePlaceID
         )

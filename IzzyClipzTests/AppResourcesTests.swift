@@ -71,15 +71,23 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertNotNil(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
     }
 
-    func testBookingLinksAreWebLinks() {
-        // The in-app browser only accepts http(s) URLs.
-        XCTAssertEqual(AppData.bookingURL(for: .anything).scheme, "https")
-        for offering in AppData.catalog.offerings {
-            XCTAssertEqual(AppData.bookingURL(for: .offering(offering)).scheme, "https", offering.id)
-        }
-        for barber in AppData.catalog.barbers {
-            XCTAssertEqual(AppData.bookingURL(for: .barber(barber.id)).scheme, "https", barber.id)
-        }
+    func testServerAddress() throws {
+        let info = try XCTUnwrap(Bundle.main.infoDictionary)
+        let value = try XCTUnwrap(info[APIConfiguration.baseURLKey] as? String, "Info.plist has no IzzyAPIBaseURL")
+        XCTAssertEqual(APIConfiguration.baseURL(from: value)?.scheme, "https")
+        XCTAssertNotNil(APIConfiguration.baseURL)
+    }
+
+    /// Only https (and http to this machine, for a local server) is used.
+    func testServerAddressMustBeSecure() {
+        XCTAssertEqual(APIConfiguration.baseURL(from: "https://izzy-clipz-api.vercel.app")?.host, "izzy-clipz-api.vercel.app")
+        XCTAssertEqual(APIConfiguration.baseURL(from: " https://example.com/api ")?.path, "/api")
+        XCTAssertNotNil(APIConfiguration.baseURL(from: "http://localhost:3000"))
+        XCTAssertNil(APIConfiguration.baseURL(from: "http://izzy-clipz-api.vercel.app"))
+        XCTAssertNil(APIConfiguration.baseURL(from: "ftp://example.com"))
+        XCTAssertNil(APIConfiguration.baseURL(from: ""))
+        XCTAssertNil(APIConfiguration.baseURL(from: nil))
+        XCTAssertNil(APIConfiguration.baseURL(from: 42))
     }
 
     func testContactLinks() {
@@ -112,35 +120,20 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(izzy?.instagramURL?.absoluteString, "https://www.instagram.com/izzy_clipz_/")
     }
 
-    func testCalendarNotesMentionTheBooking() {
-        let appointment = Appointment(
-            serviceID: "haircut",
-            serviceName: "Haircut",
-            barberID: "carlos-rafael",
-            barberName: "Carlos",
-            start: Date(timeIntervalSince1970: 1_793_395_800),
-            durationMinutes: 45,
-            priceLabel: "$45"
-        )
-        let notes = CalendarEventEditor.notes(for: appointment)
-        XCTAssertTrue(notes.contains("Haircut with Carlos"), notes)
-        XCTAssertTrue(notes.contains("$45 · 45 min"), notes)
-        XCTAssertTrue(notes.contains(AppData.shop.phone.display), notes)
+    func testCalendarEventsSayWhatAndHowToChangeIt() {
+        let event = SavedAppointment(snapshot: TestData.appointment(), origin: .app, remind: true).calendarEvent
+        XCTAssertEqual(event.title, "Haircut at Izzy Clipz")
+        XCTAssertEqual(event.start, TestData.friday)
+        XCTAssertEqual(event.end, TestData.friday.addingTimeInterval(45 * 60))
+        XCTAssertTrue(event.notes.contains("Haircut with Carlos"), event.notes)
+        XCTAssertTrue(event.notes.contains("$45 · 45 min · Pay at the shop"), event.notes)
+        XCTAssertTrue(event.notes.contains(AppData.shop.phone.display), event.notes)
     }
 
-    func testCalendarNotesForFirstAvailableReadNaturally() {
-        let appointment = Appointment(
-            serviceID: "haircut",
-            serviceName: "Haircut",
-            barberID: nil,
-            barberName: "First available",
-            start: Date(timeIntervalSince1970: 1_793_395_800),
-            durationMinutes: 45,
-            priceLabel: "$45"
-        )
-        let notes = CalendarEventEditor.notes(for: appointment)
-        XCTAssertTrue(notes.contains("Haircut with the first available barber"), notes)
-        XCTAssertFalse(notes.contains("with First available"), notes)
+    func testCalendarEventsForASquireBookingWithoutABarberReadNaturally() {
+        let old = Appointment(serviceID: "haircut", serviceName: "Haircut", barberID: nil, start: TestData.friday, durationMinutes: 45, priceLabel: "$35")
+        let event = SavedAppointment(squire: old, remind: false).calendarEvent
+        XCTAssertTrue(event.notes.contains("Haircut with the first available barber"), event.notes)
     }
 
     func testZoomFitsPhotosInsideTheScreen() {

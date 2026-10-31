@@ -121,7 +121,7 @@ struct ServiceDetailView: View {
 
     /// What happens next, after "Only Izzy offers VIP." when one barber does it all (as on step 2).
     private func bookingNote(_ offerings: [Offering]) -> String {
-        let next = "Next, you'll pick a day and time. Squire confirms the real opening."
+        let next = "Next, you'll pick a day and time from the shop's live calendar. No payment needed to book."
         let barberIDs = Set(offerings.map(\.barberID))
         guard barberIDs.count == 1, let id = barberIDs.first, let barber = catalog.barber(withID: id) else {
             return next
@@ -131,12 +131,12 @@ struct ServiceDetailView: View {
 
     private func firstAvailableButton(_ option: FirstAvailableOption) -> some View {
         Button {
-            router.startBooking(choice: .firstAvailable(option))
+            router.startBooking(choice: .anyBarber(option))
         } label: {
-            BookWithRow(name: "First available", isFavorite: false, price: option.priceLabel, duration: option.durationLabel) {
+            BookWithRow(name: "Any barber", isFavorite: false, price: option.priceLabel, duration: option.durationLabel) {
                 FirstAvailableMonograms(barberIDs: option.barberIDs)
             } detail: {
-                Text("Squire picks whoever's free")
+                Text("Whoever is free first")
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)

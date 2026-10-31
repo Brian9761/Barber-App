@@ -61,8 +61,7 @@ struct ServiceRow: View {
     }
 }
 
-/// "First available": book with whichever barber is free first. Squire picks; the app doesn't
-/// know who's free.
+/// "Any barber": book with whichever barber is free first. The shop's calendar picks one.
 struct FirstAvailableRow: View {
     let option: FirstAvailableOption
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -71,10 +70,10 @@ struct FirstAvailableRow: View {
         HStack(spacing: 14) {
             monograms
             VStack(alignment: .leading, spacing: 3) {
-                Text("First available")
+                Text("Any barber")
                     .textRole(.displayS)
                     .foregroundStyle(Theme.bone)
-                Text("Squire picks whoever's free")
+                Text("Whoever is free first")
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                 Text(option.durationLabel)
@@ -115,7 +114,7 @@ struct FirstAvailableRow: View {
     }
 
     static func accessibilityText(for option: FirstAvailableOption) -> String {
-        "First available barber, any of \(option.barberIDs.count), \(option.priceLabel), \(option.durationLabel)"
+        "Any barber, any of \(option.barberIDs.count), \(option.priceLabel), \(option.durationLabel)"
             .spokenRanges
     }
 }

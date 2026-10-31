@@ -1,20 +1,17 @@
 import SwiftUI
 
-/// One month of the booking calendar on an `ink2` card with a hairline: "OCTOBER 2026" with
-/// previous and next buttons, the weekday initials, and a Sunday-first grid of days.
+/// One month of the booking calendar on an `ink2` card: the month with previous and next buttons,
+/// the weekday initials, and a Sunday-first grid of days.
 ///
-/// Only days that can be booked are tappable; the rest are bone at 40% (still findable). Today has
-/// a bone ring. The selected day is a bone disc with ink, bold digits, never red (red is for the
-/// Continue button). There are no "has openings" dots: the app knows the shop's hours, not the
-/// barbers' calendars.
+/// Days come from the shop's live calendar: a day with open times is bone with a dot under it and
+/// can be picked; days without openings, closed days, past days and days not checked yet are bone
+/// at 40% and can't be. Today has a ring. The picked day is a bone disc with ink digits, never
+/// red (red is for the Continue button).
 struct CalendarMonthView: View {
     let page: MonthPage
-    let calendar: BookingCalendar
-    /// The appointment's length, which decides whether a day still has room.
-    let durationMinutes: Int
-    let now: Date
     let today: CalendarDay
     let selectedDay: CalendarDay?
+    let status: (CalendarDay) -> AvailabilityLoader.DayStatus
     let canShowPrevious: Bool
     let canShowNext: Bool
     let onPrevious: () -> Void
@@ -29,13 +26,7 @@ struct CalendarMonthView: View {
         VStack(spacing: Theme.Space.xxs) {
             header
             weekdayRow
-            // A new identity per month, so changing months cross-fades the
-            // whole grid in place instead of shuffling cells.
-            ZStack {
-                dayGrid
-                    .id(page.id)
-                    .transition(AnyTransition.opacity)
-            }
+            dayGrid
         }
         .padding(6)
         .background(Theme.ink2, in: shape)
@@ -44,10 +35,10 @@ struct CalendarMonthView: View {
 
     private var header: some View {
         HStack(spacing: 0) {
-            title
-                .textRole(.displayM)
+            Text(page.title)
+                .textRole(.displayS)
+                .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
-                .accessibilityLabel(page.title)
                 .accessibilityAddTraits(.isHeader)
                 .accessibilityIdentifier("calendarMonthTitle")
             Spacer(minLength: Theme.Space.s)
@@ -67,17 +58,6 @@ struct CalendarMonthView: View {
             )
         }
         .padding(.leading, 10)
-    }
-
-    /// "OCTOBER" in bone and "2026" in smoke.
-    private var title: Text {
-        let year = String(page.year)
-        let suffix = " \(year)"
-        guard page.title.hasSuffix(suffix) else {
-            return Text(page.title).foregroundStyle(Theme.bone)
-        }
-        let month = String(page.title.dropLast(suffix.count))
-        return Text("\(Text(month).foregroundStyle(Theme.bone)) \(Text(year).foregroundStyle(Theme.smoke))")
     }
 
     private var weekdayRow: some View {
@@ -106,38 +86,34 @@ struct CalendarMonthView: View {
     }
 
     private func cell(for day: CalendarDay) -> CalendarMonthDayCell {
-        let availability = calendar.availability(of: day, durationMinutes: durationMinutes, now: now)
+        let dayStatus = status(day)
         let isToday = day == today
         return CalendarMonthDayCell(
             day: day,
-            isBookable: availability.isBookable,
+            isBookable: dayStatus.isBookable,
             isToday: isToday,
             isSelected: day == selectedDay,
-            accessibilityText: Self.accessibilityText(for: day, availability: availability, isToday: isToday, calendar: calendar),
+            accessibilityText: Self.accessibilityText(for: day, status: dayStatus, isToday: isToday),
             action: { onSelect(day) }
         )
     }
 
-    /// "Thursday, October 30, today, available".
-    static func accessibilityText(
-        for day: CalendarDay,
-        availability: DayAvailability,
-        isToday: Bool,
-        calendar: BookingCalendar
-    ) -> String {
-        var parts = [calendar.longLabel(for: day)]
+    /// "Thursday, October 30, today, open times".
+    static func accessibilityText(for day: CalendarDay, status: AvailabilityLoader.DayStatus, isToday: Bool) -> String {
+        var parts = [AppData.bookingCalendar.longLabel(for: day)]
         if isToday { parts.append("today") }
-        parts.append(statusText(for: availability))
+        parts.append(statusText(for: status))
         return parts.joined(separator: ", ")
     }
 
-    static func statusText(for availability: DayAvailability) -> String {
-        switch availability {
-        case .open: return "available"
+    static func statusText(for status: AvailabilityLoader.DayStatus) -> String {
+        switch status {
+        case .open(let slots): return slots.count == 1 ? "1 open time" : "\(slots.count) open times"
+        case .noOpenings: return "no openings"
         case .closed: return "closed"
         case .past: return "past"
-        case .noTimesLeft: return "no times left"
-        case .outsideWindow: return "not open for booking yet"
+        case .tooFar: return "not open for booking yet"
+        case .notLoaded: return "checking"
         }
     }
 }
@@ -176,17 +152,24 @@ private struct CalendarMonthDayCell: View {
 
     var body: some View {
         Button(action: action) {
-            Text(verbatim: String(day.day))
-                .font(font)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-                .foregroundStyle(textColor)
-                .padding(.vertical, Theme.Space.xxs)
-                .frame(maxWidth: .infinity, minHeight: Theme.minimumTapSize)
-                // A circle inscribed in the cell, about 40 pt at the default size.
-                .background { selectionDisc }
-                .overlay { todayRing }
-                .contentShape(Rectangle())
+            VStack(spacing: 2) {
+                Text(verbatim: String(day.day))
+                    .font(font)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(textColor)
+                // Says "this day has times", with more than color alone.
+                Circle()
+                    .fill(isSelected ? Theme.ink : Theme.electric)
+                    .frame(width: 4, height: 4)
+                    .opacity(isBookable ? 1 : 0)
+            }
+            .padding(.vertical, Theme.Space.xxs)
+            .frame(maxWidth: .infinity, minHeight: Theme.minimumTapSize)
+            // A circle inscribed in the cell, about 40 pt at the default size.
+            .background { selectionDisc }
+            .overlay { todayRing }
+            .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
         .disabled(!isBookable)
@@ -213,7 +196,6 @@ private struct CalendarMonthDayCell: View {
             Circle()
                 .fill(Theme.bone)
                 .padding(2)
-                .transition(AnyTransition.opacity)
         }
     }
 
