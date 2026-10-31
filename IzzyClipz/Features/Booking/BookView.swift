@@ -37,10 +37,12 @@ struct BookView: View {
                 }
             }
             .screenBackground()
+            .reservesTabBarSpace()
             .bookingStepChrome(step: 1, name: "Service", title: "Book")
             .navigationDestination(for: BookingStep.self) { step in
                 BookStepDestination(step: step)
                     .barberPolePushRide()
+                    .reservesTabBarSpace()
             }
         }
     }

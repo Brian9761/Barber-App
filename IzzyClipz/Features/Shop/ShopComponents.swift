@@ -65,10 +65,9 @@ private struct ShopStepButtonStyle: ButtonStyle {
 
 // MARK: - Bag in the navigation bar
 
-/// The bag in a navigation bar: a bone bag glyph and how many items it holds. No circle (on iOS 26
-/// the bar draws its own glass) and no red (the red count badge is on the Shop's own header button;
-/// this one shows on the product page, and on the Shop once that header has scrolled away). The
-/// count bumps when something goes in, except with Reduce Motion.
+/// The bag in a navigation bar, on the Shop and on product pages: a bone bag glyph and, once
+/// something's in it, the count on a red capsule (the Shop's one red). No circle (on iOS 26 the bar
+/// draws its own glass). The count bumps when something goes in, except with Reduce Motion.
 struct ShopToolbarBagButton: View {
     let identifier: String
 
@@ -86,9 +85,13 @@ struct ShopToolbarBagButton: View {
                     .font(.system(size: 17, weight: .semibold))
                 if !bag.isEmpty {
                     Text(ShopBagFeedback.badgeText(bag.count))
-                        .font(BrandFont.monoBold.font(size: 14, relativeTo: .body))
+                        .font(BrandFont.monoBold.font(size: 13, relativeTo: .body))
                         .monospacedDigit()
                         .lineLimit(1)
+                        .foregroundStyle(Color.white)
+                        .padding(.horizontal, 6)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(Theme.dripRed, in: Capsule())
                 }
             }
             .foregroundStyle(Theme.bone)
@@ -111,32 +114,6 @@ struct ShopToolbarBagButton: View {
             if new > old, !reduceMotion {
                 bumps += 1
             }
-        }
-    }
-}
-
-// MARK: - Scrolling under the navigation bar
-
-extension View {
-    /// Keeps `barBottom` at the bottom edge of the navigation bar above this scroll view, in global
-    /// coordinates: where its content starts disappearing under the bar. Changes only when the bar or
-    /// the screen does (a rotation, a bigger text size), never while scrolling.
-    func shopMeasuresBarBottom(_ barBottom: Binding<CGFloat>) -> some View {
-        onGeometryChange(for: CGFloat.self) { proxy in
-            // Whether the scroll view sits under the bar (its safe area holds the bar) or below it.
-            (proxy.frame(in: .global).minY + proxy.safeAreaInsets.top).rounded()
-        } action: { bottom in
-            barBottom.wrappedValue = bottom
-        }
-    }
-
-    /// Sets `isUnderBar` while this view's bottom edge has scrolled up past `barBottom` (from
-    /// `shopMeasuresBarBottom`). Only the crossing is reported, not every scrolled point.
-    func shopScrolledUnderBar(barBottom: CGFloat, _ isUnderBar: Binding<Bool>) -> some View {
-        onGeometryChange(for: Bool.self) { proxy in
-            barBottom > 0 && proxy.frame(in: .global).maxY < barBottom
-        } action: { scrolledAway in
-            isUnderBar.wrappedValue = scrolledAway
         }
     }
 }

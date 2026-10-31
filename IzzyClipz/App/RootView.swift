@@ -23,7 +23,8 @@ struct RootView: View {
             tabRoot(tab)
                 // Bone, not red, for back buttons and plain buttons: red is each screen's main action.
                 .tint(Theme.bone)
-                .safeAreaPadding(.bottom, isKeyboardVisible ? 0 : StreetTabBar.contentReserve(for: tab, safeAreaBottom: bottomInset))
+                // Applied inside each tab's NavigationStack by `reservesTabBarSpace()`.
+                .environment(\.tabBarReserve, isKeyboardVisible ? 0 : StreetTabBar.contentReserve(for: tab, safeAreaBottom: bottomInset))
                 .environment(\.tabReselection, reselections[tab, default: 0])
         }
         .overlay(alignment: .bottom) {

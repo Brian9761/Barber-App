@@ -254,3 +254,37 @@ extension View {
         modifier(TabReselectModifier(action: action))
     }
 }
+
+// MARK: - Room for the floating bar
+
+private struct TabBarReserveKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// How much room the floating tab bar takes over the bottom of this tab's screens, beyond the
+    /// home indicator's inset. Zero in sheets and while the keyboard is up.
+    var tabBarReserve: CGFloat {
+        get { self[TabBarReserveKey.self] }
+        set { self[TabBarReserveKey.self] = newValue }
+    }
+}
+
+private struct TabBarSpaceModifier: ViewModifier {
+    @Environment(\.tabBarReserve) private var reserve
+
+    func body(content: Content) -> some View {
+        content.safeAreaPadding(.bottom, reserve)
+    }
+}
+
+extension View {
+    /// Keeps this screen's scrolling content and sticky bottom bars clear of the floating tab bar.
+    ///
+    /// Apply it to a tab's first screen and to every screen it pushes, inside the `NavigationStack`:
+    /// each pushed screen has its own safe area, so padding added outside the stack doesn't reach it
+    /// (on iOS 26, Continue and the other pinned bars ended up behind the tab bar).
+    func reservesTabBarSpace() -> some View {
+        modifier(TabBarSpaceModifier())
+    }
+}

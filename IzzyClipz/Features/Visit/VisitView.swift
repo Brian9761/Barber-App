@@ -17,11 +17,13 @@ struct VisitView: View {
     var body: some View {
         NavigationStack(path: $path) {
             VisitScreen(scrollToTop: scrollToTop)
+                .reservesTabBarSpace()
                 .navigationDestination(for: VisitRoute.self) { route in
                     switch route {
                     case .reviews:
                         ReviewsView()
                             .barberPolePushRide()
+                            .reservesTabBarSpace()
                     }
                 }
         }

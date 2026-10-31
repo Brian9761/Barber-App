@@ -15,10 +15,6 @@ struct ShopView: View {
     private let catalog = AppData.products
     /// Popped back to the shop when the Shop tab is tapped again.
     @State private var path = NavigationPath()
-    /// The navigation bar's bottom edge, in global coordinates.
-    @State private var barBottom: CGFloat = 0
-    /// Whether "THE SHOP" and its bag button have scrolled under the navigation bar.
-    @State private var headerIsUnderBar = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private static let topID = "shopTop"
@@ -39,7 +35,7 @@ struct ShopView: View {
             ScrollViewReader { scroller in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
-                        ShopHeader(barBottom: barBottom, isUnderBar: $headerIsUnderBar)
+                        ShopHeader()
                             .padding(.horizontal, Theme.gutter)
                             .padding(.top, Theme.Space.xs)
                             .id(Self.topID)
@@ -59,12 +55,13 @@ struct ShopView: View {
                     }
                     .padding(.bottom, Theme.Space.section)
                 }
-                .shopMeasuresBarBottom($barBottom)
                 .screenBackground()
-                .modifier(ShopRootBar(showsInBar: headerIsUnderBar))
+                .reservesTabBarSpace()
+                .modifier(ShopRootBar())
                 .navigationDestination(for: Product.self) { product in
                     ProductDetailView(product: product)
                         .barberPolePushRide()
+                        .reservesTabBarSpace()
                 }
                 .onTabReselect {
                     if path.isEmpty {
@@ -83,33 +80,27 @@ struct ShopView: View {
 /// The Shop's navigation bar: inline and empty while "THE SHOP" is on screen (so "Shop" never sits
 /// right above "THE SHOP"), then "Shop" and the bag once it has scrolled under. The bar stays native;
 /// "Shop" is also the back button's title on a product page.
+/// The Shop's navigation bar: no title (THE SHOP is the page's own title) and the bag button,
+/// always within reach. The bag's count is the Shop's one red, on the button.
+///
+/// The bag used to sit next to the page title and move into the bar once the title scrolled away,
+/// but that depended on measuring where the bar ends, which iOS 26 reports differently: the bar
+/// showed a second bag and a second title at rest.
 private struct ShopRootBar: ViewModifier {
-    let showsInBar: Bool
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     func body(content: Content) -> some View {
         content
+            // Names the bar for VoiceOver and the back button on product pages.
             .navigationTitle("Shop")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    // Set like the system's inline title (NavigationBarAppearance), which this replaces.
-                    Text("Shop")
-                        .font(BrandFont.condensedExtraBold.font(size: 19, relativeTo: .headline))
-                        .foregroundStyle(Theme.bone)
-                        .lineLimit(1)
-                        // The bar has a fixed height.
-                        .dynamicTypeSize(...DynamicTypeSize.xxLarge)
-                        .opacity(showsInBar ? 1 : 0)
-                        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: showsInBar)
-                        .accessibilityHidden(!showsInBar)
-                        .accessibilityAddTraits(.isHeader)
+                    // Hides the inline title, which would repeat THE SHOP right under it.
+                    Color.clear
+                        .frame(width: 1, height: 1)
+                        .accessibilityHidden(true)
                 }
-                if showsInBar {
-                    ToolbarItem(placement: .topBarTrailing) {
-                        ShopToolbarBagButton(identifier: "shopBarBagButton")
-                    }
+                ToolbarItem(placement: .topBarTrailing) {
+                    ShopToolbarBagButton(identifier: "shopBagButton")
                 }
             }
     }
@@ -117,20 +108,14 @@ private struct ShopRootBar: ViewModifier {
 
 // MARK: - Header
 
-/// "THE SHOP" with the bag button, and Bravo's logo with "PROUD BRAVO PARTNER" under it.
+/// "THE SHOP", and Bravo's logo with "PROUD BRAVO PARTNER" under it.
 private struct ShopHeader: View {
-    let barBottom: CGFloat
-    @Binding var isUnderBar: Bool
 
     private let sponsor = AppData.products.sponsor
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            ScreenHeader(title: "The shop") {
-                ShopBagButton()
-                    .padding(.top, Theme.Space.s)
-            }
-            .shopScrolledUnderBar(barBottom: barBottom, $isUnderBar)
+            ScreenHeader(title: "The shop")
             partnerLine
         }
     }
@@ -154,61 +139,6 @@ private struct ShopHeader: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Proud \(sponsor.name) partner")
-    }
-}
-
-/// The 44 pt bag button with the count on a red badge: the Shop's one red. The badge bumps when
-/// something goes in the bag (not with Reduce Motion). Opens the bag sheet.
-private struct ShopBagButton: View {
-    @Environment(BagStore.self) private var bag
-    @Environment(AppRouter.self) private var router
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var bumps = 0
-
-    var body: some View {
-        Button {
-            router.openBag()
-        } label: {
-            Image(systemName: Symbol.shop)
-        }
-        .buttonStyle(.icon)
-        .accessibilityLabel("Bag")
-        .accessibilityValue(bag.isEmpty ? "Empty" : ShopBagFeedback.itemCount(bag.count))
-        .accessibilityHint("Shows what's in your bag")
-        .accessibilityIdentifier("shopBagButton")
-        .overlay(alignment: .topTrailing) {
-            if !bag.isEmpty {
-                badge
-                    .keyframeAnimator(initialValue: 1.0, trigger: bumps) { content, scale in
-                        content.scaleEffect(scale)
-                    } keyframes: { _ in
-                        CubicKeyframe(1.25, duration: 0.12)
-                        SpringKeyframe(1.0, duration: 0.3, spring: .bouncy)
-                    }
-                    .offset(x: 5, y: -5)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-            }
-        }
-        .onChange(of: bag.count) { old, new in
-            if new > old, !reduceMotion {
-                bumps += 1
-            }
-        }
-    }
-
-    private var badge: some View {
-        Text(ShopBagFeedback.badgeText(bag.count))
-            .font(BrandFont.monoBold.font(size: 11, relativeTo: .caption2))
-            .monospacedDigit()
-            .foregroundStyle(Color.white)
-            .lineLimit(1)
-            .padding(.horizontal, 5)
-            .frame(minWidth: 21, minHeight: 21)
-            .background(Theme.dripRed, in: Capsule())
-            // An ink ring keeps the badge's edge clear of the button under it.
-            .overlay(Capsule().strokeBorder(Theme.ink, lineWidth: 2))
-            .dynamicTypeSize(...DynamicTypeSize.xxLarge)
     }
 }
 

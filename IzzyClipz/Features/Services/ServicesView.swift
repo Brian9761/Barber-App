@@ -17,6 +17,7 @@ struct ServicesView: View {
         let results = catalog.search(query)
         NavigationStack(path: $path) {
             ServicesMenu(results: results, isSearching: isSearching, scrollToTop: scrollToTop)
+                .reservesTabBarSpace()
                 .overlay {
                     if results.isEmpty {
                         noResults
@@ -33,8 +34,8 @@ struct ServicesView: View {
                 // field, which is where search belongs; it folds into the bar as the menu scrolls.
                 .navigationTitle("Services")
                 .navigationBarTitleDisplayMode(.large)
-                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide() }
-                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide() }
+                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide().reservesTabBarSpace() }
+                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide().reservesTabBarSpace() }
         }
         .onTabReselect {
             if path.isEmpty {

@@ -431,6 +431,7 @@ final class IzzyClipzUITests: XCTestCase {
         openTab("Services")
         tap("service-vip")
         XCTAssertTrue(element("bookServiceButton").waitForExistence(timeout: 10))
+        assertAboveTabBar("bookServiceButton")
         tapPinned("bookServiceButton")
         let izzy = element("choose-israel-flores/9a33be59-43eb-445c-9c18-6435125b1f75")
         XCTAssertTrue(izzy.waitForExistence(timeout: 10), "Book this didn't open step 2 for VIP")
@@ -442,6 +443,7 @@ final class IzzyClipzUITests: XCTestCase {
         openTeam()
         tap("barber-julian-ramos")
         XCTAssertTrue(element("bookBarberButton").waitForExistence(timeout: 10))
+        assertAboveTabBar("bookBarberButton")
         tapPinned("bookBarberButton")
 
         // Barber first: Julian's menu, then his haircut.
@@ -624,6 +626,7 @@ final class IzzyClipzUITests: XCTestCase {
         closeWebPage()
 
         // Two 4 oz gels go in the bag.
+        assertAboveTabBar("addToBagButton")
         tapPinned("addToBagButton")
         let bagButton = element("productBagButton")
         XCTAssertTrue(waitUntil(bagButton, toMatch: NSPredicate(format: "value == %@", "2 items")), "The bag didn't take two gels")
@@ -814,6 +817,7 @@ final class IzzyClipzUITests: XCTestCase {
     private func continueToReview(file: StaticString = #filePath, line: UInt = #line) {
         let next = element("continueToReview")
         let review = element("confirmOnSquireButton")
+        assertAboveTabBar("continueToReview", file: file, line: line)
         next.tap()
         if !review.waitForExistence(timeout: 10), next.exists {
             if !next.isEnabled {
@@ -988,6 +992,20 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(target.waitForExistence(timeout: 10), "Missing \(identifier)", file: file, line: line)
         XCTAssertTrue(waitUntil(target, toMatch: hittable()), "\(identifier) can't be tapped", file: file, line: line)
         target.tap()
+    }
+
+    /// Checks that a bar pinned to the bottom of a screen sits fully above the floating tab bar. On
+    /// iOS 26, pushed screens once drew Continue, Book this and Add to bag behind it.
+    private func assertAboveTabBar(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) {
+        let target = element(identifier)
+        let tabBar = app.buttons["tab.home"]
+        XCTAssertTrue(target.waitForExistence(timeout: 10), "Missing \(identifier)", file: file, line: line)
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 10), "Missing the tab bar", file: file, line: line)
+        XCTAssertLessThanOrEqual(
+            target.frame.maxY, tabBar.frame.minY,
+            "\(identifier) is behind the tab bar (\(target.frame) vs \(tabBar.frame))",
+            file: file, line: line
+        )
     }
 
     /// Taps a button in a sheet without dragging first: dragging a sheet can move or close it. XCUI
