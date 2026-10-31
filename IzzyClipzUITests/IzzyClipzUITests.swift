@@ -38,13 +38,14 @@ final class IzzyClipzUITests: XCTestCase {
         launch()
         let bar = app.tabBars.firstMatch
         XCTAssertTrue(bar.exists)
-        var previousMaxX = app.frame.minX
+        // Left to right. (iOS 26's floating bar lets neighbors' frames overlap, so compare centers.)
+        var previousMidX = app.frame.minX
         for name in Self.tabs {
             let button = tabButton(name)
             XCTAssertTrue(button.exists, "Missing the \(name) tab")
-            XCTAssertGreaterThanOrEqual(button.frame.minX, previousMaxX - 1, "\(name) is out of order")
+            XCTAssertGreaterThan(button.frame.midX, previousMidX, "\(name) is out of order")
             XCTAssertGreaterThanOrEqual(button.frame.height, 44, "\(name) is too short to tap")
-            previousMaxX = button.frame.maxX
+            previousMidX = button.frame.midX
         }
         assertSelectedTab("Home")
 
@@ -280,6 +281,9 @@ final class IzzyClipzUITests: XCTestCase {
         type("Sample Client", into: "nameField")
         type("4425550123", into: "phoneField")
         type("Low fade, please", into: "noteField")
+        tapPinned("hideKeyboard")
+        XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "Hide keyboard didn't put it away")
+        XCTAssertTrue(waitForDisappearance(of: element("hideKeyboard")), "The button stays only while typing")
         XCTAssertEqual(element("rememberDetailsToggle").value as? String, "1", "Remember me starts on")
         screenshot("14-Book-Details")
 
@@ -803,7 +807,17 @@ final class IzzyClipzUITests: XCTestCase {
             field.tap()
         }
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "No keyboard for \(identifier)", file: file, line: line)
+        dismissKeyboardTip()
         field.typeText(text)
+    }
+
+    /// The first time a keyboard shows, iOS 26 can put a "slide to type" tip in its place, over the
+    /// bottom of the screen. (CI also turns it off on the simulator.)
+    private func dismissKeyboardTip() {
+        let tipContinue = app.keyboards.buttons["Continue"]
+        if tipContinue.exists, tipContinue.isHittable {
+            tipContinue.tap()
+        }
     }
 
     // MARK: Web pages
@@ -980,14 +994,27 @@ final class IzzyClipzUITests: XCTestCase {
         let screen = app.frame
         guard !screen.isEmpty else { return true }
         let midY = target.frame.midY
-        return midY >= screen.minY + screen.height * 0.18 && midY <= screen.minY + screen.height * 0.75
+        // Clear of the sticky bar, which rides on top of the keyboard while one is up.
+        let bottom = min(0.75, pageBottom() - 0.12)
+        return midY >= screen.minY + screen.height * 0.18 && midY <= screen.minY + screen.height * bottom
+    }
+
+    /// Where the page ends, as a fraction of the screen's height: the keyboard's top while one is up.
+    private func pageBottom() -> CGFloat {
+        let keyboard = app.keyboards.firstMatch
+        let screen = app.frame
+        guard keyboard.exists, !screen.isEmpty, keyboard.frame.minY > screen.minY else { return 1 }
+        return max(0.45, (keyboard.frame.minY - screen.minY) / screen.height)
     }
 
     /// Drags the page about a third of the screen, holding still before letting go so it doesn't
-    /// keep scrolling. It starts at 0.7, above the sticky bars and the tab bar.
+    /// keep scrolling. It starts at 0.7, above the sticky bars and the tab bar, or higher, above
+    /// the keyboard and the bar on top of it, while a keyboard is up.
     private func drag(_ direction: DragDirection) {
-        let low = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.7))
-        let high = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        let lowY = min(0.7, pageBottom() - 0.15)
+        let highY = max(0.2, lowY - 0.35)
+        let low = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: lowY))
+        let high = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: highY))
         let (start, end) = direction == .up ? (low, high) : (high, low)
         start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.1)
     }

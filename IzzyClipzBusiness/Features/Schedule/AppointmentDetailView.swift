@@ -61,6 +61,7 @@ struct AppointmentDetailView: View {
                     LabeledContent("Note") {
                         Text(note).multilineTextAlignment(.trailing)
                     }
+                    .accessibilityIdentifier("detailNote")
                 }
             }
 
@@ -142,11 +143,13 @@ struct AppointmentDetailView: View {
         Section("Payment") {
             if appointment.payment.status == .paid {
                 LabeledContent("Paid", value: appointment.payment.amountCents.map(Money.amount) ?? "Yes")
+                    .accessibilityIdentifier("detailPayment")
                 if let paidAt = appointment.payment.paidAt {
                     LabeledContent("When", value: store.shopTime.dayAndTime(paidAt))
                 }
             } else {
                 LabeledContent("Not paid yet", value: appointment.priceLabel)
+                    .accessibilityIdentifier("detailPayment")
             }
             if appointment.status != .cancelled {
                 Button {

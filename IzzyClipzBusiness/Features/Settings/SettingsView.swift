@@ -58,6 +58,8 @@ struct SettingsView: View {
                 LabeledContent("Status") {
                     Label("Online", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
                 }
+                // One element, "Status, Online", not a separate one for the check mark.
+                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("serverStatus")
                 LabeledContent("Server version", value: health.version)
             } else if let error = workspace.healthError {

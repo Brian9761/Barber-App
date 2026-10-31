@@ -90,21 +90,38 @@ struct BookingDetailsView: View {
         .scrollDismissesKeyboard(.interactively)
         .screenBackground()
         .bookingStepChrome(title: "Your details")
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button("Done") { focus = nil }
-            }
-        }
         .stickyBottomBar {
-            Button(action: continueToReview) {
-                Text("Continue")
+            HStack(spacing: Theme.Space.s) {
+                Button(action: continueToReview) {
+                    Text("Continue")
+                }
+                .buttonStyle(.primary)
+                .accessibilityHint("Next, review and book")
+                .accessibilityIdentifier("continueToReview")
+                if focus != nil {
+                    hideKeyboardButton
+                }
             }
-            .buttonStyle(.primary)
-            .accessibilityHint("Next, review and book")
-            .accessibilityIdentifier("continueToReview")
         }
         .onAppear(perform: fillIn)
+    }
+
+    /// Puts the keyboard away: the number pad has no return key. It sits next to Continue rather
+    /// than in the keyboard's own toolbar, which iOS 26 floats over the Continue button.
+    private var hideKeyboardButton: some View {
+        Button {
+            focus = nil
+        } label: {
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Theme.bone)
+                .frame(width: 60, height: 60)
+                .background(Theme.ink3, in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous).strokeBorder(Theme.line))
+        }
+        .buttonStyle(.pressable)
+        .accessibilityLabel("Hide keyboard")
+        .accessibilityIdentifier("hideKeyboard")
     }
 
     private func field(

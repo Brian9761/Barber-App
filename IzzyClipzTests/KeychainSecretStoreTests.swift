@@ -6,9 +6,19 @@ import XCTest
 final class KeychainSecretStoreTests: XCTestCase {
     private var store: KeychainSecretStore!
 
-    override func setUp() {
-        super.setUp()
+    override func setUpWithError() throws {
+        try super.setUpWithError()
         store = KeychainSecretStore(service: "com.izzyclipz.app.tests-\(UUID().uuidString)")
+        // An unsigned simulator build (CI builds with CODE_SIGNING_ALLOWED=NO) may have no Keychain
+        // at all: reading fails too, not just saving. The app then keeps tokens for the launch and
+        // says so; there's nothing here to test.
+        do {
+            _ = try store.secret(for: "probe")
+            try store.setSecret("probe", for: "probe")
+            try store.removeSecret(for: "probe")
+        } catch let failure as KeychainSecretStore.Failure where failure.status == errSecMissingEntitlement {
+            throw XCTSkip("This build has no Keychain access (\(failure.status))")
+        }
     }
 
     override func tearDown() {
@@ -19,13 +29,7 @@ final class KeychainSecretStoreTests: XCTestCase {
 
     func testSavesReadsReplacesAndRemoves() throws {
         XCTAssertNil(try store.secret(for: "a"))
-        do {
-            try store.setSecret("first", for: "a")
-        } catch let failure as KeychainSecretStore.Failure where failure.status == errSecMissingEntitlement {
-            // An unsigned simulator build (CI builds with CODE_SIGNING_ALLOWED=NO) may have no
-            // Keychain at all; the app then keeps tokens for the launch and says so.
-            throw XCTSkip("This build has no Keychain access (\(failure.status))")
-        }
+        try store.setSecret("first", for: "a")
         XCTAssertEqual(try store.secret(for: "a"), "first")
         try store.setSecret("second", for: "a")
         XCTAssertEqual(try store.secret(for: "a"), "second", "Saving again replaces it")
@@ -39,11 +43,7 @@ final class KeychainSecretStoreTests: XCTestCase {
     }
 
     func testServicesAreSeparate() throws {
-        do {
-            try store.setSecret("mine", for: "a")
-        } catch let failure as KeychainSecretStore.Failure where failure.status == errSecMissingEntitlement {
-            throw XCTSkip("This build has no Keychain access (\(failure.status))")
-        }
+        try store.setSecret("mine", for: "a")
         let other = KeychainSecretStore(service: "com.izzyclipz.app.tests-other-\(UUID().uuidString)")
         XCTAssertNil(try other.secret(for: "a"))
     }

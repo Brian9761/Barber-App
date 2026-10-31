@@ -81,10 +81,12 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(andre.label.contains("11:30 AM"), "Got: \(andre.label)")
         XCTAssertTrue(andre.label.contains("Haircut & Beard with Izzy"))
         XCTAssertTrue(element("appointment-Marcus Sample").label.contains("Paid $40.00"), "Marcus paid for his cut")
-        XCTAssertTrue(element("appointment-Sam Sample").label.contains("Cancelled"))
         XCTAssertTrue(element("timeOff-Lunch").exists, "Flowxbori's lunch is blocked")
         XCTAssertTrue(app.staticTexts["Today"].exists)
         screenshot("O03-Schedule")
+        // Further down the day: a cancelled appointment stays on the schedule, marked.
+        XCTAssertTrue(reveal("appointment-Sam Sample").label.contains("Cancelled"))
+        reveal("previousDay", searchingFirst: .up)
 
         tap("barberFilter")
         tapButton("Izzy")
@@ -110,21 +112,22 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertEqual(element("detailClientName").label, "Andre Sample")
         XCTAssertTrue(element("callClient").exists)
         XCTAssertTrue(element("textClient").exists)
-        XCTAssertTrue(app.staticTexts["Likes a low fade"].exists, "The client's note shows")
+        XCTAssertTrue(waitForLabel(element("detailNote"), containing: "Likes a low fade"), "The client's note shows")
         screenshot("O05-Appointment")
 
         tap("markCompleted")
-        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Completed"))
+        XCTAssertTrue(statusShows("Completed"))
         tap("reopenAppointment")
-        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Booked"))
+        XCTAssertTrue(statusShows("Booked"))
         tap("markNoShow")
-        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "No-show"))
+        XCTAssertTrue(statusShows("No-show"))
         tap("reopenAppointment")
-        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Booked"))
+        XCTAssertTrue(statusShows("Booked"))
 
         tap("cancelAppointment")
         tapDialogButton("Cancel appointment", identifier: "confirmCancelAppointment")
-        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Cancelled"))
+        XCTAssertTrue(statusShows("Cancelled"))
+        XCTAssertTrue(reveal("detailPayment").label.contains("Not paid yet"))
         XCTAssertFalse(element("takePaymentForAppointment").exists, "No payment for a cancelled appointment")
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -239,13 +242,13 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertEqual(element("paymentAmount").value as? String, "0 dollars", "Ready for the next customer")
 
         tap("paymentsTodayLink")
-        XCTAssertTrue(app.staticTexts["$95.00"].waitForExistence(timeout: 10), "Marcus's $40 and Andre's $55")
+        XCTAssertTrue(waitForLabel(element("paymentsTotal"), containing: "$95.00"), "Marcus's $40 and Andre's $55")
         screenshot("O13-Payments-Today")
 
         // The schedule still shows Andre's details: they're paid now.
         openTab("Schedule")
-        XCTAssertTrue(element("detailClientName").waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["$55.00"].waitForExistence(timeout: 10), "The appointment shows the payment")
+        XCTAssertTrue(app.navigationBars["Appointment"].waitForExistence(timeout: 10), "The schedule lost Andre's details")
+        XCTAssertTrue(waitForLabel(reveal("detailPayment"), containing: "$55.00"), "The appointment shows the payment")
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForLabel(element("appointment-Andre Sample"), containing: "Paid $55.00"))
     }
@@ -339,8 +342,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
         // Edit: hide it from the customer app in the editor.
         row.tap()
-        let visible = element("productVisible")
-        XCTAssertTrue(visible.waitForExistence(timeout: 10))
+        let visible = reveal("productVisible")
         // The switch is at the row's trailing end; the row's middle is its label.
         visible.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
         tap("saveProduct")
@@ -362,10 +364,11 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     func testSettingsShowStatusHowToTapAndSignOut() {
         launch()
         openTab("Settings")
-        XCTAssertTrue(app.staticTexts["Test mode: no real money"].waitForExistence(timeout: 10))
-        XCTAssertTrue(app.staticTexts["tml_sample_location"].exists)
-        XCTAssertTrue(app.staticTexts["Online"].waitForExistence(timeout: 10), "The server's health check")
-        XCTAssertTrue(element("appVersion").exists)
+        XCTAssertTrue(waitForLabel(element("stripeMode"), containing: "Test mode: no real money"))
+        XCTAssertTrue(element("stripeLocation").label.contains("tml_sample_location"))
+        let online = app.descendants(matching: .any).matching(identifier: "serverStatus")
+            .matching(NSPredicate(format: "label CONTAINS %@", "Online")).firstMatch
+        XCTAssertTrue(online.waitForExistence(timeout: 10), "The server's health check")
         screenshot("O18-Settings")
 
         tap("howToTap")
@@ -374,6 +377,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("howToTapDone")
         XCTAssertTrue(waitForDisappearance(of: element("howToTapDone")))
 
+        XCTAssertTrue(reveal("appVersion").label.contains("Version"))
         tap("signOut")
         tapDialogButton("Sign out", identifier: "confirmSignOut")
         XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 10), "Signing out didn't go back to sign in")
@@ -420,8 +424,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     private func typeInto(_ identifier: String, _ text: String, file: StaticString = #filePath, line: UInt = #line) {
-        let field = element(identifier)
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "Missing \(identifier)", file: file, line: line)
+        let field = reveal(identifier, file: file, line: line)
         field.tap()
         field.typeText(text)
     }
@@ -447,14 +450,43 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     /// Waits for an element, scrolls it into view if needed, and taps it.
     private func tap(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) {
+        reveal(identifier, file: file, line: line).tap()
+    }
+
+    private enum Direction {
+        /// Further down the screen (a swipe up).
+        case down
+        /// Back up the screen (a swipe down).
+        case up
+    }
+
+    /// Finds an element and scrolls it onto the screen. Lists and forms only build the rows on
+    /// screen, so a row further down (or one scrolled past) isn't there until it's scrolled to.
+    @discardableResult
+    private func reveal(_ identifier: String, searchingFirst first: Direction = .down, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
         let target = element(identifier)
-        XCTAssertTrue(target.waitForExistence(timeout: 15), "Missing \(identifier)", file: file, line: line)
-        var swipes = 0
-        while !target.isHittable, swipes < 6 {
-            app.swipeUp(velocity: .slow)
-            swipes += 1
+        // Most are on screen already, or show up once the screen has loaded.
+        if target.waitForExistence(timeout: 8), target.isHittable {
+            return target
         }
-        target.tap()
+        for direction in first == .down ? [Direction.down, .up] : [.up, .down] {
+            for _ in 0..<8 {
+                if target.exists, target.isHittable {
+                    return target
+                }
+                switch direction {
+                case .down: app.swipeUp(velocity: .slow)
+                case .up: app.swipeDown(velocity: .slow)
+                }
+            }
+        }
+        XCTAssertTrue(target.exists && target.isHittable, "Couldn't find \(identifier) on the screen", file: file, line: line)
+        return target
+    }
+
+    /// The appointment's status, at the top of its details.
+    private func statusShows(_ text: String, file: StaticString = #filePath, line: UInt = #line) -> Bool {
+        waitForLabel(reveal("detailStatus", searchingFirst: .up, file: file, line: line), containing: text)
     }
 
     /// Taps a button by its label: menu items, picker rows, swipe actions.

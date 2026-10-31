@@ -79,6 +79,10 @@ jobs:
           echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
           xcrun simctl boot "$SIMULATOR" || true
           xcrun simctl bootstatus "$SIMULATOR" -b
+          # The keyboard's one-time "slide to type" tip covers the bottom of the screen.
+          for domain in com.apple.keyboard.preferences com.apple.Preferences; do
+            xcrun simctl spawn "$SIMULATOR" defaults write "$domain" DidShowContinuousPathIntroduction -bool true || true
+          done
           xcrun simctl status_bar "$SIMULATOR" override --time "9:41" --dataNetwork wifi --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100 || true
 
       - name: Build and test the app
@@ -258,6 +262,10 @@ jobs:
           echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
           xcrun simctl boot "$SIMULATOR" || true
           xcrun simctl bootstatus "$SIMULATOR" -b
+          # The keyboard's one-time "slide to type" tip covers the bottom of the screen.
+          for domain in com.apple.keyboard.preferences com.apple.Preferences; do
+            xcrun simctl spawn "$SIMULATOR" defaults write "$domain" DidShowContinuousPathIntroduction -bool true || true
+          done
           xcrun simctl status_bar "$SIMULATOR" override --time "9:41" --dataNetwork wifi --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100 || true
 
       - name: Build and test the owner app
