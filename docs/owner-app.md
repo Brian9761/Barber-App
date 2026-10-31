@@ -12,6 +12,8 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
   Tap an appointment to call or text the client, mark it completed or
   no-show, cancel it (the app asks first), reopen it, or take payment.
   **Block time** blocks a barber or the whole shop; swipe a block to remove it.
+  A block over several days shows its dates, and removing it removes all of
+  it (the app says so first).
 - **New booking**: walk-ins and phone bookings. Pick the service and a
   barber (or anyone free), then **Next open slot** for a walk-in, or a day
   and time. The client's name is needed; a phone number is optional. If

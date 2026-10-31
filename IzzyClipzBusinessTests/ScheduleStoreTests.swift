@@ -243,6 +243,49 @@ final class ScheduleStoreTests: XCTestCase {
         XCTAssertEqual(store.appointmentsOverlapping(shop).map(\.customer.name), ["Chris Sample"], "Cancelled ones don't count")
     }
 
+    /// Flowxbori is away Tuesday 10 AM to Friday 7 PM. On Wednesday the block shows its days,
+    /// and Remove says it removes all of it, not just Wednesday (it does).
+    func testABlockOverSeveralDaysShowsItsDaysAndRemoveSaysItsTheWholeBlock() async throws {
+        let tuesday = TestClock.today.adding(days: 1)
+        let friday = TestClock.today.adding(days: 4)
+        _ = try await harness.api.createTimeOff(.init(
+            barberId: "flowxbori", start: TestClock.at(10, on: tuesday), end: TestClock.at(19, on: friday), reason: "Vacation"
+        ))
+        let store = makeStore()
+        store.select(tuesday.adding(days: 1))
+        await store.refresh()
+        let block = try XCTUnwrap(store.timeOff.first { $0.reason == "Vacation" })
+        XCTAssertTrue(store.runsIntoOtherDays(block))
+        XCTAssertEqual(store.timeText(for: block), "Tue, Nov 3 at 10 AM – Fri, Nov 6 at 7 PM")
+        let question = store.removalQuestion(for: block)
+        XCTAssertEqual(question.message,
+                       "Flowxbori, Tue, Nov 3 at 10 AM – Fri, Nov 6 at 7 PM. This removes the whole block, not just Wed, Nov 4. Clients can book all of it again.")
+        XCTAssertEqual(question.button, "Remove the whole block")
+
+        await store.removeTimeOff(block)
+        XCTAssertFalse(harness.server.timeOff.contains { $0.reason == "Vacation" }, "Every day of it is gone")
+        XCTAssertTrue(store.timeOff.isEmpty)
+    }
+
+    /// The day's own blocks read as clock times, as before; one past midnight shows its days.
+    func testABlockOnTheDayReadsAsClockTimes() async throws {
+        let store = makeStore()
+        await store.refresh()
+        let lunch = try XCTUnwrap(store.timeOff.first)
+        XCTAssertFalse(store.runsIntoOtherDays(lunch))
+        XCTAssertEqual(store.timeText(for: lunch), "1 PM – 2 PM")
+        XCTAssertEqual(store.removalQuestion(for: lunch).message, "Flowxbori, 1 PM – 2 PM. Clients can book this time again.")
+        XCTAssertEqual(store.removalQuestion(for: lunch).button, "Remove blocked time")
+
+        let midnight = TestClock.shopTime.startOfDay(TestClock.today.adding(days: 1))
+        let evening = IzzyAPI.TimeOff(id: "evening", barberId: nil, start: TestClock.at(18), end: midnight)
+        XCTAssertFalse(store.runsIntoOtherDays(evening), "Ending at midnight, it's all on Monday")
+        let overnight = IzzyAPI.TimeOff(id: "overnight", barberId: nil, start: TestClock.at(18), end: TestClock.at(11, on: TestClock.today.adding(days: 1)))
+        XCTAssertEqual(store.timeText(for: overnight), "Mon, Nov 2 at 6 PM – Tue, Nov 3 at 11 AM")
+        XCTAssertEqual(store.removalQuestion(for: overnight).message,
+                       "Whole shop, Mon, Nov 2 at 6 PM – Tue, Nov 3 at 11 AM. This removes the whole block, not just today. Clients can book all of it again.")
+    }
+
     func testDefaultBlockStartsAtTheNextHalfHourToday() {
         let store = makeStore()
         let (start, end) = store.defaultBlockTimes()

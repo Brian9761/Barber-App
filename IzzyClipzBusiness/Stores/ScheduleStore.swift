@@ -210,6 +210,41 @@ final class ScheduleStore {
         }
     }
 
+    // MARK: Blocked time
+
+    /// The first and last shop days a block covers (one that ends at midnight
+    /// doesn't cover the next day).
+    private func days(of block: IzzyAPI.TimeOff) -> (first: LocalDate, last: LocalDate) {
+        let first = shopTime.day(containing: block.start)
+        return (first, max(first, shopTime.day(containing: block.end.addingTimeInterval(-1))))
+    }
+
+    /// Whether a block runs into other days than the one on screen: a few days
+    /// off, or past midnight.
+    func runsIntoOtherDays(_ block: IzzyAPI.TimeOff) -> Bool {
+        let (first, last) = days(of: block)
+        return first != day || last != day
+    }
+
+    /// When a block is: "1 PM – 2 PM" when it's all on the day on screen,
+    /// otherwise with the days, "Tue, Nov 3 at 10 AM – Fri, Nov 6 at 7 PM".
+    func timeText(for block: IzzyAPI.TimeOff) -> String {
+        guard runsIntoOtherDays(block) else { return shopTime.timeRange(block.start, block.end) }
+        return "\(shopTime.dayAndTime(block.start)) – \(shopTime.dayAndTime(block.end))"
+    }
+
+    /// What Remove asks before it removes a block. Removing takes the whole
+    /// block away, so one that runs into other days says so.
+    func removalQuestion(for block: IzzyAPI.TimeOff) -> (message: String, button: String) {
+        let what = "\(barberName(for: block.barberId)), \(timeText(for: block))."
+        guard runsIntoOtherDays(block) else {
+            return ("\(what) Clients can book this time again.", "Remove blocked time")
+        }
+        let shown = shopTime.relativeDay(day, today: today)
+        let thisDay = ["Today", "Tomorrow", "Yesterday"].contains(shown) ? shown.lowercased() : shown
+        return ("\(what) This removes the whole block, not just \(thisDay). Clients can book all of it again.", "Remove the whole block")
+    }
+
     func removeTimeOff(_ block: IzzyAPI.TimeOff) async {
         guard !removingTimeOff.contains(block.id) else { return }
         removingTimeOff.insert(block.id)

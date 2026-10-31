@@ -59,13 +59,13 @@ struct ScheduleView: View {
                 titleVisibility: .visible,
                 presenting: blockToRemove
             ) { block in
-                Button("Remove blocked time", role: .destructive) {
+                Button(store.removalQuestion(for: block).button, role: .destructive) {
                     Task { await store.removeTimeOff(block) }
                 }
                 .accessibilityIdentifier("confirmRemoveBlock")
                 Button("Keep it", role: .cancel) {}
             } message: { block in
-                Text("\(store.barberName(for: block.barberId)), \(store.shopTime.timeRange(block.start, block.end)). Clients can book this time again.")
+                Text(store.removalQuestion(for: block).message)
             }
             .alert(
                 "That didn't work",
@@ -322,7 +322,7 @@ struct TimeOffRow: View {
                 .imageScale(.large)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.shopTime.timeRange(block.start, block.end))
+                Text(store.timeText(for: block))
                     .font(.headline.monospacedDigit())
                 Text([store.barberName(for: block.barberId), block.reason].compactMap { $0 }.joined(separator: " · "))
                     .font(.subheadline)
@@ -335,7 +335,7 @@ struct TimeOffRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Blocked, \(store.barberName(for: block.barberId)), \(store.shopTime.timeRange(block.start, block.end))\(block.reason.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("Blocked, \(store.barberName(for: block.barberId)), \(store.timeText(for: block))\(block.reason.map { ", \($0)" } ?? "")")
         .accessibilityHint("Swipe left to remove.")
         .accessibilityIdentifier("timeOff-\(block.reason ?? store.barberName(for: block.barberId))")
     }
