@@ -5,7 +5,8 @@ import SwiftUI
 ///
 /// If booking fails, the card under the button says why in plain words and offers the way
 /// forward: a taken time goes back to the times (refreshed), a problem with the details goes back
-/// to them, and being offline offers "Try again" and "Call the shop".
+/// to them, being offline offers "Try again" and "Call the shop", and a limit says which one (in
+/// the server's words) with the client's appointments, where one can be cancelled.
 struct BookingReviewView: View {
     let draft: BookingDraft
 
@@ -35,6 +36,7 @@ private struct BookingReviewScreen: View {
     let submitter: BookingSubmitter
 
     @Environment(AppRouter.self) private var router
+    @Environment(AppointmentStore.self) private var appointments
     private let calendar = AppData.bookingCalendar
 
     private var plan: BookingPlan { draft.plan }
@@ -52,7 +54,9 @@ private struct BookingReviewScreen: View {
                         isRetrying: submitter.isBooking,
                         onRetry: book,
                         onPickAnotherTime: pickAnotherTime,
-                        onEditDetails: { router.returnToDetails() }
+                        onEditDetails: { router.returnToDetails() },
+                        // A number at the limit of upcoming appointments can cancel one of them.
+                        onSeeAppointments: appointments.next == nil ? nil : { router.finishBooking() }
                     )
                 }
                 Text("You can cancel in the app any time before your appointment starts.")
@@ -196,6 +200,8 @@ private struct BookingFailureCard: View {
     let onRetry: () -> Void
     let onPickAnotherTime: () -> Void
     let onEditDetails: () -> Void
+    /// Back to the client's appointments (the Book tab's first screen); `nil` when there are none.
+    let onSeeAppointments: (() -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
@@ -235,7 +241,11 @@ private struct BookingFailureCard: View {
                     .buttonStyle(.secondary)
                     .accessibilityIdentifier("editDetailsButton")
             case .rateLimited:
-                EmptyView()
+                if let onSeeAppointments {
+                    Button("See your appointments", action: onSeeAppointments)
+                        .buttonStyle(.secondary)
+                        .accessibilityIdentifier("seeAppointmentsButton")
+                }
             }
             CallButton {
                 Label("Call the shop", systemImage: Symbol.call)

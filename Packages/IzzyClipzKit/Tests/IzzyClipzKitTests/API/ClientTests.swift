@@ -454,7 +454,7 @@ final class ClientTests: XCTestCase {
             (422, "outside_hours", .outsideHours),
             (422, "too_soon", .tooSoon),
             (422, "too_far", .tooFar),
-            (429, "rate_limited", .rateLimited),
+            (429, "rate_limited", .rateLimited(message: "Message for rate_limited")),
             (503, "stripe_not_configured", .notConfigured("stripe")),
             (503, "owner_not_configured", .notConfigured("owner")),
             (500, "server_error", .server(code: "server_error", message: "Message for server_error", status: 500)),
@@ -474,7 +474,7 @@ final class ClientTests: XCTestCase {
     func testErrorsWithoutTheEnvelope() async {
         let cases: [(Reply, APIError)] = [
             (Reply(status: 401, headers: ["Content-Type": "text/html"], body: Data("<h1>Unauthorized</h1>".utf8)), .unauthorized),
-            (Reply(status: 429, body: Data()), .rateLimited),
+            (Reply(status: 429, body: Data()), .rateLimited(message: "")),
             (Reply(status: 404, body: Data("Not found".utf8)), .server(code: "not_found", message: "", status: 404)),
             (Reply(status: 413, body: Data("Request Entity Too Large".utf8)),
              .server(code: "invalid_request", message: "That photo is too big to upload. Pick a smaller one, or take it again.", status: 413)),
@@ -486,6 +486,23 @@ final class ClientTests: XCTestCase {
         for (reply, expected) in cases {
             StubURLProtocol.reply { _ in reply }
             await assertThrows(expected) { try await self.client.health() }
+        }
+    }
+
+    /// The server's own rate_limited example (a number with 3 upcoming appointments) reaches the
+    /// app with its message, which says what helps.
+    func testTheServersRateLimitMessageIsKept() async throws {
+        let url = TestPaths.serverFixtures.appendingPathComponent("errors/rate_limited.json")
+        guard let data = FileManager.default.contents(atPath: url.path) else {
+            throw XCTSkip("No server contract fixtures at \(url.path) yet; the server's tests write them.")
+        }
+        let envelope = try IzzyAPI.makeDecoder().decode(IzzyAPI.ErrorEnvelope.self, from: data)
+        XCTAssertTrue(envelope.error.message.contains("Cancel one"), envelope.error.message)
+        StubURLProtocol.reply { _ in Reply(status: 429, headers: ["Content-Type": "application/json"], body: data) }
+        await assertThrows(.rateLimited(message: envelope.error.message)) {
+            try await self.client.book(IzzyAPI.NewAppointment(
+                target: .anyBarber(serviceId: "haircut"), start: utc(2026, 11, 2, 18), customer: IzzyAPI.NewCustomer(name: "T", phone: "+14425550123")
+            ), token: .generate())
         }
     }
 
@@ -520,7 +537,7 @@ final class ClientTests: XCTestCase {
         XCTAssertTrue(APIError.fromTransport(CancellationError()) is CancellationError)
         XCTAssertEqual(APIError.fromTransport(NSError(domain: NSURLErrorDomain, code: URLError.Code.timedOut.rawValue)) as? APIError, .offline)
         XCTAssertEqual(APIError.fromTransport(NSError(domain: "Other", code: 1)) as? APIError, .server(code: "network_error", message: "", status: 0))
-        XCTAssertEqual(APIError.fromTransport(APIError.rateLimited) as? APIError, .rateLimited)
+        XCTAssertEqual(APIError.fromTransport(APIError.rateLimited(message: "x")) as? APIError, .rateLimited(message: "x"))
     }
 
     func testResponsesThatDontMatchTheContract() async throws {

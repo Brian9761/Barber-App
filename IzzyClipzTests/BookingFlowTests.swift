@@ -246,11 +246,27 @@ final class BookingSubmitterTests: XCTestCase {
         XCTAssertEqual(api.bookings.count, 2)
     }
 
-    func testTooManyTriesSaysToWaitOrCall() async throws {
-        api.bookHandler = { _ in throw APIError.rateLimited }
+    /// The server has two limits and says which one was hit: a number with 3 upcoming
+    /// appointments (waiting never helps, cancelling one does) or too many tries from one network.
+    func testALimitSaysWhichOneAndWhatHelps() async throws {
+        let phoneLimit = "This number already has 3 upcoming appointments. Cancel one, or call the shop to book more."
+        api.bookHandler = { _ in throw APIError.rateLimited(message: phoneLimit) }
         let submitter = makeSubmitter()
         _ = await submitter.book(try draft())
-        XCTAssertEqual(submitter.failure, .rateLimited(APIError.rateLimited.userMessage))
+        XCTAssertEqual(submitter.failure, .rateLimited(phoneLimit))
+        XCTAssertFalse(submitter.failure?.canRetry ?? true)
+
+        let networkLimit = "Too many booking attempts from this network. Try again in an hour, or call the shop."
+        api.bookHandler = { _ in throw APIError.rateLimited(message: networkLimit) }
+        _ = await submitter.book(try draft())
+        XCTAssertEqual(submitter.failure, .rateLimited(networkLimit))
+    }
+
+    func testALimitWithoutTheServersWordsSaysToWaitOrCall() async throws {
+        api.bookHandler = { _ in throw APIError.rateLimited(message: "") }
+        let submitter = makeSubmitter()
+        _ = await submitter.book(try draft())
+        XCTAssertEqual(submitter.failure, .rateLimited("That's a lot of tries in a short time. Wait a little and try again, or call the shop."))
         XCTAssertFalse(submitter.failure?.canRetry ?? true)
     }
 

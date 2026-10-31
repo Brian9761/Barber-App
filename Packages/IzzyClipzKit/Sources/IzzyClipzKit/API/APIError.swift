@@ -19,8 +19,10 @@ public enum APIError: Error, Hashable, Sendable {
     case slotTaken
     /// 409 `not_cancellable`: it's not booked any more, or it already started.
     case notCancellable
-    /// 429 `rate_limited`.
-    case rateLimited
+    /// 429 `rate_limited`, with the server's message: which limit it was and
+    /// what to do (e.g. cancel one of the number's upcoming appointments).
+    /// Empty when the response had no message.
+    case rateLimited(message: String)
     /// 401 `unauthorized`: a missing or wrong owner key or manage token.
     case unauthorized
     /// 503 `stripe_not_configured` (`"stripe"`), `owner_not_configured`
@@ -47,7 +49,7 @@ public enum APIError: Error, Hashable, Sendable {
         switch code {
         case IzzyAPI.ErrorCode.slotTaken: self = .slotTaken
         case IzzyAPI.ErrorCode.notCancellable: self = .notCancellable
-        case IzzyAPI.ErrorCode.rateLimited: self = .rateLimited
+        case IzzyAPI.ErrorCode.rateLimited: self = .rateLimited(message: message)
         case IzzyAPI.ErrorCode.unauthorized: self = .unauthorized
         case IzzyAPI.ErrorCode.stripeNotConfigured: self = .notConfigured(Feature.stripe)
         case IzzyAPI.ErrorCode.ownerNotConfigured: self = .notConfigured(Feature.owner)
@@ -110,8 +112,10 @@ public enum APIError: Error, Hashable, Sendable {
             return "Someone just booked that time. Pick another one."
         case .notCancellable:
             return "This appointment can't be cancelled anymore. Call the shop if you need to change it."
-        case .rateLimited:
-            return "That's a lot of tries in a short time. Wait a little and try again, or call the shop."
+        case .rateLimited(let message):
+            // The server says which limit it was and what helps, e.g. cancelling an appointment.
+            let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "That's a lot of tries in a short time. Wait a little and try again, or call the shop." : text
         case .unauthorized:
             return "We couldn't confirm it's you. Sign in again, or call the shop if this keeps happening."
         case .notConfigured(let feature):
@@ -188,7 +192,7 @@ public enum APIError: Error, Hashable, Sendable {
         case 413: return .server(code: IzzyAPI.ErrorCode.invalidRequest, message: APIError.tooLargeMessage, status: status)
         case 401: return .unauthorized
         case 404: return .server(code: IzzyAPI.ErrorCode.notFound, message: "", status: status)
-        case 429: return .rateLimited
+        case 429: return .rateLimited(message: "")
         // 400, and others such as 413 when a photo is over the platform's limit.
         case 400..<500: return .server(code: IzzyAPI.ErrorCode.invalidRequest, message: "", status: status)
         default: return .server(code: IzzyAPI.ErrorCode.serverError, message: "", status: status)

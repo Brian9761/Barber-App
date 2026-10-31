@@ -178,7 +178,8 @@ final class BookingSubmitter {
         case timeGone(String)
         /// The shop couldn't be reached: try again, or call.
         case offline(String)
-        /// Too many tries: wait, or call.
+        /// A limit, in the server's words: too many tries from one network (wait, or call), or
+        /// a number that already has 3 upcoming appointments (cancel one, or call).
         case rateLimited(String)
         /// The server turned down the name or number: back to the details.
         case details(String)
@@ -269,6 +270,7 @@ final class BookingSubmitter {
         case .offline:
             return .offline(error.userMessage)
         case .rateLimited:
+            // The server's own sentence: which limit it was and what helps.
             return .rateLimited(error.userMessage)
         case .server(let code, let message, _) where code == IzzyAPI.ErrorCode.invalidRequest:
             let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
