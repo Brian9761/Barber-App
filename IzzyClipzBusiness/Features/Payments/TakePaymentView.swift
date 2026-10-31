@@ -14,6 +14,20 @@ struct TakePaymentView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 16) {
+                    if let notice = checkout.recoveryNotice {
+                        HStack(alignment: .top) {
+                            InlineMessage(text: notice, systemImage: "checkmark.circle.fill", color: .green)
+                            Spacer(minLength: 0)
+                            Button {
+                                checkout.recoveryNotice = nil
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .frame(width: BusinessTheme.minimumTapSize, height: BusinessTheme.minimumTapSize)
+                            }
+                            .accessibilityLabel("Dismiss")
+                        }
+                        .accessibilityIdentifier("recoveryNotice")
+                    }
                     modeSection
                     readerStatus
                     if let appointment = checkout.appointment {

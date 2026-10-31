@@ -67,6 +67,8 @@ final class AppModel {
             return
         }
         await workspace.warmUpTapToPay()
+        // Payments a closed app never heard back about.
+        await workspace.checkout.syncPendingPayments()
     }
 
     /// Checks a pasted owner key with the server and keeps it in the keychain.

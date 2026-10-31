@@ -413,6 +413,7 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(harness.appointment(named: "Andre Sample")?.payment.status, .paid)
         XCTAssertEqual(paidAppointments, [andre.id])
         XCTAssertTrue(checkout.todaysPayments.contains { $0.id == created.paymentIntentId })
+        XCTAssertEqual(checkout.recoveryNotice, "A $55.00 card payment from earlier went through and is now recorded. Don't charge it again.")
     }
 
     func testPendingPaymentsStoreOnlyIDsAndDates() {

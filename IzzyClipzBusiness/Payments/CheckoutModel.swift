@@ -134,6 +134,9 @@ final class CheckoutModel {
     private(set) var todaysPayments: [IzzyAPI.Payment] = []
     private(set) var paymentsError: String?
     private(set) var isLoadingPayments = false
+    /// Payments from an earlier run that turned out to have gone through,
+    /// so the owner doesn't charge the customer again.
+    var recoveryNotice: String?
 
     @ObservationIgnored private(set) var active: ActivePayment?
     @ObservationIgnored private var flowTask: Task<Void, Never>?
@@ -555,12 +558,14 @@ final class CheckoutModel {
         guard !pending.entries.isEmpty else { return }
         let now = clock()
         var changed = false
+        var recovered: [Int] = []
         for (id, created) in pending.entries where id != active?.paymentIntentId {
             do {
                 let payment = try await api.completePayment(id: id)
                 if payment.isSucceeded || payment.status == "canceled" {
                     pending.remove(id)
                     changed = changed || payment.isSucceeded
+                    if payment.isSucceeded { recovered.append(payment.amountCents) }
                     if payment.isSucceeded, let appointmentId = payment.appointmentId { onPaid?(appointmentId) }
                 } else if now.timeIntervalSince(created) > PendingPayments.maximumAge {
                     pending.remove(id)
@@ -570,6 +575,12 @@ final class CheckoutModel {
             } catch {
                 // Offline or Stripe busy: try again next time.
             }
+        }
+        if !recovered.isEmpty {
+            let amounts = recovered.map(Money.amount).joined(separator: ", ")
+            recoveryNotice = recovered.count == 1
+                ? "A \(amounts) card payment from earlier went through and is now recorded. Don't charge it again."
+                : "\(recovered.count) card payments from earlier went through (\(amounts)) and are now recorded. Don't charge them again."
         }
         if changed { await loadPayments() }
     }
