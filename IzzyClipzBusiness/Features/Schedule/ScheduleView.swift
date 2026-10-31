@@ -9,10 +9,12 @@ struct ScheduleView: View {
     let workspace: Workspace
     @State private var showsBlockTime = false
     @State private var blockToRemove: IzzyAPI.TimeOff?
+    /// The appointment whose details are open, if any.
+    @State private var path: [AppointmentLink] = []
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
                     DayPicker(store: store)
@@ -79,15 +81,17 @@ struct ScheduleView: View {
         // While the tab is on screen and the app is in the foreground: load
         // now, then every minute. SwiftUI cancels the task when the tab goes
         // away or the app leaves the foreground. Today's schedule moves on to
-        // the new today after the app sat open overnight; the task then starts
-        // again for that day.
+        // the new today after the app sat open overnight, but not while an
+        // appointment's details are open; the task then starts again for that day.
         .task(id: AutoRefreshKey(day: store.day, isActive: scenePhase == .active)) {
             guard scenePhase == .active else { return }
             await Ticker.run(every: ScheduleStore.refreshInterval) {
-                if !store.catchUpToToday() {
-                    await store.refresh()
-                }
+                await store.autoRefresh(isShowingAnAppointment: !path.isEmpty)
             }
+        }
+        // Back from yesterday's appointment: on to today right away.
+        .onChange(of: path) { _, links in
+            if links.isEmpty { store.catchUpToToday() }
         }
     }
 

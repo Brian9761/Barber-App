@@ -71,8 +71,9 @@ final class ScheduleStore {
 
     /// After the app sat open overnight, today's schedule moves on to the new
     /// today. Another day the owner picked stays (it says "Yesterday", with
-    /// Back to today). The screen calls this when it appears, when the app
-    /// comes back and on every auto-refresh. `true` when the day changed.
+    /// Back to today). The screen calls this on every auto-refresh (see
+    /// `autoRefresh(isShowingAnAppointment:)`) and when the owner goes back
+    /// from an appointment's details. `true` when the day changed.
     @discardableResult
     func catchUpToToday() -> Bool {
         let today = self.today
@@ -83,6 +84,16 @@ final class ScheduleStore {
         guard followsToday else { return false }
         select(today)
         return true
+    }
+
+    /// One auto-refresh, when the schedule appears or the app comes back and
+    /// then every minute: a new day moves the schedule on (the screen's refresh
+    /// then starts again for that day), otherwise the day loads again. While an
+    /// appointment's details are open the day stays, so the appointment doesn't
+    /// turn into "not found"; going back moves on.
+    func autoRefresh(isShowingAnAppointment: Bool) async {
+        if !isShowingAnAppointment, catchUpToToday() { return }
+        await refresh()
     }
 
     func showToday() { select(today) }

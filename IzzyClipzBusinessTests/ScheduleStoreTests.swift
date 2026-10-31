@@ -327,6 +327,47 @@ final class ScheduleStoreTests: XCTestCase {
         XCTAssertEqual(store.day, thursday.adding(days: 1))
     }
 
+    /// Monday at 6:50 PM the owner opens the last client's details and locks the phone. On
+    /// Tuesday the auto-refresh keeps Monday while the details are open, so the appointment is
+    /// still there to mark completed; going back moves on to Tuesday.
+    func testAnAppointmentLeftOpenOvernightStaysUntilTheOwnerGoesBack() async throws {
+        let clock = MovableClock(TestClock.at(18, 50))
+        let store = ScheduleStore(api: api, shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { clock.now })
+        await store.autoRefresh(isShowingAnAppointment: false)
+        let last = try XCTUnwrap(store.appointments.last { $0.status == .booked })
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(9, on: tuesday)
+
+        await store.autoRefresh(isShowingAnAppointment: true)
+        XCTAssertEqual(store.day, TestClock.today, "Still Monday while the details are open")
+        XCTAssertEqual(store.appointment(withID: last.id)?.id, last.id, "Not \"Appointment not found\"")
+        XCTAssertEqual(store.lastUpdated, clock.now, "Monday was loaded again")
+        let marked = await store.setStatus(.completed, for: last)
+        XCTAssertTrue(marked)
+        XCTAssertEqual(store.appointment(withID: last.id)?.status, .completed)
+
+        // Back to the list.
+        XCTAssertTrue(store.catchUpToToday())
+        XCTAssertEqual(store.day, tuesday)
+        await store.autoRefresh(isShowingAnAppointment: false)
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertEqual(store.loadState, .loaded, "Tuesday loaded")
+        XCTAssertNil(store.appointment(withID: last.id))
+    }
+
+    /// With the list on screen, the auto-refresh moves on to the new today as before.
+    func testTheAutoRefreshMovesOnToTheNewToday() async {
+        let clock = MovableClock(TestClock.now)
+        let store = ScheduleStore(api: api, shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { clock.now })
+        await store.autoRefresh(isShowingAnAppointment: false)
+        XCTAssertEqual(store.loadState, .loaded)
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(8, on: tuesday)
+        await store.autoRefresh(isShowingAnAppointment: false)
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertEqual(store.loadState, .idle, "The screen's refresh starts again for Tuesday")
+    }
+
     // MARK: Auto refresh
 
     func testTheTickerRunsUntilCancelled() async throws {

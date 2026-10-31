@@ -9,7 +9,8 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
 
 - **Schedule**: one shop day at a time (‹ › or the date picker), everyone or
   one barber. Refreshes every minute while it's on screen, and on pull.
-  Today's schedule moves on to the new day after the app sat open overnight.
+  Today's schedule moves on to the new day after the app sat open overnight
+  (an appointment left open stays until you go back).
   Tap an appointment to call or text the client, mark it completed or
   no-show, cancel it (the app asks first), reopen it, or take payment.
   **Block time** blocks a barber or the whole shop; swipe a block to remove it.
