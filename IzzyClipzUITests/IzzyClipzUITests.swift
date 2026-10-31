@@ -518,13 +518,14 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitUntil(element("bookAppointmentButton"), toMatch: NSPredicate(format: "isEnabled == false")), "It isn't booking")
         XCTAssertTrue(waitForDisappearance(of: element("bookingStartOver")), "Start over shows while it's booking")
 
-        openTab("Services")
-        tap("service-haircut")
-        let carlos = element("book-\(Self.carlosHaircut)")
-        XCTAssertTrue(carlos.waitForExistence(timeout: 10))
-        scroll(toReveal: carlos)
-        carlos.tap()
+        // Another booking, started from Home while the first is still being sent (the sample
+        // server takes 12 seconds to answer it). Home's button is near the top, so this takes a
+        // moment, well inside those 12 seconds.
+        openTab("Home")
+        tap("homeBookButton")
         assertSelectedTab("Book")
+        XCTAssertTrue(element("bookService-haircut").waitForExistence(timeout: 10), "Home's button didn't start a booking")
+        XCTAssertFalse(element("bookedSummary").exists, "The first booking answered before the client left it; the test needs a longer delay")
 
         let summary = element("bookedSummary")
         XCTAssertTrue(summary.waitForExistence(timeout: 30), "It was booked, but nothing said so")
