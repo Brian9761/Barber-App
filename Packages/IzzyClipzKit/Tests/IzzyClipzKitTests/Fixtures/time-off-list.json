@@ -1,0 +1,18 @@
+{
+  "timeOff": [
+    {
+      "id": "8f9a0b1c-2d3e-4f4a-8b5c-6d7e8f9a0b1c",
+      "barberId": "carlos-rafael",
+      "start": "2026-11-05T18:00:00Z",
+      "end": "2026-11-05T21:00:00Z",
+      "reason": "Dentist"
+    },
+    {
+      "id": "9a0b1c2d-3e4f-4a5b-9c6d-7e8f9a0b1c2d",
+      "barberId": null,
+      "start": "2026-11-26T08:00:00Z",
+      "end": "2026-11-27T08:00:00Z",
+      "reason": null
+    }
+  ]
+}

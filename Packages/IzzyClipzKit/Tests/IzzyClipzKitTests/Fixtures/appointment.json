@@ -1,0 +1,20 @@
+{
+  "appointment": {
+    "id": "5b8f2c1e-3d4a-4e6f-8a9b-0c1d2e3f4a5b",
+    "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+    "serviceId": "haircut",
+    "serviceName": "Haircut",
+    "barberId": "flowxbori",
+    "barberName": "Flowxbori",
+    "start": "2026-11-02T18:00:00Z",
+    "end": "2026-11-02T18:45:00Z",
+    "durationMinutes": 45,
+    "priceLabel": "$35",
+    "status": "cancelled",
+    "cancelledBy": "customer",
+    "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
+    "customer": { "name": "Test Customer", "phone": "+14425550123", "email": "test.customer@example.com" },
+    "note": "Short on the sides, please.",
+    "createdAt": "2026-10-31T17:05:09Z"
+  }
+}
