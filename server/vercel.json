@@ -1,0 +1,13 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "regions": ["pdx1"],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 30,
+      "includeFiles": "data/**"
+    }
+  },
+  "rewrites": [{ "source": "/api/:path*", "destination": "/api" }],
+  "crons": [{ "path": "/api/cron/daily", "schedule": "17 11 * * *" }]
+}
