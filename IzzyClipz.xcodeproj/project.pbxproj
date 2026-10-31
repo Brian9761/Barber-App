@@ -12,6 +12,7 @@
 		033F5264A29ECCEBAFB1F33F /* IzzyClipzUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6D7F661B1CC04FEA08F33A1 /* IzzyClipzUITests.swift */; };
 		0510E7BA92235655C8CE7AD5 /* ServicesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B02B4216B09B876D047FA49 /* ServicesView.swift */; };
 		0536CF9DC58E642EB9511FD9 /* ArchivoCondensed-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 2585D6671CAFDE8134939FF7 /* ArchivoCondensed-ExtraBold.ttf */; };
+		0845665EBE9B2593A494E2D0 /* TabBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C579E5BECC642D9FF688E264 /* TabBarTests.swift */; };
 		0A4745FA474066B0F1350F6E /* ArchivoExpanded-ExtraBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 7840ADC11C2714FAE439F950 /* ArchivoExpanded-ExtraBold.ttf */; };
 		0A54B5DAE9A7920153914892 /* AppointmentStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = EF00DC8CFE69CEB2E557C500 /* AppointmentStore.swift */; };
 		0AA2BFF0C4664BBA3EBA1B15 /* Exports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C54ED199C14C3F9481A0C44 /* Exports.swift */; };
@@ -172,6 +173,7 @@
 		AF977F085E4CBE4CA59FAB83 /* ProductCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProductCard.swift; sourceTree = "<group>"; };
 		BD512638A8DE4852F7B87A55 /* IzzyClipzUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = IzzyClipzUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C26768EDFE09ADA1F0C62D41 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		C579E5BECC642D9FF688E264 /* TabBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabBarTests.swift; sourceTree = "<group>"; };
 		C7CBCE94DF8D07495BA167A4 /* AppointmentStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppointmentStoreTests.swift; sourceTree = "<group>"; };
 		CB0455C530A680334658705D /* Archivo-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "Archivo-Regular.ttf"; sourceTree = "<group>"; };
 		D3092ABB4F1EAAE76C714D67 /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
@@ -234,6 +236,7 @@
 				7F1C7049809125DD6EC9686C /* BagStoreTests.swift */,
 				DB7943F0DA4253877A290B27 /* BravoStoreTests.swift */,
 				4D02D4B68363C6EE276BFEDE /* ReminderStoreTests.swift */,
+				C579E5BECC642D9FF688E264 /* TabBarTests.swift */,
 			);
 			path = IzzyClipzTests;
 			sourceTree = "<group>";
@@ -624,6 +627,7 @@
 				1DE8CEFB88FAFE47F1A6C246 /* BagStoreTests.swift in Sources */,
 				37C03F386E71B1A7052C2034 /* BravoStoreTests.swift in Sources */,
 				2E62891B5FD26CAEC381D89F /* ReminderStoreTests.swift in Sources */,
+				0845665EBE9B2593A494E2D0 /* TabBarTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
