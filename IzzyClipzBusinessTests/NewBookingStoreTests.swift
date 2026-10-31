@@ -571,7 +571,7 @@ final class NewBookingStoreTests: XCTestCase {
         store.selectedSlot = store.slots.first
         let tuesday = TestClock.today.adding(days: 1)
         clock.now = TestClock.at(9, 0, on: tuesday)
-        store.catchUpToToday()
+        await store.catchUpToToday()
         XCTAssertEqual(store.day, tuesday)
         XCTAssertNil(store.selectedSlot, "Yesterday's time is gone")
         XCTAssertEqual(store.slotsState, .idle, "The screen loads Tuesday's times")
@@ -580,8 +580,42 @@ final class NewBookingStoreTests: XCTestCase {
 
         // A day ahead that the owner picked stays.
         store.select(day: tuesday.adding(days: 2))
-        store.catchUpToToday()
+        await store.catchUpToToday()
         XCTAssertEqual(store.day, tuesday.adding(days: 2))
+    }
+
+    /// Monday evening the owner loads Tuesday's times for a phone booking and locks the phone.
+    /// When the app comes back at 11:30 on Tuesday, the times are checked again: the ones that
+    /// have started and the one a client booked overnight aren't offered, and the picked 10 AM
+    /// goes, so a phone booking isn't recorded in the past.
+    func testTimesOnScreenAreCheckedAgainWhenTheAppComesBack() async throws {
+        let clock = MovableClock(TestClock.at(18))
+        let (store, server) = makeStore(clock: clock)
+        store.selectService("haircut")
+        let julian = try XCTUnwrap(store.offerings.first { $0.barberID == "julian-ramos" })
+        store.selectChoice(.offering(julian.id))
+        let tuesday = TestClock.today.adding(days: 1)
+        store.select(day: tuesday)
+        await store.loadSlots()
+        XCTAssertEqual(store.slots.first?.start, TestClock.at(10, on: tuesday))
+        XCTAssertTrue(store.slots.contains { $0.start == TestClock.at(14, on: tuesday) })
+        store.selectedSlot = store.slots.first
+
+        _ = try server.createAppointment(.init(target: .offering(id: julian.id), start: TestClock.at(14, on: tuesday), customer: .init(name: "Online Sample")))
+        clock.now = TestClock.at(11, 30, on: tuesday)
+        await store.catchUpToToday()
+        XCTAssertEqual(store.day, tuesday, "Tuesday is today now")
+        XCTAssertEqual(store.slotsState, .loaded)
+        XCTAssertEqual(store.slots.first?.start, TestClock.at(11, 30, on: tuesday), "Starts that have passed are gone")
+        XCTAssertFalse(store.slots.contains { $0.start == TestClock.at(14, on: tuesday) }, "Booked overnight")
+        XCTAssertNil(store.selectedSlot, "10 AM has passed")
+
+        // Now, picked meanwhile, stays picked.
+        store.selectNow()
+        clock.now = TestClock.at(11, 34, on: tuesday)
+        await store.catchUpToToday()
+        XCTAssertEqual(store.selectedSlot?.start, TestClock.at(11, 30, on: tuesday))
+        XCTAssertTrue(store.isNowSelected)
     }
 
     /// The day picker runs from today to the last day the server takes bookings for.

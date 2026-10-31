@@ -157,11 +157,17 @@ final class NewBookingStore {
         clearSlots()
     }
 
-    /// After the app sat open overnight, a day that has passed moves on to today (and the
-    /// screen loads its times), instead of offering yesterday's. The screen calls this when it
-    /// appears and when the app comes back to the foreground.
-    func catchUpToToday() {
-        if day < today { select(day: today) }
+    /// The screen calls this when it appears and when the app comes back to the foreground.
+    /// After the app sat open overnight, a day that has passed moves on to today (and the screen
+    /// loads its times), instead of offering yesterday's. Times already on screen are checked
+    /// again, so ones that have started since, or that clients booked meanwhile, aren't offered
+    /// (a picked one goes with them; Now stays).
+    func catchUpToToday() async {
+        if day < today {
+            select(day: today)
+        } else if slotsState == .loaded {
+            await loadSlots(keepingTheTimes: true)
+        }
     }
 
     /// The start "Now" books: this minute on the shop's clock. It's offered when the day on

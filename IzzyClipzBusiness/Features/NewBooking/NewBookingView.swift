@@ -41,10 +41,11 @@ struct NewBookingView: View {
                 BookedSheet(appointment: item.appointment, store: store, workspace: workspace)
             }
         }
-        // After the app sat open overnight: yesterday moves on to today.
-        .onAppear { store.catchUpToToday() }
+        // After the app sat open overnight, or locked for a while: yesterday moves on to
+        // today, and the times on screen are checked again.
+        .onAppear { Task { await store.catchUpToToday() } }
         .onChange(of: scenePhase) { _, phase in
-            if phase == .active { store.catchUpToToday() }
+            if phase == .active { Task { await store.catchUpToToday() } }
         }
     }
 
