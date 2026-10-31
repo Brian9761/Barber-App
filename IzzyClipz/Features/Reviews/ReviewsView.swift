@@ -34,11 +34,13 @@ struct ReviewsView: View {
         .screenBackground()
         .navigationTitle("Reviews")
         .navigationBarTitleDisplayMode(.large)
+        // Pulling down follows the same limit as opening: each answer from Google counts against
+        // the server's daily limit, which every client shares.
         .refreshable {
-            await reviews.refresh()
+            await reviews.loadIfOld()
         }
         .task {
-            await reviews.load(maxAge: 5 * 60)
+            await reviews.loadIfOld()
         }
     }
 

@@ -79,6 +79,74 @@ final class LiveResourceTests: XCTestCase {
         XCTAssertEqual(store.value?.yelp.summary?.averageLabel, "3.5")
     }
 
+    private nonisolated static func reviewsResponse(googleAvailable: Bool) -> IzzyAPI.ReviewsResponse {
+        IzzyAPI.ReviewsResponse(
+            google: googleAvailable
+                ? IzzyAPI.ReviewSource(available: true, rating: 4.8, count: 40, url: AppData.shop.googleMapsURL)
+                : IzzyAPI.ReviewSource(available: false, url: AppData.shop.googleMapsURL),
+            yelp: IzzyAPI.ReviewSource(available: false, url: ReviewLinks.yelpPage)
+        )
+    }
+
+    /// Opening Reviews and pulling it down ask the server at most every 5 minutes: each answer
+    /// from Google counts against the server's daily limit, which every client shares.
+    func testReviewsAskAtMostEveryFiveMinutesEvenWhenPulledDown() async {
+        api.reviewsHandler = { Self.reviewsResponse(googleAvailable: true) }
+        let store = makeReviews()
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 1)
+        XCTAssertEqual(store.maxAge, 5 * 60)
+
+        for _ in 0..<10 {
+            await store.loadIfOld()
+        }
+        XCTAssertEqual(api.reviewRequests, 1, "Pulling down again and again within 5 minutes doesn't ask again")
+        now = now.addingTimeInterval(5 * 60 - 1)
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 1)
+        now = now.addingTimeInterval(2)
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 2, "Older than 5 minutes: asked again")
+    }
+
+    /// While Google's reviews can't be shown, the client can try again a minute later; once they
+    /// show, it's every 5 minutes again.
+    func testUnavailableGoogleReviewsAreAskedForAgainAfterAMinute() async {
+        var googleAvailable = false
+        api.reviewsHandler = { Self.reviewsResponse(googleAvailable: googleAvailable) }
+        let store = makeReviews()
+        await store.loadIfOld()
+        XCTAssertEqual(store.maxAge, 60)
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 1, "Not again within the minute")
+
+        googleAvailable = true
+        now = now.addingTimeInterval(61)
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 2)
+        XCTAssertEqual(store.value?.google.available, true)
+        XCTAssertEqual(store.maxAge, 5 * 60)
+        now = now.addingTimeInterval(61)
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 2, "Back to every 5 minutes")
+    }
+
+    /// Nothing loaded yet (offline, say): opening or pulling down always tries again.
+    func testReviewsThatNeverLoadedAreAskedForOnEveryPull() async {
+        api.reviewsHandler = { throw APIError.offline }
+        let store = makeReviews()
+        await store.loadIfOld()
+        XCTAssertEqual(store.error, .offline)
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 2)
+
+        api.reviewsHandler = { Self.reviewsResponse(googleAvailable: true) }
+        await store.loadIfOld()
+        XCTAssertEqual(api.reviewRequests, 3)
+        XCTAssertNil(store.error)
+        XCTAssertNotNil(store.value)
+    }
+
     func testUnavailableGoogleHasNoRatingToShow() async {
         api.reviewsHandler = {
             IzzyAPI.ReviewsResponse(
