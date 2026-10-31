@@ -162,26 +162,37 @@ private extension GalleryPhoto {
 // MARK: - Book, and the next appointment
 
 /// The screen's one red thing, "Book an appointment" (with "No payment needed" under it), then
-/// the next appointment or, with nothing booked, a line about walk-ins and today's hours.
+/// the next appointment (and one the shop cancelled before it) or, with nothing booked, a line
+/// about walk-ins and today's hours.
 struct HomeBookSection: View {
     @Environment(AppRouter.self) private var router
     @Environment(AppointmentStore.self) private var appointments
 
     var body: some View {
         let upcoming = appointments.upcoming
+        let refreshError = appointments.refreshError
         // Re-checked every minute, so an appointment that's over drops off.
         TimelineView(.everyMinute) { context in
-            // The next one that's on, or one the shop cancelled, so the client hears about it.
-            let next = upcoming.first { $0.isUpcoming(at: context.date) && ($0.status == .booked || $0.isCancelledByShop) }
+            // The next one that's on and, so the client hears about it, one the shop cancelled
+            // before it.
+            let shown = AppointmentStore.homeAppointments(upcoming, at: context.date)
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 bookButton
-                if let next {
-                    AppointmentCard(appointment: next, isNext: true)
-                        // A new card when the next one changes, so an open "Cancel?" can't carry
-                        // over to another appointment.
-                        .id(next.id)
-                } else {
+                if shown.isEmpty {
                     walkInLine(at: context.date)
+                } else {
+                    VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
+                        // The check with the shop failed (offline, say): the shop may have
+                        // changed something, so say so, as the Book tab does.
+                        if let refreshError {
+                            StaleDataNote(text: "Couldn't check for changes. \(refreshError.userMessage)")
+                        }
+                        // A card of its own for each appointment, so an open "Cancel?" can't carry
+                        // over to another one.
+                        ForEach(shown) { saved in
+                            AppointmentCard(appointment: saved, isNext: saved.status == .booked)
+                        }
+                    }
                 }
             }
         }

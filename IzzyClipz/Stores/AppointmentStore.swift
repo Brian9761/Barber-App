@@ -257,10 +257,23 @@ final class AppointmentStore {
         upcoming.first { $0.status == .booked }
     }
 
-    /// What Home shows: the next appointment that's on, or one the shop cancelled, so the client
-    /// hears about it.
-    var homeAppointment: SavedAppointment? {
-        upcoming.first { $0.status == .booked || $0.isCancelledByShop }
+    /// What Home shows now (see `homeAppointments(_:at:)`).
+    var homeAppointments: [SavedAppointment] {
+        Self.homeAppointments(upcoming, at: now())
+    }
+
+    /// What Home shows at `date`, soonest first: the next appointment that's on and, so the client
+    /// hears about it, the first one the shop cancelled if it comes before that one (or nothing is
+    /// on). A new booking never hides behind an older cancellation, and the next one that's on is
+    /// always there.
+    static func homeAppointments(_ appointments: [SavedAppointment], at date: Date) -> [SavedAppointment] {
+        let upcoming = appointments.filter { $0.isUpcoming(at: date) }
+        var shown = upcoming.first { $0.status == .booked }.map { [$0] } ?? []
+        if let cancelled = upcoming.first(where: \.isCancelledByShop),
+           cancelled.start < (shown.first?.start ?? .distantFuture) {
+            shown.insert(cancelled, at: 0)
+        }
+        return shown
     }
 
     /// When the most recent appointment that's over started, for "time for a fresh cut"

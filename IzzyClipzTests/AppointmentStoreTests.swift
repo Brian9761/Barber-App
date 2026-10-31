@@ -28,7 +28,7 @@ final class AppointmentStoreTests: XCTestCase {
         let store = makeStore(defaults: TestData.defaults())
         XCTAssertTrue(store.appointments.isEmpty)
         XCTAssertNil(store.next)
-        XCTAssertNil(store.homeAppointment)
+        XCTAssertTrue(store.homeAppointments.isEmpty)
         XCTAssertNil(store.latestFinishedStart)
     }
 
@@ -210,10 +210,63 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertEqual(saved?.status, .cancelled)
         XCTAssertTrue(saved?.isCancelledByShop ?? false)
         XCTAssertNil(store.next, "Nothing is on any more")
-        XCTAssertEqual(store.homeAppointment?.id, id, "Home still shows it, so the client hears about it")
+        XCTAssertEqual(store.homeAppointments.map(\.id), [id], "Home still shows it, so the client hears about it")
         XCTAssertTrue(scheduler.pending.isEmpty, "A cancelled appointment's reminders are removed")
         XCTAssertNil(store.refreshError)
         XCTAssertEqual(saved?.checkedAt, now)
+    }
+
+    /// The shop cancels one and the client books another time after it: Home shows the
+    /// cancellation and the new booking under it, not only the older cancelled one.
+    func testHomeShowsANewBookingAfterAnEarlierShopCancellation() async {
+        let store = makeStore(defaults: TestData.defaults())
+        let cancelledStart = TestData.friday
+        let rebookedStart = TestData.friday.addingTimeInterval(24 * 60 * 60)
+        store.add(TestData.confirmation(id: "cancelled", start: cancelledStart, token: "t1"), remind: false)
+        api.appointmentHandler = { id, _ in
+            TestData.appointment(id: id, start: cancelledStart, status: .cancelled, cancelledBy: .shop)
+        }
+        await store.refresh(force: true)
+        XCTAssertEqual(store.homeAppointments.map(\.id), ["cancelled"])
+
+        store.add(TestData.confirmation(id: "rebooked", start: rebookedStart, token: "t2"), remind: false)
+        XCTAssertEqual(store.homeAppointments.map(\.id), ["cancelled", "rebooked"], "The new booking is on Home too")
+        XCTAssertEqual(store.homeAppointments.map(\.status), [.cancelled, .booked])
+
+        // Once the cancelled one's time is over, only the booking is left.
+        let cancelledEnd = cancelledStart.addingTimeInterval(45 * 60)
+        XCTAssertEqual(AppointmentStore.homeAppointments(store.upcoming, at: cancelledEnd).map(\.id), ["rebooked"])
+        now = cancelledEnd
+        XCTAssertEqual(store.homeAppointments.map(\.id), ["rebooked"])
+    }
+
+    /// The shop cancels a later appointment: the next one that's on stays on Home by itself (the
+    /// Book tab lists the cancellation), and Home shows the cancellation once the next one is over.
+    func testHomeKeepsTheNextAppointmentAheadOfALaterShopCancellation() async {
+        let store = makeStore(defaults: TestData.defaults())
+        let laterStart = TestData.friday.addingTimeInterval(24 * 60 * 60)
+        store.add(TestData.confirmation(id: "next", start: TestData.friday, token: "t1"), remind: false)
+        store.add(TestData.confirmation(id: "later", start: laterStart, token: "t2"), remind: false)
+        api.appointmentHandler = { id, _ in
+            id == "later"
+                ? TestData.appointment(id: id, start: laterStart, status: .cancelled, cancelledBy: .shop)
+                : TestData.appointment(id: id)
+        }
+        await store.refresh(force: true)
+        XCTAssertEqual(store.homeAppointments.map(\.id), ["next"])
+
+        now = TestData.friday.addingTimeInterval(45 * 60)
+        XCTAssertEqual(store.homeAppointments.map(\.id), ["later"], "Then the client hears about the cancellation")
+    }
+
+    /// Booked again at the very time the shop cancelled: the booking is all Home needs to show.
+    func testHomeShowsOnlyTheBookingAtTheTimeTheShopCancelled() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(id: "cancelled", token: "t1"), remind: false)
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id, status: .cancelled, cancelledBy: .shop) }
+        await store.refresh(force: true)
+        store.add(TestData.confirmation(id: "rebooked", token: "t2"), remind: false)
+        XCTAssertEqual(store.homeAppointments.map(\.id), ["rebooked"])
     }
 
     func testRefreshFindsItCompleted() async {
@@ -240,6 +293,23 @@ final class AppointmentStoreTests: XCTestCase {
         api.appointmentHandler = { id, _ in TestData.appointment(id: id) }
         await store.refresh(force: true)
         XCTAssertNil(store.refreshError)
+    }
+
+    /// Pulling Home down offline: the appointment stays as it was last known, and the store says
+    /// the check failed, which Home shows as "Couldn't check for changes" above it.
+    func testAnOfflinePullOnHomeKeepsTheAppointmentAndSaysTheCheckFailed() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id) }
+        await store.refresh(force: true)
+        XCTAssertNil(store.refreshError)
+
+        api.appointmentHandler = { _, _ in throw APIError.offline }
+        await store.refresh(force: true)
+        XCTAssertEqual(store.homeAppointments.map(\.id), [id])
+        XCTAssertEqual(store.homeAppointments.first?.status, .booked)
+        XCTAssertEqual(store.refreshError, .offline)
+        XCTAssertEqual(store.refreshError?.userMessage, "We couldn't reach the shop. Check your internet connection and try again.")
     }
 
     /// The server answering 404 (wrong token or unknown ID) keeps the appointment and flags it.
@@ -304,7 +374,7 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertEqual(api.cancellations.map(\.token), ["t1"])
         XCTAssertEqual(store.appointment(withID: id)?.status, .cancelled)
         XCTAssertNil(store.next)
-        XCTAssertNil(store.homeAppointment, "Cancelled by the client: Home goes back to walk-ins")
+        XCTAssertTrue(store.homeAppointments.isEmpty, "Cancelled by the client: Home goes back to walk-ins")
         XCTAssertTrue(scheduler.pending.isEmpty)
 
         // Cancelled ones can be cleared away.

@@ -64,7 +64,23 @@ final class LiveResource<Value> {
 /// The shop's products for the Shop tab.
 typealias ProductsStore = LiveResource<[IzzyAPI.Product]>
 
-/// Google's (and Yelp's) rating and reviews, for the Reviews screen only: it asks when it opens (at
-/// most every 5 minutes), and Home never does, because each Google answer counts against the
-/// server's daily limit.
+/// Google's (and Yelp's) rating and reviews, for the Reviews screen only: it asks when it opens and
+/// on pull to refresh (at most every 5 minutes), and Home never does, because each Google answer
+/// counts against the server's daily limit, which every client shares.
 typealias ReviewsStore = LiveResource<IzzyAPI.ReviewsResponse>
+
+extension LiveResource where Value == IzzyAPI.ReviewsResponse {
+    /// How old the reviews can get before the Reviews screen asks again: 5 minutes, or 1 minute
+    /// while Google's can't be shown, so the client can soon try again. Then the server is over
+    /// the day's limit or isn't set up (asking doesn't reach Google), or Google just failed (the
+    /// server tries Google again at most once a minute).
+    var maxAge: TimeInterval {
+        value?.google.available == false ? 60 : 5 * 60
+    }
+
+    /// Opening the Reviews screen and pulling it down: asks the server only when there's nothing
+    /// yet, or what's there is older than `maxAge`.
+    func loadIfOld() async {
+        await load(maxAge: maxAge)
+    }
+}
