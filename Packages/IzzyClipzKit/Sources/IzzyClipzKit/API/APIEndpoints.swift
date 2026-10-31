@@ -66,13 +66,15 @@ extension IzzyAPI {
         /// The request to send to the server at `baseURL`.
         ///
         /// - Throws: `APIError.notConfigured("server")` for a base URL that
-        ///   isn't http(s) with a host; `APIError.unauthorized` for an owner
-        ///   call without a usable owner key, or a manage token that can't be
-        ///   sent, so a secret is never sent malformed or empty.
+        ///   isn't https with a host (plain http only for this computer, for a
+        ///   local server in development); `APIError.unauthorized` for an
+        ///   owner call without a usable owner key, or a manage token that
+        ///   can't be sent, so a secret is never sent malformed or empty.
         public func urlRequest(baseURL: URL, ownerKey: String?) throws -> URLRequest {
-            guard let scheme = baseURL.scheme?.lowercased(), scheme == "https" || scheme == "http",
+            guard let scheme = baseURL.scheme?.lowercased(),
                   var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: true),
-                  components.host?.isEmpty == false
+                  let host = components.host?.lowercased(), !host.isEmpty,
+                  scheme == "https" || (scheme == "http" && Endpoints.isLoopback(host))
             else { throw APIError.notConfigured(APIError.Feature.server) }
 
             var basePath = components.percentEncodedPath
@@ -279,6 +281,11 @@ extension IzzyAPI {
             if id.isEmpty { return "%20" }
             if id == "." || id == ".." { return String(repeating: "%2E", count: id.count) }
             return escape(id)
+        }
+
+        /// This computer, where plain http can't be overheard.
+        static func isLoopback(_ host: String) -> Bool {
+            host == "localhost" || host == "127.0.0.1" || host == "::1" || host == "[::1]"
         }
 
         /// Not empty, and no control characters (a line break would split the

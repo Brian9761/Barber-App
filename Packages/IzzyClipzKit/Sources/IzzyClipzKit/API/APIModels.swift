@@ -152,9 +152,41 @@ extension IzzyAPI {
             status == .booked && start > now
         }
 
+        /// "45 min", "1 hr 15 min".
+        public var durationLabel: String {
+            durationMinutes > 0 ? DurationText.short(minutes: durationMinutes) : ""
+        }
+
         private enum CodingKeys: String, CodingKey {
             case id, offeringId, serviceId, serviceName, barberId, barberName, start, end, durationMinutes, priceLabel
             case status, cancelledBy, payment, customer, note, createdAt
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            let durationMinutes = try container.decode(Int.self, forKey: .durationMinutes)
+            // The Kit's duration formatting requires a length, like its own Appointment.
+            guard durationMinutes > 0 else {
+                throw DecodingError.dataCorruptedError(forKey: .durationMinutes, in: container, debugDescription: "An appointment needs a length")
+            }
+            self.init(
+                id: try container.decode(String.self, forKey: .id),
+                offeringId: try container.decode(String.self, forKey: .offeringId),
+                serviceId: try container.decode(String.self, forKey: .serviceId),
+                serviceName: try container.decode(String.self, forKey: .serviceName),
+                barberId: try container.decode(String.self, forKey: .barberId),
+                barberName: try container.decode(String.self, forKey: .barberName),
+                start: try container.decode(Date.self, forKey: .start),
+                end: try container.decode(Date.self, forKey: .end),
+                durationMinutes: durationMinutes,
+                priceLabel: try container.decode(String.self, forKey: .priceLabel),
+                status: try container.decode(AppointmentStatus.self, forKey: .status),
+                cancelledBy: try container.decodeIfPresent(CancelledBy.self, forKey: .cancelledBy),
+                payment: try container.decode(AppointmentPayment.self, forKey: .payment),
+                customer: try container.decode(Customer.self, forKey: .customer),
+                note: try container.decodeIfPresent(String.self, forKey: .note),
+                createdAt: try container.decode(Date.self, forKey: .createdAt)
+            )
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -297,7 +329,8 @@ extension IzzyAPI {
 
         /// "$12", "$7.50", or `nil` without a price.
         public var priceLabel: String? {
-            priceCents.map { Price.currencyString(cents: $0) }
+            guard let priceCents, priceCents >= 0 else { return nil }
+            return Price.currencyString(cents: priceCents)
         }
 
         private enum CodingKeys: String, CodingKey {
@@ -404,12 +437,15 @@ extension IzzyAPI {
             author = try container.decode(String.self, forKey: .author)
             authorPhotoUrl = container.decodeWebURLIfPossible(forKey: .authorPhotoUrl)
             authorUrl = container.decodeWebURLIfPossible(forKey: .authorUrl)
-            // Stars are whole numbers in the contract; round a 4.0 or 4.5 rather than fail.
-            if let stars = try? container.decode(Int.self, forKey: .rating) {
-                rating = stars
+            // Stars are whole numbers in the contract; round a 4.0 or 4.5 rather
+            // than fail, and keep them in 0...5 so a star row can't overflow.
+            let stars: Double
+            if let whole = try? container.decode(Int.self, forKey: .rating) {
+                stars = Double(whole)
             } else {
-                rating = Int(try container.decode(Double.self, forKey: .rating).rounded())
+                stars = try container.decode(Double.self, forKey: .rating)
             }
+            rating = Int(min(max(stars, 0), 5).rounded())
             text = try container.decodeIfPresent(String.self, forKey: .text) ?? ""
             relativeTime = try? container.decodeIfPresent(String.self, forKey: .relativeTime)
             publishedAt = (try? container.decodeIfPresent(String.self, forKey: .publishedAt)).flatMap(Timestamp.date(from:))
@@ -443,6 +479,13 @@ extension IzzyAPI {
         public var reviews: [Review]
         public var fetchedAt: Date?
 
+        /// The rating and count as the Kit's `Rating` ("4.9", "61 reviews"),
+        /// when the site gave both.
+        public var summary: Rating? {
+            guard available, let rating, let count, (0...5).contains(rating), count >= 0 else { return nil }
+            return Rating(average: rating, count: count)
+        }
+
         public init(
             available: Bool,
             rating: Double? = nil,
@@ -466,8 +509,9 @@ extension IzzyAPI {
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             available = try container.decode(Bool.self, forKey: .available)
-            rating = try container.decodeIfPresent(Double.self, forKey: .rating)
-            count = try container.decodeIfPresent(Int.self, forKey: .count)
+            // Out-of-range numbers are treated as unknown rather than shown.
+            rating = (try? container.decodeIfPresent(Double.self, forKey: .rating)).flatMap { (0...5).contains($0) ? $0 : nil }
+            count = (try? container.decodeIfPresent(Int.self, forKey: .count)).flatMap { $0 >= 0 ? $0 : nil }
             url = try container.decodeWebURL(forKey: .url)
             reviews = try container.decodeIfPresent([Lossy<Review>].self, forKey: .reviews)?.decodedValues() ?? []
             fetchedAt = (try? container.decodeIfPresent(String.self, forKey: .fetchedAt)).flatMap(Timestamp.date(from:))
@@ -766,10 +810,18 @@ extension KeyedDecodingContainer {
     }
 
     private func webURL(_ string: String) -> URL? {
-        guard let url = URL(string: string),
+        // A link with a raw space or accent isn't a valid URL everywhere; escape
+        // just those characters and try again.
+        let escaped = string.addingPercentEncoding(withAllowedCharacters: Self.linkCharacters)
+        guard let url = URL(string: string) ?? escaped.flatMap(URL.init(string:)),
               let scheme = url.scheme?.lowercased(), scheme == "https" || scheme == "http",
               url.host?.isEmpty == false
         else { return nil }
         return url
+    }
+
+    /// Everything a URL may contain as is, including "%" for what's already escaped.
+    private static var linkCharacters: CharacterSet {
+        CharacterSet.urlQueryAllowed.union(CharacterSet(charactersIn: "#%[]"))
     }
 }

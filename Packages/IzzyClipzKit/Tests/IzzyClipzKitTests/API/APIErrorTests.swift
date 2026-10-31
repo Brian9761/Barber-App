@@ -73,6 +73,7 @@ final class APIErrorTests: XCTestCase {
         XCTAssertTrue(APIError.server(code: "server_error", message: "", status: 503).isRetryable)
         XCTAssertTrue(APIError.server(code: "network_error", message: "", status: 0).isRetryable)
         XCTAssertFalse(APIError.server(code: "invalid_request", message: "", status: 400).isRetryable)
+        XCTAssertFalse(APIError.server(code: "invalid_request", message: "Too big", status: 0).isRetryable)
         XCTAssertFalse(APIError.slotTaken.isRetryable)
         XCTAssertFalse(APIError.unauthorized.isRetryable)
         XCTAssertFalse(APIError.decoding("x").isRetryable)

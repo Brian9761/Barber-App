@@ -20,15 +20,28 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
 
     /// - Parameters:
     ///   - baseURL: e.g. `https://izzy-clipz-api.vercel.app` (a path prefix is kept).
-    ///   - session: inject one with a stub `URLProtocol` in tests.
+    ///   - session: `IzzyAPIClient.defaultSession` unless given; inject one
+    ///     with a stub `URLProtocol` in tests.
     ///   - ownerKey: the owner key for owner calls; surrounding spaces and line
     ///     breaks from pasting are dropped. Without one, owner calls throw
     ///     `APIError.unauthorized` without contacting the server.
-    public init(baseURL: URL, session: URLSession = .shared, ownerKey: String? = nil) {
+    public init(baseURL: URL, session: URLSession = IzzyAPIClient.defaultSession, ownerKey: String? = nil) {
         self.baseURL = baseURL
         self.session = session
         self.ownerKey = ownerKey?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmpty
     }
+
+    /// A session that keeps nothing on disk: no URL cache (so customers'
+    /// names and phone numbers never land in the app's caches) and no cookies.
+    public static let defaultSession: URLSession = {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        configuration.httpCookieStorage = nil
+        configuration.httpShouldSetCookies = false
+        // `waitsForConnectivity` is already false, so being offline fails fast.
+        return URLSession(configuration: configuration)
+    }()
 
     /// The same client with a different owner key (`nil` signs out).
     public func withOwnerKey(_ ownerKey: String?) -> IzzyAPIClient {
@@ -151,8 +164,13 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         _ = try await send(IzzyAPI.Endpoints.deleteProduct(id: id))
     }
 
+    /// Photos over `IzzyAPI.maxPhotoBytes` are turned down here, with the
+    /// same message the server's limit gives, without uploading them.
     public func uploadProductPhoto(id: String, jpegData: Data) async throws -> IzzyAPI.Product {
-        try await send(IzzyAPI.Endpoints.uploadProductPhoto(id: id, jpegData: jpegData)).product
+        guard jpegData.count <= IzzyAPI.maxPhotoBytes else {
+            throw APIError.server(code: IzzyAPI.ErrorCode.invalidRequest, message: APIError.tooLargeMessage, status: 0)
+        }
+        return try await send(IzzyAPI.Endpoints.uploadProductPhoto(id: id, jpegData: jpegData)).product
     }
 
     public func connectionToken() async throws -> String {

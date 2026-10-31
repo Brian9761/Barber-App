@@ -48,8 +48,9 @@ extension IzzyAPI {
     /// The public endpoint needs a phone; the owner's walk-ins don't.
     public struct NewCustomer: Encodable, Hashable, Sendable {
         public var name: String
-        /// E.164, e.g. "+14423413053"; `PhoneNumber(parsing:)` makes one from
-        /// what a customer types.
+        /// Sent in E.164, e.g. "+14423413053": a US number typed any common
+        /// way ("(442) 341-3053") is converted; anything else is sent as typed
+        /// for the server to turn down.
         public var phone: String?
         public var email: String?
 
@@ -66,7 +67,9 @@ extension IzzyAPI {
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(name.trimmed, forKey: .name)
-            try container.encodeIfPresent(phone?.trimmed.nonEmpty, forKey: .phone)
+            if let typed = phone?.trimmed.nonEmpty {
+                try container.encode(PhoneNumber(parsing: typed)?.e164 ?? typed, forKey: .phone)
+            }
             try container.encodeIfPresent(email?.trimmed.nonEmpty, forKey: .email)
         }
     }
@@ -183,7 +186,8 @@ extension IzzyAPI {
     }
 
     /// `PATCH /api/owner/products/:id` (partial): only the fields that change
-    /// are sent. Clearing the description or the price sends `null`.
+    /// are sent. Clearing the description or the price sends `null`; so does
+    /// setting a blank description.
     public struct ProductUpdate: Encodable, Hashable, Sendable {
         /// `nil` leaves the name as it is.
         public var name: String?

@@ -83,7 +83,7 @@ public enum APIError: Error, Hashable, Sendable {
     public var isRetryable: Bool {
         switch self {
         case .offline, .rateLimited: return true
-        case .server(_, _, let status): return status == 0 || status >= 500
+        case .server(let code, _, let status): return code == APIError.networkErrorCode || status >= 500
         default: return false
         }
     }
@@ -140,6 +140,9 @@ public enum APIError: Error, Hashable, Sendable {
     /// being offline, such as a failed secure connection.
     public static let networkErrorCode = "network_error"
 
+    /// For a body over the server's limit: in practice, a product photo.
+    static let tooLargeMessage = "That photo is too big to upload. Pick a smaller one, or take it again."
+
     /// URL loading errors that mean the server couldn't be reached.
     static let offlineCodes: Set<URLError.Code> = [
         .notConnectedToInternet,
@@ -182,6 +185,7 @@ public enum APIError: Error, Hashable, Sendable {
             return APIError(code: envelope.error.code, message: message, status: status)
         }
         switch status {
+        case 413: return .server(code: IzzyAPI.ErrorCode.invalidRequest, message: APIError.tooLargeMessage, status: status)
         case 401: return .unauthorized
         case 404: return .server(code: IzzyAPI.ErrorCode.notFound, message: "", status: status)
         case 429: return .rateLimited

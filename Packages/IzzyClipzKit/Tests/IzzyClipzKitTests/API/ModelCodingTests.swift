@@ -51,8 +51,11 @@ final class ResponseDecodingTests: XCTestCase {
         XCTAssertFalse(appointment.isCancellable(at: utc(2026, 11, 2, 18)))
         XCTAssertTrue(appointment.isUpcoming(at: utc(2026, 11, 2, 18, 44)))
         XCTAssertFalse(appointment.isUpcoming(at: utc(2026, 11, 2, 18, 45)))
+        XCTAssertEqual(appointment.durationLabel, "45 min")
         appointment.status = .cancelled
         XCTAssertFalse(appointment.isCancellable(at: utc(2026, 11, 1)))
+        appointment.durationMinutes = 0
+        XCTAssertEqual(appointment.durationLabel, "")
         XCTAssertEqual(IzzyAPI.AppointmentStatus.allCases.map(\.title), ["Booked", "Cancelled", "Completed", "No-show"])
         XCTAssertEqual(IzzyAPI.AppointmentStatus.noShow.rawValue, "noShow")
     }
@@ -65,6 +68,8 @@ final class ResponseDecodingTests: XCTestCase {
             (#""start": "2026-11-02T18:00:00Z""#, #""start": "2026-11-02 18:00""#),
             (#""durationMinutes": 45"#, #""durationMinutes": "45""#),
             (#""cancelledBy": "customer""#, #""cancelledBy": "barber""#),
+            (#""durationMinutes": 45"#, #""durationMinutes": 0"#),
+            (#""durationMinutes": 45"#, #""durationMinutes": -15"#),
         ] {
             XCTAssertThrowsError(try decodeAPI(IzzyAPI.AppointmentResponse.self, fixture.replacingOccurrences(of: from, with: to)), to)
         }
@@ -90,6 +95,8 @@ final class ResponseDecodingTests: XCTestCase {
         XCTAssertEqual(reviews.google.rating, 4.9)
         XCTAssertEqual(reviews.google.count, 61)
         XCTAssertEqual(reviews.google.fetchedAt, utc(2026, 10, 31, 17))
+        XCTAssertEqual(reviews.google.summary?.averageLabel, "4.9")
+        XCTAssertEqual(reviews.google.summary?.countLabel, "61 reviews")
         XCTAssertEqual(reviews.google.reviews.count, 2)
         let first = reviews.google.reviews[0]
         XCTAssertEqual(first.author, "Sample Reviewer")
@@ -104,6 +111,7 @@ final class ResponseDecodingTests: XCTestCase {
         XCTAssertEqual(second.text, "")
 
         XCTAssertFalse(reviews.yelp.available)
+        XCTAssertNil(reviews.yelp.summary)
         XCTAssertNil(reviews.yelp.rating)
         XCTAssertNil(reviews.yelp.count)
         XCTAssertEqual(reviews.yelp.url.absoluteString, "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")
@@ -144,8 +152,33 @@ final class ResponseDecodingTests: XCTestCase {
         // The shop's own page link is required and must be a web link.
         XCTAssertThrowsError(try decodeAPI(IzzyAPI.ReviewSource.self, #"{"available": false, "url": "javascript:alert(1)", "reviews": []}"#))
         XCTAssertThrowsError(try decodeAPI(IzzyAPI.ReviewSource.self, #"{"available": false, "reviews": []}"#))
+        // A link with a raw space still works.
+        let spaced = try decodeAPI(IzzyAPI.ReviewSource.self,
+                                   #"{"available": false, "url": "https://www.google.com/maps/search/?api=1&query=Izzy Clipz Barbershop"}"#)
+        XCTAssertEqual(spaced.url.absoluteString, "https://www.google.com/maps/search/?api=1&query=Izzy%20Clipz%20Barbershop")
+        // An already escaped one is left alone.
+        let escaped = try decodeAPI(IzzyAPI.ReviewSource.self, #"{"available": false, "url": "https://www.google.com/maps/search/?query=Izzy%20Clipz"}"#)
+        XCTAssertEqual(escaped.url.absoluteString, "https://www.google.com/maps/search/?query=Izzy%20Clipz")
         // A missing review list is an empty one.
         XCTAssertEqual(try decodeAPI(IzzyAPI.ReviewSource.self, #"{"available": false, "url": "https://www.yelp.com/biz/x"}"#).reviews, [])
+    }
+
+    func testNumbersThatWouldBreakAStarRowAreTamed() throws {
+        let source = try decodeAPI(IzzyAPI.ReviewSource.self, """
+        {"available": true, "rating": 7.5, "count": -3, "url": "https://www.yelp.com/biz/x", "reviews": [
+          {"author": "Huge", "rating": 1e300, "text": ""},
+          {"author": "Negative", "rating": -2, "text": ""},
+          {"author": "Too many", "rating": 9, "text": ""},
+          {"author": "Half", "rating": 3.5, "text": ""}
+        ]}
+        """)
+        XCTAssertEqual(source.reviews.map(\.rating), [5, 0, 5, 4])
+        XCTAssertNil(source.rating)
+        XCTAssertNil(source.count)
+        XCTAssertNil(source.summary)
+        let partial = try decodeAPI(IzzyAPI.ReviewSource.self, #"{"available": true, "rating": 4.5, "count": null, "url": "https://www.yelp.com/biz/x"}"#)
+        XCTAssertNil(partial.summary, "no count, no summary")
+        XCTAssertNil(IzzyAPI.Product(id: "p", name: "Odd", priceCents: -100).priceLabel)
     }
 
     func testProducts() throws {
@@ -277,6 +310,19 @@ final class RequestEncodingTests: XCTestCase {
         ]))
         let raw = String(decoding: try IzzyAPI.makeEncoder().encode(body), as: UTF8.self)
         XCTAssertFalse(raw.contains("\\/"), raw)
+    }
+
+    func testCustomerPhonesAreSentInE164() throws {
+        func phone(_ typed: String?) throws -> JSONValue? {
+            try encodeAPI(IzzyAPI.NewCustomer(name: "T", phone: typed))["phone"]
+        }
+        XCTAssertEqual(try phone("(442) 555-0123"), .string("+14425550123"))
+        XCTAssertEqual(try phone("442.555.0123 "), .string("+14425550123"))
+        XCTAssertEqual(try phone("+14425550123"), .string("+14425550123"))
+        // Not a US number: sent as typed, for the server to explain.
+        XCTAssertEqual(try phone(" +44 20 7946 0958 "), .string("+44 20 7946 0958"))
+        XCTAssertNil(try phone("  "))
+        XCTAssertNil(try phone(nil))
     }
 
     func testNewAppointmentWithAnyBarber() throws {

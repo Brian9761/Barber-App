@@ -369,6 +369,16 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(sent.request.timeoutInterval, 60)
     }
 
+    func testPhotosOverTheLimitArentUploaded() async throws {
+        await assertThrows(.server(code: "invalid_request", message: "That photo is too big to upload. Pick a smaller one, or take it again.", status: 0)) {
+            try await self.client.uploadProductPhoto(id: "p1", jpegData: Data(count: IzzyAPI.maxPhotoBytes + 1))
+        }
+        XCTAssertEqual(StubURLProtocol.sent.count, 0)
+        StubURLProtocol.reply { _ in .fixture("product.json") }
+        _ = try await client.uploadProductPhoto(id: "p1", jpegData: Data(count: IzzyAPI.maxPhotoBytes))
+        XCTAssertEqual(try only().body?.count, IzzyAPI.maxPhotoBytes)
+    }
+
     func testOwnerCallsNeedAUsableKeyAndNeverSendABadOne() async throws {
         for key in [nil, "", "   \n"] as [String?] {
             let signedOut = client.withOwnerKey(key)
@@ -426,7 +436,8 @@ final class ClientTests: XCTestCase {
             (Reply(status: 401, headers: ["Content-Type": "text/html"], body: Data("<h1>Unauthorized</h1>".utf8)), .unauthorized),
             (Reply(status: 429, body: Data()), .rateLimited),
             (Reply(status: 404, body: Data("Not found".utf8)), .server(code: "not_found", message: "", status: 404)),
-            (Reply(status: 413, body: Data("Request Entity Too Large".utf8)), .server(code: "invalid_request", message: "", status: 413)),
+            (Reply(status: 413, body: Data("Request Entity Too Large".utf8)),
+             .server(code: "invalid_request", message: "That photo is too big to upload. Pick a smaller one, or take it again.", status: 413)),
             (Reply(status: 400, body: Data(#"{"message":"bad"}"#.utf8)), .server(code: "invalid_request", message: "", status: 400)),
             (Reply(status: 500, body: Data("A server error has occurred".utf8)), .server(code: "server_error", message: "", status: 500)),
             (Reply(status: 504, body: Data(#"{"error":"FUNCTION_INVOCATION_TIMEOUT"}"#.utf8)), .server(code: "server_error", message: "", status: 504)),
@@ -523,6 +534,31 @@ final class ClientTests: XCTestCase {
         StubURLProtocol.reply { _ in .fixture("health.json") }
         _ = try await IzzyAPIClient(baseURL: URL(string: "http://localhost:3000/?x=1#top")!, session: StubURLProtocol.session()).health()
         XCTAssertEqual(try only().request.url?.absoluteString, "http://localhost:3000/api/health")
+    }
+
+    func testPlainHTTPOnlyForThisComputer() async throws {
+        for text in ["http://localhost:3000", "http://127.0.0.1:3000", "http://[::1]:3000", "HTTP://LOCALHOST"] {
+            StubURLProtocol.reply { _ in .fixture("owner-me.json") }
+            _ = try await IzzyAPIClient(baseURL: URL(string: text)!, session: StubURLProtocol.session(), ownerKey: ownerKey).ownerStatus()
+            XCTAssertEqual(try only().header("Authorization"), "Bearer " + ownerKey, text)
+        }
+        // Anywhere else, plain http could be overheard: nothing is sent, not even public calls.
+        for text in ["http://izzy-clipz-api.vercel.app", "http://192.168.1.20:3000", "http://localhost.evil.test"] {
+            StubURLProtocol.reply { _ in .fixture("health.json") }
+            let insecure = IzzyAPIClient(baseURL: URL(string: text)!, session: StubURLProtocol.session(), ownerKey: ownerKey)
+            await assertThrows(.notConfigured("server")) { try await insecure.ownerStatus() }
+            await assertThrows(.notConfigured("server")) { try await insecure.health() }
+            XCTAssertEqual(StubURLProtocol.sent.count, 0, text)
+        }
+    }
+
+    func testTheDefaultSessionKeepsNothing() {
+        let configuration = IzzyAPIClient.defaultSession.configuration
+        XCTAssertNil(configuration.urlCache)
+        XCTAssertNil(configuration.httpCookieStorage)
+        XCTAssertFalse(configuration.httpShouldSetCookies)
+        XCTAssertEqual(configuration.requestCachePolicy, .reloadIgnoringLocalCacheData)
+        XCTAssertTrue(IzzyAPIClient(baseURL: baseURL).session === IzzyAPIClient.defaultSession)
     }
 
     func testUnusableBaseURLs() async {
