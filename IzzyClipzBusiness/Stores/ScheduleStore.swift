@@ -40,6 +40,9 @@ final class ScheduleStore {
     /// Bumped by every refresh, so a slow answer for an older request (or
     /// another day) never replaces a newer one.
     @ObservationIgnored private var generation = 0
+    /// The schedule shows today and the owner hasn't moved to another day, so
+    /// a new day moves it on too (see `catchUpToToday()`).
+    @ObservationIgnored private var followsToday = true
 
     init(api: any OwnerAPI, shopTime: ShopTime, catalog: Catalog, clock: @escaping () -> Date) {
         self.api = api
@@ -55,6 +58,7 @@ final class ScheduleStore {
     // MARK: Days
 
     func select(_ day: LocalDate) {
+        followsToday = day == today
         guard day != self.day else { return }
         self.day = day
         generation += 1
@@ -63,6 +67,22 @@ final class ScheduleStore {
         refreshError = nil
         lastUpdated = nil
         loadState = .idle
+    }
+
+    /// After the app sat open overnight, today's schedule moves on to the new
+    /// today. Another day the owner picked stays (it says "Yesterday", with
+    /// Back to today). The screen calls this when it appears, when the app
+    /// comes back and on every auto-refresh. `true` when the day changed.
+    @discardableResult
+    func catchUpToToday() -> Bool {
+        let today = self.today
+        if day == today {
+            followsToday = true
+            return false
+        }
+        guard followsToday else { return false }
+        select(today)
+        return true
     }
 
     func showToday() { select(today) }

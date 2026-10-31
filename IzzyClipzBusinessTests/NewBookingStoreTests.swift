@@ -3,7 +3,8 @@ import XCTest
 @testable import IzzyClipzBusiness
 
 /// Walk-ins and phone bookings: the owner's availability (no lead time), the
-/// "next open slot" shortcut, "Now", booking, and a slot taken in the meantime.
+/// "next open slot" shortcut, "Now", booking, a slot taken in the meantime, and
+/// a new day after the app sat open overnight.
 @MainActor
 final class NewBookingStoreTests: XCTestCase {
     private var harness: Harness!
@@ -534,4 +535,62 @@ final class NewBookingStoreTests: XCTestCase {
         XCTAssertEqual(pastClosing, .outsideHours, "Wouldn't end by closing")
     }
 
+    // MARK: A new day
+
+    /// The app sat open overnight: New booking moves on from yesterday to today and loads its
+    /// times, instead of offering yesterday's or saying there are none.
+    func testAfterTheAppSatOpenOvernightNewBookingMovesToToday() async throws {
+        let clock = MovableClock(TestClock.at(11, 5))
+        let (store, _) = makeStore(clock: clock)
+        store.selectService("haircut")
+        await store.loadSlots()
+        store.selectedSlot = store.slots.first
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(9, 0, on: tuesday)
+        store.catchUpToToday()
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertNil(store.selectedSlot, "Yesterday's time is gone")
+        XCTAssertEqual(store.slotsState, .idle, "The screen loads Tuesday's times")
+        await store.loadSlots()
+        XCTAssertEqual(store.slots.first.map { store.shopTime.time($0.start) }, "10 AM")
+
+        // A day ahead that the owner picked stays.
+        store.select(day: tuesday.adding(days: 2))
+        store.catchUpToToday()
+        XCTAssertEqual(store.day, tuesday.adding(days: 2))
+    }
+
+    /// The day picker runs from today to the last day the server takes bookings for.
+    func testTheDayStaysBetweenTodayAndTheLastBookingDay() {
+        let store = makeStore()
+        let last = TestClock.today.adding(days: 60)
+        XCTAssertEqual(store.lastDay, last)
+        XCTAssertEqual(store.dayRange.lowerBound, TestClock.shopTime.startOfDay(TestClock.today))
+        XCTAssertEqual(store.dayRange.upperBound, TestClock.shopTime.noon(on: last))
+        XCTAssertTrue(store.dayRange.contains(store.dayAsDate))
+        store.select(day: TestClock.today.adding(days: 90))
+        XCTAssertEqual(store.day, last)
+        XCTAssertTrue(store.dayRange.contains(store.dayAsDate))
+        store.select(day: TestClock.today.adding(days: -3))
+        XCTAssertEqual(store.day, TestClock.today)
+    }
+
+    /// The app stayed open past midnight with a time picked: booking it says the day has
+    /// passed and moves on to today, instead of "too soon, pick a later time".
+    func testBookingADayThatHasPassedMovesToToday() async throws {
+        let clock = MovableClock(TestClock.at(18))
+        let (store, server) = makeStore(clock: clock)
+        store.selectService("haircut")
+        await store.loadSlots()
+        store.selectedSlot = try XCTUnwrap(store.slots.last)
+        store.clientName = "Late Sample"
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(0, 5, on: tuesday)
+        await store.book()
+        XCTAssertNil(store.booked)
+        XCTAssertEqual(store.formError, "That day has passed. Pick a time today.")
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertNil(store.selectedSlot)
+        XCTAssertFalse(server.appointments.contains { $0.customer.name == "Late Sample" })
+    }
 }

@@ -3,7 +3,7 @@ import XCTest
 @testable import IzzyClipzBusiness
 
 /// The schedule: loading a day, filtering, refreshing without losing what's
-/// shown, status changes, and blocked time.
+/// shown, status changes, blocked time, and a new day after the app sat open.
 @MainActor
 final class ScheduleStoreTests: XCTestCase {
     private var harness: Harness!
@@ -293,6 +293,38 @@ final class ScheduleStoreTests: XCTestCase {
         XCTAssertEqual(end.timeIntervalSince(start), 3_600)
         store.showNextDay()
         XCTAssertEqual(store.shopTime.time(store.defaultBlockTimes().start), "10 AM", "Other days start at opening")
+    }
+
+    // MARK: A new day
+
+    /// The app sat open overnight: today's schedule moves on to the new today. A day the owner
+    /// picked stays, until it's today again.
+    func testTodaysScheduleMovesOnToTheNewToday() async {
+        let clock = MovableClock(TestClock.now)
+        let store = ScheduleStore(api: api, shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { clock.now })
+        await store.refresh()
+        XCTAssertFalse(store.catchUpToToday(), "Still Monday")
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(8, on: tuesday)
+        XCTAssertTrue(store.catchUpToToday())
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertEqual(store.loadState, .idle, "Tuesday loads afresh")
+        XCTAssertTrue(store.appointments.isEmpty, "Monday's list is gone")
+
+        // The owner looks back at Monday: the next morning, it stays on Monday.
+        store.showPreviousDay()
+        clock.now = TestClock.at(8, on: tuesday.adding(days: 1))
+        XCTAssertFalse(store.catchUpToToday())
+        XCTAssertEqual(store.day, TestClock.today)
+
+        // A day picked ahead becomes today, then moves on like today.
+        let thursday = tuesday.adding(days: 2)
+        store.select(thursday)
+        clock.now = TestClock.at(8, on: thursday)
+        XCTAssertFalse(store.catchUpToToday(), "Thursday is today now")
+        clock.now = TestClock.at(8, on: thursday.adding(days: 1))
+        XCTAssertTrue(store.catchUpToToday())
+        XCTAssertEqual(store.day, thursday.adding(days: 1))
     }
 
     // MARK: Auto refresh

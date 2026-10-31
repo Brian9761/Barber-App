@@ -78,11 +78,15 @@ struct ScheduleView: View {
         }
         // While the tab is on screen and the app is in the foreground: load
         // now, then every minute. SwiftUI cancels the task when the tab goes
-        // away or the app leaves the foreground.
+        // away or the app leaves the foreground. Today's schedule moves on to
+        // the new today after the app sat open overnight; the task then starts
+        // again for that day.
         .task(id: AutoRefreshKey(day: store.day, isActive: scenePhase == .active)) {
             guard scenePhase == .active else { return }
             await Ticker.run(every: ScheduleStore.refreshInterval) {
-                await store.refresh()
+                if !store.catchUpToToday() {
+                    await store.refresh()
+                }
             }
         }
     }

@@ -8,6 +8,7 @@ struct NewBookingView: View {
     @Bindable var store: NewBookingStore
     let workspace: Workspace
     @FocusState private var focusedField: Field?
+    @Environment(\.scenePhase) private var scenePhase
 
     enum Field: Hashable {
         case name, phone, note
@@ -39,6 +40,11 @@ struct NewBookingView: View {
             .sheet(item: Binding(get: { store.booked.map(BookedItem.init) }, set: { if $0 == nil { store.startOver() } })) { item in
                 BookedSheet(appointment: item.appointment, store: store, workspace: workspace)
             }
+        }
+        // After the app sat open overnight: yesterday moves on to today.
+        .onAppear { store.catchUpToToday() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { store.catchUpToToday() }
         }
     }
 
@@ -91,7 +97,7 @@ struct NewBookingView: View {
             DatePicker(
                 "Day",
                 selection: $store.dayAsDate,
-                in: store.shopTime.startOfDay(store.today)...,
+                in: store.dayRange,
                 displayedComponents: .date
             )
             .environment(\.timeZone, store.shopTime.timeZone)

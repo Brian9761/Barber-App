@@ -9,6 +9,7 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
 
 - **Schedule**: one shop day at a time (‹ › or the date picker), everyone or
   one barber. Refreshes every minute while it's on screen, and on pull.
+  Today's schedule moves on to the new day after the app sat open overnight.
   Tap an appointment to call or text the client, mark it completed or
   no-show, cancel it (the app asks first), reopen it, or take payment.
   **Block time** blocks a barber or the whole shop; swipe a block to remove it.
@@ -17,10 +18,11 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
 - **New booking**: walk-ins and phone bookings. Pick the service and a
   barber (or anyone free), then **Now** for a walk-in who's here (from this
   minute, while the shop is open), **Next open slot** for the next time that
-  hasn't started, or a day and time. The client's name is needed; a phone
-  number is optional. If the connection drops before the answer arrives,
-  Book again finds the booking that went through instead of booking the
-  client twice.
+  hasn't started, or a day (today to 60 days ahead) and time. A day that has
+  passed moves on to today when the app comes back. The client's name is
+  needed; a phone number is optional. If the connection drops before the
+  answer arrives, Book again finds the booking that went through instead of
+  booking the client twice.
 - **Take payment**: the amount on the keypad (filled in from an
   appointment's fixed price), an optional note and receipt email, then
   **Tap to Pay on iPhone**. The result screen says Paid, Declined,

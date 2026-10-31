@@ -138,15 +138,30 @@ final class NewBookingStore {
 
     // MARK: Days and times
 
+    /// The last day the server takes bookings for: `windowDays` (60) after today.
+    var lastDay: LocalDate { today.adding(days: shopTime.bookingCalendar.windowDays) }
+
+    /// What the day picker offers: today through the last day bookings are taken for.
+    var dayRange: ClosedRange<Date> { shopTime.startOfDay(today)...shopTime.noon(on: lastDay) }
+
     var dayAsDate: Date {
         get { shopTime.noon(on: day) }
         set { select(day: shopTime.day(containing: newValue)) }
     }
 
+    /// Picks a day, kept between today and the last day bookings are taken for.
     func select(day: LocalDate) {
+        let day = min(max(day, today), lastDay)
         guard day != self.day else { return }
         self.day = day
         clearSlots()
+    }
+
+    /// After the app sat open overnight, a day that has passed moves on to today (and the
+    /// screen loads its times), instead of offering yesterday's. The screen calls this when it
+    /// appears and when the app comes back to the foreground.
+    func catchUpToToday() {
+        if day < today { select(day: today) }
     }
 
     /// The start "Now" books: this minute on the shop's clock. It's offered when the day on
@@ -288,7 +303,8 @@ final class NewBookingStore {
 
     /// `POST /api/owner/appointments`, with the same key as the last try when
     /// it's the same booking (see `idempotencyKey(for:)`). On "slot taken" the
-    /// times are loaded again so the owner can pick another one.
+    /// times are loaded again so the owner can pick another one; a day that
+    /// has passed moves on to today.
     func book() async {
         guard !isBooking else { return }
         if let missing {
@@ -326,6 +342,11 @@ final class NewBookingStore {
             formError = "That time is outside the shop's hours. Pick another one."
             selectedSlot = nil
             await loadSlots(keepingTheTimes: true)
+        } catch APIError.tooSoon {
+            // The shop can book any time today, so this means the day has passed.
+            formError = "That day has passed. Pick a time today."
+            selectedSlot = nil
+            select(day: today)
         } catch is CancellationError {
             return
         } catch {
