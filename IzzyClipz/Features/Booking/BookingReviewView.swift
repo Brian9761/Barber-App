@@ -23,7 +23,8 @@ struct BookingReviewView: View {
                 Theme.ink.ignoresSafeArea()
             }
         }
-        .bookingStepChrome(title: "Review")
+        // Starting over while it books would leave its answer nowhere to show.
+        .bookingStepChrome(title: "Review", showsStartOver: !(submitter?.isBooking ?? false))
         .onAppear {
             if submitter == nil {
                 submitter = BookingSubmitter(api: api, appointments: appointments)
@@ -151,9 +152,15 @@ private struct BookingReviewScreen: View {
 
     /// Books it. "Try again" comes back here too, and sends the same booking with the same token,
     /// so a try that went through but whose answer was lost is found, not booked twice.
+    ///
+    /// If the client has left this review by the time the answer comes (another booking started
+    /// from Home, say), it leaves the flow on screen alone: a booking that went through is saved
+    /// and shows in their appointments either way.
     private func book() {
         Task {
-            guard let saved = await submitter.book(draft) else {
+            let saved = await submitter.book(draft)
+            guard router.isShowing(.review(draft)) else { return }
+            guard let saved else {
                 if case .timeGone(let message)? = submitter.failure {
                     // Back to the times, which reload without the time that's gone.
                     router.returnToTimes(message: message, droppedStart: plan.start)

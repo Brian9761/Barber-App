@@ -262,6 +262,12 @@ final class AppRouter {
         }
     }
 
+    /// Whether `step` is the booking step on screen. A booking's answer can arrive after the
+    /// client has left its review for another booking; it mustn't move that one.
+    func isShowing(_ step: BookingStep) -> Bool {
+        bookingPath.last == step
+    }
+
     /// Booked: the flow is replaced by the confirmation, so going back can't book it twice.
     func showBooked(appointmentID: String) {
         bookingPath = [.booked(appointmentID: appointmentID)]

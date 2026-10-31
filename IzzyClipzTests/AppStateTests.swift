@@ -150,6 +150,22 @@ final class AppRouterTests: XCTestCase {
         }
     }
 
+    /// A booking's late answer only moves the flow while its review is the step on screen.
+    func testOnlyTheStepOnScreenIsShowing() throws {
+        let router = AppRouter()
+        let draft = try draft()
+        router.bookingPath = [.chooseBarber(serviceID: "haircut"), .chooseTime(draft.plan.choice), .details(draft.plan), .review(draft)]
+        XCTAssertTrue(router.isShowing(.review(draft)))
+        XCTAssertFalse(router.isShowing(.details(draft.plan)))
+
+        // Another booking, started from Home while the first was being sent.
+        router.startBooking(serviceID: "vip")
+        XCTAssertFalse(router.isShowing(.review(draft)))
+        let other = BookingDraft(plan: draft.plan, customer: draft.customer, note: "Low fade")
+        router.bookingPath = [.chooseBarber(serviceID: "haircut"), .chooseTime(draft.plan.choice), .details(draft.plan), .review(other)]
+        XCTAssertFalse(router.isShowing(.review(draft)), "Another review isn't this one")
+    }
+
     func testOpeningPagesSetsTheSheet() {
         let website = AppData.shop.websiteURL
         let event = SavedAppointment(snapshot: TestData.appointment(), origin: .app, remind: true).calendarEvent
