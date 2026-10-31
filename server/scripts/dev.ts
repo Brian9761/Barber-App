@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 import { createApp } from '../src/app.js';
 import { productionDeps } from '../src/production.js';
 
+// Real environment variables win over .env.local.
 if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
 const app = createApp(productionDeps());

@@ -10,6 +10,11 @@
 // under the name "Smoke test" and a 555-01xx number (reserved for fiction), then
 // cancels it straight away.
 
+import { existsSync } from 'node:fs';
+
+// Real environment variables win over .env.local.
+if (existsSync('.env.local')) process.loadEnvFile('.env.local');
+
 const base = (process.argv[2] ?? process.env.SMOKE_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
 const ownerKey = process.env.SMOKE_OWNER_KEY;
 const OFFERING = process.env.SMOKE_OFFERING_ID ?? 'flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a';
@@ -81,7 +86,7 @@ try {
   check(back.body.days[0].slots.some((s: { start: string }) => s.start === slot), 'the slot is back');
   console.log('Smoke test passed.');
 } catch (error) {
-  console.error(`FAILED: ${error instanceof Error ? error.message : error}`);
+  console.error(`FAILED against ${base}: ${error instanceof Error ? error.message : error}`);
   if (booked && owner) {
     const cleanup = await call('PATCH', `/api/owner/appointments/${booked.id}`, { headers: owner, body: { status: 'cancelled' } });
     console.error(`cleanup: cancelled through the owner API (${cleanup.status})`);

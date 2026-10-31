@@ -8,9 +8,7 @@ import { normalizeConnectionString } from '../src/db.js';
 import { migrate, seedBarbers } from '../src/migrate.js';
 
 // `vercel env pull .env.local` writes the Neon URLs here; real environment variables win.
-if (!process.env.DATABASE_URL_UNPOOLED && !process.env.DATABASE_URL && existsSync('.env.local')) {
-  process.loadEnvFile('.env.local');
-}
+if (existsSync('.env.local')) process.loadEnvFile('.env.local');
 
 const url = process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL;
 if (!url) {

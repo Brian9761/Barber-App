@@ -23,7 +23,7 @@ TypeScript on Vercel Functions (Node 24), Postgres on Neon, region `pdx1`. One f
 
 ## Environment variables
 
-Set them in the Vercel project (as **Sensitive**), or in `.env.local` for scripts (`vercel env pull .env.local`). Empty values count as unset.
+Set them in the Vercel project (as **Sensitive**). For the scripts (`migrate`, `dev`, `smoke`), put them in `.env.local`: copy `.env.example`, or run `vercel env pull .env.local`. Real environment variables win over the file, and empty values count as unset.
 
 | Variable | Needed for | Notes |
 |---|---|---|
