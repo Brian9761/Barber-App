@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "owner_not_configured",
+    "message": "The shop's owner key isn't set up on the server yet."
+  }
+}

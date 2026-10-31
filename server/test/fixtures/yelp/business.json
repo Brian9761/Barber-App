@@ -1,0 +1,34 @@
+{
+  "id": "FixtureYelpBusinessId01",
+  "alias": "izzy-clipz-barbershop-oceanside",
+  "name": "Fixture Barbershop (test data)",
+  "image_url": "https://s3-media0.fl.yelpcdn.com/bphoto/FixturePhoto000000000/o.jpg",
+  "is_claimed": true,
+  "is_closed": false,
+  "url": "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside?adjust_creative=FixtureCreative00000000&utm_campaign=yelp_api_v3&utm_medium=api_v3_business_lookup&utm_source=FixtureCreative00000000",
+  "phone": "+14423413053",
+  "display_phone": "(442) 341-3053",
+  "review_count": 12,
+  "categories": [{ "alias": "barbers", "title": "Barbers" }],
+  "rating": 4.5,
+  "location": {
+    "address1": "1919 Mission Ave",
+    "address2": "Ste 105",
+    "address3": "",
+    "city": "Oceanside",
+    "zip_code": "92058",
+    "country": "US",
+    "state": "CA",
+    "display_address": ["1919 Mission Ave", "Ste 105", "Oceanside, CA 92058"]
+  },
+  "coordinates": { "latitude": 33.2034409, "longitude": -117.364815 },
+  "photos": [],
+  "hours": [
+    {
+      "open": [{ "is_overnight": false, "start": "1000", "end": "1900", "day": 0 }],
+      "hours_type": "REGULAR",
+      "is_open_now": true
+    }
+  ],
+  "transactions": []
+}

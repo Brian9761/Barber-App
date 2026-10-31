@@ -1,0 +1,28 @@
+{
+  "appointment": {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "offeringId": "cristian-ceja/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+    "serviceId": "haircut",
+    "serviceName": "Haircut",
+    "barberId": "cristian-ceja",
+    "barberName": "Cristian",
+    "start": "2026-11-03T18:00:00Z",
+    "end": "2026-11-03T18:45:00Z",
+    "durationMinutes": 45,
+    "priceLabel": "$35",
+    "status": "cancelled",
+    "cancelledBy": "customer",
+    "payment": {
+      "status": "unpaid",
+      "amountCents": null,
+      "paidAt": null
+    },
+    "customer": {
+      "name": "Second Client",
+      "phone": "+14425550124",
+      "email": null
+    },
+    "note": null,
+    "createdAt": "2026-11-02T17:00:00Z"
+  }
+}

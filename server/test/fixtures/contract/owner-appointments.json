@@ -1,0 +1,108 @@
+{
+  "appointments": [
+    {
+      "id": "00000000-0000-4000-8000-000000000006",
+      "offeringId": "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "julian-ramos",
+      "barberName": "Julian",
+      "start": "2026-11-02T18:20:00Z",
+      "end": "2026-11-02T19:05:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$35",
+      "status": "completed",
+      "cancelledBy": null,
+      "payment": {
+        "status": "paid",
+        "amountCents": 3500,
+        "paidAt": "2026-11-02T19:06:00Z"
+      },
+      "customer": {
+        "name": "Walk-in",
+        "phone": null,
+        "email": null
+      },
+      "note": null,
+      "createdAt": "2026-11-02T18:20:00Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "flowxbori",
+      "barberName": "Flowxbori",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$35",
+      "status": "booked",
+      "cancelledBy": null,
+      "payment": {
+        "status": "unpaid",
+        "amountCents": null,
+        "paidAt": null
+      },
+      "customer": {
+        "name": "Fixture Client",
+        "phone": "+14425550123",
+        "email": "client@example.com"
+      },
+      "note": "Low skin fade, please.",
+      "createdAt": "2026-11-02T17:00:00Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000005",
+      "offeringId": "cristian-ceja/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "cristian-ceja",
+      "barberName": "Cristian",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$35",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "payment": {
+        "status": "unpaid",
+        "amountCents": null,
+        "paidAt": null
+      },
+      "customer": {
+        "name": "Second Client",
+        "phone": "+14425550124",
+        "email": null
+      },
+      "note": null,
+      "createdAt": "2026-11-02T17:00:00Z"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000007",
+      "offeringId": "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "julian-ramos",
+      "barberName": "Julian",
+      "start": "2026-11-03T19:00:00Z",
+      "end": "2026-11-03T19:45:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$35",
+      "status": "noShow",
+      "cancelledBy": null,
+      "payment": {
+        "status": "unpaid",
+        "amountCents": null,
+        "paidAt": null
+      },
+      "customer": {
+        "name": "Phone booking",
+        "phone": "+17605550142",
+        "email": null
+      },
+      "note": null,
+      "createdAt": "2026-11-02T19:06:00Z"
+    }
+  ]
+}

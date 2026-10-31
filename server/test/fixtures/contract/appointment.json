@@ -1,0 +1,28 @@
+{
+  "appointment": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+    "serviceId": "haircut",
+    "serviceName": "Haircut",
+    "barberId": "flowxbori",
+    "barberName": "Flowxbori",
+    "start": "2026-11-03T18:00:00Z",
+    "end": "2026-11-03T18:45:00Z",
+    "durationMinutes": 45,
+    "priceLabel": "$35",
+    "status": "booked",
+    "cancelledBy": null,
+    "payment": {
+      "status": "unpaid",
+      "amountCents": null,
+      "paidAt": null
+    },
+    "customer": {
+      "name": "Fixture Client",
+      "phone": "+14425550123",
+      "email": "client@example.com"
+    },
+    "note": "Low skin fade, please.",
+    "createdAt": "2026-11-02T17:00:00Z"
+  }
+}

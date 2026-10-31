@@ -1,0 +1,47 @@
+name: Server smoke test
+
+# End-to-end check against the deployed API: books a slot near the end of the
+# booking window, sees it leave availability, cancels it with its manage token
+# and sees it come back. Run it by hand after a deploy, or let it run when
+# Vercel reports a successful production deployment.
+#
+# Settings: repository variable API_BASE_URL (the production domain, e.g.
+# https://izzy-clipz-api.vercel.app; per-deployment URLs sit behind Vercel's
+# Deployment Protection) and, optionally, secret SMOKE_OWNER_KEY (the server's
+# OWNER_KEY) to also check the owner schedule and clean up if a cancel fails.
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: API base URL (defaults to the API_BASE_URL variable)
+        required: false
+  deployment_status:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - run: npm ci
+      - name: Smoke test
+        env:
+          BASE_URL: ${{ inputs.base_url || vars.API_BASE_URL }}
+          SMOKE_OWNER_KEY: ${{ secrets.SMOKE_OWNER_KEY }}
+        run: |
+          if [ -z "$BASE_URL" ]; then echo "Set the API_BASE_URL repository variable or pass base_url."; exit 1; fi
+          npm run smoke -- "$BASE_URL"

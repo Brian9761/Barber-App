@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "not_cancellable",
+    "message": "This appointment is already cancelled."
+  }
+}

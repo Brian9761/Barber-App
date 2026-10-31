@@ -1,0 +1,18 @@
+{
+  "google": {
+    "available": false,
+    "rating": null,
+    "count": null,
+    "url": "https://www.google.com/maps/search/?api=1&query=Izzy%20Clipz%20Barbershop&query_place_id=ChIJGz5HChRv3IARYJJy_6jyRm8",
+    "reviews": [],
+    "fetchedAt": null
+  },
+  "yelp": {
+    "available": false,
+    "rating": null,
+    "count": null,
+    "url": "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside",
+    "reviews": [],
+    "fetchedAt": null
+  }
+}

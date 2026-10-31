@@ -1,0 +1,7 @@
+{
+  "ok": true,
+  "stripe": {
+    "configured": true,
+    "mode": "test"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "rate_limited",
+    "message": "This number already has 3 upcoming appointments. Cancel one, or call the shop to book more."
+  }
+}
