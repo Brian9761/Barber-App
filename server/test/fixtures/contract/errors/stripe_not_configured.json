@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "stripe_not_configured",
+    "message": "Card payments aren't set up yet. Add the shop's Stripe key on the server."
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "payments": [
+    {
+      "id": "pi_3TestFixture000002",
+      "amountCents": 500,
+      "description": null,
+      "appointmentId": null,
+      "status": "requires_payment_method",
+      "createdAt": "2026-11-02T19:06:00Z"
+    },
+    {
+      "id": "pi_3TestFixture000001",
+      "amountCents": 3500,
+      "description": "Haircut",
+      "appointmentId": "00000000-0000-4000-8000-000000000006",
+      "status": "succeeded",
+      "createdAt": "2026-11-02T19:05:00Z"
+    }
+  ]
+}

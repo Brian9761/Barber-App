@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "too_far",
+    "message": "We take bookings up to 60 days ahead. Pick an earlier day."
+  }
+}

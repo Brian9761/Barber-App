@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "outside_hours",
+    "message": "That isn't one of our booking times. Pick a time from the list."
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "products": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "name": "Matte pomade",
+      "description": "Medium hold, low shine.",
+      "priceCents": 1800,
+      "imageUrl": "https://fixture.public.blob.vercel-storage.com/products/00000000-0000-4000-8000-000000000001-r1.jpg",
+      "visible": true
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "name": "Beard oil",
+      "description": null,
+      "priceCents": 1500,
+      "imageUrl": null,
+      "visible": true
+    }
+  ]
+}

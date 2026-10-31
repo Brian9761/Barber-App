@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "too_soon",
+    "message": "That time has already passed. Pick another."
+  }
+}
