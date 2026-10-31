@@ -107,6 +107,49 @@ final class AppRouterTests: XCTestCase {
         XCTAssertEqual(router.bookingPath, [])
     }
 
+    /// What the client typed on the details step survives going back to the times (a taken time,
+    /// "Change", the back button) and changing the service or barber from the review. It's
+    /// dropped once booked, on "Start over", and when a new booking starts elsewhere in the app.
+    func testTypedDetailsAreKeptWhileBooking() throws {
+        let router = AppRouter()
+        let draft = try draft()
+        let typed = BookingDetailsInProgress(customer: draft.customer, note: "Low fade", remember: false)
+        router.bookingPath = [.chooseBarber(serviceID: "haircut"), .chooseTime(draft.plan.choice), .details(draft.plan), .review(draft)]
+        router.detailsInProgress = typed
+
+        router.returnToTimes(message: "Someone just booked 2:30 PM. Pick another time.", droppedStart: draft.plan.start)
+        XCTAssertEqual(router.detailsInProgress, typed)
+        router.returnToTimes(message: nil, droppedStart: nil)
+        router.returnToDetails()
+        XCTAssertEqual(router.detailsInProgress, typed)
+        // "Change" on the service or the barber, from the review.
+        router.startBooking(keepingDetails: true)
+        XCTAssertEqual(router.detailsInProgress, typed)
+        router.startBooking(serviceID: "haircut", keepingDetails: true)
+        XCTAssertEqual(router.detailsInProgress, typed)
+
+        router.showBooked(appointmentID: "abc")
+        XCTAssertNil(router.detailsInProgress, "Booked: the next booking starts fresh")
+
+        router.detailsInProgress = typed
+        router.finishBooking()
+        XCTAssertNil(router.detailsInProgress, "Start over")
+
+        let offering = try haircutWithCarlos()
+        let elsewhere: [(AppRouter) -> Void] = [
+            { $0.startBooking() },
+            { $0.startBooking(serviceID: "vip") },
+            { $0.startBooking(choice: .offering(offering)) },
+            { $0.startBooking(barberID: "julian-ramos") },
+            { $0.startBooking(fromBarberMenu: offering) },
+        ]
+        for start in elsewhere {
+            router.detailsInProgress = typed
+            start(router)
+            XCTAssertNil(router.detailsInProgress, "A booking started from elsewhere in the app starts fresh")
+        }
+    }
+
     func testOpeningPagesSetsTheSheet() {
         let website = AppData.shop.websiteURL
         let event = SavedAppointment(snapshot: TestData.appointment(), origin: .app, remind: true).calendarEvent

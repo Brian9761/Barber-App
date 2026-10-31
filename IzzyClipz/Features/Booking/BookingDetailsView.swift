@@ -3,6 +3,7 @@ import SwiftUI
 /// Step 4: who the appointment is for. A name and a US mobile number (so the shop knows who's
 /// coming and can reach them), and an optional note for the barber. The name and number are
 /// filled in from last time and remembered for next time, unless the client turns that off.
+/// Everything typed here is kept while they book, so a trip back to the times doesn't lose it.
 struct BookingDetailsView: View {
     let plan: BookingPlan
 
@@ -25,6 +26,10 @@ struct BookingDetailsView: View {
 
     private var details: CustomerDetails {
         CustomerDetails(name: name, phone: phone)
+    }
+
+    private var typed: BookingDetailsInProgress {
+        BookingDetailsInProgress(customer: details, note: note, remember: remember)
     }
 
     var body: some View {
@@ -104,6 +109,9 @@ struct BookingDetailsView: View {
             }
         }
         .onAppear(perform: fillIn)
+        .onChange(of: typed) { _, newValue in
+            router.detailsInProgress = newValue
+        }
     }
 
     /// Puts the keyboard away: the number pad has no return key. It sits next to Continue rather
@@ -196,14 +204,16 @@ struct BookingDetailsView: View {
         }
     }
 
-    /// From last time, or from the review if the client came back to fix something.
+    /// What was typed earlier in this booking (before going back to the times), or else the name
+    /// and number from last time. Coming back from the review keeps this same screen as it was.
     private func fillIn() {
         guard !didFill else { return }
         didFill = true
-        if let saved = savedDetails.saved {
-            name = saved.name
-            phone = saved.phone
-        }
+        let initial = BookingDetailsInProgress.start(kept: router.detailsInProgress, saved: savedDetails.saved)
+        name = initial.customer.name
+        phone = initial.customer.phone
+        note = initial.note
+        remember = initial.remember
     }
 
     private func continueToReview() {

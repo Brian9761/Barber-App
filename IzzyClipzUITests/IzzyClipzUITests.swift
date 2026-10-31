@@ -390,7 +390,7 @@ final class IzzyClipzUITests: XCTestCase {
     }
 
     /// Someone else books the time first: back to the times, refreshed, with a note, and another
-    /// time books fine.
+    /// time books fine, with the note for the barber still there.
     func testSlotTakenPicksAnotherTime() {
         launch(UITestArguments.slotTaken, UITestArguments.savedDetails)
         openTab("Book")
@@ -399,6 +399,8 @@ final class IzzyClipzUITests: XCTestCase {
         waitForTimes()
         let taken = pickFirstTime()
         continueToDetails()
+        type("Low fade, please", into: "noteField")
+        tapPinned("hideKeyboard")
         continueToReview()
         tapPinned("bookAppointmentButton")
 
@@ -411,7 +413,10 @@ final class IzzyClipzUITests: XCTestCase {
 
         pickFirstTime()
         continueToDetails()
+        XCTAssertEqual(element("noteField").value as? String, "Low fade, please", "The note for the barber was lost")
+        XCTAssertEqual(element("nameField").value as? String, "Sample Client")
         continueToReview()
+        XCTAssertTrue(containing("Low fade, please").exists, "The note isn't on the review")
         bookAppointment()
     }
 

@@ -96,7 +96,7 @@ private struct BookingReviewScreen: View {
                 label: "Service",
                 value: choice.serviceName,
                 detail: [choice.priceLabel, choice.durationLabel].joined(separator: " · "),
-                onChange: { router.startBooking() },
+                onChange: { router.startBooking(keepingDetails: true) },
                 identifier: "service"
             )
             SummaryDivider()
@@ -142,7 +142,7 @@ private struct BookingReviewScreen: View {
 
     /// Back to "Pick a barber" for this service, however the client got here.
     private func changeBarber() {
-        router.startBooking(serviceID: choice.serviceID)
+        router.startBooking(serviceID: choice.serviceID, keepingDetails: true)
     }
 
     private func pickAnotherTime() {

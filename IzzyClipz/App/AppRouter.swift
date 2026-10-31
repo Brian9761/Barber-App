@@ -129,6 +129,21 @@ struct BookingDraft: Hashable {
     let note: String
 }
 
+/// What the client has typed on the details step, kept while they're booking: going back to the
+/// times (a time that was taken, "Change", or the back button) and forward again brings it back,
+/// the note and "Remember me" too, and the name and number even when they aren't remembered.
+struct BookingDetailsInProgress: Hashable {
+    var customer: CustomerDetails
+    var note: String
+    var remember: Bool
+
+    /// What the details step starts with: what was typed earlier in this booking, or else the
+    /// name and number remembered from last time, with no note and "Remember me" on.
+    static func start(kept: BookingDetailsInProgress?, saved: CustomerDetails?) -> BookingDetailsInProgress {
+        kept ?? BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: "", remember: true)
+    }
+}
+
 /// What the time step is told when the client is sent back to it: reload, and say why (e.g.
 /// someone else booked the time first).
 struct TimeStepNotice: Equatable {
@@ -170,6 +185,9 @@ final class AppRouter {
     private(set) var timeStepNotice: TimeStepNotice?
     /// Goes up by one each time an appointment is booked.
     private(set) var finishedBookings = 0
+    /// What the client has typed on the details step in this booking. Kept until it's booked,
+    /// the client starts over, or a new booking starts from elsewhere in the app.
+    var detailsInProgress: BookingDetailsInProgress?
     /// The sheet on screen. Set it through `present(_:)` so dismissal knows what was showing;
     /// SwiftUI sets it back to `nil` when it goes away.
     var sheet: AppSheet?
@@ -179,16 +197,20 @@ final class AppRouter {
 
     // MARK: Booking
 
-    /// Switches to the Book tab at step 1.
-    func startBooking() {
+    /// Switches to the Book tab at step 1. `keepingDetails` when the client is changing the
+    /// service of the booking they're making (from its review), so what they typed stays.
+    func startBooking(keepingDetails: Bool = false) {
         closeSheet()
+        if !keepingDetails { detailsInProgress = nil }
         bookingPath = []
         selectedTab = .book
     }
 
-    /// Switches to the Book tab with a service already chosen.
-    func startBooking(serviceID: String) {
+    /// Switches to the Book tab with a service already chosen. `keepingDetails` when the client
+    /// is changing the barber of the booking they're making (from its review).
+    func startBooking(serviceID: String, keepingDetails: Bool = false) {
         closeSheet()
+        if !keepingDetails { detailsInProgress = nil }
         bookingPath = [.chooseBarber(serviceID: serviceID)]
         selectedTab = .book
     }
@@ -196,6 +218,7 @@ final class AppRouter {
     /// Switches to the Book tab with the service and barber chosen, at the calendar.
     func startBooking(choice: BookingChoice) {
         closeSheet()
+        detailsInProgress = nil
         bookingPath = [.chooseBarber(serviceID: choice.serviceID), .chooseTime(choice)]
         selectedTab = .book
     }
@@ -203,6 +226,7 @@ final class AppRouter {
     /// Switches to the Book tab with a barber chosen, to pick one of their services.
     func startBooking(barberID: String) {
         closeSheet()
+        detailsInProgress = nil
         bookingPath = [.chooseService(barberID: barberID)]
         selectedTab = .book
     }
@@ -211,12 +235,14 @@ final class AppRouter {
     /// shows that barber's services, the way the client came, not "Pick a barber".
     func startBooking(fromBarberMenu offering: Offering) {
         closeSheet()
+        detailsInProgress = nil
         bookingPath = [.chooseService(barberID: offering.barberID), .chooseTime(.offering(offering))]
         selectedTab = .book
     }
 
     /// Back to the times (step 3), which reload and show `message`: when the picked time was
     /// taken or can no longer be booked, or (with no message) when the client wants another time.
+    /// What they typed on the details step comes back when they continue.
     func returnToTimes(message: String?, droppedStart: Date?) {
         if let index = bookingPath.lastIndex(where: { if case .chooseTime = $0 { return true } else { return false } }) {
             bookingPath = Array(bookingPath.prefix(through: index))
@@ -239,12 +265,14 @@ final class AppRouter {
     /// Booked: the flow is replaced by the confirmation, so going back can't book it twice.
     func showBooked(appointmentID: String) {
         bookingPath = [.booked(appointmentID: appointmentID)]
+        detailsInProgress = nil
         finishedBookings += 1
     }
 
-    /// Back to the start of the Book tab.
+    /// Back to the start of the Book tab, with nothing kept from this booking.
     func finishBooking() {
         bookingPath = []
+        detailsInProgress = nil
         timeStepNotice = nil
     }
 

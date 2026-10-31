@@ -483,6 +483,30 @@ final class BookingSubmitterTests: XCTestCase {
     }
 }
 
+/// What the details step starts with: what was typed earlier in this booking, before what's
+/// remembered from last time.
+final class BookingDetailsInProgressTests: XCTestCase {
+    func testWhatWasTypedInThisBookingComesBack() {
+        let saved = CustomerDetails(name: "Sample Client", phone: "(442) 555-0123")
+        // "Remember me" off: nothing saved, but the name, number and note come back while booking.
+        let typed = BookingDetailsInProgress(customer: CustomerDetails(name: "Alex", phone: "4425550124"), note: "Low fade", remember: false)
+        XCTAssertEqual(BookingDetailsInProgress.start(kept: typed, saved: nil), typed)
+        XCTAssertEqual(BookingDetailsInProgress.start(kept: typed, saved: saved), typed)
+    }
+
+    func testANewBookingStartsFromWhatsRemembered() {
+        let saved = CustomerDetails(name: "Sample Client", phone: "(442) 555-0123")
+        XCTAssertEqual(
+            BookingDetailsInProgress.start(kept: nil, saved: saved),
+            BookingDetailsInProgress(customer: saved, note: "", remember: true)
+        )
+        XCTAssertEqual(
+            BookingDetailsInProgress.start(kept: nil, saved: nil),
+            BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "", remember: true)
+        )
+    }
+}
+
 /// The in-memory server the UI tests use behaves like the real one.
 @MainActor
 final class FakeShopAPITests: XCTestCase {
