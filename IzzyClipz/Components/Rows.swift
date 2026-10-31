@@ -114,7 +114,8 @@ struct FirstAvailableRow: View {
     }
 
     static func accessibilityText(for option: FirstAvailableOption) -> String {
-        "Any barber, any of \(option.barberIDs.count), \(option.priceLabel), \(option.durationLabel)"
+        let names = option.barberIDs.compactMap { AppData.catalog.barber(withID: $0)?.name }
+        return "Any barber, whoever is free first: \(BookingFlowCopy.list(names)), \(option.priceLabel), \(option.durationLabel)"
             .spokenRanges
     }
 }

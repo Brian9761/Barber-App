@@ -61,7 +61,7 @@ struct HomeHero: View {
 
     private var galleryButton: some View {
         NavigationLink(value: HomeRoute.gallery) {
-            Image(systemName: Symbol.external)
+            Image(systemName: Symbol.gallery)
         }
         .buttonStyle(IconButtonStyle(fill: Theme.bone, foreground: Theme.ink))
         .accessibilityLabel("See all photos")
@@ -142,9 +142,9 @@ struct HomeHero: View {
 }
 
 private extension GalleryPhoto {
-    /// Where to crop each portrait photo for the landscape hero, so the head and the fade line sit
-    /// in the clear top half, above the headline's band. Measured on each photo: the textured crop's
-    /// head is near the top of the frame, the lined-up beard's much lower.
+    /// Where to crop each portrait photo for the landscape hero, so the head and the fade line stay
+    /// in view. Measured on each photo: the textured crop's head is near the top of the frame, the
+    /// lined-up beard's much lower.
     var heroAnchor: UnitPoint {
         let y: CGFloat
         switch self {

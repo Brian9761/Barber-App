@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Dark native navigation bars, set once at launch.
+/// Dark native navigation bars (and the tab bar's colors), set once at launch.
 ///
 /// Every screen keeps the system bar, so the back button, swipe-back and large titles work exactly
 /// as everywhere else in iOS. It's styled to match the dark canvas: transparent at rest, solid
@@ -32,5 +32,10 @@ enum NavigationBarAppearance {
         bar.scrollEdgeAppearance = atRest
         bar.compactScrollEdgeAppearance = atRest
         bar.tintColor = bone
+
+        // The system tab bar: the selected tab in red (as the TabView's tint says), the rest smoke.
+        let tabBar = UITabBar.appearance()
+        tabBar.tintColor = UIColor(Theme.dripRed)
+        tabBar.unselectedItemTintColor = UIColor(Theme.smoke)
     }
 }

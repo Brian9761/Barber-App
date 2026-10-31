@@ -129,11 +129,12 @@ struct BookingDraft: Hashable {
     let note: String
 }
 
-/// What a booking step is told when the client is sent back to the times, e.g. after someone
-/// else booked the time first.
+/// What the time step is told when the client is sent back to it: reload, and say why (e.g.
+/// someone else booked the time first).
 struct TimeStepNotice: Equatable {
     let id = UUID()
-    let message: String
+    /// `nil` when the client went back on purpose, to change the time.
+    let message: String?
     /// The time that's gone, so it's no longer shown as picked.
     let droppedStart: Date?
 }
@@ -214,9 +215,9 @@ final class AppRouter {
         selectedTab = .book
     }
 
-    /// Back to the times (step 3), which reload and show `message`. Used when the picked time
-    /// was taken or can no longer be booked.
-    func returnToTimes(message: String, droppedStart: Date?) {
+    /// Back to the times (step 3), which reload and show `message`: when the picked time was
+    /// taken or can no longer be booked, or (with no message) when the client wants another time.
+    func returnToTimes(message: String?, droppedStart: Date?) {
         if let index = bookingPath.lastIndex(where: { if case .chooseTime = $0 { return true } else { return false } }) {
             bookingPath = Array(bookingPath.prefix(through: index))
         }

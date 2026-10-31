@@ -340,9 +340,12 @@ final class AppointmentStore {
             case .missing:
                 setProblem(.tokenMissing, for: id)
             case .found(let token):
+                let asked = now()
                 do {
                     let fresh = try await api.appointment(id: id, manageToken: token)
                     update(id) { saved in
+                        // Cancelled from the app while this was on its way: that answer is newer.
+                        guard (saved.checkedAt ?? .distantPast) <= asked else { return }
                         saved.snapshot = fresh
                         saved.checkedAt = self.now()
                         if saved.problem != .tokenNotSaved { saved.problem = nil }

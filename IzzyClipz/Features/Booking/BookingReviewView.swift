@@ -135,20 +135,13 @@ private struct BookingReviewScreen: View {
         return "The shop books whoever is free first: \(BookingFlowCopy.list(choice.anyBarberNames))."
     }
 
+    /// Back to "Pick a barber" for this service, however the client got here.
     private func changeBarber() {
-        if let index = router.bookingPath.firstIndex(where: {
-            if case .chooseBarber = $0 { return true }
-            if case .chooseService = $0 { return true }
-            return false
-        }) {
-            router.bookingPath = Array(router.bookingPath.prefix(through: index))
-        } else {
-            router.startBooking(serviceID: choice.serviceID)
-        }
+        router.startBooking(serviceID: choice.serviceID)
     }
 
     private func pickAnotherTime() {
-        router.returnToTimes(message: "Pick another time.", droppedStart: nil)
+        router.returnToTimes(message: nil, droppedStart: nil)
     }
 
     private func book() {

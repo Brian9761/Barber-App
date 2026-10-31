@@ -266,10 +266,14 @@ private struct ChooseTimeScreen: View {
         showMonth(at: pageIndex + 1)
     }
 
-    /// Asks for the month on screen again. A picked time that's gone is dropped, with a note.
+    /// Asks for the month on screen again (and the picked day's, if that's another month). A picked
+    /// time that's gone is dropped, with a note.
     private func reload(saying message: String?) async {
         guard let page = displayedPage else { return }
         await loader.reload(page)
+        if let day = selectedDay, !(loader.bookableRange(of: page)?.contains(day) ?? false) {
+            await loader.reload(MonthPage(year: day.year, month: day.month))
+        }
         if let message {
             notice = message
             UIAccessibility.post(notification: .announcement, argument: message)
