@@ -1,8 +1,10 @@
 import { cancelAppointment, getAppointment, getAvailability, listOwnerAppointments, patchOwnerAppointment, postAppointment, postOwnerAppointment } from './appointments.js';
+import { dailyCron } from './cron.js';
 import type { Deps } from './deps.js';
 import { json } from './http.js';
 import { completePayment, connectionToken, createPayment, listPayments, ownerMe, stripeWebhook } from './payments.js';
 import { createProduct, deleteProduct, listOwnerProducts, listPublicProducts, updateProduct, uploadProductPhoto } from './products.js';
+import { getReviews } from './reviews.js';
 import { Router } from './router.js';
 import { deleteTimeOff, listTimeOff, postTimeOff } from './timeoff.js';
 import { VERSION } from './version.js';
@@ -17,6 +19,7 @@ export function createRouter(): Router {
       .on('POST', '/api/appointments', postAppointment)
       .on('GET', '/api/appointments/:id', getAppointment)
       .on('POST', '/api/appointments/:id/cancel', cancelAppointment)
+      .on('GET', '/api/reviews', getReviews)
       .on('GET', '/api/products', listPublicProducts)
       // Owner (Authorization: Bearer OWNER_KEY)
       .on('GET', '/api/owner/me', ownerMe)
@@ -37,6 +40,7 @@ export function createRouter(): Router {
       .on('POST', '/api/owner/payments/:id/complete', completePayment)
       // Machines
       .on('POST', '/api/stripe/webhook', stripeWebhook)
+      .on('GET', '/api/cron/daily', dailyCron)
   );
 }
 

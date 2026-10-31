@@ -1,0 +1,45 @@
+{
+  "possible_languages": ["en"],
+  "reviews": [
+    {
+      "id": "FixtureYelpReview000001",
+      "url": "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside?adjust_creative=FixtureCreative00000000&hrid=FixtureHrid0000000001&utm_campaign=yelp_api_v3&utm_medium=api_v3_business_reviews&utm_source=FixtureCreative00000000",
+      "text": "Fixture Yelp excerpt one. Test data shaped like a Yelp Places API review excerpt, not a real review...",
+      "rating": 5,
+      "time_created": "2026-08-14 17:22:09",
+      "user": {
+        "id": "FixtureYelpUser0000001",
+        "profile_url": "https://www.yelp.com/user_details?userid=FixtureYelpUser0000001",
+        "image_url": "https://s3-media0.fl.yelpcdn.com/photo/FixtureUserPhoto0001/o.jpg",
+        "name": "Fixture A."
+      }
+    },
+    {
+      "id": "FixtureYelpReview000002",
+      "url": "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside?adjust_creative=FixtureCreative00000000&hrid=FixtureHrid0000000002&utm_campaign=yelp_api_v3&utm_medium=api_v3_business_reviews&utm_source=FixtureCreative00000000",
+      "text": "Fixture Yelp excerpt two. Test data only...",
+      "rating": 4,
+      "time_created": "2026-01-03 09:05:44",
+      "user": {
+        "id": "FixtureYelpUser0000002",
+        "profile_url": "https://www.yelp.com/user_details?userid=FixtureYelpUser0000002",
+        "image_url": "",
+        "name": "Fixture B."
+      }
+    },
+    {
+      "id": "FixtureYelpReview000003",
+      "url": "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside?adjust_creative=FixtureCreative00000000&hrid=FixtureHrid0000000003&utm_campaign=yelp_api_v3&utm_medium=api_v3_business_reviews&utm_source=FixtureCreative00000000",
+      "text": "Fixture Yelp excerpt three. Test data only...",
+      "rating": 5,
+      "time_created": "2025-11-20 20:41:13",
+      "user": {
+        "id": "FixtureYelpUser0000003",
+        "profile_url": "https://www.yelp.com/user_details?userid=FixtureYelpUser0000003",
+        "image_url": null,
+        "name": "Fixture C."
+      }
+    }
+  ],
+  "total": 3
+}

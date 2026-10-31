@@ -1,0 +1,80 @@
+{
+  "rating": 4.9,
+  "googleMapsUri": "https://maps.google.com/?cid=8018362994233872992&g_mp=Cidnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+  "userRatingCount": 59,
+  "reviews": [
+    {
+      "name": "places/ChIJGz5HChRv3IARYJJy_6jyRm8/reviews/Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNUMjVsRUFF",
+      "relativePublishTimeDescription": "2 weeks ago",
+      "rating": 5,
+      "text": { "text": "Fixture review one. Test data shaped like a Places API (New) review, not a real review.", "languageCode": "en" },
+      "originalText": { "text": "Fixture review one. Test data shaped like a Places API (New) review, not a real review.", "languageCode": "en" },
+      "authorAttribution": {
+        "displayName": "Fixture Reviewer One",
+        "uri": "https://www.google.com/maps/contrib/100000000000000000001/reviews",
+        "photoUri": "https://lh3.googleusercontent.com/a-/ALV-UjXFixtureAvatarOne=s128-c0x00000000-cc-rp-mo"
+      },
+      "publishTime": "2026-10-17T21:04:33.519282964Z",
+      "flagContentUri": "https://www.google.com/local/review/rap/report?postId=Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNUMjVsRUFF&d=17924085&t=1",
+      "googleMapsUri": "https://www.google.com/maps/reviews/data=!4m6!14m5!1m4!2m3!1sCi9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNUMjVsRUFF!2m1!1s0x0:0x6f46f2a8ff729260"
+    },
+    {
+      "name": "places/ChIJGz5HChRv3IARYJJy_6jyRm8/reviews/Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNWSGR2UlVGRkVBRQ",
+      "relativePublishTimeDescription": "a month ago",
+      "rating": 4,
+      "text": { "text": "Fixture review two, translated by Google from Spanish. Test data only.", "languageCode": "en" },
+      "originalText": { "text": "Reseña de prueba número dos. Solo datos de prueba.", "languageCode": "es" },
+      "authorAttribution": {
+        "displayName": "Fixture Reviewer Two",
+        "uri": "https://www.google.com/maps/contrib/100000000000000000002/reviews",
+        "photoUri": "https://lh3.googleusercontent.com/a/ACg8ocFixtureAvatarTwo=s128-c0x00000000-cc-rp-mo-ba2"
+      },
+      "publishTime": "2026-09-28T16:20:05Z",
+      "flagContentUri": "https://www.google.com/local/review/rap/report?postId=Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNWSGR2UlVGRkVBRQ&d=17924085&t=1",
+      "googleMapsUri": "https://www.google.com/maps/reviews/data=!4m6!14m5!1m4!2m3!1sCi9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNWSGR2UlVGRkVBRQ!2m1!1s0x0:0x6f46f2a8ff729260"
+    },
+    {
+      "name": "places/ChIJGz5HChRv3IARYJJy_6jyRm8/reviews/Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNUa3hHUkZORlJFUUFFQUU",
+      "relativePublishTimeDescription": "3 months ago",
+      "rating": 5,
+      "authorAttribution": {
+        "displayName": "Fixture Reviewer Three",
+        "uri": "https://www.google.com/maps/contrib/100000000000000000003/reviews",
+        "photoUri": "//lh3.googleusercontent.com/a-/ALV-UjXFixtureAvatarThree=s128-c0x00000000-cc-rp-mo"
+      },
+      "publishTime": "2026-07-30T03:11:48.104Z",
+      "flagContentUri": "https://www.google.com/local/review/rap/report?postId=Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNUa3hHUkZORlJFUUFFQUU&d=17924085&t=1",
+      "googleMapsUri": "https://www.google.com/maps/reviews/data=!4m6!14m5!1m4!2m3!1sCi9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNUa3hHUkZORlJFUUFFQUU!2m1!1s0x0:0x6f46f2a8ff729260"
+    },
+    {
+      "name": "places/ChIJGz5HChRv3IARYJJy_6jyRm8/reviews/Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNVVlZPV0VSR1JVRkZFQUU",
+      "relativePublishTimeDescription": "5 months ago",
+      "rating": 5,
+      "text": { "text": "Fixture review four. Test data only.\n\nIt has a line break.", "languageCode": "en" },
+      "originalText": { "text": "Fixture review four. Test data only.\n\nIt has a line break.", "languageCode": "en" },
+      "authorAttribution": {
+        "displayName": "Fixture Reviewer Four",
+        "uri": "https://www.google.com/maps/contrib/100000000000000000004/reviews",
+        "photoUri": "https://lh3.googleusercontent.com/a-/ALV-UjXFixtureAvatarFour=s128-c0x00000000-cc-rp-mo-ba3"
+      },
+      "publishTime": "2026-05-22T18:45:00Z",
+      "flagContentUri": "https://www.google.com/local/review/rap/report?postId=Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNVVlZPV0VSR1JVRkZFQUU&d=17924085&t=1",
+      "googleMapsUri": "https://www.google.com/maps/reviews/data=!4m6!14m5!1m4!2m3!1sCi9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNVVlZPV0VSR1JVRkZFQUU!2m1!1s0x0:0x6f46f2a8ff729260"
+    },
+    {
+      "name": "places/ChIJGz5HChRv3IARYJJy_6jyRm8/reviews/Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNWVkZXUWxGa1VFRkJFQUU",
+      "relativePublishTimeDescription": "a year ago",
+      "rating": 3,
+      "text": { "text": "Fixture review five. Test data only.", "languageCode": "en" },
+      "originalText": { "text": "Fixture review five. Test data only.", "languageCode": "en" },
+      "authorAttribution": {
+        "displayName": "Fixture Reviewer Five",
+        "uri": "https://www.google.com/maps/contrib/100000000000000000005/reviews",
+        "photoUri": "https://lh3.googleusercontent.com/a/ACg8ocFixtureAvatarFive=s128-c0x00000000-cc-rp-mo"
+      },
+      "publishTime": "2025-10-02T12:00:00Z",
+      "flagContentUri": "https://www.google.com/local/review/rap/report?postId=Ci9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNWVkZXUWxGa1VFRkJFQUU&d=17924085&t=1",
+      "googleMapsUri": "https://www.google.com/maps/reviews/data=!4m6!14m5!1m4!2m3!1sCi9DQUlRQUNvZENodHljRjlvT2xSR2FYaDBkWEpsVW1WMmFXVjNWVkZXUWxGa1VFRkJFQUU!2m1!1s0x0:0x6f46f2a8ff729260"
+    }
+  ]
+}
