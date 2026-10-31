@@ -115,17 +115,6 @@ enum Theme {
 
     // MARK: Gradients
 
-    /// Bravo's promo cards: royal into blue at about 120°. White text on it is 6.63:1 or better.
-    static let promoGradient = LinearGradient(
-        stops: [
-            .init(color: royal, location: 0),
-            .init(color: blue, location: 0.64),
-            .init(color: Color(hex: 0x3A66F0), location: 1),
-        ],
-        startPoint: UnitPoint(x: 0.07, y: 0.25),
-        endPoint: UnitPoint(x: 0.93, y: 0.75)
-    )
-
     /// The dot in the open-status pill.
     static func color(for tone: StatusSummary.Tone) -> Color {
         switch tone {

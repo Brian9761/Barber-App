@@ -46,7 +46,7 @@ struct SafariView: UIViewControllerRepresentable {
     }
 }
 
-/// A web page in a sheet: Squire for booking, Bravo for products, Google for reviews.
+/// A web page in a sheet: the shop's website, Google and Yelp reviews, Instagram.
 ///
 /// Until the first page draws, a barber-pole spinner sits in the middle (it never blocks Safari's
 /// own Done button, and gives up after 12 seconds in case Safari never reports the load). The

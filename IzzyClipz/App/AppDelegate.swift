@@ -9,9 +9,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     let favorites = Favorites(defaults: LaunchOptions.defaults)
     let reminders = ReminderStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
     let appointments = AppointmentStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
-    let bravo = BravoStore()
-    /// Uses Bravo's live prices, variants and stock, so it's made after `bravo`.
-    private(set) lazy var bag = BagStore(bravo: bravo, defaults: LaunchOptions.defaults)
 
     /// UI tests never see a permission alert; everyone else gets the real thing.
     private static func makeScheduler() -> NotificationScheduling {
@@ -40,7 +37,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             // Also notices permission changes made in Settings.
             reminders.refresh()
         }
-        Task { await bravo.refresh() }
     }
 
     /// Shows notifications even while the app is open.

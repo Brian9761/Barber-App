@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The Home tab: the drop page. The shop's work up top, the way to book right under it, then the
 /// client's next appointment, the quick ways to reach the shop, the menu's favorites, the crew,
-/// what clients say, Instagram and Bravo.
+/// what clients say and Instagram.
 struct HomeView: View {
     @Environment(AppRouter.self) private var router
 
@@ -58,7 +58,7 @@ private struct HomeScreen: View {
 }
 
 /// Everything on Home, top to bottom (art direction §1.2): hero, Book, the next appointment, quick
-/// actions, popular services, the crew, reviews, Instagram, Bravo.
+/// actions, popular services, the crew, reviews, Instagram.
 private struct HomeContent: View {
     let heroHeight: CGFloat
 
@@ -80,8 +80,6 @@ private struct HomeContent: View {
                     // Room for the logo sticker that pokes out above the Instagram card.
                     InstagramCard()
                         .padding(.top, 28)
-                    HomeBravoCard()
-                        .padding(.top, Theme.Space.cardGap)
                 }
                 .padding(.horizontal, Theme.gutter)
             }

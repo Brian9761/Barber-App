@@ -140,10 +140,6 @@ enum AppSheet: Identifiable, Hashable {
     case web(URL)
     case reminders
     case addToCalendar(Appointment)
-    /// The client's Bravo bag.
-    case bag
-    /// Bravo's own checkout, opened with the bag's items in its cart.
-    case checkout(URL)
 
     var id: String {
         switch self {
@@ -157,10 +153,6 @@ enum AppSheet: Identifiable, Hashable {
             return "reminders"
         case .addToCalendar(let appointment):
             return "calendar/\(appointment.id.uuidString)"
-        case .bag:
-            return "bag"
-        case .checkout(let url):
-            return "checkout/\(url.absoluteString)"
         }
     }
 }
@@ -179,11 +171,6 @@ final class AppRouter {
     /// The sheet on screen. Set it through `present(_:)` so dismissal knows
     /// what was showing; SwiftUI sets it back to `nil` when it goes away.
     var sheet: AppSheet?
-    /// Set when Bravo's checkout closes, for the root to ask "Did you finish
-    /// checking out?": the app can't see whether the client paid, so it asks
-    /// before emptying the bag. Cleared by `answerCheckoutPrompt` (and by
-    /// SwiftUI when the question goes away).
-    var asksAboutCheckout = false
 
     /// What was presented last, so its dismissal can lead somewhere.
     @ObservationIgnored private var lastPresentedSheet: AppSheet?
@@ -257,33 +244,13 @@ final class AppRouter {
         present(.addToCalendar(appointment))
     }
 
-    func openBag() {
-        present(.bag)
-    }
-
-    /// Opens Bravo's checkout with the bag's items. From the bag sheet, the
-    /// bag closes first and the checkout opens once it has gone. When the
-    /// checkout closes, the client is asked whether they finished.
-    func checkOut(_ url: URL) {
-        present(.checkout(url))
-    }
-
-    /// The client's answer to "Did you finish checking out?": yes empties the
-    /// bag, not yet keeps it as it is.
-    func answerCheckoutPrompt(finished: Bool, bag: BagStore) {
-        asksAboutCheckout = false
-        if finished {
-            bag.removeAll()
-        }
-    }
-
     /// Shows a sheet. If another one is up (e.g. "Add to Calendar" from the
     /// "Did you book it?" sheet), that one closes first and the new one opens
     /// once it has gone: swapping sheets mid-presentation is unreliable on
     /// some iOS versions.
     func present(_ sheet: AppSheet) {
-        // A second tap (e.g. on "Check out on Bravo") while the sheet it
-        // replaces is still closing: it's already on its way.
+        // A second tap while the sheet it replaces is still closing: it's
+        // already on its way.
         if sheet == queuedSheet { return }
         if let current = self.sheet, current != sheet {
             queuedSheet = sheet
@@ -296,12 +263,10 @@ final class AppRouter {
         self.sheet = sheet
     }
 
-    /// Closes whatever sheet is up without anything following it, including
-    /// a checkout question that's up or about to be.
+    /// Closes whatever sheet is up without anything following it.
     func closeSheet() {
         queuedSheet = nil
         lastPresentedSheet = nil
-        asksAboutCheckout = false
         sheet = nil
     }
 
@@ -321,8 +286,6 @@ final class AppRouter {
             if let plan = handoff.plan {
                 present(.confirmBooking(plan))
             }
-        case .checkout?:
-            asksAboutCheckout = true
         default:
             break
         }

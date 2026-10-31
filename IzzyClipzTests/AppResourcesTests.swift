@@ -19,7 +19,6 @@ final class AppResourcesTests: XCTestCase {
         for name in Asset.all {
             XCTAssertNotNil(UIImage(named: name), "Missing image '\(name)'")
         }
-        XCTAssertNotNil(UIImage(named: "BravoLogo"))
     }
 
     func testTheLogoIsTransparentSoItSitsOnAnyLightSurface() throws {
@@ -80,21 +79,6 @@ final class AppResourcesTests: XCTestCase {
         }
         for barber in AppData.catalog.barbers {
             XCTAssertEqual(AppData.bookingURL(for: .barber(barber.id)).scheme, "https", barber.id)
-        }
-    }
-
-    func testBravoLinksGoToBravoAndSayWhereTheyCameFrom() throws {
-        let products = AppData.products
-        var urls = products.products.map { products.url(for: $0) }
-        urls.append(products.storeURL)
-        for url in urls {
-            XCTAssertEqual(url.scheme, "https", url.absoluteString)
-            XCTAssertEqual(url.host, "bravohairgel.com", url.absoluteString)
-            let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
-            XCTAssertTrue(query.contains(URLQueryItem(name: "utm_source", value: "izzyclipz-app")), url.absoluteString)
-        }
-        for product in products.products {
-            XCTAssertTrue(products.url(for: product).path.hasSuffix("/products/\(product.id)"), product.id)
         }
     }
 

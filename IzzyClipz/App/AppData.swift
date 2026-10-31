@@ -4,7 +4,6 @@ import Foundation
 enum AppData {
     static let shop = ShopInfo.izzyClipz
     static let catalog = Catalog.izzyClipz
-    static let products = ProductCatalog.bravo
     static let clock = shop.clock
     /// Day and time picking for appointments, in the shop's time zone.
     static let bookingCalendar = BookingCalendar(clock: clock)
@@ -71,6 +70,5 @@ enum Asset {
     static var all: [String] {
         [storefront, hero, launchLogo, logo, mascot]
             + GalleryPhoto.allCases.map(\.assetName)
-            + AppData.products.products.map(\.imageName)
     }
 }
