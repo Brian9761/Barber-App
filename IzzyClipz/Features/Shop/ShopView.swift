@@ -4,7 +4,8 @@ import SwiftUI
 /// there's no cart and no checkout, and every product says it's available at the shop.
 ///
 /// Products come live from the shop's server (the owner adds them in the Izzy Clipz Business app).
-/// Pull to refresh. Loading, empty and error states each say what's going on and what to do.
+/// Pull to refresh (a photo that couldn't load tries again then). Loading, empty and error states
+/// each say what's going on and what to do.
 struct ShopView: View {
     @State private var path: [IzzyAPI.Product] = []
 
@@ -64,7 +65,7 @@ private struct ShopScreen: View {
                 if list.isEmpty {
                     ShopEmptyState()
                 } else {
-                    ProductGrid(products: list)
+                    ProductGrid(products: list, loadedAt: products.loadedAt)
                 }
             }
         } else if let error = products.error {
@@ -117,6 +118,8 @@ private struct ShopEmptyState: View {
 /// Two columns of product tiles, one at the largest text sizes.
 private struct ProductGrid: View {
     let products: [IzzyAPI.Product]
+    /// When the products last came from the server.
+    let loadedAt: Date?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
@@ -127,7 +130,7 @@ private struct ProductGrid: View {
         ) {
             ForEach(products) { product in
                 NavigationLink(value: product) {
-                    ProductTile(product: product)
+                    ProductTile(product: product, loadedAt: loadedAt)
                 }
                 .buttonStyle(.pressable)
                 .accessibilityLabel(ProductTile.accessibilityText(for: product))
@@ -142,10 +145,11 @@ private struct ProductGrid: View {
 /// a short description and "Available at the shop".
 private struct ProductTile: View {
     let product: IzzyAPI.Product
+    let loadedAt: Date?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            ProductPhoto(url: product.imageUrl, name: product.name)
+            ProductPhoto(url: product.imageUrl, name: product.name, listLoadedAt: loadedAt)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.thumbnail, style: .continuous))
             Text(product.name)
@@ -188,6 +192,13 @@ private struct ProductTile: View {
 struct ProductPhoto: View {
     let url: URL?
     let name: String
+    /// When the products last came from the server. A photo that couldn't load tries again when
+    /// this changes (pull to refresh); photos that loaded stay as they are.
+    var listLoadedAt: Date? = nil
+
+    /// A new number makes a new `AsyncImage`, which loads the photo again.
+    @State private var attempt = 0
+    @State private var didFail = false
 
     var body: some View {
         Color.clear
@@ -202,17 +213,24 @@ struct ProductPhoto: View {
                                 .accessibilityLabel("Photo of \(name)")
                         case .failure:
                             placeholder(note: "Photo unavailable")
+                                .onAppear { didFail = true }
                         case .empty:
                             placeholder(note: nil, isLoading: true)
                         @unknown default:
                             placeholder(note: nil)
                         }
                     }
+                    .id(attempt)
                 } else {
                     placeholder(note: nil)
                 }
             }
             .clipped()
+            .onChange(of: listLoadedAt) {
+                guard didFail else { return }
+                didFail = false
+                attempt += 1
+            }
     }
 
     private func placeholder(note: String?, isLoading: Bool = false) -> some View {

@@ -60,6 +60,29 @@ final class LiveResourceTests: XCTestCase {
         XCTAssertNotNil(store.error)
     }
 
+    /// Pull to refresh that brings back the very same products still marks a new answer
+    /// (`loadedAt`), which tells a product photo that couldn't load to try again. A pull that fails
+    /// doesn't, so the photos aren't asked for while the shop can't be reached.
+    func testEveryAnswerMarksANewLoadEvenWhenNothingChanged() async {
+        api.productsHandler = { [product] in [product] }
+        let store = makeProducts()
+        await store.refresh()
+        let first = now
+        XCTAssertEqual(store.loadedAt, first)
+
+        now = now.addingTimeInterval(30)
+        await store.refresh()
+        XCTAssertEqual(store.value, [product], "The same products")
+        XCTAssertEqual(store.loadedAt, now, "A new answer all the same")
+
+        let second = now
+        api.productsHandler = { throw APIError.offline }
+        now = now.addingTimeInterval(30)
+        await store.refresh()
+        XCTAssertEqual(store.loadedAt, second, "A failed pull isn't an answer")
+        XCTAssertEqual(store.value, [product])
+    }
+
     func testTwoRefreshesAtOnceShareOneRequest() async {
         api.productsHandler = { [product] in [product] }
         let store = makeProducts()
