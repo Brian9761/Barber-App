@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// Step 2 when the barber was picked first (from Home, the Services tab or their profile): the
-/// barber shows as step 1, done, then everything they offer with their own prices and lengths.
-/// Tapping a service goes straight to the calendar. No red here.
+/// barber, then everything they offer with their own prices and lengths. Tapping a service goes
+/// straight to the times.
 struct ChooseServiceView: View {
     let barber: Barber
     @Environment(Favorites.self) private var favorites
@@ -11,19 +11,17 @@ struct ChooseServiceView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                ChooseServiceBarberCard(barber: barber, isFavorite: favorites.isFavorite(barber.id))
-
-                BookingStepTitle(
+                BookingStepHeader(
                     step: 2,
-                    name: "Service",
                     title: "Pick a service",
                     subtitle: "Everything \(barber.name) offers, with their own prices and lengths."
                 )
+                ChooseServiceBarberCard(barber: barber, isFavorite: favorites.isFavorite(barber.id))
 
                 if sections.isEmpty {
                     InfoCallout(
                         title: "Nothing to book here yet",
-                        message: "\(barber.name) has no services on the booking menu right now. Call the shop at \(AppData.shop.phone.display) to set something up."
+                        message: "\(barber.name) has no services to book in the app right now. Call the shop at \(AppData.shop.phone.display) to set something up."
                     )
                 } else {
                     ForEach(sections) { section in
@@ -41,7 +39,7 @@ struct ChooseServiceView: View {
             .padding(.bottom, Theme.Space.xxl)
         }
         .screenBackground()
-        .bookingStepChrome(step: 2, name: "Service", title: barber.name)
+        .bookingStepChrome(title: barber.name)
     }
 
     /// The barber's offerings, grouped by menu category, in menu order.
@@ -61,7 +59,7 @@ private struct ChooseServiceSection: Identifiable {
     var id: String { category.id }
 }
 
-/// Step 1, already done: the barber this booking is with.
+/// The barber this booking is with.
 private struct ChooseServiceBarberCard: View {
     let barber: Barber
     let isFavorite: Bool
@@ -70,7 +68,9 @@ private struct ChooseServiceBarberCard: View {
         HStack(spacing: 14) {
             MonogramTile(barber: barber, side: 56)
             VStack(alignment: .leading, spacing: 3) {
-                MonoTag(text: "Barber", style: .bone, symbol: Symbol.checkmark)
+                Text("Your barber")
+                    .textRole(.label)
+                    .foregroundStyle(Theme.smoke)
                 HStack(spacing: Theme.Space.xs) {
                     Text(barber.name)
                         .textRole(.displayS)
@@ -83,29 +83,15 @@ private struct ChooseServiceBarberCard: View {
                             .accessibilityHidden(true)
                     }
                 }
-                if let rating = barber.rating {
-                    RatingLine(rating: rating, source: "Squire")
-                } else {
-                    Text(barber.title)
-                        .textRole(.monoNumber)
-                        .foregroundStyle(Theme.smoke)
-                }
+                Text(barber.title)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
             }
             Spacer(minLength: 0)
         }
         .card(padding: Theme.Space.cardPadding)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var accessibilityText: String {
-        var parts = ["Barber picked: \(barber.name)" + (isFavorite ? ", your barber" : "")]
-        if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel) on Squire")
-        } else {
-            parts.append(barber.title)
-        }
-        return parts.joined(separator: ", ")
+        .accessibilityLabel("Booking with \(barber.name)" + (isFavorite ? ", your barber" : "") + ", \(barber.title.menuSpokenList)")
     }
 }
 
@@ -158,7 +144,7 @@ private struct ChooseServiceOfferingLink: View {
                 .foregroundStyle(Theme.bone)
                 .fixedSize(horizontal: false, vertical: true)
             Text(offering.durationLabel)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
     }

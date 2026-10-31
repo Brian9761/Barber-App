@@ -110,7 +110,7 @@ private struct GalleryPhotoTile: View {
     }
 }
 
-/// The photos full screen on ink: swipe between them, pinch or double-tap to zoom. A mono "3 / 6"
+/// The photos full screen on ink: swipe between them, pinch or double-tap to zoom. A "3 / 6"
 /// counter and a 44 pt close button stay put on top, and the photo's description sits on a solid
 /// ink band at the bottom.
 struct PhotoViewer: View {
@@ -172,7 +172,7 @@ struct PhotoViewer: View {
     /// "3 / 6". VoiceOver hears "Photo 3 of 6".
     private var counter: some View {
         Text("\(position) / \(GalleryPhoto.allCases.count)")
-            .textRole(.monoNumber)
+            .textRole(.detail)
             .foregroundStyle(Theme.bone)
             .padding(.horizontal, Theme.Space.l)
             .frame(minHeight: 32)

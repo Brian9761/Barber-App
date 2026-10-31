@@ -70,14 +70,14 @@ struct MascotSticker: View {
     }
 }
 
-/// "IZZY CLIPZ" in Archivo Expanded Black: "IZZY" in bone and "CLIPZ" in hot red, one of the only
-/// two places hot red text is allowed. VoiceOver reads the shop's name.
+/// "Izzy Clipz" in heavy type: "Izzy" in bone and "Clipz" in hot red, the one place hot red text
+/// is allowed. VoiceOver reads the shop's name.
 struct Wordmark: View {
     var isCompact = false
 
     var body: some View {
         Text("\(Text("Izzy ").foregroundStyle(Theme.bone))\(Text("Clipz").foregroundStyle(Theme.hotRed))")
-            .textRole(isCompact ? .wordmarkCompact : .wordmark)
+            .font(.system(isCompact ? .headline : .title3, design: .default, weight: .heavy))
             .lineLimit(1)
             .accessibilityLabel(AppData.shop.name)
     }
@@ -86,9 +86,9 @@ struct Wordmark: View {
 // MARK: - Monograms
 
 /// A barber's tile. There are no headshots, so each barber gets two letters of their name in
-/// Archivo ExtraCondensed Black on a fill picked by their place on the team: bone, blue, ink4,
+/// heavy type on a fill picked by their place on the team: bone, blue, ink4,
 /// bone, blue, and around again. No red (red is for actions) and no stripes (the stripes belong to
-/// the pole). The owner's wide tiles carry an "OWNER" tag. Decorative: the row or card around it
+/// the logo). The owner's wide tiles carry an "Owner" tag. Decorative: the row or card around it
 /// says who it is.
 ///
 ///     MonogramTile(barber: izzy, size: CGSize(width: 116, height: 66))
@@ -120,8 +120,7 @@ struct MonogramTile: View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius ?? min(size.width, size.height) * 0.27, style: .continuous)
         let letterSize = min(size.height * 0.76, size.width * 0.8)
         Text(Self.letters(for: barber))
-            .font(BrandFont.extraCondensedBlack.font(fixedSize: letterSize))
-            .tracking(-0.01 * letterSize)
+            .font(.system(size: letterSize * 0.8, weight: .heavy, design: .default))
             .foregroundStyle(palette.letters)
             .lineLimit(1)
             .minimumScaleFactor(0.5)
@@ -129,7 +128,7 @@ struct MonogramTile: View {
             .background(palette.fill, in: shape)
             .overlay(alignment: .topLeading) {
                 if barber.isOwner && size.width >= 96 {
-                    MonoTag(text: "Owner", style: palette.isLight ? .ink : .bone)
+                    Badge(text: "Owner", style: palette.isLight ? .ink : .bone)
                         .padding(7)
                 }
             }
@@ -164,7 +163,7 @@ private struct MonogramPalette {
 }
 
 extension Barber {
-    /// Whether their title on Squire says they own the shop.
+    /// Whether their title says they own the shop.
     var isOwner: Bool {
         title.localizedCaseInsensitiveContains("owner")
     }
@@ -199,7 +198,7 @@ struct ShopStatusLine: Equatable {
     }
 }
 
-/// The open-status pill: a status dot and the status in mono. On the ink canvas it's an `ink3`
+/// The open-status pill: a status dot and the status. On the ink canvas it's an `ink3`
 /// capsule; over a photo it's frosted ink (solid with Reduce Transparency).
 struct StatusPill: View {
     let status: ShopStatusLine
@@ -213,7 +212,7 @@ struct StatusPill: View {
                 .padding(3)
                 .background(Theme.color(for: status.tone).opacity(0.22), in: Circle())
             Text(status.text)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.bone)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)

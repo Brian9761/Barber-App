@@ -17,22 +17,14 @@ struct VisitView: View {
     var body: some View {
         NavigationStack(path: $path) {
             VisitScreen(scrollToTop: scrollToTop)
-                .tabScreen()
                 .navigationDestination(for: VisitRoute.self) { route in
                     switch route {
                     case .reviews:
                         ReviewsView()
-                            .barberPolePushRide()
-                            .tabScreen()
+                            
+                            
                     }
                 }
-        }
-        .onTabReselect {
-            if path.isEmpty {
-                scrollToTop += 1
-            } else {
-                path = NavigationPath()
-            }
         }
     }
 
@@ -169,7 +161,7 @@ private struct VisitHero: View {
                 if showsStatus, let walkIns = VisitCopy.walkIns {
                     // Only in the bottom of the photo, where the scrim is at least 84% ink.
                     Text(walkIns)
-                        .textRole(.monoTag)
+                        .textRole(.label)
                         .foregroundStyle(Theme.bone)
                         .multilineTextAlignment(.trailing)
                         .fixedSize(horizontal: false, vertical: true)
@@ -196,7 +188,7 @@ private struct VisitStatusStrip: View {
                         .fill(Theme.color(for: status.tone))
                         .frame(width: 10, height: 10)
                     Text(status.text)
-                        .textRole(.monoTag)
+                        .textRole(.label)
                         .foregroundStyle(Theme.bone)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -206,7 +198,7 @@ private struct VisitStatusStrip: View {
             }
             if let walkIns = VisitCopy.walkIns {
                 Text(walkIns)
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -432,19 +424,17 @@ private struct VisitHoursRow: View {
     private var dayLabel: some View {
         HStack(spacing: Theme.Space.s) {
             Text(day.name)
-                // Regular, or bold for today; the role adds the capitals, tracking and size limits.
-                .font((isToday ? BrandFont.monoBold : BrandFont.monoRegular).font(size: 12, relativeTo: .caption))
-                .textRole(.monoNumber)
+                .font(.system(.subheadline, design: .default, weight: isToday ? .bold : .regular))
                 .foregroundStyle(isToday ? Theme.ink : Theme.smokeDark)
             if isToday {
-                MonoTag(text: "Today", style: .ink)
+                Badge(text: "Today", style: .ink)
             }
         }
     }
 
     private var hoursLabel: some View {
         Text(hours?.label ?? "Closed")
-            .font((isToday ? BrandFont.bold : BrandFont.semiBold).font(size: 15, relativeTo: .body).monospacedDigit())
+            .font(.system(.body, design: .default, weight: isToday ? .bold : .semibold).monospacedDigit())
             .foregroundStyle(Theme.ink)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -672,13 +662,12 @@ private struct VisitLinksSection: View {
             VisitLinkRow(
                 symbol: Symbol.reviews,
                 title: "Reviews",
-                detail: ratingsLabel,
+                detail: "On Google and Yelp",
                 trailingSymbol: Symbol.chevron
             )
         }
         .buttonStyle(.pressable)
         .accessibilityLabel("Reviews")
-        .accessibilityValue(ratingsSpoken)
         .accessibilityIdentifier("visitSeeAllReviews")
     }
 
@@ -700,14 +689,6 @@ private struct VisitLinksSection: View {
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    /// "5.0 on Squire · 4.9 on Google".
-    private var ratingsLabel: String {
-        shop.ratings.map { "\($0.rating.averageLabel) on \($0.source)" }.joined(separator: " · ")
-    }
-
-    private var ratingsSpoken: String {
-        shop.ratings.map { "\($0.rating.averageLabel) out of 5 on \($0.source)" }.joined(separator: ", ")
-    }
 }
 
 /// An icon tile, a title over a detail line, and a trailing arrow (↗ for web pages, › for the
@@ -752,10 +733,10 @@ private struct VisitFooter: View {
         VStack(spacing: Theme.Space.m) {
             MascotSticker(size: 40)
             VStack(spacing: Theme.Space.xxs) {
-                Text("Appointments are confirmed on Squire")
+                Text("Book in the app, pay at the shop")
                 Text("Version \(VisitView.appVersion)")
             }
-            .textRole(.monoTag)
+            .textRole(.label)
             .foregroundStyle(Theme.smoke)
             .fixedSize(horizontal: false, vertical: true)
         }

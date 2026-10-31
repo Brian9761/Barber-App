@@ -54,13 +54,10 @@ struct ReminderSettingsView: View {
     }
 }
 
-/// A still barber pole, the kicker, "KEEP IT FRESH" and how reminders work.
+/// The kicker, "Keep it fresh" and how reminders work.
 private struct ReminderSettingsHeader: View {
     var body: some View {
         VStack(spacing: Theme.Space.m) {
-            BarberPole(phase: 0)
-                .frame(width: 18, height: 48)
-                .padding(.bottom, Theme.Space.xs)
             VStack(spacing: Theme.Space.xxs) {
                 Kicker("Cut reminders")
                 Text("Keep it fresh")
@@ -205,7 +202,7 @@ private struct ReminderScheduleSection: View {
 
     private var pickedInterval: some View {
         Text(Self.weeks(store.intervalWeeks))
-            .textRole(.monoNumber)
+            .textRole(.detail)
             .foregroundStyle(Theme.bone)
     }
 
@@ -285,7 +282,7 @@ private struct ReminderChipStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous)
         return configuration.label
-            .font((isSelected ? BrandFont.bold : BrandFont.semiBold).font(size: 15, relativeTo: .subheadline).monospacedDigit())
+            .font(.system(.subheadline, design: .default, weight: isSelected ? .bold : .semibold).monospacedDigit())
             .foregroundStyle(isSelected ? Theme.ink : Theme.bone)
             .lineLimit(1)
             .padding(.horizontal, Theme.Space.s)
@@ -295,8 +292,8 @@ private struct ReminderChipStyle: ButtonStyle {
     }
 }
 
-/// When the next reminder will show up, on a bone card: the day in Display M, the time in mono.
-/// While it's being scheduled, the pole spins in its place.
+/// When the next reminder will show up, on a bone card: the day and the time. While it's being
+/// scheduled, a spinner shows in its place.
 private struct ReminderNextCard: View {
     @Environment(ReminderStore.self) private var store
 
@@ -310,11 +307,12 @@ private struct ReminderNextCard: View {
                     .textRole(.displayM)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(next.date, format: .dateTime.hour().minute())
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smokeDark)
             } else {
                 HStack(spacing: Theme.Space.m) {
-                    BarberPoleSpinner(size: CGSize(width: 12, height: 36), label: "Scheduling")
+                    ProgressView()
+                        .accessibilityLabel("Scheduling")
                     Text("Scheduling…")
                         .textRole(.callout)
                         .foregroundStyle(Theme.smokeDark)

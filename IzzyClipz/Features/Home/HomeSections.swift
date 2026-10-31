@@ -6,13 +6,10 @@ import SwiftUI
 // MARK: - Hero
 
 /// The shop's six cuts as a photo pager you swipe through (no autoplay), with the open status on
-/// top and "FRESH / OUT THE CHAIR." over an ink band at the bottom. Each photo's real caption and a
-/// "3 / 6" counter sit under it, on the canvas. Tapping a photo, or the ↗ button, opens the Gallery.
-///
-/// Text sits only on the band, which is 82% ink under the type (bone on it is 10:1 or better over
-/// any photo); the faces stay clear above it.
+/// top and a button to the gallery in the corner. Each photo's caption and a "3 of 6" counter sit
+/// under it, on the canvas. Tapping a photo opens the gallery too.
 struct HomeHero: View {
-    /// The pager's minimum height: it grows with the headline at large text sizes.
+    /// The pager's height.
     let height: CGFloat
 
     @Environment(AppRouter.self) private var router
@@ -42,68 +39,29 @@ struct HomeHero: View {
     // MARK: Card
 
     private var card: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            LiveStatusPill(isOverPhoto: true)
-                // One line on the photo: the longest status ("Closed · opens 10 AM tomorrow") still
-                // fits at xxxLarge. VoiceOver reads it in full.
-                .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
-                .padding(Theme.Space.l)
-                // Swipes that start on the pill still turn the page.
-                .allowsHitTesting(false)
-            Spacer(minLength: Theme.Space.xxl)
-            HStack(alignment: .bottom, spacing: Theme.Space.l) {
-                headline
+        pager
+            .frame(maxWidth: .infinity)
+            .frame(height: height)
+            .overlay(alignment: .topLeading) {
+                LiveStatusPill(isOverPhoto: true)
+                    // One line on the photo: the longest status still fits at xxxLarge. VoiceOver
+                    // reads it in full.
+                    .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+                    .padding(Theme.Space.l)
+                    // Swipes that start on the pill still turn the page.
                     .allowsHitTesting(false)
-                Spacer(minLength: 0)
-                galleryButton
             }
-            .padding(.leading, Theme.Space.xl)
-            .padding(.trailing, 14)
-            .padding(.bottom, 14)
-            .background(alignment: .top) { band }
-        }
-        // `idealHeight` too: inside the vertical scroll view nothing proposes a height, and without
-        // it the spacer wouldn't push the headline down to the bottom of the photo.
-        .frame(maxWidth: .infinity, minHeight: height, idealHeight: height, alignment: .topLeading)
-        .background { pager }
-        .background(Theme.ink3)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
-    }
-
-    /// The one drip word on Home, in bone (red stays for the Book button), over the hero line.
-    private var headline: some View {
-        // Rubik Wet Paint's drips hang 16 pt below its baseline, inside its own line box; pulling
-        // the next line up by a point leaves the 2–4 pt gap the spec asks for.
-        VStack(alignment: .leading, spacing: -1) {
-            Text("Fresh")
-                .textRole(.dripWord)
-            Text("Out the chair.")
-                .textRole(.displayL)
-        }
-        .foregroundStyle(Theme.bone)
-        .lineLimit(2)
-        .minimumScaleFactor(0.7)
-        .fixedSize(horizontal: false, vertical: true)
-        // A slogan, not information: VoiceOver gets the photos and the status instead.
-        .accessibilityHidden(true)
-    }
-
-    /// 82% ink behind the headline, fading in over the 40 pt above it.
-    private var band: some View {
-        let fade: CGFloat = 40
-        return VStack(spacing: 0) {
-            LinearGradient(colors: [Theme.ink.opacity(0), Theme.ink.opacity(0.82)], startPoint: .top, endPoint: .bottom)
-                .frame(height: fade)
-            Theme.ink.opacity(0.82)
-        }
-        .padding(.top, -fade)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+            .overlay(alignment: .bottomTrailing) {
+                galleryButton
+                    .padding(14)
+            }
+            .background(Theme.ink3)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
     }
 
     private var galleryButton: some View {
         NavigationLink(value: HomeRoute.gallery) {
-            Image(systemName: Symbol.external)
+            Image(systemName: Symbol.gallery)
         }
         .buttonStyle(IconButtonStyle(fill: Theme.bone, foreground: Theme.ink))
         .accessibilityLabel("See all photos")
@@ -143,16 +101,16 @@ struct HomeHero: View {
         .accessibilityIdentifier("homeHeroPhotos")
     }
 
-    /// "Textured crop with a fade" on the left, "1 / 6" on the right.
+    /// "Textured crop with a fade" on the left, "1 of 6" on the right.
     private func caption(for photo: GalleryPhoto, index: Int) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
             Text(photo.caption)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 0)
-            Text("\(index + 1) / \(Self.photos.count)")
-                .textRole(.monoNumber)
+            Text("\(index + 1) of \(Self.photos.count)")
+                .textRole(.detail)
                 .foregroundStyle(Theme.bone)
                 .fixedSize()
         }
@@ -184,9 +142,9 @@ struct HomeHero: View {
 }
 
 private extension GalleryPhoto {
-    /// Where to crop each portrait photo for the landscape hero, so the head and the fade line sit
-    /// in the clear top half, above the headline's band. Measured on each photo: the textured crop's
-    /// head is near the top of the frame, the lined-up beard's much lower.
+    /// Where to crop each portrait photo for the landscape hero, so the head and the fade line stay
+    /// in view. Measured on each photo: the textured crop's head is near the top of the frame, the
+    /// lined-up beard's much lower.
     var heroAnchor: UnitPoint {
         let y: CGFloat
         switch self {
@@ -203,9 +161,8 @@ private extension GalleryPhoto {
 
 // MARK: - Book, and the next appointment
 
-/// The screen's one red thing, "BOOK AN APPOINTMENT" with the logo's drips, then either the next
-/// saved appointment as a ticket or, with nothing booked, a mono line about walk-ins (not another
-/// booking card: the button above already does that job).
+/// The screen's one red thing, "Book an appointment" (with "No payment needed" under it), then
+/// the next appointment or, with nothing booked, a line about walk-ins and today's hours.
 struct HomeBookSection: View {
     @Environment(AppRouter.self) private var router
     @Environment(AppointmentStore.self) private var appointments
@@ -214,12 +171,13 @@ struct HomeBookSection: View {
         let upcoming = appointments.upcoming
         // Re-checked every minute, so an appointment that's over drops off.
         TimelineView(.everyMinute) { context in
-            let next = upcoming.first { $0.isUpcoming(at: context.date) }
+            // The next one that's on, or one the shop cancelled, so the client hears about it.
+            let next = upcoming.first { $0.isUpcoming(at: context.date) && ($0.status == .booked || $0.isCancelledByShop) }
             VStack(alignment: .leading, spacing: Theme.Space.xs) {
                 bookButton
                 if let next {
-                    UpcomingAppointmentCard(appointment: next)
-                        // A new card when the next one changes, so an open "Remove?" can't carry
+                    AppointmentCard(appointment: next, isNext: true)
+                        // A new card when the next one changes, so an open "Cancel?" can't carry
                         // over to another appointment.
                         .id(next.id)
                 } else {
@@ -233,19 +191,25 @@ struct HomeBookSection: View {
         Button {
             router.startBooking()
         } label: {
-            Text("Book an appointment")
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Book an appointment")
+                Text("No payment needed. Pay at the shop.")
+                    .textRole(.caption)
+            }
         }
-        .buttonStyle(.primary(drips: true))
+        .buttonStyle(.primary)
+        .accessibilityLabel("Book an appointment")
+        .accessibilityHint("No payment needed. You pay at the shop.")
         .accessibilityIdentifier("homeBookButton")
     }
 
-    /// "WALK-INS WELCOME · TODAY 10 AM – 7 PM", from the shop's highlights and regular hours.
+    /// "Walk-ins welcome · Today 10 AM – 7 PM", from the shop's highlights and regular hours.
     private func walkInLine(at date: Date) -> some View {
         let hours = AppData.clock.todayLabel(at: date)
         let walkIns = AppData.shop.highlights.first { $0.localizedCaseInsensitiveContains("walk-in") }
         let parts = [walkIns, hours].compactMap { $0 }
         return Text(parts.joined(separator: " · "))
-            .textRole(.monoTag)
+            .textRole(.label)
             .foregroundStyle(Theme.smoke)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.horizontal, Theme.Space.xxs)
@@ -337,7 +301,7 @@ struct HomePopularCard: View {
                 .foregroundStyle(primary)
                 .padding(.top, 2)
             Text(AppData.catalog.durationSummary(forService: service.id))
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 2)
@@ -399,8 +363,7 @@ struct HomeCrewSection: View {
     }
 }
 
-/// A barber's card in the crew row: their monogram tile on top, then the name and the rating
-/// ("★ 5.0 · 92"), or "Barber" when Squire doesn't show one.
+/// A barber's card in the crew row: their monogram tile on top, then the name and their title.
 struct HomeCrewCard: View {
     let barber: Barber
     /// About 2.9 cards show on a 390 pt screen, so the row clearly scrolls. Wider with larger text.
@@ -431,39 +394,22 @@ struct HomeCrewCard: View {
         .contentShape(shape)
     }
 
-    /// "Izzy, Owner · Barber, rated 5.0 out of 5 from 92 reviews".
+    /// "Izzy, Owner, Barber".
     static func accessibilityText(for barber: Barber) -> String {
-        var parts = [barber.name, barber.title.replacingOccurrences(of: " · ", with: ", ")]
-        if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel)")
-        }
-        return parts.joined(separator: ", ")
+        [barber.name, barber.title.replacingOccurrences(of: " · ", with: ", ")].joined(separator: ", ")
     }
 }
 
-/// "★ 5.0 · 92" in mono, or the barber's title ("Barber") when there's no published rating. Never
-/// "0 reviews".
+/// The barber's title, "Owner · Barber".
 private struct HomeBarberMeta: View {
     let barber: Barber
     @Environment(\.surfaceTone) private var tone
 
     var body: some View {
-        if let rating = barber.rating {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Image(systemName: Symbol.starFilled)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(tone.primary)
-                Text("\(rating.averageLabel) · \(rating.count)")
-                    .textRole(.monoNumber)
-                    .foregroundStyle(tone.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        } else {
-            Text(barber.title)
-                .textRole(.monoTag)
-                .foregroundStyle(tone.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(barber.title)
+            .textRole(.label)
+            .foregroundStyle(tone.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -482,9 +428,8 @@ struct HomeFavoriteBarberCard: View {
                     .foregroundStyle(Theme.bone)
                     .accessibilityHidden(true)
                 Text("Your barber")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
-                    // UI tests look for this exact text; the role sets it in capitals.
                     .accessibilityLabel("Your barber")
             }
             ViewThatFits(in: .horizontal) {
@@ -556,205 +501,112 @@ private struct HomeLinkLabel: View {
 
 // MARK: - Reviews
 
-/// What clients say, on a bone card: the shop's score on Squire and on Google, then one review
-/// quoted as written (cut off at three lines) with its source. Opens the Reviews screen.
+/// What clients say: Google's live rating and count, with Google Maps' attribution, opening the
+/// Reviews screen. Until Google's numbers arrive (or when they can't be shown), it's a plain link,
+/// "See what clients say". Google and Yelp are never added up into one rating.
 struct HomeReviewsCard: View {
-    private let shop = AppData.shop
+    @Environment(ReviewsStore.self) private var reviews
 
     var body: some View {
         NavigationLink(value: HomeRoute.reviews) {
-            VStack(alignment: .leading, spacing: Theme.Space.l) {
-                scores
-                if let review = shop.reviews.first {
-                    quote(review)
+            Group {
+                if let summary = reviews.value?.google.summary {
+                    rated(summary)
+                } else {
+                    link
                 }
             }
-            .boneCard(padding: Theme.Space.xl)
+            .card(padding: Theme.Space.xl)
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
         .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Opens all reviews")
-        .accessibilityIdentifier("seeAllReviews")
-    }
-
-    /// "5.0 ★★★★★ 115 ON SQUIRE | 4.9 ★★★★★ 59 ON GOOGLE", stacked when they don't fit side by side.
-    private var scores: some View {
-        let ratings = Array(shop.ratings.prefix(2))
-        return ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: Theme.Space.m) {
-                ForEach(Array(ratings.enumerated()), id: \.offset) { index, sourced in
-                    if index > 0 {
-                        Rectangle()
-                            .fill(Theme.ink.opacity(0.15))
-                            .frame(width: 1, height: 34)
-                    }
-                    score(sourced)
-                }
-            }
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                ForEach(ratings, id: \.source) { sourced in
-                    score(sourced, wraps: true)
-                }
-            }
+        .accessibilityHint("Opens the reviews")
+        .accessibilityIdentifier("homeReviews")
+        .task {
+            // Google's numbers are asked for live and never stored; once per half hour at most.
+            await reviews.load(maxAge: 30 * 60)
         }
     }
 
-    /// One site's score. Side by side it keeps its natural width (so `ViewThatFits` can tell
-    /// whether both fit); stacked, the source wraps at the largest text sizes.
-    private func score(_ sourced: SourcedRating, wraps: Bool = false) -> some View {
-        HStack(alignment: .center, spacing: Theme.Space.xs) {
-            Text(sourced.rating.averageLabel)
-                .textRole(.priceL)
-                .foregroundStyle(Theme.ink)
-                .fixedSize()
-            VStack(alignment: .leading, spacing: 3) {
-                RatingStars(average: sourced.rating.average, size: 11, color: Theme.ink)
-                Text("\(sourced.rating.count) on \(sourced.source)")
-                    .textRole(.monoNumber)
-                    .foregroundStyle(Theme.smokeDark)
-                    .fixedSize(horizontal: !wraps, vertical: true)
+    private func rated(_ summary: Rating) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack {
+                Text("What clients say")
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
+                Spacer(minLength: Theme.Space.s)
+                MenuChevron()
             }
+            ReviewScore(rating: summary, site: "Google")
+            GoogleMapsAttribution(lead: "From")
         }
     }
 
-    private func quote(_ review: Review) -> some View {
-        HStack(alignment: .top, spacing: Theme.Space.s) {
-            Image(systemName: Symbol.quote)
-                .font(.system(size: 16, weight: .black))
-                .foregroundStyle(Theme.ink)
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text(review.text)
-                    .textRole(.quote)
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
-                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
-                    Text(byline(for: review))
-                        .textRole(.monoTag)
-                        .foregroundStyle(Theme.smokeDark)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Image(systemName: Symbol.chevron)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Theme.ink)
-                }
-            }
-        }
-    }
-
-    /// "Alex N. · Squire · on Carlos" (set in capitals). Only names a barber the data names.
-    private func byline(for review: Review) -> String {
-        let barber = review.barberID.flatMap { AppData.catalog.barber(withID: $0)?.name }
-        return [review.author, review.source, review.date, barber.map { "on \($0)" }]
-            .compactMap { $0 }
-            .joined(separator: " · ")
-    }
-
+    /// "What clients say. Rated 4.9 out of 5 from 61 reviews on Google. From Google Maps", or
+    /// "See what clients say, on Google and Yelp".
     private var accessibilityText: String {
-        let scores = shop.ratings.prefix(2)
-            .map { "\($0.rating.averageLabel) out of 5 from \($0.rating.countLabel) on \($0.source)" }
-            .joined(separator: ", and ")
-        var text = "Reviews. Rated \(scores)."
-        if let review = shop.reviews.first {
-            let barber = review.barberID.flatMap { AppData.catalog.barber(withID: $0)?.name }
-            let about = barber.map { ", about \($0)" } ?? ""
-            text += " \(review.author) on \(review.source)\(about): \(review.text)"
+        guard let summary = reviews.value?.google.summary else {
+            return "See what clients say, on Google and Yelp"
         }
-        return text
+        return "What clients say. Rated \(summary.averageLabel) out of 5 from \(summary.countLabel) on Google. From Google Maps"
+    }
+
+    private var link: some View {
+        HStack(spacing: Theme.Space.l) {
+            Image(systemName: Symbol.reviews)
+                .font(.title3)
+                .foregroundStyle(Theme.bone)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("See what clients say")
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
+                Text("Reviews on Google and Yelp")
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
+            }
+            Spacer(minLength: Theme.Space.s)
+            MenuChevron()
+        }
     }
 }
 
-// MARK: - Bravo
+// MARK: - Shop
 
-/// The shop's Bravo partnership on the promo gradient, with the blue gel in a white disc bleeding
-/// off the corner. Opens the Shop tab. It says what's true (Bravo sponsors the shop and ships its
-/// own orders), not that the shop uses Bravo on clients.
-struct HomeBravoCard: View {
+/// The shop's own products, a tap from Home: "Only at Izzy Clipz", opening the Shop tab.
+struct HomeShopCard: View {
     @Environment(AppRouter.self) private var router
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    private let sponsor = AppData.products.sponsor
-    private let jarImage = AppData.products.featured.first?.imageName
-    /// Bravo's wordmark, a template image tinted white here.
-    private static let logoAsset = "BravoLogo"
-    private static let jarSize: CGFloat = 112
 
     var body: some View {
         Button {
             router.selectedTab = .shop
         } label: {
-            card
+            HStack(spacing: Theme.Space.l) {
+                Image(systemName: Symbol.shop)
+                    .font(.title3)
+                    .foregroundStyle(Theme.bone)
+                    .frame(width: 44, height: 44)
+                    .background(Theme.ink4, in: RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Only at \(AppData.shop.name)")
+                        .textRole(.headline)
+                        .foregroundStyle(Theme.bone)
+                    Text("Products you can pick up at the shop")
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                }
+                .multilineTextAlignment(.leading)
+                Spacer(minLength: Theme.Space.s)
+                MenuChevron()
+            }
+            .card(padding: Theme.Space.xl)
+            .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(accessibilityText)
+        .accessibilityLabel("Only at \(AppData.shop.name): products you can pick up at the shop")
         .accessibilityHint("Opens the Shop tab")
-        .accessibilityIdentifier("bravoBanner")
-    }
-
-    private var showsJar: Bool {
-        jarImage != nil && !dynamicTypeSize.isAccessibilitySize
-    }
-
-    private var card: some View {
-        let shape = RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-        return VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Image(Self.logoAsset)
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .frame(height: 16)
-                .foregroundStyle(Color.white)
-                .accessibilityHidden(true)
-            Text("Proud \(sponsor.name) partner")
-                .textRole(.displayM)
-                .foregroundStyle(Color.white)
-                .fixedSize(horizontal: false, vertical: true)
-            Text("Gels, clay and pomade, shipped by \(sponsor.name).")
-                .textRole(.body)
-                .foregroundStyle(Color.white)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: Theme.Space.xs) {
-                Text("Shop \(sponsor.name)")
-                    .textRole(.monoTag)
-                Image(systemName: Symbol.forward)
-                    .font(.system(size: 12, weight: .bold))
-            }
-            .foregroundStyle(Color.white)
-            .padding(.top, 2)
-        }
-        .multilineTextAlignment(.leading)
-        .padding(Theme.Space.xl)
-        // Clear of the jar on the right.
-        .padding(.trailing, showsJar ? Self.jarSize - 22 : 0)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(alignment: .topTrailing) {
-            if showsJar {
-                jar
-            }
-        }
-        .background(Theme.promoGradient)
-        .clipShape(shape)
-        .contentShape(shape)
-    }
-
-    @ViewBuilder private var jar: some View {
-        if let jarImage {
-            Image(jarImage)
-                .resizable()
-                .scaledToFill()
-                .scaleEffect(1.18)
-                .frame(width: Self.jarSize, height: Self.jarSize)
-                .background(Color.white)
-                .clipShape(Circle())
-                .rotationEffect(.degrees(-10))
-                .shadow(color: .black.opacity(0.35), radius: 14, x: -10, y: 10)
-                .offset(x: 14, y: -6)
-                .accessibilityHidden(true)
-        }
-    }
-
-    private var accessibilityText: String {
-        "Proud \(sponsor.name) partner. Gels, clay and pomade, shipped by \(sponsor.name). Shop \(sponsor.name)"
+        .accessibilityIdentifier("homeShopCard")
     }
 }

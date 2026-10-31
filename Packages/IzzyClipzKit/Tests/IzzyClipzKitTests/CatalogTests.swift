@@ -32,8 +32,8 @@ final class CatalogTests: XCTestCase {
     func testValidationCatchesBrokenData() {
         let service = Service(id: "cut", name: "Cut", category: .haircuts, summary: "A cut", symbol: "scissors")
         let unoffered = Service(id: "lonely", name: "Lonely", category: .addOns, summary: "Nobody does this", symbol: "eye")
-        let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [], rating: nil)
-        let badSlug = Barber(id: "Bad Slug", name: "B", listedName: "B", title: "Barber", bio: "", specialties: [], rating: nil)
+        let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [])
+        let badSlug = Barber(id: "Bad Slug", name: "B", listedName: "B", title: "Barber", bio: "", specialties: [])
         let uuid = "bbb0c294-87a6-465d-9f55-6f579dcb399a"
         let broken = Catalog(
             services: [service, service, unoffered],
@@ -179,7 +179,7 @@ final class CatalogTests: XCTestCase {
         let pricey = "22222222-2222-2222-2222-222222222222"
         let service = Service(id: "cut", name: "Cut", category: .haircuts, summary: "A cut", symbol: "scissors")
         let barbers = ["a", "b", "c", "d"].map {
-            Barber(id: $0, name: $0, listedName: $0, title: "Barber", bio: "", specialties: [], rating: nil)
+            Barber(id: $0, name: $0, listedName: $0, title: "Barber", bio: "", specialties: [])
         }
         let tied = Catalog(services: [service], barbers: barbers, offerings: [
             Offering(squireServiceID: pricey, serviceID: "cut", barberID: "a", price: .dollars(50), durationMinutes: 30),
@@ -231,7 +231,7 @@ final class CatalogTests: XCTestCase {
 
     func testMonogramsOfShortOrPaddedNames() {
         func barber(_ name: String) -> Barber {
-            Barber(id: "x", name: name, listedName: name, title: "Barber", bio: "", specialties: [], rating: nil)
+            Barber(id: "x", name: name, listedName: name, title: "Barber", bio: "", specialties: [])
         }
         XCTAssertEqual(barber("Al").monogram, "AL")
         XCTAssertEqual(barber("J").monogram, "J")
@@ -260,14 +260,14 @@ final class CatalogTests: XCTestCase {
     }
 
     func testInstagramHandleDefaultsToNone() {
-        let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [], rating: nil)
+        let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [])
         XCTAssertNil(barber.instagramHandle)
         XCTAssertNil(barber.instagramURL)
     }
 
     func testInvalidInstagramHandlesGetNoLink() {
         for handle in ["", "has space", "@izzy", "a/b", String(repeating: "a", count: 31)] {
-            let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [], rating: nil, instagramHandle: handle)
+            let barber = Barber(id: "a-b", name: "A", listedName: "A B.", title: "Barber", bio: "", specialties: [], instagramHandle: handle)
             XCTAssertNil(barber.instagramURL, handle)
         }
         XCTAssertTrue(Barber.isInstagramHandle("izzy.clipz_99"))

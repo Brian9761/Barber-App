@@ -146,7 +146,7 @@ struct InstagramCard: View {
 
     private var handle: some View {
         Text("@\(shop.instagramHandle)")
-            .font(BrandFont.condensedExtraBold.font(size: 21, relativeTo: .title3))
+            .textRole(.displayS)
             .foregroundStyle(Theme.bone)
             .lineLimit(1)
             .minimumScaleFactor(0.7)

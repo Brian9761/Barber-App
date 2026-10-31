@@ -5,241 +5,355 @@ import XCTest
 @MainActor
 final class AppointmentStoreTests: XCTestCase {
     private let scheduler = FakeNotificationScheduler()
-    // Wednesday, October 28, 2026, noon in Oceanside.
-    private let now = Date(timeIntervalSince1970: 1_793_214_000)
-    // Friday, October 30, 2026, 2:30 PM.
-    private let friday = Date(timeIntervalSince1970: 1_793_395_800)
-    // Today at 12:45 PM: too soon for a day-before reminder.
-    private let soon = Date(timeIntervalSince1970: 1_793_216_700)
-    // Monday, October 26, 2026, 10 AM: already over.
-    private let monday = Date(timeIntervalSince1970: 1_793_034_000)
-    // Tuesday, September 15, 2026, 10 AM: over a month ago.
-    private let september = Date(timeIntervalSince1970: 1_789_491_600)
-
-    private func makeDefaults() -> UserDefaults {
-        let suite = "AppointmentStoreTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suite)!
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
-    }
+    private let api = ScriptedShopAPI()
+    private let tokens = InMemorySecretStore()
+    private var now = TestData.now
 
     private func makeStore(defaults: UserDefaults) -> AppointmentStore {
-        AppointmentStore(scheduler: scheduler, defaults: defaults, calendar: AppData.bookingCalendar, now: { [now] in now })
-    }
-
-    private func appointment(at start: Date, service: String = "Haircut") -> Appointment {
-        Appointment(
-            serviceID: "haircut",
-            serviceName: service,
-            barberID: "carlos-rafael",
-            barberName: "Carlos",
-            start: start,
-            durationMinutes: 45,
-            priceLabel: "$45",
-            createdAt: now
+        AppointmentStore(
+            api: api,
+            tokens: tokens,
+            scheduler: scheduler,
+            defaults: defaults,
+            calendar: AppData.bookingCalendar,
+            now: { [unowned self] in self.now }
         )
     }
 
+    private let id = "5b8f2c1e-3d4a-4e6f-8a9b-0c1d2e3f4a5b"
+
+    // MARK: Saving
+
     func testStartsEmpty() {
-        let store = makeStore(defaults: makeDefaults())
+        let store = makeStore(defaults: TestData.defaults())
         XCTAssertTrue(store.appointments.isEmpty)
-        XCTAssertTrue(store.upcoming.isEmpty)
         XCTAssertNil(store.next)
+        XCTAssertNil(store.homeAppointment)
         XCTAssertNil(store.latestFinishedStart)
     }
 
-    func testSavedAppointmentsAreRemembered() async {
-        let defaults = makeDefaults()
+    func testABookingIsKeptWithItsTokenInTheSecretStore() async {
+        let defaults = TestData.defaults()
         let store = makeStore(defaults: defaults)
-        let saved = appointment(at: friday)
-        store.save(saved, remind: false)
+        let saved = store.add(TestData.confirmation(token: "secret-token"), remind: false)
         await store.settle()
 
+        XCTAssertEqual(saved.origin, .app)
+        XCTAssertNil(saved.problem)
+        XCTAssertEqual(tokens.secrets[id], "secret-token")
+        XCTAssertEqual(store.next?.id, id)
+
+        // Remembered between launches, and the token never goes into UserDefaults.
         let reopened = makeStore(defaults: defaults)
-        XCTAssertEqual(reopened.appointments, [saved])
-        XCTAssertEqual(reopened.next, saved)
-        XCTAssertFalse(reopened.isReminding(saved.id))
+        XCTAssertEqual(reopened.appointments.map(\.id), [id])
+        XCTAssertEqual(reopened.appointments.first?.snapshot, TestData.appointment())
+        let stored = String(decoding: defaults.data(forKey: "appointments.v2") ?? Data(), as: UTF8.self)
+        XCTAssertFalse(stored.isEmpty)
+        XCTAssertFalse(stored.contains("secret-token"))
     }
 
-    func testUpcomingIsSoonestFirst() async {
-        let store = makeStore(defaults: makeDefaults())
-        let later = appointment(at: friday, service: "VIP")
-        let sooner = appointment(at: soon)
-        let past = appointment(at: monday)
-        store.save(later, remind: false)
-        store.save(past, remind: false)
-        store.save(sooner, remind: false)
-        await store.settle()
+    /// The Keychain refusing the token mustn't lose it: it's kept for this launch, cancelling
+    /// still works, and the appointment says it can't be managed after the app closes.
+    func testATokenTheKeychainRefusesIsKeptForThisLaunchAndFlagged() async throws {
+        tokens.failsWrites = true
+        let store = makeStore(defaults: TestData.defaults())
+        let saved = store.add(TestData.confirmation(token: "only-copy"), remind: false)
+        XCTAssertEqual(saved.problem, .tokenNotSaved)
+        XCTAssertNil(tokens.secrets[id])
 
-        XCTAssertEqual(store.upcoming.map(\.id), [sooner.id, later.id])
-        XCTAssertEqual(store.next?.id, sooner.id)
-        XCTAssertEqual(store.appointments.map(\.id), [past.id, sooner.id, later.id])
-        XCTAssertEqual(store.latestFinishedStart, monday)
-    }
-
-    func testSavingAgainReplacesTheSameAppointment() async {
-        let store = makeStore(defaults: makeDefaults())
-        var saved = appointment(at: friday)
-        store.save(saved, remind: false)
-        saved.start = friday.addingTimeInterval(60 * 60)
-        store.save(saved, remind: false)
-        await store.settle()
-        XCTAssertEqual(store.appointments.count, 1)
-        XCTAssertEqual(store.appointments.first?.start, saved.start)
+        api.cancelHandler = { id, token in
+            XCTAssertEqual(token, "only-copy")
+            return TestData.appointment(id: id, status: .cancelled, cancelledBy: .customer)
+        }
+        try await store.cancel(id)
+        XCTAssertEqual(store.appointment(withID: id)?.status, .cancelled)
     }
 
     func testRemindersAreScheduledTheDayBeforeAndAnHourBefore() async throws {
         scheduler.status = .authorized
-        let store = makeStore(defaults: makeDefaults())
-        let saved = appointment(at: friday)
-        store.save(saved, remind: true)
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: true)
         await store.settle()
 
-        XCTAssertTrue(store.isReminding(saved.id))
-        XCTAssertFalse(store.remindersPermissionDenied)
-        let dayBefore = AppointmentStore.identifier(for: saved.id, kind: .dayBefore)
-        let hourBefore = AppointmentStore.identifier(for: saved.id, kind: .hourBefore)
+        let dayBefore = AppointmentStore.identifier(for: id, kind: .dayBefore)
+        let hourBefore = AppointmentStore.identifier(for: id, kind: .hourBefore)
         XCTAssertEqual(Set(scheduler.pending.keys), [dayBefore, hourBefore])
-
-        let dayTrigger = try XCTUnwrap(scheduler.pending[dayBefore]?.trigger as? UNTimeIntervalNotificationTrigger)
-        XCTAssertEqual(dayTrigger.timeInterval, friday.timeIntervalSince(now) - 24 * 60 * 60, accuracy: 1)
-        let hourTrigger = try XCTUnwrap(scheduler.pending[hourBefore]?.trigger as? UNTimeIntervalNotificationTrigger)
-        XCTAssertEqual(hourTrigger.timeInterval, friday.timeIntervalSince(now) - 60 * 60, accuracy: 1)
-        XCTAssertFalse(hourTrigger.repeats)
-
+        let trigger = try XCTUnwrap(scheduler.pending[hourBefore]?.trigger as? UNTimeIntervalNotificationTrigger)
+        XCTAssertEqual(trigger.timeInterval, TestData.friday.timeIntervalSince(now) - 60 * 60, accuracy: 1)
         let content = try XCTUnwrap(scheduler.pending[hourBefore]?.content)
         XCTAssertTrue(content.title.contains("Haircut"), content.title)
         XCTAssertTrue(content.body.contains("Carlos"), content.body)
+        XCTAssertTrue(store.willSendHourBeforeReminder(for: id))
     }
 
-    func testRemindersThatWouldBeLateAreSkipped() async {
+    func testTurningRemindersOffRemovesThem() async {
         scheduler.status = .authorized
-        let store = makeStore(defaults: makeDefaults())
-        let saved = appointment(at: soon)
-        store.save(saved, remind: true)
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: true)
         await store.settle()
-        // 45 minutes away: too late for "tomorrow" and for "in an hour".
-        XCTAssertTrue(scheduler.pending.isEmpty)
-    }
-
-    func testNoPermissionPromptWhenNoReminderIsAhead() async {
-        scheduler.status = .notDetermined
-        let store = makeStore(defaults: makeDefaults())
-        store.save(appointment(at: soon), remind: true)
-        await store.settle()
-        // Nothing could be sent, so there's nothing to ask permission for.
-        XCTAssertEqual(scheduler.permissionRequests, 0)
-        XCTAssertTrue(scheduler.pending.isEmpty)
-        XCTAssertFalse(store.remindersPermissionDenied)
-    }
-
-    func testNoRemindersWhenTurnedOff() async {
-        scheduler.status = .authorized
-        let store = makeStore(defaults: makeDefaults())
-        store.save(appointment(at: friday), remind: false)
+        store.setReminders(false, for: id)
         await store.settle()
         XCTAssertTrue(scheduler.pending.isEmpty)
-        XCTAssertEqual(scheduler.permissionRequests, 0)
-    }
-
-    func testAsksForPermissionTheFirstTime() async {
-        scheduler.status = .notDetermined
-        let store = makeStore(defaults: makeDefaults())
-        store.save(appointment(at: friday), remind: true)
-        await store.settle()
-        XCTAssertEqual(scheduler.permissionRequests, 1)
-        XCTAssertEqual(scheduler.pending.count, 2)
+        XCTAssertFalse(store.willSendHourBeforeReminder(for: id))
     }
 
     func testDeniedPermissionIsReported() async {
         scheduler.status = .notDetermined
         scheduler.grantsPermission = false
-        let store = makeStore(defaults: makeDefaults())
-        let saved = appointment(at: friday)
-        store.save(saved, remind: true)
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: true)
         await store.settle()
         XCTAssertTrue(store.remindersPermissionDenied)
         XCTAssertTrue(scheduler.pending.isEmpty)
-        // The appointment itself is still saved.
-        XCTAssertEqual(store.next, saved)
+        XCTAssertEqual(store.next?.id, id, "The appointment is still saved")
     }
 
-    func testHourBeforeReminderIsOnlyPromisedWhenItCanBeSent() async {
-        scheduler.status = .authorized
-        let store = makeStore(defaults: makeDefaults())
-        let reminded = appointment(at: friday)
-        let notReminded = appointment(at: friday.addingTimeInterval(2 * 60 * 60))
-        let tooSoon = appointment(at: soon)
-        store.save(reminded, remind: true)
-        store.save(notReminded, remind: false)
-        store.save(tooSoon, remind: true)
+    func testNoPermissionPromptWhenNoReminderIsAhead() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(start: TestData.soon), remind: true)
         await store.settle()
-
-        // The app sends it, so the calendar event can skip its own alarm.
-        XCTAssertTrue(store.willSendHourBeforeReminder(for: reminded.id))
-        // Reminders off, or 45 minutes away: the calendar's alarm is the only one.
-        XCTAssertFalse(store.willSendHourBeforeReminder(for: notReminded.id))
-        XCTAssertFalse(store.willSendHourBeforeReminder(for: tooSoon.id))
-        XCTAssertFalse(store.willSendHourBeforeReminder(for: UUID()))
+        XCTAssertEqual(scheduler.permissionRequests, 0)
+        XCTAssertTrue(scheduler.pending.isEmpty)
     }
 
-    func testHourBeforeReminderIsNotPromisedWithNotificationsOff() async {
-        scheduler.status = .notDetermined
-        scheduler.grantsPermission = false
-        let store = makeStore(defaults: makeDefaults())
-        let saved = appointment(at: friday)
-        store.save(saved, remind: true)
-        await store.settle()
+    // MARK: Checking with the shop
 
-        // Still wanted, but it can't come through.
-        XCTAssertTrue(store.isReminding(saved.id))
-        XCTAssertTrue(store.remindersPermissionDenied)
-        XCTAssertFalse(store.willSendHourBeforeReminder(for: saved.id))
-    }
-
-    func testRemovingCancelsItsReminders() async {
+    func testRefreshFindsTheShopCancelledIt() async {
         scheduler.status = .authorized
-        let defaults = makeDefaults()
-        let store = makeStore(defaults: defaults)
-        let saved = appointment(at: friday)
-        store.save(saved, remind: true)
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(token: "t1"), remind: true)
         await store.settle()
         XCTAssertEqual(scheduler.pending.count, 2)
 
-        store.remove(saved.id)
+        api.appointmentHandler = { id, token in
+            XCTAssertEqual(token, "t1")
+            return TestData.appointment(id: id, status: .cancelled, cancelledBy: .shop)
+        }
+        await store.refresh(force: true)
         await store.settle()
-        XCTAssertTrue(store.appointments.isEmpty)
+
+        let saved = store.appointment(withID: id)
+        XCTAssertEqual(saved?.status, .cancelled)
+        XCTAssertTrue(saved?.isCancelledByShop ?? false)
+        XCTAssertNil(store.next, "Nothing is on any more")
+        XCTAssertEqual(store.homeAppointment?.id, id, "Home still shows it, so the client hears about it")
+        XCTAssertTrue(scheduler.pending.isEmpty, "A cancelled appointment's reminders are removed")
+        XCTAssertNil(store.refreshError)
+        XCTAssertEqual(saved?.checkedAt, now)
+    }
+
+    func testRefreshFindsItCompleted() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(start: TestData.soon), remind: false)
+        now = TestData.soon.addingTimeInterval(60 * 60)
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id, start: TestData.soon, status: .completed) }
+        await store.refresh(force: true)
+        XCTAssertEqual(store.past.first?.status, .completed)
+        XCTAssertEqual(store.latestFinishedStart, TestData.soon)
+    }
+
+    func testOfflineRefreshKeepsWhatWasThereAndSaysSo() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(id: "a", token: "ta"), remind: false)
+        store.add(TestData.confirmation(id: "b", start: TestData.friday.addingTimeInterval(3600), token: "tb"), remind: false)
+        api.appointmentHandler = { _, _ in throw APIError.offline }
+        await store.refresh(force: true)
+
+        XCTAssertEqual(store.refreshError, .offline)
+        XCTAssertEqual(store.appointments.map(\.status), [.booked, .booked])
+        XCTAssertEqual(api.lookups.count, 1, "Once offline, the others aren't tried")
+
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id) }
+        await store.refresh(force: true)
+        XCTAssertNil(store.refreshError)
+    }
+
+    /// The server answering 404 (wrong token or unknown ID) keeps the appointment and flags it.
+    func testAnAppointmentTheServerDoesNotKnowIsKeptAndFlagged() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        api.appointmentHandler = { _, _ in throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "", status: 404) }
+        await store.refresh(force: true)
+        XCTAssertEqual(store.appointment(withID: id)?.problem, .notFound)
+        XCTAssertNil(store.refreshError, "Not a connection problem")
+        XCTAssertFalse(store.appointment(withID: id)?.canCancelInApp(at: now) ?? true)
+
+        // It isn't asked about again.
+        await store.refresh(force: true)
+        XCTAssertEqual(api.lookups.count, 1)
+    }
+
+    func testAMissingTokenIsFlagged() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        try? tokens.removeSecret(for: id)
+        await store.refresh(force: true)
+        XCTAssertEqual(store.appointment(withID: id)?.problem, .tokenMissing)
+        XCTAssertTrue(api.lookups.isEmpty)
+    }
+
+    /// A locked Keychain is "try later", not "missing".
+    func testAnUnreadableTokenIsTriedAgainLater() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        tokens.failsReads = true
+        await store.refresh(force: true)
+        XCTAssertNil(store.appointment(withID: id)?.problem)
+        XCTAssertTrue(api.lookups.isEmpty)
+    }
+
+    func testRefreshIsAtMostOnceAMinuteUnlessForced() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id) }
+        await store.refresh()
+        await store.refresh()
+        XCTAssertEqual(api.lookups.count, 1)
+        now = now.addingTimeInterval(61)
+        await store.refresh()
+        XCTAssertEqual(api.lookups.count, 2)
+        await store.refresh(force: true)
+        XCTAssertEqual(api.lookups.count, 3)
+    }
+
+    // MARK: Cancelling
+
+    func testCancelling() async throws {
+        scheduler.status = .authorized
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(token: "t1"), remind: true)
+        await store.settle()
+        api.cancelHandler = { id, _ in TestData.appointment(id: id, status: .cancelled, cancelledBy: .customer) }
+
+        try await store.cancel(id)
+        await store.settle()
+        XCTAssertEqual(api.cancellations.map(\.token), ["t1"])
+        XCTAssertEqual(store.appointment(withID: id)?.status, .cancelled)
+        XCTAssertNil(store.next)
+        XCTAssertNil(store.homeAppointment, "Cancelled by the client: Home goes back to walk-ins")
         XCTAssertTrue(scheduler.pending.isEmpty)
-        XCTAssertTrue(makeStore(defaults: defaults).appointments.isEmpty)
+
+        // Cancelled ones can be cleared away.
+        store.remove(id)
+        XCTAssertNil(store.appointment(withID: id))
+        XCTAssertNil(tokens.secrets[id])
     }
 
-    func testRefreshDropsOldAppointments() async {
-        let defaults = makeDefaults()
+    func testCancellingOfflineKeepsItBooked() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        api.cancelHandler = { _, _ in throw APIError.offline }
+        do {
+            try await store.cancel(id)
+            XCTFail("Cancelling offline should throw")
+        } catch {
+            XCTAssertEqual(error as? AppointmentActionError, .server(.offline))
+        }
+        XCTAssertEqual(store.appointment(withID: id)?.status, .booked)
+    }
+
+    /// The shop changed it meanwhile: the error comes back and the appointment shows how it is now.
+    func testCancellingSomethingThatCanNoLongerBeCancelledShowsItAsItIs() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        api.cancelHandler = { _, _ in throw APIError.notCancellable }
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id, status: .cancelled, cancelledBy: .shop) }
+        do {
+            try await store.cancel(id)
+            XCTFail("Should throw")
+        } catch {
+            XCTAssertEqual(error as? AppointmentActionError, .server(.notCancellable))
+        }
+        XCTAssertTrue(store.appointment(withID: id)?.isCancelledByShop ?? false)
+    }
+
+    func testCancellingWithoutATokenSaysToCall() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        try? tokens.removeSecret(for: id)
+        do {
+            try await store.cancel(id)
+            XCTFail("Should throw")
+        } catch {
+            XCTAssertEqual(error as? AppointmentActionError, .cannotManage)
+            XCTAssertTrue(AppointmentActionError.cannotManage.userMessage.contains(AppData.shop.phone.display))
+        }
+        XCTAssertTrue(api.cancellations.isEmpty)
+        XCTAssertEqual(store.appointment(withID: id)?.problem, .tokenMissing)
+    }
+
+    func testABookedAppointmentCanOnlyBeRemovedByCancellingIt() {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        store.remove(id)
+        XCTAssertNotNil(store.appointment(withID: id))
+    }
+
+    // MARK: Lists
+
+    func testUpcomingPastAndNext() {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(id: "later", start: TestData.friday), remind: false)
+        store.add(TestData.confirmation(id: "past", start: TestData.monday), remind: false)
+        store.add(TestData.confirmation(id: "sooner", start: TestData.soon), remind: false)
+        XCTAssertEqual(store.upcoming.map(\.id), ["sooner", "later"])
+        XCTAssertEqual(store.past.map(\.id), ["past"])
+        XCTAssertEqual(store.next?.id, "sooner")
+        XCTAssertEqual(store.latestFinishedStart, TestData.monday)
+    }
+
+    func testOldAppointmentsAndTheirTokensAreDropped() {
+        let defaults = TestData.defaults()
         let store = makeStore(defaults: defaults)
-        let old = appointment(at: september)
-        let recent = appointment(at: monday)
-        let upcoming = appointment(at: friday)
-        store.save(old, remind: false)
-        store.save(recent, remind: false)
-        store.save(upcoming, remind: false)
-        store.refresh()
-        await store.settle()
-
-        XCTAssertEqual(store.appointments.map(\.id), [recent.id, upcoming.id])
-        XCTAssertEqual(makeStore(defaults: defaults).appointments.map(\.id), [recent.id, upcoming.id])
+        store.add(TestData.confirmation(id: "old", start: TestData.september), remind: false)
+        store.add(TestData.confirmation(id: "new", start: TestData.friday), remind: false)
+        store.refreshLocally()
+        XCTAssertEqual(store.appointments.map(\.id), ["new"])
+        XCTAssertNil(tokens.secrets["old"])
+        XCTAssertNotNil(tokens.secrets["new"])
     }
 
-    func testUnreadableDataStartsEmpty() {
-        let defaults = makeDefaults()
-        defaults.set(Data("not json".utf8), forKey: "appointments.v1")
+    func testUnreadableStoredDataStartsEmpty() {
+        let defaults = TestData.defaults()
+        defaults.set(Data("not json".utf8), forKey: "appointments.v2")
         XCTAssertTrue(makeStore(defaults: defaults).appointments.isEmpty)
     }
 
-    func testIdentifiersAreUniquePerAppointmentAndKind() {
-        let first = UUID(), second = UUID()
-        let all = AppointmentStore.identifiers(for: first) + AppointmentStore.identifiers(for: second)
-        XCTAssertEqual(Set(all).count, 4)
-        XCTAssertTrue(all.allSatisfy { $0.hasPrefix(AppointmentStore.identifierPrefix) })
-        XCTAssertFalse(all.contains { $0.hasPrefix(ReminderIdentifiers.prefix) })
+    // MARK: From v3
+
+    /// v3 saved Squire bookings under "appointments.v1". The ones still ahead come along,
+    /// read-only, with their reminders; past ones are dropped; the old keys are cleared.
+    func testSquireAppointmentsFromTheLastVersionComeAlongReadOnly() async throws {
+        scheduler.status = .authorized
+        let defaults = TestData.defaults()
+        let ahead = Appointment(serviceID: "haircut", serviceName: "Haircut", barberID: nil, start: TestData.friday, durationMinutes: 45, priceLabel: "$35", createdAt: TestData.monday)
+        let over = Appointment(serviceID: "vip", serviceName: "VIP", barberID: "israel-flores", barberName: "Izzy", start: TestData.monday, durationMinutes: 75, priceLabel: "$80", createdAt: TestData.monday)
+        defaults.set(try AppointmentPlanner.encode([ahead, over]), forKey: "appointments.v1")
+        defaults.set([ahead.id.uuidString], forKey: "appointments.reminding.v1")
+
+        let store = makeStore(defaults: defaults)
+        // As when the app becomes active.
+        store.refreshLocally()
+        await store.settle()
+        XCTAssertEqual(store.appointments.map(\.id), [ahead.id.uuidString])
+        let saved = try XCTUnwrap(store.appointments.first)
+        XCTAssertEqual(saved.origin, .squire)
+        XCTAssertTrue(saved.remind)
+        XCTAssertEqual(saved.title, "Haircut with the first available barber")
+        XCTAssertFalse(saved.canCancelInApp(at: now), "Booked on Squire: the shop changes it")
+        XCTAssertNil(defaults.data(forKey: "appointments.v1"))
+        XCTAssertNil(defaults.stringArray(forKey: "appointments.reminding.v1"))
+        // Its reminders keep v3's identifiers, so nothing is scheduled twice.
+        XCTAssertEqual(Set(scheduler.pending.keys), Set(AppointmentStore.identifiers(for: ahead.id.uuidString)))
+
+        // Not something the server knows: it's never asked about.
+        await store.refresh(force: true)
+        XCTAssertTrue(api.lookups.isEmpty)
+
+        // It can be taken off the list, and it goes once it's over.
+        let reopened = makeStore(defaults: defaults)
+        XCTAssertEqual(reopened.appointments.map(\.id), [ahead.id.uuidString])
+        reopened.remove(ahead.id.uuidString)
+        XCTAssertTrue(reopened.appointments.isEmpty)
     }
 }

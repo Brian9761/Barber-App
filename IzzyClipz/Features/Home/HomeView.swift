@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The Home tab: the drop page. The shop's work up top, the way to book right under it, then the
-/// client's next appointment, the quick ways to reach the shop, the menu's favorites, the crew,
-/// what clients say, Instagram and Bravo.
+/// The Home tab: the shop's work up top, the way to book right under it, then the client's next
+/// appointment, the quick ways to reach the shop, the menu's favorites, the crew, what clients say,
+/// the shop's products and Instagram.
 struct HomeView: View {
     @Environment(AppRouter.self) private var router
 
@@ -11,9 +11,8 @@ struct HomeView: View {
 
         NavigationStack(path: $router.homePath) {
             HomeScreen()
-                .tabScreen()
-                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0).barberPolePushRide().tabScreen() }
-                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0).barberPolePushRide().tabScreen() }
+                .navigationDestination(for: Service.self) { ServiceDetailView(service: $0) }
+                .navigationDestination(for: Barber.self) { BarberDetailView(barber: $0) }
                 .navigationDestination(for: HomeRoute.self) { route in
                     Group {
                         switch route {
@@ -22,8 +21,8 @@ struct HomeView: View {
                         case .reviews: ReviewsView()
                         }
                     }
-                    .barberPolePushRide()
-                    .tabScreen()
+                    
+                    
                 }
         }
     }
@@ -33,25 +32,21 @@ struct HomeView: View {
 /// is hidden and the shop's own header (mascot, wordmark, reminders bell) takes its place. Every
 /// screen pushed from here shows the native bar again, with its back button and swipe-back.
 private struct HomeScreen: View {
-    private static let top = "homeTop"
-
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(AppointmentStore.self) private var appointments
+    @Environment(ReviewsStore.self) private var reviews
 
     var body: some View {
         GeometryReader { proxy in
             // The whole screen's height, bars and home indicator included: the hero is sized from
-            // it so a 375 × 667 iPhone SE still shows the Book button and a ticket above the tab bar.
+            // it so a 375 × 667 iPhone SE still shows the Book button above the tab bar.
             let screenHeight = proxy.size.height + proxy.safeAreaInsets.top + proxy.safeAreaInsets.bottom
-            ScrollViewReader { scroller in
-                ScrollView {
-                    HomeContent(heroHeight: HomeHero.height(forScreenHeight: screenHeight))
-                        .id(Self.top)
-                }
-                .onTabReselect {
-                    withAnimation(reduceMotion ? nil : .snappy) {
-                        scroller.scrollTo(Self.top, anchor: .top)
-                    }
-                }
+            ScrollView {
+                HomeContent(heroHeight: HomeHero.height(forScreenHeight: screenHeight))
+            }
+            // Pull down to check the appointments with the shop and reload Google's rating.
+            .refreshable {
+                await appointments.refresh(force: true)
+                await reviews.refresh()
             }
             // Content scrolls up under the header, which is frosted ink.
             .safeAreaInset(edge: .top, spacing: 0) {
@@ -63,8 +58,8 @@ private struct HomeScreen: View {
     }
 }
 
-/// Everything on Home, top to bottom (art direction §1.2): hero, Book, the next appointment, quick
-/// actions, popular services, the crew, reviews, Instagram, Bravo.
+/// Everything on Home, top to bottom: the photos, Book, the next appointment, Directions and Call,
+/// popular services, the crew, reviews, the shop's products and Instagram.
 private struct HomeContent: View {
     let heroHeight: CGFloat
 
@@ -83,11 +78,11 @@ private struct HomeContent: View {
                 HomeCrewSection()
                 VStack(spacing: 0) {
                     HomeReviewsCard()
+                    HomeShopCard()
+                        .padding(.top, Theme.Space.cardGap)
                     // Room for the logo sticker that pokes out above the Instagram card.
                     InstagramCard()
                         .padding(.top, 28)
-                    HomeBravoCard()
-                        .padding(.top, Theme.Space.cardGap)
                 }
                 .padding(.horizontal, Theme.gutter)
             }
@@ -99,7 +94,7 @@ private struct HomeContent: View {
 
 // MARK: - Header
 
-/// The mascot sticker, "IZZY CLIPZ" and where the shop is, with the reminders bell on the right.
+/// The mascot sticker, "Izzy Clipz" and where the shop is, with the reminders bell on the right.
 /// Pinned over the content in frosted ink (solid ink2 with Reduce Transparency). It stops growing
 /// at xxLarge text so it never eats the screen; the bell shows the large content viewer above that.
 private struct HomeHeader: View {
@@ -111,7 +106,7 @@ private struct HomeHeader: View {
             VStack(alignment: .leading, spacing: 3) {
                 Wordmark()
                 Text("Barbershop · \(shop.address.city), \(shop.address.state)")
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)

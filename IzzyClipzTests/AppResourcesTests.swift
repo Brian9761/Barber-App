@@ -19,7 +19,6 @@ final class AppResourcesTests: XCTestCase {
         for name in Asset.all {
             XCTAssertNotNil(UIImage(named: name), "Missing image '\(name)'")
         }
-        XCTAssertNotNil(UIImage(named: "BravoLogo"))
     }
 
     func testTheLogoIsTransparentSoItSitsOnAnyLightSurface() throws {
@@ -51,85 +50,60 @@ final class AppResourcesTests: XCTestCase {
 
     // MARK: Fonts
 
-    /// Info.plist registers exactly the fonts `BrandFont` knows, and each file is in the app bundle
-    /// (XcodeGen copies `Resources/Fonts` to the bundle's root).
-    func testEveryListedFontFileIsBundled() throws {
+    /// The app uses the system font: no bundled fonts are registered.
+    func testNoBundledFonts() throws {
         let info = try XCTUnwrap(Bundle.main.infoDictionary)
-        let files = try XCTUnwrap(info["UIAppFonts"] as? [String], "Info.plist has no UIAppFonts")
-        XCTAssertEqual(files, BrandFont.fileNames, "UIAppFonts and BrandFont list different fonts")
-        XCTAssertEqual(Set(files).count, files.count, "A font is listed twice")
-        for file in files {
-            XCTAssertNotNil(Bundle.main.url(forResource: file, withExtension: nil), "\(file) is in UIAppFonts but not in the app bundle")
-        }
+        XCTAssertNil(info["UIAppFonts"], "The app uses the system font; UIAppFonts should be gone")
+        XCTAssertTrue(Bundle.main.urls(forResourcesWithExtension: "ttf", subdirectory: nil)?.isEmpty ?? true)
     }
 
-    /// Every face the app asks for by PostScript name is registered, so no text falls back to the
-    /// system font.
-    func testEveryBrandFontLoads() {
-        XCTAssertEqual(BrandFont.allCases.count, 11)
-        for face in BrandFont.allCases {
-            let font = UIFont(name: face.postScriptName, size: 17)
-            XCTAssertNotNil(font, "\(face.postScriptName) doesn't load: check UIAppFonts and the file's PostScript name")
-            XCTAssertEqual(font?.fontName, face.postScriptName)
-        }
-    }
-
-    /// Each file holds the face it's named after (a file named for one face but holding another
-    /// would still register, under the wrong name).
-    func testEachFontFileHoldsTheFaceItIsNamedFor() throws {
-        for face in BrandFont.allCases {
-            let url = try XCTUnwrap(Bundle.main.url(forResource: face.fileName, withExtension: nil), face.fileName)
-            let provider = try XCTUnwrap(CGDataProvider(url: url as CFURL), face.fileName)
-            let font = try XCTUnwrap(CGFont(provider), "\(face.fileName) isn't a font")
-            XCTAssertEqual(font.postScriptName as String?, face.postScriptName, face.fileName)
-        }
-    }
-
-    /// Every text role's face is one of the bundled fonts and loads at the role's size, and the UIKit
-    /// version (the navigation bars) is the real face, not the system fallback.
-    func testEveryTextRoleUsesARegisteredFace() {
+    /// Every text role is the system font in a Dynamic Type text style, so it scales with the
+    /// person's text size.
+    func testTextRolesFollowDynamicType() {
         for role in TextRole.allCases {
-            XCTAssertTrue(BrandFont.postScriptNames.contains(role.face.postScriptName), "\(role)")
-            XCTAssertNotNil(UIFont(name: role.face.postScriptName, size: role.size), "\(role) uses \(role.face.postScriptName), which doesn't load")
-            XCTAssertEqual(role.face.uiFont(size: role.size, relativeTo: .body).fontName, role.face.postScriptName, "\(role)")
+            XCTAssertGreaterThanOrEqual(role.largestDynamicTypeSize, .accessibility2, "\(role) stops growing too early")
+        }
+        XCTAssertEqual(TextRole.body.textStyle, .body)
+        XCTAssertEqual(TextRole.displayXL.textStyle, .largeTitle)
+    }
+
+    /// The name, number and note sent with a booking are declared: used for the app's own
+    /// functionality, linked to the client, never for tracking.
+    func testPrivacyManifestDeclaresWhatGoesToTheShop() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
+        let manifest = try XCTUnwrap(try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
+        XCTAssertEqual(manifest["NSPrivacyTracking"] as? Bool, false)
+        let collected = try XCTUnwrap(manifest["NSPrivacyCollectedDataTypes"] as? [[String: Any]])
+        let types = collected.compactMap { $0["NSPrivacyCollectedDataType"] as? String }
+        XCTAssertEqual(Set(types), [
+            "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypePhoneNumber",
+            "NSPrivacyCollectedDataTypeOtherUserContent",
+        ])
+        for entry in collected {
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypeLinked"] as? Bool, true)
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypeTracking"] as? Bool, false)
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypePurposes"] as? [String], ["NSPrivacyCollectedDataTypePurposeAppFunctionality"])
         }
     }
 
-    /// The fonts are SIL Open Font License: their licenses ship with them.
-    func testFontLicensesAreBundled() {
-        for license in ["OFL-Archivo", "OFL-SpaceMono", "OFL-RubikWetPaint"] {
-            XCTAssertNotNil(Bundle.main.url(forResource: license, withExtension: "txt"), "\(license).txt isn't in the app bundle")
-        }
+    func testServerAddress() throws {
+        let info = try XCTUnwrap(Bundle.main.infoDictionary)
+        let value = try XCTUnwrap(info[APIConfiguration.baseURLKey] as? String, "Info.plist has no IzzyAPIBaseURL")
+        XCTAssertEqual(APIConfiguration.baseURL(from: value)?.scheme, "https")
+        XCTAssertNotNil(APIConfiguration.baseURL)
     }
 
-    func testPrivacyManifestIsBundled() {
-        XCTAssertNotNil(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
-    }
-
-    func testBookingLinksAreWebLinks() {
-        // The in-app browser only accepts http(s) URLs.
-        XCTAssertEqual(AppData.bookingURL(for: .anything).scheme, "https")
-        for offering in AppData.catalog.offerings {
-            XCTAssertEqual(AppData.bookingURL(for: .offering(offering)).scheme, "https", offering.id)
-        }
-        for barber in AppData.catalog.barbers {
-            XCTAssertEqual(AppData.bookingURL(for: .barber(barber.id)).scheme, "https", barber.id)
-        }
-    }
-
-    func testBravoLinksGoToBravoAndSayWhereTheyCameFrom() throws {
-        let products = AppData.products
-        var urls = products.products.map { products.url(for: $0) }
-        urls.append(products.storeURL)
-        for url in urls {
-            XCTAssertEqual(url.scheme, "https", url.absoluteString)
-            XCTAssertEqual(url.host, "bravohairgel.com", url.absoluteString)
-            let query = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems)
-            XCTAssertTrue(query.contains(URLQueryItem(name: "utm_source", value: "izzyclipz-app")), url.absoluteString)
-        }
-        for product in products.products {
-            XCTAssertTrue(products.url(for: product).path.hasSuffix("/products/\(product.id)"), product.id)
-        }
+    /// Only https (and http to this machine, for a local server) is used.
+    func testServerAddressMustBeSecure() {
+        XCTAssertEqual(APIConfiguration.baseURL(from: "https://izzy-clipz-api.vercel.app")?.host, "izzy-clipz-api.vercel.app")
+        XCTAssertEqual(APIConfiguration.baseURL(from: " https://example.com/api ")?.path, "/api")
+        XCTAssertNotNil(APIConfiguration.baseURL(from: "http://localhost:3000"))
+        XCTAssertNil(APIConfiguration.baseURL(from: "http://izzy-clipz-api.vercel.app"))
+        XCTAssertNil(APIConfiguration.baseURL(from: "ftp://example.com"))
+        XCTAssertNil(APIConfiguration.baseURL(from: ""))
+        XCTAssertNil(APIConfiguration.baseURL(from: nil))
+        XCTAssertNil(APIConfiguration.baseURL(from: 42))
     }
 
     func testContactLinks() {
@@ -141,11 +115,7 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(shop.googleMapsDirectionsURL.scheme, "https")
         XCTAssertEqual(shop.googleMapsURL.scheme, "https")
         XCTAssertEqual(shop.googleReviewURL.scheme, "https")
-        for sourced in shop.ratings {
-            if let url = sourced.url {
-                XCTAssertEqual(url.scheme, "https", sourced.source)
-            }
-        }
+        XCTAssertEqual(ReviewLinks.yelpPage.absoluteString, "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")
         for barber in AppData.catalog.barbers {
             if let url = barber.instagramURL {
                 XCTAssertEqual(url.scheme, "https", barber.id)
@@ -162,35 +132,20 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(izzy?.instagramURL?.absoluteString, "https://www.instagram.com/izzy_clipz_/")
     }
 
-    func testCalendarNotesMentionTheBooking() {
-        let appointment = Appointment(
-            serviceID: "haircut",
-            serviceName: "Haircut",
-            barberID: "carlos-rafael",
-            barberName: "Carlos",
-            start: Date(timeIntervalSince1970: 1_793_395_800),
-            durationMinutes: 45,
-            priceLabel: "$45"
-        )
-        let notes = CalendarEventEditor.notes(for: appointment)
-        XCTAssertTrue(notes.contains("Haircut with Carlos"), notes)
-        XCTAssertTrue(notes.contains("$45 · 45 min"), notes)
-        XCTAssertTrue(notes.contains(AppData.shop.phone.display), notes)
+    func testCalendarEventsSayWhatAndHowToChangeIt() {
+        let event = SavedAppointment(snapshot: TestData.appointment(), origin: .app, remind: true).calendarEvent
+        XCTAssertEqual(event.title, "Haircut at Izzy Clipz")
+        XCTAssertEqual(event.start, TestData.friday)
+        XCTAssertEqual(event.end, TestData.friday.addingTimeInterval(45 * 60))
+        XCTAssertTrue(event.notes.contains("Haircut with Carlos"), event.notes)
+        XCTAssertTrue(event.notes.contains("$45 · 45 min · Pay at the shop"), event.notes)
+        XCTAssertTrue(event.notes.contains(AppData.shop.phone.display), event.notes)
     }
 
-    func testCalendarNotesForFirstAvailableReadNaturally() {
-        let appointment = Appointment(
-            serviceID: "haircut",
-            serviceName: "Haircut",
-            barberID: nil,
-            barberName: "First available",
-            start: Date(timeIntervalSince1970: 1_793_395_800),
-            durationMinutes: 45,
-            priceLabel: "$45"
-        )
-        let notes = CalendarEventEditor.notes(for: appointment)
-        XCTAssertTrue(notes.contains("Haircut with the first available barber"), notes)
-        XCTAssertFalse(notes.contains("with First available"), notes)
+    func testCalendarEventsForASquireBookingWithoutABarberReadNaturally() {
+        let old = Appointment(serviceID: "haircut", serviceName: "Haircut", barberID: nil, start: TestData.friday, durationMinutes: 45, priceLabel: "$35")
+        let event = SavedAppointment(squire: old, remind: false).calendarEvent
+        XCTAssertTrue(event.notes.contains("Haircut with the first available barber"), event.notes)
     }
 
     func testZoomFitsPhotosInsideTheScreen() {

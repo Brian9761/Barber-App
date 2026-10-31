@@ -1,18 +1,18 @@
 import XCTest
 
-/// A paced walkthrough of the real app, recorded on video by the "Demo video"
-/// workflow. Unlike the other UI tests it opens the live Squire and Bravo
-/// pages, including Bravo's checkout with the bag's items in its cart, so it
-/// only runs when asked: `TEST_RUNNER_DEMO_TOUR=1 xcodebuild test ...`.
+/// A paced walkthrough of the app, recorded on video by the "Demo video" workflow. It only runs
+/// when asked: `TEST_RUNNER_DEMO_TOUR=1 xcodebuild test ...`.
 ///
-/// It books the way a client would: a service, a barber, a day and time on
-/// the app's calendar, the review, Squire, then "Did you book it?" to save
-/// the appointment (BOOKED). Then the crew, the Bravo bag and its checkout,
-/// Visit and the gallery. Every tab switch plays the barber-pole sweep. It
-/// never taps an Instagram link: outside UI tests those leave the app.
+/// It runs on the app's in-memory server (`-ui-testing`), so it never books anything real and
+/// needs no network: the sample products and reviews it shows are test data. Animations stay on
+/// (`-keepAnimations`) so the video looks like the app.
 ///
-/// Steps are lenient on purpose: a slow web page shouldn't stop the tour, but
-/// anything that goes wrong is logged and attached as a screenshot.
+/// It books the way a client would: a service, a barber, a day and time from the live calendar,
+/// their details, the review ("No payment now"), then "You're booked" and the appointment on
+/// Home. Then the crew, the shop's products, the reviews, Visit and the gallery.
+///
+/// Steps are lenient on purpose: anything that goes wrong is logged and attached as a screenshot,
+/// and the tour goes on.
 final class DemoTour: XCTestCase {
     private var app: XCUIApplication!
 
@@ -23,36 +23,31 @@ final class DemoTour: XCTestCase {
         )
         continueAfterFailure = true
         app = XCUIApplication()
-        // The barber pole crosses 3 times slower than in the app: the CI simulator has no GPU and
-        // draws few frames, so at full speed the video catches the pole only as it leaves.
-        app.launchArguments += ["-poleSlowMotion", "3"]
+        app.launchArguments = ["-ui-testing", "-keepAnimations", "-fakeYelp"]
         app.launch()
     }
 
     func testTour() {
-        // Home: the hero, Book, Directions and Call, then the menu, the crew, reviews, Instagram and Bravo
+        // Home: the photos, Book, Directions and Call, then the menu, the crew, reviews and the shop
         expect("homeBookButton")
         pause(3)
         capture("Home")
 
-        // A lap of the tab bar, for the barber pole: right through the tabs, then back to Home.
+        // A lap of the tab bar: no animation between tabs.
         for name in ["Services", "Book", "Shop", "Visit", "Home"] {
             tab(name)
-            pause(2.5)
+            pause(2)
         }
         for _ in 0..<3 {
             app.swipeUp(velocity: .slow)
             pause(1.2)
         }
         capture("Home-Crew")
-        reveal(element("instagramButton"))
+        reveal(element("homeShopCard"))
         pause(1.2)
-        capture("Home-Instagram")
-        app.swipeUp(velocity: .slow)
-        pause(1.2)
-        capture("Home-Bravo")
+        capture("Home-Reviews-And-Shop")
 
-        // Services: open Haircut and book Carlos on the calendar
+        // Services: open Haircut and book Carlos
         tab("Services")
         pause(2)
         tap("service-haircut")
@@ -63,8 +58,8 @@ final class DemoTour: XCTestCase {
         capture("Haircut-Detail")
         tap(carlos, named: "Book with Carlos")
 
-        // Day and time, then the review
-        expect("continueToReview")
+        // Day and time from the live calendar
+        expect("selectedDayLabel")
         pause(2.5)
         capture("Calendar")
         tap("calendarNextMonth")
@@ -75,28 +70,30 @@ final class DemoTour: XCTestCase {
         tap(firstTime, named: "the first open time")
         pause(1.5)
         capture("Time-Picked")
+        tapPinned("continueToDetails")
+        pause(2)
+
+        // Details, then the review
+        type("Sample Client", into: "nameField")
+        type("4425550123", into: "phoneField")
+        pause(1.5)
+        capture("Details")
         tapPinned("continueToReview")
         pause(2.5)
         capture("Review")
 
-        // Squire, then "Did you book it?" and BOOKED
-        tap("confirmOnSquireButton")
-        showWebPage(named: "Squire-Carlos-Haircut")
-        expect("confirmBookingSheet")
-        pause(2.5)
-        capture("Did-You-Book")
-        tapPinned("saveAppointmentButton")
-        allowNotificationsIfAsked()
-        pause(2.5)
+        // Booked
+        tapPinned("bookAppointmentButton")
+        expect("bookedTitle")
+        pause(3)
         capture("Booked")
-        tapPinned("confirmDoneButton")
-        pause(1.5)
+        tapPinned("bookedDoneButton")
+        pause(2)
         capture("Book-Appointments")
 
-        // Home now shows the ticket
+        // Home now shows the appointment
         tab("Home")
         pause(1)
-        app.swipeDown(velocity: .fast)
         app.swipeDown(velocity: .fast)
         pause(2.5)
         capture("Home-Appointment")
@@ -110,52 +107,34 @@ final class DemoTour: XCTestCase {
         tapPinned("favoriteButton")
         pause(1.5)
         capture("Izzy-Profile")
-        app.swipeUp(velocity: .slow)
-        pause(2)
         back()
         pause(1)
         back()
         pause(1)
 
-        // Shop: two quick adds, the gel's sizes, then the bag and Bravo's checkout
+        // The reviews, live from Google and Yelp
+        tap("homeReviews")
+        pause(3)
+        capture("Reviews")
+        for _ in 0..<3 {
+            app.swipeUp(velocity: .slow)
+            pause(1.5)
+        }
+        capture("Reviews-Yelp")
+        back()
+        pause(1)
+
+        // Shop: the shop's own products
         tab("Shop")
         pause(3)
         capture("Shop")
-        tap("quickAdd-blue-bravo-hair-gel-16oz")
-        pause(1.5)
-        tap("quickAdd-bravo-matte-clay")
-        pause(1.5)
-        app.swipeDown(velocity: .fast)
-        app.swipeDown(velocity: .fast)
-        pause(1)
-        tap("product-blue-bravo-hair-gel-16oz")
+        tap("product-sample-pomade")
         pause(2.5)
-        tap("productSize-blue-bravo-hair-gel-4oz")
-        pause(2)
-        capture("Bravo-Gel-4oz")
-        tap("productSize-blue-bravo-hair-gel-16oz")
-        pause(1.5)
-        tapPinned("productBagButton")
-        expect("bagSheet")
-        pause(2.5)
-        capture("Bag")
-        // The stepper's "+" is the 44 pt square at its right end.
-        let gel = element("bagStepper-blue-bravo-hair-gel-16oz")
-        if gel.waitForExistence(timeout: 5) {
-            gel.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -22, dy: 0)).tap()
-        } else {
-            note("Missing the gel's stepper in the bag")
-        }
-        pause(2)
-        capture("Bag-Two-Gels")
-        tapPinned("bagCheckoutButton")
-        showWebPage(named: "Bravo-Checkout", firstLook: 6, fullLoad: 8)
-        answerCheckoutQuestion("Yes, empty my bag")
-        pause(1.5)
+        capture("Product")
         back()
         pause(1)
 
-        // Visit: the storefront, Directions, hours, the map, Instagram and links
+        // Visit: the storefront, Directions, hours, the map and links
         tab("Visit")
         pause(3)
         capture("Visit")
@@ -164,9 +143,6 @@ final class DemoTour: XCTestCase {
             pause(1.5)
         }
         capture("Visit-Info")
-        reveal(element("visitInstagramMessage"))
-        pause(1.5)
-        capture("Visit-Instagram")
 
         // Gallery and the photo viewer
         tab("Home")
@@ -180,11 +156,7 @@ final class DemoTour: XCTestCase {
         pause(2.5)
         app.swipeLeft()
         pause(2)
-        app.swipeLeft()
-        pause(2)
         capture("Photo-Viewer")
-        // Tapped where it is: after a page swipe XCUI can fail to "scroll" the
-        // pinned button into view even though it's on screen.
         let close = element("closePhoto")
         if close.waitForExistence(timeout: 5) {
             close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
@@ -196,55 +168,12 @@ final class DemoTour: XCTestCase {
 
     // MARK: Helpers
 
-    /// Waits for a web page to load, shows it, then closes it.
-    ///
-    /// Squire sits behind a Cloudflare check that can take a while to clear
-    /// for data-center traffic like CI runners, so it gets a generous wait.
-    private func showWebPage(named name: String, firstLook: TimeInterval = 12, fullLoad: TimeInterval = 18) {
-        pause(firstLook)
-        capture("\(name)-\(Int(firstLook))s")
-        pause(fullLoad)
-        capture(name)
-        let done = app.buttons.matching(NSPredicate(format: "label IN {'Done', 'Close'}")).firstMatch
-        if done.waitForExistence(timeout: 5) {
-            done.tap()
-        } else {
-            note("No Done button on the \(name) sheet; swiping it away")
-            let top = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08))
-            top.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.95)))
-        }
-        pause(1.5)
-    }
-
-    /// "Did you finish checking out?", asked once Bravo's checkout closes.
-    private func answerCheckoutQuestion(_ answer: String) {
-        let button = app.alerts.buttons[answer]
-        if button.waitForExistence(timeout: 10) {
-            pause(1.5)
-            button.tap()
-        } else {
-            note("No checkout question")
-        }
-    }
-
-    /// Saving with reminders on asks for notification permission the first time.
-    private func allowNotificationsIfAsked() {
-        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
-        let allow = springboard.alerts.buttons["Allow"]
-        if allow.waitForExistence(timeout: 5) {
-            pause(1.5)
-            allow.tap()
-        } else {
-            print("DEMO TOUR: No notification permission prompt")
-        }
-    }
-
     private func element(_ identifier: String) -> XCUIElement {
         app.descendants(matching: .any).matching(identifier: identifier).firstMatch
     }
 
     private func expect(_ identifier: String) {
-        if !element(identifier).waitForExistence(timeout: 10) {
+        if !element(identifier).waitForExistence(timeout: 15) {
             note("Missing \(identifier)")
         }
     }
@@ -253,8 +182,7 @@ final class DemoTour: XCTestCase {
         tap(element(identifier), named: identifier)
     }
 
-    /// Scrolls to an element and taps it. Elements in lazy grids only exist
-    /// once they're close to the screen, so a missing one is scrolled for.
+    /// Scrolls to an element and taps it.
     private func tap(_ target: XCUIElement, named name: String) {
         if !target.waitForExistence(timeout: 8) {
             reveal(target)
@@ -267,20 +195,29 @@ final class DemoTour: XCTestCase {
         target.tap()
     }
 
-    /// Taps something pinned in place (a sticky bar, a navigation bar button, a
-    /// sheet's button) without scrolling to it first.
+    /// Taps something pinned in place (a sticky bar, a navigation bar button) without scrolling.
     private func tapPinned(_ identifier: String) {
         let target = element(identifier)
-        guard target.waitForExistence(timeout: 8) else {
+        guard target.waitForExistence(timeout: 10) else {
             note("Couldn't find \(identifier)")
             return
         }
         target.tap()
     }
 
-    /// Taps a tab in the floating bar; the barber pole sweeps across to it.
+    private func type(_ text: String, into identifier: String) {
+        let field = element(identifier)
+        guard field.waitForExistence(timeout: 10) else {
+            note("Couldn't find \(identifier)")
+            return
+        }
+        field.tap()
+        pause(0.8)
+        field.typeText(text)
+    }
+
     private func tab(_ name: String) {
-        let button = app.buttons["tab.\(name.lowercased())"]
+        let button = app.tabBars.buttons[name]
         guard button.waitForExistence(timeout: 5) else {
             note("Missing tab \(name)")
             return
@@ -292,15 +229,12 @@ final class DemoTour: XCTestCase {
         }
     }
 
-    /// The back button of the screen on top: the first navigation bar button
-    /// that can be tapped (every tab keeps its own bar alive behind the others).
     private func back() {
-        guard app.navigationBars.buttons.firstMatch.waitForExistence(timeout: 5) else {
+        let button = app.navigationBars.buttons.element(boundBy: 0)
+        guard button.waitForExistence(timeout: 5) else {
             note("No back button")
             return
         }
-        let leading = app.navigationBars.allElementsBoundByIndex.map { $0.buttons.element(boundBy: 0) }
-        let button = leading.first { $0.exists && $0.isHittable } ?? app.navigationBars.buttons.firstMatch
         button.tap()
     }
 

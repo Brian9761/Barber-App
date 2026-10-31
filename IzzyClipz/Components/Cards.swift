@@ -30,147 +30,6 @@ struct RatingStars: View {
     }
 }
 
-/// "★ 5.0 · 92 REVIEWS ON SQUIRE" in mono: a barber's rating in a row or on their profile.
-struct RatingLine: View {
-    let rating: Rating
-    var source: String?
-
-    @Environment(\.surfaceTone) private var tone
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 5) {
-            Image(systemName: Symbol.starFilled)
-                .font(.system(size: 10, weight: .bold))
-                .foregroundStyle(tone.primary)
-            Text(line)
-                .textRole(.monoNumber)
-                .foregroundStyle(tone.secondary)
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var line: String {
-        let base = "\(rating.averageLabel) · \(rating.countLabel)"
-        guard let source else { return base }
-        return "\(base) on \(source)"
-    }
-
-    private var accessibilityText: String {
-        let base = "Rated \(rating.averageLabel) out of 5, \(rating.countLabel)"
-        guard let source else { return base }
-        return "\(base) on \(source)"
-    }
-}
-
-/// One review site's score on a bone tile: "5.0" big, ink stars, "115 ON SQUIRE ↗".
-struct ScoreTile: View {
-    let sourced: SourcedRating
-    /// Shows the ↗ that says tapping opens the site.
-    var showsLink = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text(sourced.rating.averageLabel)
-                .textRole(.displayXL)
-                .lineLimit(1)
-            RatingStars(average: sourced.rating.average, size: 13)
-            HStack(spacing: 4) {
-                Text("\(sourced.rating.count) on \(sourced.source)")
-                    .textRole(.monoNumber)
-                    .foregroundStyle(Theme.smokeDark)
-                if showsLink {
-                    Image(systemName: Symbol.external)
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(Theme.ink)
-                        .accessibilityHidden(true)
-                }
-            }
-            .fixedSize(horizontal: false, vertical: true)
-        }
-        .boneCard()
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Rated \(sourced.rating.averageLabel) out of 5 from \(sourced.rating.countLabel) on \(sourced.source)")
-    }
-}
-
-/// The shop's score on each review site, side by side, stacked from xxLarge text.
-struct RatingSummary: View {
-    let ratings: [SourcedRating]
-    /// Called with a rating whose site should open, if it has a link.
-    var onOpen: ((SourcedRating) -> Void)?
-
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    var body: some View {
-        let layout = dynamicTypeSize >= .xxLarge
-            ? AnyLayout(VStackLayout(spacing: Theme.Space.l))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: Theme.Space.l))
-        layout {
-            ForEach(ratings, id: \.source) { sourced in
-                if let onOpen, sourced.url != nil {
-                    Button {
-                        onOpen(sourced)
-                    } label: {
-                        ScoreTile(sourced: sourced, showsLink: true)
-                    }
-                    .buttonStyle(.pressable)
-                    .accessibilityHint("Opens \(sourced.source)")
-                } else {
-                    ScoreTile(sourced: sourced)
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Reviews
-
-/// A client's review on a bone card: ink stars, an ink quote mark, their words in Archivo SemiBold
-/// and a mono byline ("ALEX N. · SQUIRE · ON CARLOS"). Quoted as written, never edited.
-struct ReviewCard: View {
-    let review: Review
-    /// Cut the text off after this many lines (Home shows 3), or `nil` for all of it.
-    var lineLimit: Int?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack {
-                RatingStars(average: Double(review.stars), size: 13)
-                Spacer()
-                Image(systemName: Symbol.quote)
-                    .font(.title3.weight(.bold))
-                    .accessibilityHidden(true)
-            }
-            Text(review.text)
-                .textRole(.quote)
-                .lineLimit(lineLimit)
-                .fixedSize(horizontal: false, vertical: lineLimit == nil)
-            Text(byline)
-                .textRole(.monoTag)
-                .foregroundStyle(Theme.smokeDark)
-        }
-        .boneCard(padding: Theme.Space.xl)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(accessibilityText)
-    }
-
-    private var barberName: String? {
-        review.barberID.flatMap { AppData.catalog.barber(withID: $0)?.name }
-    }
-
-    private var byline: String {
-        [review.author, review.source, review.date, barberName.map { "on \($0)" }]
-            .compactMap { $0 }
-            .joined(separator: " · ")
-    }
-
-    private var accessibilityText: String {
-        let about = barberName.map { ", about \($0)" } ?? ""
-        return "\(review.stars) star review by \(review.author) on \(review.source)\(about): \(review.text)"
-    }
-}
-
 // MARK: - Notes
 
 /// "Walk-ins welcome" with today's hours.
@@ -193,7 +52,7 @@ struct WalkInCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                 TimelineView(.everyMinute) { context in
                     Text(AppData.clock.todayLabel(at: context.date))
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.bone)
                 }
                 .padding(.top, 2)
@@ -236,7 +95,7 @@ struct InfoCallout: View {
 
 // MARK: - Empty states
 
-/// `ContentUnavailableView` in Street Drip: a bone symbol on an `ink4` tile, a Display M title, a
+/// `ContentUnavailableView` in Street Drip: a bone symbol on an `ink4` tile, a title, a
 /// line of body text and the actions (a bone "Call (442) 341-3053" is the usual one). For a link to
 /// a service or barber that no longer exists, or a list with nothing in it.
 ///

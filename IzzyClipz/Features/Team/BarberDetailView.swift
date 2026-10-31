@@ -10,10 +10,6 @@ struct BarberDetailView: View {
     /// Whether the name in the content has scrolled up under the navigation bar.
     @State private var nameIsUnderBar = false
 
-    private var reviews: [Review] {
-        AppData.shop.reviews.filter { $0.barberID == barber.id }
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.section) {
@@ -27,7 +23,6 @@ struct BarberDetailView: View {
                 }
                 BarberAbout(barber: barber)
                 BarberMenuSection(barber: barber)
-                reviewsSection
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, Theme.Space.s)
@@ -44,17 +39,6 @@ struct BarberDetailView: View {
             .buttonStyle(.primary)
             .accessibilityHint("Next, pick one of their services")
             .accessibilityIdentifier("bookBarberButton")
-        }
-    }
-
-    @ViewBuilder private var reviewsSection: some View {
-        if !reviews.isEmpty {
-            VStack(alignment: .leading, spacing: Theme.Space.m) {
-                SectionHeader("What clients say")
-                ForEach(reviews) { review in
-                    ReviewCard(review: review)
-                }
-            }
         }
     }
 }
@@ -85,8 +69,7 @@ private struct BarberBand: View {
     }
 }
 
-/// Their title in mono, the name in Display XL, then how Squire lists them and their Squire rating
-/// (nothing for barbers without one: never "0 reviews").
+/// Their title, then their name.
 private struct BarberNameBlock: View {
     let barber: Barber
 
@@ -97,17 +80,6 @@ private struct BarberNameBlock: View {
             MenuTitleText(barber.name, role: .displayXL)
                 .foregroundStyle(Theme.bone)
                 .accessibilityAddTraits(.isHeader)
-            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                if barber.listedName != barber.name {
-                    Text("Listed as \(barber.listedName) on Squire")
-                        .textRole(.monoTag)
-                        .foregroundStyle(Theme.smoke)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let rating = barber.rating {
-                    RatingLine(rating: rating, source: "Squire")
-                }
-            }
         }
     }
 }
@@ -176,7 +148,7 @@ private struct BarberInstagramRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Kicker("\(barberName) on Instagram")
                     Text(verbatim: handleText)
-                        .font(BrandFont.condensedExtraBold.font(size: 21, relativeTo: .title3))
+                        .textRole(.displayS)
                         .foregroundStyle(Theme.bone)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -198,7 +170,7 @@ private struct BarberInstagramRow: View {
 
 // MARK: - About
 
-/// The bio, then the specialties as one mono line (they aren't tappable, so they aren't chips).
+/// The bio, then the specialties as one line (they aren't tappable, so they aren't chips).
 private struct BarberAbout: View {
     let barber: Barber
 
@@ -219,7 +191,7 @@ private struct BarberAbout: View {
                     Kicker("Specialties")
                         .accessibilityAddTraits(.isHeader)
                     specialties
-                        .textRole(.monoNumber)
+                        .textRole(.detail)
                         .foregroundStyle(Theme.bone)
                         .accessibilityElement(children: .ignore)
                         .accessibilityLabel(barber.specialties.joined(separator: ", "))
@@ -273,7 +245,7 @@ private struct BarberMenuSection: View {
             if offerings.isEmpty {
                 InfoCallout(
                     title: "Nothing to book online yet",
-                    message: "\(barber.name) has no services on Squire right now. Call the shop at \(AppData.shop.phone.display)."
+                    message: "\(barber.name) has no services to book in the app right now. Call the shop at \(AppData.shop.phone.display)."
                 )
             }
         }
@@ -292,7 +264,7 @@ private struct BarberMenuSection: View {
     }
 }
 
-/// An `ink3` row: the service and the barber's price, their length in mono, their note, a chevron.
+/// An `ink3` row: the service and the barber's price, their length, their note, a chevron.
 private struct BarberMenuRow: View {
     let service: Service
     let offering: Offering
@@ -302,7 +274,7 @@ private struct BarberMenuRow: View {
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                 MenuNamePriceLine(name: service.name, price: offering.price.label)
                 Text(offering.durationLabel)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 if let note = offering.note {
                     Text(note)

@@ -8,14 +8,38 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     let router = AppRouter()
     let favorites = Favorites(defaults: LaunchOptions.defaults)
     let reminders = ReminderStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
-    let appointments = AppointmentStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
-    let bravo = BravoStore()
-    /// Uses Bravo's live prices, variants and stock, so it's made after `bravo`.
-    private(set) lazy var bag = BagStore(bravo: bravo, defaults: LaunchOptions.defaults)
+    let customerDetails = CustomerDetailsStore(defaults: LaunchOptions.defaults)
+    /// The shop's server, or an in-memory fake while UI testing.
+    let api: any ShopAPI = APIConfiguration.makeAPI()
+    private(set) lazy var appointments: AppointmentStore = makeAppointments()
+    private(set) lazy var products = ProductsStore { [api] in try await api.products() }
+    private(set) lazy var reviews = ReviewsStore { [api] in try await api.reviews() }
 
     /// UI tests never see a permission alert; everyone else gets the real thing.
     private static func makeScheduler() -> NotificationScheduling {
         LaunchOptions.isUITesting ? AlwaysAllowedNotificationScheduler() : SystemNotificationScheduler()
+    }
+
+    /// Manage tokens live in the Keychain. UI tests keep them in memory, so every run starts
+    /// empty and nothing is left in the simulator's Keychain.
+    private static func makeTokenStore() -> SecretStore {
+        LaunchOptions.isUITesting ? InMemorySecretStore() : KeychainSecretStore(service: "com.izzyclipz.app.manage-tokens")
+    }
+
+    private func makeAppointments() -> AppointmentStore {
+        if LaunchOptions.isUITesting {
+            UITestSetup.prepareDefaults(LaunchOptions.defaults)
+        }
+        let store = AppointmentStore(
+            api: api,
+            tokens: Self.makeTokenStore(),
+            scheduler: Self.makeScheduler(),
+            defaults: LaunchOptions.defaults
+        )
+        if LaunchOptions.isUITesting {
+            UITestSetup.seed(store, api: api, customerDetails: customerDetails)
+        }
+        return store
     }
 
     func application(
@@ -24,23 +48,32 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         // Set before launch finishes so a tap that launched the app is delivered.
         UNUserNotificationCenter.current().delegate = self
-        if LaunchOptions.isUITesting {
+        // UI tests run without animations, except the recorded demo (`-keepAnimations`).
+        if LaunchOptions.isUITesting, !ProcessInfo.processInfo.arguments.contains("-keepAnimations") {
             UIView.setAnimationsEnabled(false)
         }
         return true
     }
 
-    /// Rolls reminders forward, drops old appointments, and treats the latest
-    /// appointment that's over as the client's last cut.
+    /// Rolls reminders forward, checks the appointments with the shop (the shop may have
+    /// cancelled or completed one), and treats the latest appointment that's over as the client's
+    /// last cut.
     func becameActive() {
-        appointments.refresh()
+        appointments.refreshLocally()
+        updateLastCut()
+        Task {
+            await appointments.refresh()
+            updateLastCut()
+        }
+    }
+
+    private func updateLastCut() {
         if let lastAppointment = appointments.latestFinishedStart, lastAppointment > reminders.lastCut {
             reminders.setLastCut(lastAppointment)
         } else {
             // Also notices permission changes made in Settings.
             reminders.refresh()
         }
-        Task { await bravo.refresh() }
     }
 
     /// Shows notifications even while the app is open.

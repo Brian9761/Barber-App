@@ -50,14 +50,14 @@ enum Theme {
     /// The primary-action color: the Book button, each screen's one main button, the Shop's bag badge.
     /// Labels on it are `white` at 100%.
     static let dripRed = Color(hex: 0xD7141C)
-    /// Red text on ink, used in exactly two places: the wordmark's "CLIPZ" and the "BOOKED" drip word.
+    /// Red text on ink, used in one place: the wordmark's "Clipz".
     static let hotRed = Color(hex: 0xFF4545)
     /// Red text on bone (5.97). Kept for the logo's own red; the build rules leave it almost unused.
     static let logoRed = Color(hex: 0xB80000)
 
     // MARK: Blue
 
-    /// The logo's royal blue: the promo gradient's start, blue text on bone, the pole's blue stripes.
+    /// The logo's royal blue: the blue monogram tiles, blue text on bone.
     static let royal = Color(hex: 0x00309A)
     /// The promo gradient's end, and the blue monogram tiles.
     static let blue = Color(hex: 0x1F4FD8)
@@ -114,28 +114,6 @@ enum Theme {
     static let minimumTapSize: CGFloat = 44
 
     // MARK: Gradients
-
-    /// Bravo's promo cards: royal into blue at about 120°. White text on it is 6.63:1 or better.
-    static let promoGradient = LinearGradient(
-        stops: [
-            .init(color: royal, location: 0),
-            .init(color: blue, location: 0.64),
-            .init(color: Color(hex: 0x3A66F0), location: 1),
-        ],
-        startPoint: UnitPoint(x: 0.07, y: 0.25),
-        endPoint: UnitPoint(x: 0.93, y: 0.75)
-    )
-
-    /// The fade above the floating tab bar, so scrolling content dissolves before it reaches the bar.
-    static let tabScrim = LinearGradient(
-        stops: [
-            .init(color: ink.opacity(0), location: 0),
-            .init(color: ink.opacity(0.88), location: 0.34),
-            .init(color: ink, location: 0.58),
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
 
     /// The dot in the open-status pill.
     static func color(for tone: StatusSummary.Tone) -> Color {
@@ -267,6 +245,7 @@ enum Symbol {
 
     // Content
     static let team = "person.3"
+    static let person = "person.crop.circle"
     static let starFilled = "star.fill"
     static let starHalf = "star.leadinghalf.filled"
     static let starEmpty = "star"
@@ -282,6 +261,7 @@ enum Symbol {
     static let walkIn = "figure.walk"
     static let firstAvailable = "person.2.fill"
     static let gallery = "photo.on.rectangle"
+    static let photoUnavailable = "photo"
     static let quote = "quote.opening"
     static let info = "info.circle"
     static let map = "map"
@@ -307,6 +287,7 @@ enum Symbol {
             team, starFilled, starHalf, starEmpty, favorite, favoriteFilled, included, clock, calendar, calendarAdd,
             calendarClock, payment, accessibility, walkIn, firstAvailable, gallery, quote, info, map, location,
             checkmark, success, partner, shipping, reviews, morning, afternoon, evening, sparkles, warning, remindersOff,
+            photoUnavailable, person,
         ]
         let data = Catalog.izzyClipz.services.map(\.symbol) + ServiceCategory.allCases.map(\.symbol)
         return Array(Set(own + data)).sorted()

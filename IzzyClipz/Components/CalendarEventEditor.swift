@@ -4,13 +4,13 @@ import SwiftUI
 
 /// Apple's "New Event" screen, filled in with an appointment.
 ///
-/// Since iOS 17 this screen runs outside the app, so adding the event needs no
-/// calendar permission: the client sees exactly what's saved and taps Add.
+/// Since iOS 17 this screen runs outside the app, so adding the event needs no calendar
+/// permission: the client sees exactly what's saved and taps Add.
 struct CalendarEventEditor: UIViewControllerRepresentable {
-    let appointment: Appointment
-    /// Off only when the app will send its own hour-before reminder, so the
-    /// client doesn't get two alerts at once. With notifications off, or the
-    /// reminder turned off, the calendar's alert is the one they get.
+    let event: CalendarEvent
+    /// Off only when the app will send its own hour-before reminder, so the client doesn't get two
+    /// alerts at once. With notifications off, or the reminder turned off, the calendar's alert is
+    /// the one they get.
     var includesAlert = true
     let onDone: () -> Void
 
@@ -20,37 +20,28 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
 
     func makeUIViewController(context: Context) -> EKEventEditViewController {
         let store = EKEventStore()
-        let event = EKEvent(eventStore: store)
+        let calendarEvent = EKEvent(eventStore: store)
         let shop = AppData.shop
-        event.title = "\(appointment.serviceName) at \(shop.name)"
-        event.startDate = appointment.start
-        event.endDate = appointment.end
-        event.timeZone = shop.timeZone
-        event.location = "\(shop.fullName), \(shop.address.singleLine)"
-        event.notes = CalendarEventEditor.notes(for: appointment)
-        event.url = shop.websiteURL
+        calendarEvent.title = event.title
+        calendarEvent.startDate = event.start
+        calendarEvent.endDate = event.end
+        calendarEvent.timeZone = shop.timeZone
+        calendarEvent.location = "\(shop.fullName), \(shop.address.singleLine)"
+        calendarEvent.notes = event.notes
+        calendarEvent.url = shop.websiteURL
         if includesAlert {
-            event.addAlarm(EKAlarm(relativeOffset: -60 * 60))
+            calendarEvent.addAlarm(EKAlarm(relativeOffset: -60 * 60))
         }
 
         let controller = EKEventEditViewController()
         controller.eventStore = store
-        controller.event = event
+        controller.event = calendarEvent
         controller.editViewDelegate = context.coordinator
         controller.view.tintColor = UIColor(Theme.bone)
         return controller
     }
 
     func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
-
-    static func notes(for appointment: Appointment) -> String {
-        let shop = AppData.shop
-        return [
-            "\(appointment.serviceName) \(BookingFlowCopy.withBarber(for: appointment))",
-            "\(appointment.priceLabel) · \(DurationText.short(minutes: appointment.durationMinutes))",
-            "Need to change it? Call \(shop.phone.display).",
-        ].joined(separator: "\n")
-    }
 
     final class Coordinator: NSObject, EKEventEditViewDelegate {
         private let onDone: () -> Void
@@ -65,22 +56,22 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
     }
 }
 
-/// The "New Event" screen in a sheet. UI tests get a stand-in, since the real
-/// one runs in another process.
+/// The "New Event" screen in a sheet. UI tests get a stand-in, since the real one runs in another
+/// process.
 struct AddToCalendarSheet: View {
-    let appointment: Appointment
+    let event: CalendarEvent
     @Environment(\.dismiss) private var dismiss
     @Environment(AppointmentStore.self) private var appointments
 
     var body: some View {
         if LaunchOptions.isUITesting {
             NavigationStack {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("New Event")
-                        .font(.headline)
-                    Text("\(appointment.serviceName) at \(AppData.shop.name)")
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    Text("New event")
+                        .textRole(.headline)
+                    Text(event.title)
                         .accessibilityIdentifier("calendarEventTitle")
-                    Text(AppData.bookingCalendar.dateTimeLabel(for: appointment.start))
+                    Text(AppData.bookingCalendar.dateTimeLabel(for: event.start))
                     Spacer()
                 }
                 .padding()
@@ -93,8 +84,8 @@ struct AddToCalendarSheet: View {
             }
         } else {
             CalendarEventEditor(
-                appointment: appointment,
-                includesAlert: !appointments.willSendHourBeforeReminder(for: appointment.id)
+                event: event,
+                includesAlert: !appointments.willSendHourBeforeReminder(for: event.id)
             ) {
                 dismiss()
             }

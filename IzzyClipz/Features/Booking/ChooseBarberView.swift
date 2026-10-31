@@ -1,9 +1,9 @@
 import SwiftUI
 
-/// Step 2 when the service was picked first: who does it, one barber per row with their own price
-/// and length (a Haircut runs $35–$45 and 45 min–1 hr depending on the barber). "First available"
-/// comes first when several barbers share the service, then each barber who offers it, the
-/// client's favorite at the top. Tapping a row goes straight to the calendar. No red here.
+/// Step 2 when the service was picked first: who does it. "Any barber" comes first when several
+/// barbers share the service, then one row per barber's version of it, with their own price and
+/// length (Flowxbori has two haircuts, so he's listed twice), the client's favorite at the top.
+/// Tapping a row goes straight to the times.
 struct ChooseBarberView: View {
     let service: Service
     @Environment(Favorites.self) private var favorites
@@ -12,19 +12,12 @@ struct ChooseBarberView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
-                VStack(alignment: .leading, spacing: Theme.Space.s) {
-                    BookingStepTitle(step: 2, name: "Barber", title: "Pick your barber")
-                    Text(summary)
-                        .textRole(.monoNumber)
-                        .foregroundStyle(Theme.smoke)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel(summary.spokenRanges)
-                }
-                .padding(.bottom, Theme.Space.s)
+                BookingStepHeader(step: 2, title: "Pick a barber", subtitle: summary)
+                    .padding(.bottom, Theme.Space.s)
 
                 if let option = catalog.firstAvailableOption(forService: service.id) {
-                    ChooseBarberFirstAvailableLink(option: option)
-                    BookingSectionLabel(title: "Or choose your barber")
+                    ChooseAnyBarberLink(option: option)
+                    BookingSectionLabel(title: "Or pick your barber")
                         .padding(.top, Theme.Space.s)
                 }
 
@@ -33,7 +26,8 @@ struct ChooseBarberView: View {
                         ChooseBarberOfferingLink(
                             offering: offering,
                             barber: barber,
-                            isFavorite: favorites.isFavorite(barber.id)
+                            isFavorite: favorites.isFavorite(barber.id),
+                            showsLength: offeringsByBarber[barber.id, default: 0] > 1
                         )
                     }
                 }
@@ -50,18 +44,14 @@ struct ChooseBarberView: View {
             .padding(.bottom, Theme.Space.xxl)
         }
         .screenBackground()
-        .bookingStepChrome(step: 2, name: "Barber", title: service.name)
+        .bookingStepChrome(title: service.name)
     }
 
-    /// "Haircut · $35–$45 · 45 min – 1 hr" (set in capitals).
+    /// "Haircut · $35–$45 · 45 min – 1 hr".
     private var summary: String {
-        [
-            service.name,
-            catalog.priceSummary(forService: service.id),
-            catalog.durationSummary(forService: service.id),
-        ]
-        .filter { !$0.isEmpty }
-        .joined(separator: " · ")
+        [service.name, catalog.priceSummary(forService: service.id), catalog.durationSummary(forService: service.id)]
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 
     /// The client's favorite barber first, then cheapest first.
@@ -71,6 +61,11 @@ struct ChooseBarberView: View {
         return all.filter { $0.barberID == favorite } + all.filter { $0.barberID != favorite }
     }
 
+    /// How many versions of the service each barber has.
+    private var offeringsByBarber: [String: Int] {
+        Dictionary(grouping: catalog.offerings(forService: service.id), by: \.barberID).mapValues(\.count)
+    }
+
     /// The one barber who offers this service, when only one does ("Only Izzy offers VIP.").
     private var onlyBarber: Barber? {
         let barbers = catalog.barbers(offering: service.id)
@@ -78,40 +73,30 @@ struct ChooseBarberView: View {
     }
 }
 
-/// Book the service with whoever is free first. The app doesn't know who that is: Squire picks.
-private struct ChooseBarberFirstAvailableLink: View {
+/// Book with whoever is free first among the barbers who share the service's main item. The shop
+/// assigns the barber when the time is booked.
+private struct ChooseAnyBarberLink: View {
     let option: FirstAvailableOption
 
+    private var names: String {
+        BookingFlowCopy.list(option.barberIDs.compactMap { AppData.catalog.barber(withID: $0)?.name })
+    }
+
     var body: some View {
-        NavigationLink(value: BookingStep.chooseTime(.firstAvailable(option))) {
-            ChooseBarberRow(
-                name: "First available",
-                isFavorite: false,
-                price: option.priceLabel,
-                duration: option.durationLabel
-            ) {
-                ChooseBarberStackedMonograms(barberIDs: option.barberIDs)
+        NavigationLink(value: BookingStep.chooseTime(.anyBarber(option))) {
+            ChooseBarberRow(name: "Any barber", isFavorite: false, price: option.priceLabel, duration: option.durationLabel) {
+                ServiceIcon(symbol: Symbol.firstAvailable, size: 56)
             } detail: {
-                Text("Squire picks whoever's free")
+                Text("Whoever is free first: \(names)")
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(accessibilityText)
+        .accessibilityLabel("Any barber, whoever is free first: \(names), \(option.priceLabel.spokenRanges), \(option.durationLabel.spokenRanges)")
         .accessibilityHint("Next, pick a day and time")
-        .accessibilityIdentifier("chooseFirstAvailable")
-    }
-
-    private var accessibilityText: String {
-        let names = option.barberIDs.compactMap { AppData.catalog.barber(withID: $0)?.name }
-        return [
-            "First available barber",
-            "Squire picks whoever's free" + (names.isEmpty ? "" : ": \(ListFormatter.localizedString(byJoining: names))"),
-            option.priceLabel.spokenRanges,
-            option.durationLabel.spokenRanges,
-        ].joined(separator: ", ")
+        .accessibilityIdentifier("chooseAnyBarber")
     }
 }
 
@@ -120,11 +105,13 @@ private struct ChooseBarberOfferingLink: View {
     let offering: Offering
     let barber: Barber
     let isFavorite: Bool
+    /// Names the length too, for a barber with two versions of the service.
+    let showsLength: Bool
 
     var body: some View {
         NavigationLink(value: BookingStep.chooseTime(.offering(offering))) {
             ChooseBarberRow(
-                name: barber.name,
+                name: showsLength ? "\(barber.name), \(offering.durationLabel)" : barber.name,
                 isFavorite: isFavorite,
                 price: offering.price.label,
                 duration: offering.durationLabel,
@@ -132,14 +119,9 @@ private struct ChooseBarberOfferingLink: View {
             ) {
                 MonogramTile(barber: barber, side: 56)
             } detail: {
-                if let rating = barber.rating {
-                    RatingLine(rating: rating)
-                } else {
-                    // Cristian and Julian have no published rating: "BARBER", never "0 reviews".
-                    Text(barber.title)
-                        .textRole(.monoNumber)
-                        .foregroundStyle(Theme.smoke)
-                }
+                Text(barber.title)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
             }
         }
         .buttonStyle(.pressable)
@@ -149,12 +131,7 @@ private struct ChooseBarberOfferingLink: View {
     }
 
     private var accessibilityText: String {
-        var parts = ["\(barber.name)" + (isFavorite ? ", your barber" : "")]
-        if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel)")
-        } else {
-            parts.append(barber.title)
-        }
+        var parts = [barber.name + (isFavorite ? ", your barber" : ""), barber.title.menuSpokenList]
         parts.append(offering.price.label.spokenRanges)
         parts.append(DurationText.spoken(minutes: offering.durationMinutes))
         if let note = offering.note { parts.append(note) }
@@ -165,7 +142,7 @@ private struct ChooseBarberOfferingLink: View {
 /// A row on step 2: a 56 pt tile, the name with a line under it, the price and length on the
 /// right and a chevron. When the name and price can't share a line (big text, a long price like
 /// "Included with cut"), the price moves under the name. A barber's note runs full width below.
-private struct ChooseBarberRow<Leading: View, Detail: View>: View {
+struct ChooseBarberRow<Leading: View, Detail: View>: View {
     let name: String
     let isFavorite: Bool
     let price: String
@@ -241,7 +218,6 @@ private struct ChooseBarberRow<Leading: View, Detail: View>: View {
         }
     }
 
-    /// Beside the name it stays on one line; under it, a long price ("Included with cut") wraps.
     private func priceBlock(isStacked: Bool) -> some View {
         VStack(alignment: isStacked ? .leading : .trailing, spacing: 2) {
             Text(price)
@@ -251,38 +227,8 @@ private struct ChooseBarberRow<Leading: View, Detail: View>: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .multilineTextAlignment(isStacked ? .leading : .trailing)
             Text(duration)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
-    }
-}
-
-/// The barbers "first available" covers: up to three 32 pt monograms fanned across a 56 pt square,
-/// so the row lines up with the barber rows under it.
-private struct ChooseBarberStackedMonograms: View {
-    let barberIDs: [String]
-
-    private static let side: CGFloat = 32
-    private static let box: CGFloat = 56
-
-    var body: some View {
-        let barbers = Array(barberIDs.compactMap { AppData.catalog.barber(withID: $0) }.prefix(3))
-        // Spread corner to corner; a single tile sits in the middle.
-        let travel = Self.box - Self.side
-        let step = barbers.count > 1 ? travel / CGFloat(barbers.count - 1) : 0
-        let start = barbers.count > 1 ? 0 : travel / 2
-        ZStack(alignment: .topLeading) {
-            ForEach(Array(barbers.enumerated()), id: \.element.id) { index, barber in
-                let offset = start + CGFloat(index) * step
-                MonogramTile(barber: barber, side: Self.side, cornerRadius: 9)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(Theme.ink3, lineWidth: 2)
-                    )
-                    .offset(x: offset, y: offset)
-            }
-        }
-        .frame(width: Self.box, height: Self.box, alignment: .topLeading)
-        .accessibilityHidden(true)
     }
 }

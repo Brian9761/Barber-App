@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// A short uppercase mono line above a title, like the label on a shoe box: "THE MENU · 12 SERVICES".
-/// `smoke` on ink, `smokeDark` on bone. Pass sentence case; it's set in capitals.
+/// A short line above a title: "The menu · 12 services". `smoke` on ink, `smokeDark` on bone.
 struct Kicker: View {
     let text: String
     @Environment(\.surfaceTone) private var tone
@@ -12,14 +11,14 @@ struct Kicker: View {
 
     var body: some View {
         Text(text)
-            .textRole(.monoTag)
+            .textRole(.label)
             .foregroundStyle(tone.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 }
 
-/// A small boxed mono tag on a card or tile: "OWNER", "THE WORKS", "SOLD OUT", "TODAY".
-struct MonoTag: View {
+/// A small boxed label on a card or tile: "Owner", "The works", "Today".
+struct Badge: View {
     enum Style {
         /// Ink box, bone text: on bone and on photos.
         case ink
@@ -44,7 +43,7 @@ struct MonoTag: View {
                     .accessibilityHidden(true)
             }
             Text(text)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .lineLimit(1)
         }
         .foregroundStyle(foreground)
@@ -75,7 +74,7 @@ struct MonoTag: View {
     }
 }
 
-/// The top of a screen: a mono kicker over a Display XL title, in the content (the navigation bar
+/// The top of a screen: a kicker over a large title, in the content (the navigation bar
 /// above stays native). The title stops growing at accessibility2, wraps to two lines and then
 /// shrinks, since it's decoration repeated in the navigation title.
 ///
@@ -115,7 +114,7 @@ extension ScreenHeader where Trailing == EmptyView {
     }
 }
 
-/// A section title in Display M with an optional trailing link ("All 5 barbers ›"), 44 pt tall.
+/// A section title with an optional trailing link ("All 5 barbers ›"), 44 pt tall.
 /// The trailing control is styled as a smoke text link.
 ///
 ///     SectionHeader("The crew") {
@@ -150,55 +149,8 @@ extension SectionHeader where Trailing == EmptyView {
     }
 }
 
-/// Where you are in booking: the pole progress bar and "STEP 3 / 4 · TIME", then the step's title in
-/// Display L and a line under it.
-struct StepHeader: View {
-    let step: Int
-    let total: Int
-    /// The step's short name for the tag, e.g. "Time".
-    var stepName: String?
-    let title: String
-    let subtitle: String
-
-    init(step: Int, of total: Int = 4, stepName: String? = nil, title: String, subtitle: String) {
-        self.step = step
-        self.total = total
-        self.stepName = stepName
-        self.title = title
-        self.subtitle = subtitle
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.s) {
-            HStack(spacing: Theme.Space.m) {
-                PoleProgressBar(step: step, total: total)
-                Text(tag)
-                    .textRole(.monoTag)
-                    .foregroundStyle(Theme.smoke)
-                    .accessibilityHidden(true)
-            }
-            Text(title)
-                .textRole(.displayL)
-                .foregroundStyle(Theme.bone)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityAddTraits(.isHeader)
-            Text(subtitle)
-                .textRole(.body)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var tag: String {
-        let count = "Step \(step) / \(total)"
-        guard let stepName else { return count }
-        return "\(count) · \(stepName)"
-    }
-}
-
-/// A price in Archivo Condensed with tabular figures, so digits line up from row to row: card size
-/// (20 pt) or big (30 pt). VoiceOver reads a range like "$35–$45" as "$35 to $45".
+/// A price with tabular figures, so digits line up from row to row: card size or big. VoiceOver
+/// reads a range like "$35–$45" as "$35 to $45".
 struct PriceText: View {
     let label: String
     var isLarge = false
@@ -222,5 +174,28 @@ extension String {
     /// VoiceOver doesn't always read a dash between values as "to".
     var spokenRanges: String {
         replacingOccurrences(of: " – ", with: " to ").replacingOccurrences(of: "–", with: " to ")
+    }
+}
+
+/// Where you are in booking, as a thin bar: the finished part in bone, the rest in `ink4`.
+/// Decoration for the text beside it ("Step 2 of 5"), so VoiceOver skips it.
+///
+///     StepProgressBar(step: 2, total: 5)
+struct StepProgressBar: View {
+    /// The current step, from 1.
+    let step: Int
+    var total = 5
+
+    var body: some View {
+        GeometryReader { proxy in
+            let fraction = CGFloat(min(max(step, 1), max(total, 1))) / CGFloat(max(total, 1))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Theme.ink4)
+                Capsule().fill(Theme.bone)
+                    .frame(width: proxy.size.width * fraction)
+            }
+        }
+        .frame(height: 4)
+        .accessibilityHidden(true)
     }
 }

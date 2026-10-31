@@ -16,14 +16,13 @@ struct IzzyClipzApp: App {
                 .environment(appDelegate.favorites)
                 .environment(appDelegate.reminders)
                 .environment(appDelegate.appointments)
-                .environment(appDelegate.bravo)
-                .environment(appDelegate.bag)
+                .environment(appDelegate.products)
+                .environment(appDelegate.reviews)
+                .environment(appDelegate.customerDetails)
+                .environment(\.shopAPI, appDelegate.api)
                 // Street Drip is dark only: the palette is the brand.
                 .preferredColorScheme(.dark)
                 .tint(Theme.dripRed)
-                .task {
-                    await appDelegate.bravo.refresh()
-                }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active {

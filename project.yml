@@ -53,6 +53,8 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
+        # The shop's server (see server/README.md). A placeholder until it's deployed.
+        IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIApplicationSupportsIndirectInputEvents: true
@@ -60,18 +62,6 @@ targets:
           UIColorName: LaunchBackground
           UIImageName: LaunchLogo
         UIUserInterfaceStyle: Dark
-        UIAppFonts:
-          - ArchivoExtraCondensed-Black.ttf
-          - ArchivoCondensed-ExtraBold.ttf
-          - ArchivoExpanded-Black.ttf
-          - ArchivoExpanded-ExtraBold.ttf
-          - Archivo-Regular.ttf
-          - Archivo-Medium.ttf
-          - Archivo-SemiBold.ttf
-          - Archivo-Bold.ttf
-          - SpaceMono-Regular.ttf
-          - SpaceMono-Bold.ttf
-          - RubikWetPaint-Regular.ttf
         UIRequiredDeviceCapabilities:
           - arm64
         UISupportedInterfaceOrientations:

@@ -1,160 +1,213 @@
 import SwiftUI
 
-/// Step 4: the pick on a bone ticket, and the hand-off to Squire, the shop's booking system, where
-/// the real slot is confirmed. The Squire link carries the barber and the service, not the time,
-/// so the hand-off card says exactly what to pick there. The screen's one red is "Confirm on
-/// Squire".
+/// Step 5: everything on one card (each part with "Change"), the note that nothing is paid now,
+/// and the screen's one red, "Book appointment".
+///
+/// If booking fails, the card under the button says why in plain words and offers the way
+/// forward: a taken time goes back to the times (refreshed), a problem with the details goes back
+/// to them, and being offline offers "Try again" and "Call the shop".
 struct BookingReviewView: View {
-    let plan: BookingPlan
+    let draft: BookingDraft
+
+    @Environment(\.shopAPI) private var api
+    @State private var submitter: BookingSubmitter?
+
+    var body: some View {
+        Group {
+            if let submitter {
+                BookingReviewScreen(draft: draft, submitter: submitter)
+            } else {
+                Theme.ink.ignoresSafeArea()
+            }
+        }
+        .bookingStepChrome(title: "Review")
+        .onAppear {
+            if submitter == nil {
+                submitter = BookingSubmitter(api: api)
+            }
+        }
+    }
+}
+
+private struct BookingReviewScreen: View {
+    let draft: BookingDraft
+    let submitter: BookingSubmitter
 
     @Environment(AppRouter.self) private var router
+    @Environment(AppointmentStore.self) private var appointments
     private let calendar = AppData.bookingCalendar
 
-    /// A time this close to now may be gone by the time the client confirms.
-    private static let soonMinutes = 15
+    private var plan: BookingPlan { draft.plan }
+    private var choice: BookingChoice { draft.plan.choice }
 
     var body: some View {
         ScrollView {
-            // Re-checked every minute, so the warning shows up if the client lingers.
-            TimelineView(.everyMinute) { context in
-                content(now: context.date)
-            }
-        }
-        .screenBackground()
-        .bookingStepChrome(step: 4, name: "Review", title: "Review")
-    }
-
-    private func content(now: Date) -> some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xxl) {
-            BookingStepTitle(step: 4, name: "Review", title: "Review & confirm")
-
-            VStack(alignment: .leading, spacing: Theme.Space.m) {
-                BookingTicket(
-                    kicker: "Your pick",
-                    start: plan.start,
-                    serviceName: plan.choice.serviceName,
-                    withBarber: BookingFlowCopy.withBarber(plan.choice),
-                    priceLabel: plan.choice.priceLabel,
-                    durationMinutes: plan.choice.durationMinutes
-                )
-                if let note = plan.choice.note {
-                    Text(note)
-                        .textRole(.caption)
-                        .foregroundStyle(Theme.smoke)
-                        .fixedSize(horizontal: false, vertical: true)
+            VStack(alignment: .leading, spacing: Theme.Space.xl) {
+                BookingStepHeader(step: 5, title: "Review and book")
+                summary
+                BookingPayAtShopNote()
+                if let failure = submitter.failure {
+                    BookingFailureCard(
+                        failure: failure,
+                        isRetrying: submitter.isBooking,
+                        onRetry: book,
+                        onPickAnotherTime: pickAnotherTime,
+                        onEditDetails: { router.returnToDetails() }
+                    )
                 }
-            }
-
-            if isTooSoon(now: now) {
-                BookingReviewSoonWarning(timeLabel: timeLabel, hasPassed: plan.start <= now, onPickAnother: pickAnotherTime)
-            }
-
-            BookingReviewHandoff(instruction: instruction, timeZoneNote: BookingFlowCopy.timeZoneNote(at: plan.start))
-
-            VStack(spacing: Theme.Space.s) {
-                Button {
-                    router.openSquire(plan.choice.request, plan: plan)
-                } label: {
-                    Text("Confirm on Squire")
-                }
-                .buttonStyle(.primary(trailingSymbol: Symbol.external, drips: true))
-                .accessibilityHint("Opens Squire, the shop's booking system")
-                .accessibilityIdentifier("confirmOnSquireButton")
-
-                Text("After you confirm, come back here to save it.")
+                Text("You can cancel in the app any time before your appointment starts.")
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
-                    .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity)
+            }
+            .padding(.horizontal, Theme.gutter)
+            .padding(.top, Theme.Space.s)
+            .padding(.bottom, Theme.Space.xl)
+        }
+        .screenBackground()
+        .stickyBottomBar {
+            Button(action: book) {
+                HStack(spacing: Theme.Space.s) {
+                    if submitter.isBooking {
+                        ProgressView()
+                            .tint(.white)
+                    }
+                    Text(submitter.isBooking ? "Booking…" : "Book appointment")
+                }
+            }
+            .buttonStyle(.primary(trailingSymbol: submitter.isBooking ? nil : Symbol.checkmark))
+            .disabled(submitter.isBooking)
+            .accessibilityHint("Books it with the shop. No payment now.")
+            .accessibilityIdentifier("bookAppointmentButton")
+        }
+        // Leaving while it books would lose the confirmation.
+        .navigationBarBackButtonHidden(submitter.isBooking)
+        .interactiveDismissDisabled(submitter.isBooking)
+    }
+
+    private var summary: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            SummaryRow(
+                label: "Service",
+                value: choice.serviceName,
+                detail: [choice.priceLabel, choice.durationLabel].joined(separator: " · "),
+                onChange: { router.startBooking() },
+                identifier: "service"
+            )
+            SummaryDivider()
+            SummaryRow(
+                label: "Barber",
+                value: choice.barberName,
+                detail: barberDetail,
+                onChange: changeBarber,
+                identifier: "barber"
+            )
+            SummaryDivider()
+            SummaryRow(
+                label: "Day and time",
+                value: calendar.dateTimeLabel(for: plan.start),
+                detail: BookingFlowCopy.timeZoneNote(at: plan.start),
+                onChange: pickAnotherTime,
+                identifier: "time"
+            )
+            SummaryDivider()
+            SummaryRow(
+                label: "Your details",
+                value: draft.customer.trimmedName,
+                detail: draft.customer.displayPhone,
+                onChange: { router.returnToDetails() },
+                identifier: "details"
+            )
+            if !draft.note.isEmpty {
+                SummaryDivider()
+                SummaryRow(label: "Note for your barber", value: draft.note, onChange: { router.returnToDetails() }, identifier: "note")
             }
         }
-        .padding(.horizontal, Theme.gutter)
-        .padding(.top, Theme.Space.s)
-        .padding(.bottom, Theme.Space.xxl)
+        .card(padding: Theme.Space.xl)
+        .disabled(submitter.isBooking)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("bookingSummary")
     }
 
-    private func isTooSoon(now: Date) -> Bool {
-        plan.start < now.addingTimeInterval(TimeInterval(Self.soonMinutes) * 60)
+    private var barberDetail: String? {
+        if let note = choice.note { return note }
+        guard choice.barberID == nil else { return nil }
+        return "The shop books whoever is free first: \(BookingFlowCopy.list(choice.anyBarberNames))."
     }
 
-    private var dayLabel: String {
-        calendar.shortLabel(for: calendar.day(containing: plan.start))
+    /// Back to "Pick a barber" for this service, however the client got here.
+    private func changeBarber() {
+        router.startBooking(serviceID: choice.serviceID)
     }
 
-    private var timeLabel: String {
-        calendar.timeLabel(for: plan.start)
-    }
-
-    /// What to do on Squire, in plain words: "Squire opens with Carlos and Haircut picked. Choose
-    /// Thu, Oct 29 at 2:30 PM, or the closest open time."
-    private var instruction: String {
-        let choice = plan.choice
-        let opens: String
-        if choice.barberID == nil {
-            opens = "Squire opens with \(choice.serviceName) picked, for whoever's free first."
-        } else {
-            opens = "Squire opens with \(choice.barberName) and \(choice.serviceName) picked."
-        }
-        return "\(opens) Choose \(dayLabel) at \(timeLabel), or the closest open time."
-    }
-
-    /// Back to the calendar to choose again.
     private func pickAnotherTime() {
-        guard let last = router.bookingPath.last, case .review = last else { return }
-        router.bookingPath.removeLast()
+        router.returnToTimes(message: nil, droppedStart: nil)
+    }
+
+    private func book() {
+        Task {
+            guard let confirmation = await submitter.book(draft) else {
+                if case .timeGone(let message)? = submitter.failure {
+                    // Back to the times, which reload without the time that's gone.
+                    router.returnToTimes(message: message, droppedStart: plan.start)
+                }
+                if let message = submitter.failure?.message {
+                    UIAccessibility.post(notification: .announcement, argument: message)
+                }
+                return
+            }
+            let saved = appointments.add(confirmation, remind: true)
+            router.showBooked(appointmentID: saved.id)
+        }
     }
 }
 
-/// "LAST STEP · ON SQUIRE": what Squire opens with and what to pick there. The time isn't held
-/// anywhere until it's confirmed on Squire, and the card says so.
-private struct BookingReviewHandoff: View {
-    let instruction: String
-    let timeZoneNote: String?
-
+/// "No payment now — you'll pay at the shop", with how.
+struct BookingPayAtShopNote: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.s) {
-            Kicker("Last step · on Squire")
-            Text(instruction)
-                .textRole(.callout)
-                .foregroundStyle(Theme.bone)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(detail)
-                .textRole(.body)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
+        HStack(alignment: .top, spacing: Theme.Space.l) {
+            Image(systemName: Symbol.payment)
+                .font(.title3)
+                .foregroundStyle(Theme.electric)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                Text("No payment now — you'll pay at the shop")
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(BookingFlowCopy.payAtShop)
+                    .textRole(.body)
+                    .foregroundStyle(Theme.smoke)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
         }
         .card(padding: Theme.Space.xl)
         .accessibilityElement(children: .combine)
-    }
-
-    private var detail: String {
-        let base = "Squire is the shop's booking system. Nothing is booked until you confirm there with your name and number."
-        guard let timeZoneNote else { return base }
-        return "\(base) \(timeZoneNote)"
+        .accessibilityIdentifier("payAtShopNote")
     }
 }
 
-/// The picked time has passed or is about to: an `ink3` card with the caution icon and a bone
-/// "Pick another time" button.
-private struct BookingReviewSoonWarning: View {
-    let timeLabel: String
-    let hasPassed: Bool
-    let onPickAnother: () -> Void
+/// Why the booking didn't go through, and what to do next.
+private struct BookingFailureCard: View {
+    let failure: BookingSubmitter.Failure
+    let isRetrying: Bool
+    let onRetry: () -> Void
+    let onPickAnotherTime: () -> Void
+    let onEditDetails: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             HStack(alignment: .top, spacing: Theme.Space.l) {
                 Image(systemName: Symbol.warning)
-                    .font(.title3.weight(.semibold))
+                    .font(.title3)
                     .foregroundStyle(Theme.caution)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text(hasPassed ? "That time has passed" : "That time is coming up fast")
-                        .textRole(.callout)
+                    Text("Not booked yet")
+                        .textRole(.headline)
                         .foregroundStyle(Theme.bone)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(message)
+                    Text(failure.message)
                         .textRole(.body)
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
@@ -162,48 +215,33 @@ private struct BookingReviewSoonWarning: View {
                 Spacer(minLength: 0)
             }
             .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("bookingError")
 
-            Button(action: onPickAnother) {
-                Text("Pick another time")
+            switch failure {
+            case .offline, .other:
+                Button(action: onRetry) {
+                    Text(isRetrying ? "Trying again…" : "Try again")
+                }
+                .buttonStyle(.secondary)
+                .disabled(isRetrying)
+                .accessibilityIdentifier("retryBookingButton")
+            case .timeGone:
+                Button("Pick another time", action: onPickAnotherTime)
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("pickAnotherTimeButton")
+            case .details:
+                Button("Edit your details", action: onEditDetails)
+                    .buttonStyle(.secondary)
+                    .accessibilityIdentifier("editDetailsButton")
+            case .rateLimited:
+                EmptyView()
             }
-            .buttonStyle(.secondary)
-            .accessibilityIdentifier("pickAnotherTimeButton")
+            CallButton {
+                Label("Call the shop", systemImage: Symbol.call)
+            }
+            .buttonStyle(.tertiary)
+            .accessibilityIdentifier("bookingCallButton")
         }
         .card(padding: Theme.Space.xl)
-    }
-
-    private var message: String {
-        if hasPassed {
-            return "\(timeLabel) is already over. Go back to the calendar and pick a later time."
-        }
-        return "\(timeLabel) is only minutes away and may be gone by the time you confirm. A later time is a safer bet."
-    }
-}
-
-// MARK: - Shared by the booking steps
-
-/// Wording the booking screens share.
-enum BookingFlowCopy {
-    /// "with Carlos", or "with whoever's free first".
-    static func withBarber(_ choice: BookingChoice) -> String {
-        choice.barberID == nil ? "with whoever's free first" : "with \(choice.barberName)"
-    }
-
-    /// "with Carlos", or "with the first available barber".
-    static func withBarber(for appointment: Appointment) -> String {
-        appointment.barberID == nil ? "with the first available barber" : "with \(appointment.barberName)"
-    }
-
-    /// "Carlos's", or "the barbers'".
-    static func barberPossessive(_ choice: BookingChoice) -> String {
-        choice.barberID == nil ? "the barbers'" : "\(choice.barberName)'s"
-    }
-
-    /// "Times are in Oceanside time (Pacific).", but only when this iPhone is
-    /// set to another time zone, where shop times could pass for local ones.
-    static func timeZoneNote(at date: Date) -> String? {
-        let shopOffset = AppData.shop.timeZone.secondsFromGMT(for: date)
-        guard TimeZone.current.secondsFromGMT(for: date) != shopOffset else { return nil }
-        return "Times are in Oceanside time (Pacific)."
     }
 }

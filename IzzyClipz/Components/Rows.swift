@@ -30,7 +30,7 @@ struct ServiceRow: View {
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(AppData.catalog.durationSummary(forService: service.id))
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 // At the largest text sizes the price moves under the name,
                 // so neither has to break mid-word.
@@ -61,8 +61,7 @@ struct ServiceRow: View {
     }
 }
 
-/// "First available": book with whichever barber is free first. Squire picks; the app doesn't
-/// know who's free.
+/// "Any barber": book with whichever barber is free first. The shop's calendar picks one.
 struct FirstAvailableRow: View {
     let option: FirstAvailableOption
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -71,14 +70,14 @@ struct FirstAvailableRow: View {
         HStack(spacing: 14) {
             monograms
             VStack(alignment: .leading, spacing: 3) {
-                Text("First available")
+                Text("Any barber")
                     .textRole(.displayS)
                     .foregroundStyle(Theme.bone)
-                Text("Squire picks whoever's free")
+                Text("Whoever is free first")
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                 Text(option.durationLabel)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 if dynamicTypeSize.isAccessibilitySize {
                     price
@@ -115,7 +114,8 @@ struct FirstAvailableRow: View {
     }
 
     static func accessibilityText(for option: FirstAvailableOption) -> String {
-        "First available barber, any of \(option.barberIDs.count), \(option.priceLabel), \(option.durationLabel)"
+        let names = option.barberIDs.compactMap { AppData.catalog.barber(withID: $0)?.name }
+        return "Any barber, whoever is free first: \(BookingFlowCopy.list(names)), \(option.priceLabel), \(option.durationLabel)"
             .spokenRanges
     }
 }
@@ -145,7 +145,7 @@ struct OfferingRow: View {
                     }
                 }
                 Text(offering.durationLabel)
-                    .textRole(.monoNumber)
+                    .textRole(.detail)
                     .foregroundStyle(Theme.smoke)
                 if let note = offering.note {
                     Text(note)
@@ -183,7 +183,7 @@ struct OfferingRow: View {
     private var action: some View {
         HStack(spacing: 3) {
             Text(actionLabel)
-                .textRole(.monoTag)
+                .textRole(.label)
             Image(systemName: Symbol.chevron)
                 .font(.system(size: 10, weight: .heavy))
         }

@@ -46,7 +46,7 @@ struct SafariView: UIViewControllerRepresentable {
     }
 }
 
-/// A web page in a sheet: Squire for booking, Bravo for products, Google for reviews.
+/// A web page in a sheet: the shop's website, Google and Yelp reviews, Instagram.
 ///
 /// Until the first page draws, a barber-pole spinner sits in the middle (it never blocks Safari's
 /// own Done button, and gives up after 12 seconds in case Safari never reports the load). The
@@ -93,10 +93,11 @@ private struct WebLoadingBadge: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.m) {
-            BarberPoleSpinner(label: loadingLabel)
+            ProgressView()
+                .accessibilityLabel(loadingLabel)
             if let host {
                 Text(host.replacingOccurrences(of: "www.", with: ""))
-                    .textRole(.monoTag)
+                    .textRole(.label)
                     .foregroundStyle(Theme.smoke)
                     .lineLimit(1)
                     .accessibilityHidden(true)
@@ -126,7 +127,7 @@ private struct WebLinkPreview: View {
                     .textRole(.headline)
                     .foregroundStyle(Theme.bone)
                 Text(url.absoluteString)
-                    .font(BrandFont.monoRegular.font(size: 13, relativeTo: .footnote))
+                    .font(.footnote.monospaced())
                     .foregroundStyle(Theme.bone)
                     .textSelection(.enabled)
                     .accessibilityIdentifier("webURL")

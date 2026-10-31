@@ -12,19 +12,15 @@ reproduces the catalog:
   AppIcon           1024 x 1024, no alpha: the logo on white over a barber-stripe band
   AccentColor, BrandRed, BrandBlue, LaunchBackground      Street Drip colors (drip red,
                     royal blue, ink)
-  Bravo-<handle>    Bravo product photos, square on white      (needs --bravo-json)
-  BravoLogo         Bravo's wordmark as a template image       (needs --bravo-json)
   Gallery1...6, Storefront   shop photos                       (needs --photos)
 
     python3 scripts/generate_assets.py --logo LOGO.jpg
-    python3 scripts/generate_assets.py --logo LOGO.jpg --bravo-json products.json --photos DIR
+    python3 scripts/generate_assets.py --logo LOGO.jpg --photos DIR
     python3 scripts/generate_assets.py --launch-only
 
 LOGO is the logo from izzyclipzbarbershop.net (the 1500 x 1150 JPEG on white).
-products.json is https://bravohairgel.com/products.json; given it, the script
-downloads each product's photo and Bravo's logo from Shopify's CDN. That is the
-only time it uses the network. DIR holds gallery_1 ... gallery_6 and storefront
-in any format Pillow reads.
+DIR holds gallery_1 ... gallery_6 and storefront in any format Pillow reads.
+The script never uses the network.
 
     --icon A|B|C            which app icon design goes in the catalog (default A)
     --icon-candidates DIR   also writes all three designs and a comparison of them at 60 and 120 px
@@ -40,9 +36,6 @@ Requires Pillow and NumPy (`pip install Pillow numpy`).
 
 import argparse
 import json
-import tempfile
-import time
-import urllib.request
 from pathlib import Path
 
 import numpy as np
@@ -74,23 +67,6 @@ DETAIL_MAX = 0.0013        # enclosed white areas in the wordmark smaller than t
 
 LAUNCH_WIDTH_PT = 260      # the sticker's width, white border included
 LAUNCH_TILT = -5           # degrees; negative tilts it counterclockwise, like a sticker slapped on
-
-# Bravo products shown in the app (Shopify handle -> which product photo is the cleanest packshot).
-BRAVO_PRODUCTS = {
-    "blue-bravo-hair-gel-16oz": 0,
-    "white-bravo-hair-gel-16oz": 0,
-    "bravo-onyx-hair-gel": 0,
-    "blue-bravo-hair-gel-4oz": 0,
-    "white-bravo-hair-gel-4oz": 0,
-    "bravo-matte-clay": 0,
-    "bravo-texture-powder": 0,
-    "bravo-blue-pomade": 0,
-    "bravo-after-shave": 0,
-    "bravo-chapstick-3-pack": 0,
-}
-BRAVO_LOGO_URL = "https://cdn.shopify.com/s/files/1/0645/6380/6385/files/A_New_Design_3_2.png"  # site header
-PRODUCT_SIZE = 900         # px, square
-PRODUCT_FILL = 0.80        # the product's longer side as a share of the square
 
 
 # Catalog files ---------------------------------------------------------------------------------
@@ -435,78 +411,6 @@ def icon_comparison(icons: dict) -> Image.Image:
     return sheet
 
 
-# Bravo -----------------------------------------------------------------------------------------
-
-def download(url: str, destination: Path) -> Path:
-    request = urllib.request.Request(url, headers={"User-Agent": "IzzyClipz-assets/2"})
-    for attempt in range(4):
-        try:
-            with urllib.request.urlopen(request, timeout=60) as response:
-                destination.write_bytes(response.read())
-            return destination
-        except OSError as error:
-            if attempt == 3:
-                raise SystemExit(f"Couldn't download {url}: {error}")
-            time.sleep(1 + attempt * 2)
-    return destination
-
-
-def sized(url: str, width: int) -> str:
-    """A Shopify CDN image URL that serves the image at most `width` px wide."""
-    return f"{url}{'&' if '?' in url else '?'}width={width}"
-
-
-def product_square(photo: Image.Image) -> Image.Image:
-    """Fits a product photo inside a white square without cropping the product or its shadow.
-
-    The product itself (not its soft shadow) is sized and centered, so products shot
-    with bigger shadows don't come out smaller; the shadow is then kept inside the square.
-    """
-    flat = Image.new("RGBA", photo.size, WHITE + (255,))
-    flat.alpha_composite(photo.convert("RGBA"))
-    pixels = np.asarray(flat.convert("RGB"), np.float32)
-    border = np.concatenate([pixels[:4].reshape(-1, 3), pixels[-4:].reshape(-1, 3),
-                             pixels[:, :4].reshape(-1, 3), pixels[:, -4:].reshape(-1, 3)])
-    paper = np.median(border, axis=0)
-    pixels = np.clip(pixels * (255 / np.maximum(paper, 1)), 0, 255)  # the studio white becomes pure white
-    image = Image.fromarray(pixels.round().astype(np.uint8), "RGB")
-    ink = Image.fromarray((255 - pixels.min(axis=2)).astype(np.uint8)).filter(ImageFilter.GaussianBlur(2))
-    whole = ink.point(lambda v: 255 if v > 4 else 0).getbbox() or (0, 0, *image.size)  # with the shadow
-    body = ink.point(lambda v: 255 if v > 24 else 0).getbbox() or whole                 # just the product
-
-    margin = round(PRODUCT_SIZE * 0.02)
-    scale = min(PRODUCT_SIZE * PRODUCT_FILL / max(body[2] - body[0], body[3] - body[1]),
-                (PRODUCT_SIZE - 2 * margin) / max(whole[2] - whole[0], whole[3] - whole[1]))
-    piece = image.crop(whole)
-    piece = piece.resize((round(piece.width * scale), round(piece.height * scale)), Image.Resampling.LANCZOS)
-
-    def offset(body_start, body_end, whole_start, length):
-        start = round(PRODUCT_SIZE / 2 - ((body_start + body_end) / 2 - whole_start) * scale)
-        return min(max(start, margin), PRODUCT_SIZE - margin - length)
-
-    square = Image.new("RGB", (PRODUCT_SIZE, PRODUCT_SIZE), WHITE)
-    square.paste(piece, (offset(body[0], body[2], whole[0], piece.width), offset(body[1], body[3], whole[1], piece.height)))
-    return square
-
-
-def make_bravo(products_json: Path) -> dict:
-    products = {p["handle"]: p for p in json.loads(products_json.read_text())["products"]}
-    made = {}
-    with tempfile.TemporaryDirectory() as folder:
-        for handle, index in BRAVO_PRODUCTS.items():
-            if handle not in products:
-                raise SystemExit(f"{handle} isn't in {products_json}")
-            src = products[handle]["images"][index]["src"]
-            photo = Image.open(download(sized(src, 1200), Path(folder) / f"{handle}.img"))
-            made[f"Bravo-{handle}"] = product_square(photo)
-            image_set(f"Bravo-{handle}", {None: made[f"Bravo-{handle}"]})
-        logo = Image.open(download(sized(BRAVO_LOGO_URL, 1080), Path(folder) / "bravo-logo.png")).convert("RGBA")
-    made["BravoLogo"] = trim(logo, margin=0.02)
-    # A one-color black wordmark: as a template image, SwiftUI tints it with the foreground style.
-    image_set("BravoLogo", {None: made["BravoLogo"]}, {"template-rendering-intent": "template"})
-    return made
-
-
 # Photos ----------------------------------------------------------------------------------------
 
 def photo_set(name: str, source: Path, max_width: int) -> None:
@@ -552,13 +456,7 @@ def tile(background, art: Image.Image, size: tuple) -> Image.Image:
     return canvas
 
 
-def tinted(image: Image.Image, color: tuple) -> Image.Image:
-    solid = Image.new("RGBA", image.size, color + (255,))
-    solid.putalpha(image.getchannel("A"))
-    return solid
-
-
-def write_preview(path: Path, logo, mascot, launch, icon, bravo: dict) -> None:
+def write_preview(path: Path, logo, mascot, launch, icon) -> None:
     wallpaper = (236, 238, 243)
     icon_shape = Image.composite(icon, Image.new("RGB", icon.size, wallpaper), home_screen_mask(icon.width))
     tiles = [
@@ -570,10 +468,6 @@ def write_preview(path: Path, logo, mascot, launch, icon, bravo: dict) -> None:
         ("LaunchLogo@3x on ink", tile(INK, launch, (560, 450))),
         ("AppIcon", tile(wallpaper, icon_shape, (450, 450))),
     ]
-    tiles += [(name, tile(WHITE, image, (300, 300))) for name, image in bravo.items() if name != "BravoLogo"]
-    if "BravoLogo" in bravo:
-        tiles += [("BravoLogo", tile(None, bravo["BravoLogo"], (420, 200))),
-                  ("BravoLogo tinted white on navy", tile(NAVY, tinted(bravo["BravoLogo"], WHITE), (420, 200)))]
 
     font, width = label_font(20), 1880
     x, y, row_height, placed = 20, 20, 0, []
@@ -596,7 +490,6 @@ def write_preview(path: Path, logo, mascot, launch, icon, bravo: dict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--logo", type=Path, help="the official logo (JPEG or PNG on white)")
-    parser.add_argument("--bravo-json", type=Path, help="Bravo's Shopify products.json (downloads the photos)")
     parser.add_argument("--photos", type=Path, help="folder with gallery_1..6 and storefront images")
     parser.add_argument("--icon", choices=sorted(ICON_DESIGNS), default="A", help="app icon design (default A)")
     parser.add_argument("--icon-candidates", type=Path, help="folder for all icon designs and compare.png")
@@ -609,8 +502,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.preview and not args.logo:
         parser.error("--preview needs --logo")
-    if args.launch_only and (args.logo or args.bravo_json or args.photos):
-        parser.error("--launch-only rebuilds LaunchLogo alone; leave out --logo, --bravo-json and --photos")
+    if args.launch_only and (args.logo or args.photos):
+        parser.error("--launch-only rebuilds LaunchLogo alone; leave out --logo and --photos")
 
     write_json(CATALOG / "Contents.json", {"info": INFO})
     color_set("AccentColor", DRIP_RED)
@@ -644,15 +537,13 @@ def main() -> None:
     else:
         print("No --logo: skipped Logo, LogoMascot, LaunchLogo and AppIcon")
 
-    bravo = make_bravo(args.bravo_json) if args.bravo_json else {}
-
     if args.photos:
         for index in range(1, 7):
             photo_set(f"Gallery{index}", find(args.photos, f"gallery_{index}"), max_width=750)
         photo_set("Storefront", find(args.photos, "storefront"), max_width=1000)
 
     if args.preview:
-        write_preview(args.preview, logo, mascot, launch["3x"], icons[args.icon], bravo)
+        write_preview(args.preview, logo, mascot, launch["3x"], icons[args.icon])
     if args.launch_preview and launch:
         backdrop = Image.new("RGBA", (launch["3x"].width + 240, launch["3x"].height + 240), INK + (255,))
         paste_center(backdrop, launch["3x"], (backdrop.width / 2, backdrop.height / 2))

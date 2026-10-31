@@ -1,8 +1,9 @@
 name: Demo video
 
 # Records the app running in the iOS Simulator while DemoTour walks through
-# every tab, including the live Squire booking pages, and publishes the video
-# and screenshots to the "demo" branch. Run it from the Actions tab.
+# every tab and books an appointment on the app's in-memory server, and
+# publishes the video and screenshots to the "demo" branch. Run it from the
+# Actions tab.
 on:
   workflow_dispatch:
 

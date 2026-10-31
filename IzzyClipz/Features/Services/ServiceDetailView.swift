@@ -2,8 +2,7 @@ import SwiftUI
 
 /// One service: its category and name, its price, length and how many barbers do it, what it is and
 /// what's included, then who does it at what price. Each "Book with" row jumps straight to the
-/// calendar with that choice; the red "Book this" bar (the screen's one red) goes to picking a
-/// barber.
+/// calendar with that choice; the red "Book" bar (the screen's one red) goes to picking a barber.
 struct ServiceDetailView: View {
     let service: Service
 
@@ -38,10 +37,9 @@ struct ServiceDetailView: View {
             Button {
                 router.startBooking(serviceID: service.id)
             } label: {
-                Text("Book this")
+                Text("Book \(service.name)")
             }
             .buttonStyle(.primary)
-            .accessibilityLabel("Book \(service.name)")
             .accessibilityHint("Next, pick your barber")
             .accessibilityIdentifier("bookServiceButton")
         }
@@ -74,7 +72,7 @@ struct ServiceDetailView: View {
 
     /// "THE WORKS", from VIP's own description. VoiceOver already hears it in the summary.
     private var featuredTag: some View {
-        MonoTag(text: MenuFeaturedService.tag, style: .bone)
+        Badge(text: MenuFeaturedService.tag, style: .bone)
             .accessibilityHidden(true)
     }
 
@@ -121,7 +119,7 @@ struct ServiceDetailView: View {
 
     /// What happens next, after "Only Izzy offers VIP." when one barber does it all (as on step 2).
     private func bookingNote(_ offerings: [Offering]) -> String {
-        let next = "Next, you'll pick a day and time. Squire confirms the real opening."
+        let next = "Next, you'll pick a day and time from the shop's live calendar. No payment needed to book."
         let barberIDs = Set(offerings.map(\.barberID))
         guard barberIDs.count == 1, let id = barberIDs.first, let barber = catalog.barber(withID: id) else {
             return next
@@ -131,12 +129,12 @@ struct ServiceDetailView: View {
 
     private func firstAvailableButton(_ option: FirstAvailableOption) -> some View {
         Button {
-            router.startBooking(choice: .firstAvailable(option))
+            router.startBooking(choice: .anyBarber(option))
         } label: {
-            BookWithRow(name: "First available", isFavorite: false, price: option.priceLabel, duration: option.durationLabel) {
+            BookWithRow(name: "Any barber", isFavorite: false, price: option.priceLabel, duration: option.durationLabel) {
                 FirstAvailableMonograms(barberIDs: option.barberIDs)
             } detail: {
-                Text("Squire picks whoever's free")
+                Text("Whoever is free first")
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
@@ -162,14 +160,9 @@ struct ServiceDetailView: View {
             ) {
                 MonogramTile(barber: barber, side: 56)
             } detail: {
-                if let rating = barber.rating {
-                    RatingLine(rating: rating)
-                } else {
-                    // No published rating: their title ("BARBER"), never "0 reviews".
-                    Text(barber.title)
-                        .textRole(.monoNumber)
-                        .foregroundStyle(Theme.smoke)
-                }
+                Text(barber.title)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
             }
         }
         .buttonStyle(.pressable)
@@ -178,12 +171,9 @@ struct ServiceDetailView: View {
         .accessibilityIdentifier("book-\(offering.id)")
     }
 
-    /// "Book with Carlos, your barber, rated 5.0 out of 5 from 8 reviews, $45, 45 minutes, …".
+    /// "Book with Carlos, your barber, $45, 45 minutes, …".
     private func offeringAccessibilityText(_ offering: Offering, barber: Barber, isFavorite: Bool) -> String {
         var parts = ["Book with \(barber.name)" + (isFavorite ? ", your barber" : "")]
-        if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel)")
-        }
         parts.append(offering.price.label.spokenRanges)
         parts.append(DurationText.spoken(minutes: offering.durationMinutes))
         if let note = offering.note { parts.append(note) }
@@ -200,7 +190,7 @@ struct ServiceDetailView: View {
 
 // MARK: - Stats
 
-/// Three mono stat blocks: PRICE $35–$45 · TIME 45 MIN – 1 HR · BARBERS 5, across everyone who
+/// Three stat blocks: Price $35–$45 · Time 45 min – 1 hr · Barbers 5, across everyone who
 /// offers the service. Side by side up to xLarge text, stacked above it.
 private struct ServiceStats: View {
     let service: Service
@@ -246,7 +236,7 @@ private struct ServiceStats: View {
     }
 }
 
-/// A label in mono over a value in Archivo Condensed on an `ink3` tile. The value wraps between
+/// A label over a value on an `ink3` tile. The value wraps between
 /// words rather than being cut off ("45 MIN –" over "1 HR" in a narrow block), and a word wider
 /// than the block ("INCLUDED", a third of a 375 pt screen) shrinks a little instead of breaking.
 private struct ServiceStat: View {
@@ -257,10 +247,9 @@ private struct ServiceStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
             Text(label)
-                .textRole(.monoTag)
+                .textRole(.label)
                 .foregroundStyle(Theme.smoke)
             MenuTitleText(value, role: .price)
-                .textCase(.uppercase)
                 .foregroundStyle(Theme.bone)
         }
         .padding(Theme.Space.l)
@@ -400,7 +389,7 @@ private struct BookWithRow<Leading: View, Detail: View>: View {
                 .multilineTextAlignment(isStacked ? .leading : .trailing)
                 .fixedSize(horizontal: false, vertical: true)
             Text(duration)
-                .textRole(.monoNumber)
+                .textRole(.detail)
                 .foregroundStyle(Theme.smoke)
         }
     }

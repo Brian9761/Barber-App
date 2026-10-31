@@ -22,22 +22,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>IzzyAPIBaseURL</key>
+	<string>https://izzy-clipz-api.vercel.app</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>UIAppFonts</key>
-	<array>
-		<string>ArchivoExtraCondensed-Black.ttf</string>
-		<string>ArchivoCondensed-ExtraBold.ttf</string>
-		<string>ArchivoExpanded-Black.ttf</string>
-		<string>ArchivoExpanded-ExtraBold.ttf</string>
-		<string>Archivo-Regular.ttf</string>
-		<string>Archivo-Medium.ttf</string>
-		<string>Archivo-SemiBold.ttf</string>
-		<string>Archivo-Bold.ttf</string>
-		<string>SpaceMono-Regular.ttf</string>
-		<string>SpaceMono-Bold.ttf</string>
-		<string>RubikWetPaint-Regular.ttf</string>
-	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
