@@ -92,9 +92,6 @@ public struct ShopInfo: Sendable {
     public let paymentMethods: [String]
     public let highlights: [String]
     public let accessibility: [String]
-    /// Ratings from each review site, the headline one first.
-    public let ratings: [SourcedRating]
-    public let reviews: [Review]
     /// The shop's Google Maps place ID, used for its Maps page and "Write a review".
     public let googlePlaceID: String
 
@@ -113,12 +110,9 @@ public struct ShopInfo: Sendable {
         paymentMethods: [String],
         highlights: [String],
         accessibility: [String],
-        ratings: [SourcedRating],
-        reviews: [Review],
         googlePlaceID: String
     ) {
         precondition(TimeZone(identifier: timeZoneIdentifier) != nil, "Unknown time zone \(timeZoneIdentifier)")
-        precondition(!ratings.isEmpty, "The shop needs at least one rating")
         precondition(ShopInfo.isPlaceID(googlePlaceID), "Invalid Google place ID")
         self.name = name
         self.fullName = fullName
@@ -134,16 +128,8 @@ public struct ShopInfo: Sendable {
         self.paymentMethods = paymentMethods
         self.highlights = highlights
         self.accessibility = accessibility
-        self.ratings = ratings
-        self.reviews = reviews
         self.googlePlaceID = googlePlaceID
     }
-
-    /// The headline rating, e.g. 5.0 from 115 reviews.
-    public var rating: Rating { ratings[0].rating }
-
-    /// Where the headline rating comes from, e.g. "Squire".
-    public var ratingSource: String { ratings[0].source }
 
     public var timeZone: TimeZone {
         // Validated in `init`.
@@ -208,10 +194,6 @@ public struct ShopInfo: Sendable {
 
     static func googleReviewURL(placeID: String) -> URL {
         link(host: "search.google.com", path: "/local/writereview", query: [("placeid", placeID)])
-    }
-
-    static func squireDiscoverURL(shopSlug: String) -> URL {
-        link(host: "getsquire.com", path: "/discover/barbershop/\(shopSlug)", query: [])
     }
 
     /// Google place IDs are URL-safe base64: letters, digits, "-" and "_".

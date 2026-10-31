@@ -55,68 +55,6 @@ final class ShopInfoTests: XCTestCase {
         )
     }
 
-    func testReviewsPointAtRealBarbers() {
-        for review in shop.reviews {
-            if let barberID = review.barberID {
-                XCTAssertNotNil(Catalog.izzyClipz.barber(withID: barberID), review.id)
-            }
-            XCTAssertFalse(review.text.isEmpty)
-        }
-    }
-
-    func testReviews() throws {
-        XCTAssertEqual(shop.reviews.map(\.id), ["alex-n", "justin-b", "patti-m"])
-        XCTAssertEqual(Set(shop.reviews.map(\.id)).count, shop.reviews.count)
-        XCTAssertTrue(shop.reviews.allSatisfy { $0.stars == 5 })
-
-        let alex = shop.reviews[0]
-        XCTAssertEqual(alex.author, "Alex N.")
-        XCTAssertEqual(alex.source, "Squire")
-        XCTAssertEqual(alex.barberID, "carlos-rafael")
-        XCTAssertNil(alex.date)
-
-        let justin = shop.reviews[1]
-        XCTAssertEqual(justin.author, "Justin B.")
-        XCTAssertEqual(justin.text, "Finely faded every time.")
-        XCTAssertEqual(justin.source, "Squire")
-        XCTAssertNil(justin.barberID)
-
-        let patti = shop.reviews[2]
-        XCTAssertEqual(patti.author, "Patti M.")
-        XCTAssertEqual(patti.source, "Yelp")
-        XCTAssertEqual(patti.date, "Aug 2026")
-        XCTAssertNil(patti.barberID)
-        XCTAssertTrue(patti.text.hasPrefix("Finally found a great hair artist; Christian!"), patti.text)
-        XCTAssertTrue(patti.text.hasSuffix("I got the haircut I wanted. Thanks bro"), patti.text)
-    }
-
-    func testReviewDateDefaultsToUnknown() {
-        let review = Review(id: "x", author: "X.", stars: 4, text: "Good", barberID: nil, source: "Google")
-        XCTAssertNil(review.date)
-    }
-
-    func testRating() {
-        XCTAssertEqual(shop.rating.averageLabel, "5.0")
-        XCTAssertEqual(shop.rating.countLabel, "115 reviews")
-        XCTAssertEqual(shop.ratingSource, "Squire")
-    }
-
-    func testRatingsFromEachSite() {
-        XCTAssertEqual(shop.ratings.map(\.source), ["Squire", "Google"])
-        XCTAssertEqual(shop.ratings.map(\.rating.averageLabel), ["5.0", "4.9"])
-        XCTAssertEqual(shop.ratings.map(\.rating.countLabel), ["115 reviews", "59 reviews"])
-        XCTAssertEqual(shop.ratings[0].rating, shop.rating)
-        XCTAssertEqual(shop.ratings[0].url, ShopInfo.squireDiscoverURL(shopSlug: "izzy-clipz-oceanside"))
-        XCTAssertEqual(shop.ratings[1].url, shop.googleMapsURL)
-    }
-
-    func testSquireDiscoverPage() {
-        XCTAssertEqual(
-            ShopInfo.squireDiscoverURL(shopSlug: "izzy-clipz-oceanside").absoluteString,
-            "https://getsquire.com/discover/barbershop/izzy-clipz-oceanside"
-        )
-    }
-
     func testGooglePlaceLinks() {
         XCTAssertEqual(shop.googlePlaceID, "ChIJGz5HChRv3IARYJJy_6jyRm8")
         XCTAssertEqual(

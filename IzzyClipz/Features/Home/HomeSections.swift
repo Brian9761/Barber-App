@@ -400,8 +400,7 @@ struct HomeCrewSection: View {
     }
 }
 
-/// A barber's card in the crew row: their monogram tile on top, then the name and the rating
-/// ("★ 5.0 · 92"), or "Barber" when Squire doesn't show one.
+/// A barber's card in the crew row: their monogram tile on top, then the name and their title.
 struct HomeCrewCard: View {
     let barber: Barber
     /// About 2.9 cards show on a 390 pt screen, so the row clearly scrolls. Wider with larger text.
@@ -432,39 +431,22 @@ struct HomeCrewCard: View {
         .contentShape(shape)
     }
 
-    /// "Izzy, Owner · Barber, rated 5.0 out of 5 from 92 reviews".
+    /// "Izzy, Owner, Barber".
     static func accessibilityText(for barber: Barber) -> String {
-        var parts = [barber.name, barber.title.replacingOccurrences(of: " · ", with: ", ")]
-        if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel)")
-        }
-        return parts.joined(separator: ", ")
+        [barber.name, barber.title.replacingOccurrences(of: " · ", with: ", ")].joined(separator: ", ")
     }
 }
 
-/// "★ 5.0 · 92" in mono, or the barber's title ("Barber") when there's no published rating. Never
-/// "0 reviews".
+/// The barber's title, "Owner · Barber".
 private struct HomeBarberMeta: View {
     let barber: Barber
     @Environment(\.surfaceTone) private var tone
 
     var body: some View {
-        if let rating = barber.rating {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Image(systemName: Symbol.starFilled)
-                    .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(tone.primary)
-                Text("\(rating.averageLabel) · \(rating.count)")
-                    .textRole(.detail)
-                    .foregroundStyle(tone.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        } else {
-            Text(barber.title)
-                .textRole(.label)
-                .foregroundStyle(tone.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
+        Text(barber.title)
+            .textRole(.label)
+            .foregroundStyle(tone.secondary)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
@@ -557,111 +539,66 @@ private struct HomeLinkLabel: View {
 
 // MARK: - Reviews
 
-/// What clients say, on a bone card: the shop's score on Squire and on Google, then one review
-/// quoted as written (cut off at three lines) with its source. Opens the Reviews screen.
+/// What clients say: Google's live rating and count, with Google Maps' attribution, opening the
+/// Reviews screen. Until Google's numbers arrive (or when they can't be shown), it's a plain link,
+/// "See what clients say". Google and Yelp are never added up into one rating.
 struct HomeReviewsCard: View {
-    private let shop = AppData.shop
+    @Environment(ReviewsStore.self) private var reviews
 
     var body: some View {
         NavigationLink(value: HomeRoute.reviews) {
-            VStack(alignment: .leading, spacing: Theme.Space.l) {
-                scores
-                if let review = shop.reviews.first {
-                    quote(review)
+            Group {
+                if let summary = reviews.value?.google.summary {
+                    rated(summary)
+                } else {
+                    link
                 }
             }
-            .boneCard(padding: Theme.Space.xl)
+            .card(padding: Theme.Space.xl)
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel(accessibilityText)
-        .accessibilityHint("Opens all reviews")
-        .accessibilityIdentifier("seeAllReviews")
-    }
-
-    /// "5.0 ★★★★★ 115 ON SQUIRE | 4.9 ★★★★★ 59 ON GOOGLE", stacked when they don't fit side by side.
-    private var scores: some View {
-        let ratings = Array(shop.ratings.prefix(2))
-        return ViewThatFits(in: .horizontal) {
-            HStack(alignment: .center, spacing: Theme.Space.m) {
-                ForEach(Array(ratings.enumerated()), id: \.offset) { index, sourced in
-                    if index > 0 {
-                        Rectangle()
-                            .fill(Theme.ink.opacity(0.15))
-                            .frame(width: 1, height: 34)
-                    }
-                    score(sourced)
-                }
-            }
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                ForEach(ratings, id: \.source) { sourced in
-                    score(sourced, wraps: true)
-                }
-            }
+        .accessibilityHint("Opens the reviews")
+        .accessibilityIdentifier("homeReviews")
+        .task {
+            // Google's numbers are asked for live and never stored; once per half hour at most.
+            await reviews.load(maxAge: 30 * 60)
         }
     }
 
-    /// One site's score. Side by side it keeps its natural width (so `ViewThatFits` can tell
-    /// whether both fit); stacked, the source wraps at the largest text sizes.
-    private func score(_ sourced: SourcedRating, wraps: Bool = false) -> some View {
-        HStack(alignment: .center, spacing: Theme.Space.xs) {
-            Text(sourced.rating.averageLabel)
-                .textRole(.priceL)
-                .foregroundStyle(Theme.ink)
-                .fixedSize()
-            VStack(alignment: .leading, spacing: 3) {
-                RatingStars(average: sourced.rating.average, size: 11, color: Theme.ink)
-                Text("\(sourced.rating.count) on \(sourced.source)")
-                    .textRole(.detail)
-                    .foregroundStyle(Theme.smokeDark)
-                    .fixedSize(horizontal: !wraps, vertical: true)
+    private func rated(_ summary: Rating) -> some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack {
+                Text("What clients say")
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
+                Spacer(minLength: Theme.Space.s)
+                MenuChevron()
             }
+            ReviewScore(rating: summary, site: "Google")
+                .accessibilityIdentifier("homeGoogleRating")
+            GoogleMapsAttribution(lead: "From")
         }
+        .accessibilityElement(children: .combine)
     }
 
-    private func quote(_ review: Review) -> some View {
-        HStack(alignment: .top, spacing: Theme.Space.s) {
-            Image(systemName: Symbol.quote)
-                .font(.system(size: 16, weight: .black))
-                .foregroundStyle(Theme.ink)
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text(review.text)
-                    .textRole(.quote)
-                    .foregroundStyle(Theme.ink)
-                    .lineLimit(3)
-                    .multilineTextAlignment(.leading)
-                HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
-                    Text(byline(for: review))
-                        .textRole(.label)
-                        .foregroundStyle(Theme.smokeDark)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
-                    Image(systemName: Symbol.chevron)
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundStyle(Theme.ink)
-                }
+    private var link: some View {
+        HStack(spacing: Theme.Space.l) {
+            Image(systemName: Symbol.reviews)
+                .font(.title3)
+                .foregroundStyle(Theme.bone)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("See what clients say")
+                    .textRole(.headline)
+                    .foregroundStyle(Theme.bone)
+                Text("Reviews on Google and Yelp")
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
             }
+            Spacer(minLength: Theme.Space.s)
+            MenuChevron()
         }
-    }
-
-    /// "Alex N. · Squire · on Carlos" (set in capitals). Only names a barber the data names.
-    private func byline(for review: Review) -> String {
-        let barber = review.barberID.flatMap { AppData.catalog.barber(withID: $0)?.name }
-        return [review.author, review.source, review.date, barber.map { "on \($0)" }]
-            .compactMap { $0 }
-            .joined(separator: " · ")
-    }
-
-    private var accessibilityText: String {
-        let scores = shop.ratings.prefix(2)
-            .map { "\($0.rating.averageLabel) out of 5 from \($0.rating.countLabel) on \($0.source)" }
-            .joined(separator: ", and ")
-        var text = "Reviews. Rated \(scores)."
-        if let review = shop.reviews.first {
-            let barber = review.barberID.flatMap { AppData.catalog.barber(withID: $0)?.name }
-            let about = barber.map { ", about \($0)" } ?? ""
-            text += " \(review.author) on \(review.source)\(about): \(review.text)"
-        }
-        return text
+        .accessibilityElement(children: .combine)
     }
 }

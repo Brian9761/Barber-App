@@ -1,16 +1,16 @@
 import Foundation
 
 // The shop's real data, collected from izzyclipzbarbershop.net, the shop's
-// Squire booking page (getsquire.com/discover/barbershop/izzy-clipz-oceanside),
-// its Google Maps listing and its Yelp page.
+// former Squire booking page, its Google Maps listing and its Yelp page.
 //
-// To update prices, add a barber or change hours, edit this file. Squire IDs
-// come from the `preselect=` value in each service's Squire booking link.
+// To update prices, add a barber or change hours, edit this file, then
+// regenerate server/data/catalog.json (see CatalogExport). Each offering's
+// `squireServiceID` is the menu item's ID from the shop's old Squire menu: it
+// stays because offering IDs ("<barber>/<item>") are what the server books.
 
 /// Identifiers the shop's data and links share.
 enum IzzyClipzListing {
     static let fullName = "Izzy Clipz Barbershop"
-    static let squireSlug = "izzy-clipz-oceanside"
     static let googlePlaceID = "ChIJGz5HChRv3IARYJJy_6jyRm8"
 }
 
@@ -48,45 +48,6 @@ extension ShopInfo {
         paymentMethods: ["Credit card", "Gift card"],
         highlights: ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"],
         accessibility: ["Wheelchair accessible", "ADA-compliant entrance", "Accessible parking near the entrance"],
-        ratings: [
-            SourcedRating(
-                source: "Squire",
-                rating: Rating(average: 5.0, count: 115),
-                url: ShopInfo.squireDiscoverURL(shopSlug: IzzyClipzListing.squireSlug)
-            ),
-            SourcedRating(
-                source: "Google",
-                rating: Rating(average: 4.9, count: 59),
-                url: ShopInfo.googleMapsURL(name: IzzyClipzListing.fullName, placeID: IzzyClipzListing.googlePlaceID)
-            ),
-        ],
-        reviews: [
-            Review(
-                id: "alex-n",
-                author: "Alex N.",
-                stars: 5,
-                text: "Carlos is detail oriented, makes you feel comfortable, and keeps the conversation light and funny. I've been searching for a barber in Oceanside since I moved here, and he's now the go-to. Always gives me a great cut. Highly recommend 👌",
-                barberID: "carlos-rafael",
-                source: "Squire"
-            ),
-            Review(
-                id: "justin-b",
-                author: "Justin B.",
-                stars: 5,
-                text: "Finely faded every time.",
-                barberID: nil,
-                source: "Squire"
-            ),
-            Review(
-                id: "patti-m",
-                author: "Patti M.",
-                stars: 5,
-                text: "Finally found a great hair artist; Christian! … Great conversationalist. Thorough & methodical. I got the haircut I wanted. Thanks bro",
-                barberID: nil,
-                source: "Yelp",
-                date: "Aug 2026"
-            ),
-        ],
         googlePlaceID: IzzyClipzListing.googlePlaceID
     )
 }
@@ -203,7 +164,6 @@ extension Catalog {
                 title: "Owner · Barber",
                 bio: "Izzy is a licensed barber and educator who believes a haircut is more than a service. It's an experience. He's the shop's go-to for color, lightener and perms, and a straight-razor shave specialist.",
                 specialties: ["Color & lightener", "Perms", "VIP service", "Hot towel shaves"],
-                rating: Rating(average: 5.0, count: 92),
                 instagramHandle: "izzy_clipz_"
             ),
             Barber(
@@ -212,8 +172,7 @@ extension Catalog {
                 listedName: "Carlos R.",
                 title: "Barber",
                 bio: "Every haircut with Carlos comes with mustache and eyebrow detail, straight-razor work and styling.",
-                specialties: ["Detail work", "Straight-razor finish", "Styling"],
-                rating: Rating(average: 5.0, count: 8)
+                specialties: ["Detail work", "Straight-razor finish", "Styling"]
             ),
             Barber(
                 id: "flowxbori",
@@ -221,8 +180,7 @@ extension Catalog {
                 listedName: "Flowxbori",
                 title: "Barber",
                 bio: "Custom cuts, haircut and beard combos, hot towel shaves and seniors' cuts.",
-                specialties: ["Custom cuts", "Hot towel shaves", "Seniors"],
-                rating: Rating(average: 5.0, count: 2)
+                specialties: ["Custom cuts", "Hot towel shaves", "Seniors"]
             ),
             Barber(
                 id: "cristian-ceja",
@@ -230,8 +188,7 @@ extension Catalog {
                 listedName: "Cristian C.",
                 title: "Barber",
                 bio: "Custom cuts, military cuts, haircut and beard combos and quick hot towel shaves.",
-                specialties: ["Custom cuts", "Military cuts", "Beard work"],
-                rating: nil
+                specialties: ["Custom cuts", "Military cuts", "Beard work"]
             ),
             Barber(
                 id: "julian-ramos",
@@ -239,17 +196,17 @@ extension Catalog {
                 listedName: "Julian R.",
                 title: "Barber",
                 bio: "Custom cuts, haircut and beard combos, hot towel shaves and seniors' cuts.",
-                specialties: ["Custom cuts", "Hot towel shaves", "Seniors"],
-                rating: nil
+                specialties: ["Custom cuts", "Hot towel shaves", "Seniors"]
             ),
         ],
         offerings: IzzyClipzMenu.offerings
     )
 }
 
-/// Each barber's Squire menu, item by item.
+/// Each barber's menu, item by item.
 enum IzzyClipzMenu {
-    // Squire menu item IDs.
+    // Menu item IDs, from the shop's old Squire menu. Offering IDs are built from them, so they
+    // must not change.
     static let haircut45 = "bbb0c294-87a6-465d-9f55-6f579dcb399a"
     static let haircut60 = "0d069a9e-c5ea-4cca-ae34-3f38bf668940"
     static let haircutCarlos = "9343fc67-b196-4604-987e-a4a9b6b4cc41"

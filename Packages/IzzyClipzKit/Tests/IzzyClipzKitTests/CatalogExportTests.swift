@@ -39,7 +39,7 @@ final class CatalogExportTests: XCTestCase {
             ]),
             instagramHandle: shop.instagramHandle, websiteURL: shop.websiteURL,
             paymentMethods: shop.paymentMethods, highlights: shop.highlights, accessibility: shop.accessibility,
-            ratings: shop.ratings, reviews: shop.reviews, googlePlaceID: shop.googlePlaceID
+            googlePlaceID: shop.googlePlaceID
         )
         let rules = BookingCalendar(clock: custom.clock, slotIntervalMinutes: 15, leadTimeMinutes: 0, windowDays: 14)
         let exported = CatalogExport.document(shop: custom, calendar: rules)

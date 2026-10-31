@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     let api: any ShopAPI = APIConfiguration.makeAPI()
     private(set) lazy var appointments: AppointmentStore = makeAppointments()
     private(set) lazy var products = ProductsStore { [api] in try await api.products() }
+    private(set) lazy var reviews = ReviewsStore { [api] in try await api.reviews() }
 
     /// UI tests never see a permission alert; everyone else gets the real thing.
     private static func makeScheduler() -> NotificationScheduling {

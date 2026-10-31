@@ -662,13 +662,12 @@ private struct VisitLinksSection: View {
             VisitLinkRow(
                 symbol: Symbol.reviews,
                 title: "Reviews",
-                detail: ratingsLabel,
+                detail: "On Google and Yelp",
                 trailingSymbol: Symbol.chevron
             )
         }
         .buttonStyle(.pressable)
         .accessibilityLabel("Reviews")
-        .accessibilityValue(ratingsSpoken)
         .accessibilityIdentifier("visitSeeAllReviews")
     }
 
@@ -690,14 +689,6 @@ private struct VisitLinksSection: View {
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
-    /// "5.0 on Squire · 4.9 on Google".
-    private var ratingsLabel: String {
-        shop.ratings.map { "\($0.rating.averageLabel) on \($0.source)" }.joined(separator: " · ")
-    }
-
-    private var ratingsSpoken: String {
-        shop.ratings.map { "\($0.rating.averageLabel) out of 5 on \($0.source)" }.joined(separator: ", ")
-    }
 }
 
 /// An icon tile, a title over a detail line, and a trailing arrow (↗ for web pages, › for the

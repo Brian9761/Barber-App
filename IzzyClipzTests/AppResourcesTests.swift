@@ -99,11 +99,7 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(shop.googleMapsDirectionsURL.scheme, "https")
         XCTAssertEqual(shop.googleMapsURL.scheme, "https")
         XCTAssertEqual(shop.googleReviewURL.scheme, "https")
-        for sourced in shop.ratings {
-            if let url = sourced.url {
-                XCTAssertEqual(url.scheme, "https", sourced.source)
-            }
-        }
+        XCTAssertEqual(ReviewLinks.yelpPage.absoluteString, "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")
         for barber in AppData.catalog.barbers {
             if let url = barber.instagramURL {
                 XCTAssertEqual(url.scheme, "https", barber.id)

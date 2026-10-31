@@ -87,33 +87,18 @@ public struct Rating: Hashable, Sendable {
     }
 }
 
-/// A rating as published by one review site, e.g. Squire or Google.
-public struct SourcedRating: Hashable, Sendable {
-    /// The site's name as shown to clients, e.g. "Google".
-    public let source: String
-    public let rating: Rating
-    /// Where the reviews can be read, if there's a page for them.
-    public let url: URL?
-
-    public init(source: String, rating: Rating, url: URL? = nil) {
-        self.source = source
-        self.rating = rating
-        self.url = url
-    }
-}
-
-/// A member of the team, as listed on the shop's Squire page.
+/// A member of the team.
 public struct Barber: Identifiable, Hashable, Sendable {
-    /// The barber's Squire URL slug, e.g. "israel-flores". Used to build booking links.
+    /// A URL-safe slug, e.g. "israel-flores": part of every offering's ID, which the shop's
+    /// server books against.
     public let id: String
     /// The name clients know them by, e.g. "Izzy".
     public let name: String
-    /// How Squire lists them, e.g. "Israel F.".
+    /// Their first name and last initial, e.g. "Israel F.".
     public let listedName: String
     public let title: String
     public let bio: String
     public let specialties: [String]
-    public let rating: Rating?
     /// Their own Instagram account, without the "@", e.g. "izzy_clipz_".
     public let instagramHandle: String?
 
@@ -124,7 +109,6 @@ public struct Barber: Identifiable, Hashable, Sendable {
         title: String,
         bio: String,
         specialties: [String],
-        rating: Rating?,
         instagramHandle: String? = nil
     ) {
         self.id = id
@@ -133,7 +117,6 @@ public struct Barber: Identifiable, Hashable, Sendable {
         self.title = title
         self.bio = bio
         self.specialties = specialties
-        self.rating = rating
         self.instagramHandle = instagramHandle
     }
 
@@ -168,10 +151,11 @@ public struct Barber: Identifiable, Hashable, Sendable {
     }
 }
 
-/// A specific barber's version of a service: the exact item on their Squire menu.
+/// A specific barber's version of a service, with their own price and length. Its `id` is what the
+/// shop's server books.
 public struct Offering: Identifiable, Hashable, Sendable {
-    /// The service's ID in Squire. Passed as `preselect` so the booking page
-    /// opens with this exact item already in the cart.
+    /// The menu item's ID, kept from the shop's old Squire menu. It's part of `id`, so it must
+    /// never change for an existing offering: the server's appointments refer to it.
     public let squireServiceID: String
     public let serviceID: String
     public let barberID: String
@@ -200,35 +184,4 @@ public struct Offering: Identifiable, Hashable, Sendable {
     public var id: String { "\(barberID)/\(squireServiceID)" }
 
     public var durationLabel: String { DurationText.short(minutes: durationMinutes) }
-}
-
-/// A client review quoted in the app.
-public struct Review: Identifiable, Hashable, Sendable {
-    public let id: String
-    public let author: String
-    public let stars: Int
-    public let text: String
-    public let barberID: String?
-    public let source: String
-    /// When it was written, as display text, e.g. "Aug 2026". `nil` when unknown.
-    public let date: String?
-
-    public init(
-        id: String,
-        author: String,
-        stars: Int,
-        text: String,
-        barberID: String?,
-        source: String,
-        date: String? = nil
-    ) {
-        precondition((1...5).contains(stars), "Reviews are 1 to 5 stars")
-        self.id = id
-        self.author = author
-        self.stars = stars
-        self.text = text
-        self.barberID = barberID
-        self.source = source
-        self.date = date
-    }
 }

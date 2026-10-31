@@ -10,10 +10,6 @@ struct BarberDetailView: View {
     /// Whether the name in the content has scrolled up under the navigation bar.
     @State private var nameIsUnderBar = false
 
-    private var reviews: [Review] {
-        AppData.shop.reviews.filter { $0.barberID == barber.id }
-    }
-
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.section) {
@@ -27,7 +23,6 @@ struct BarberDetailView: View {
                 }
                 BarberAbout(barber: barber)
                 BarberMenuSection(barber: barber)
-                reviewsSection
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, Theme.Space.s)
@@ -44,17 +39,6 @@ struct BarberDetailView: View {
             .buttonStyle(.primary)
             .accessibilityHint("Next, pick one of their services")
             .accessibilityIdentifier("bookBarberButton")
-        }
-    }
-
-    @ViewBuilder private var reviewsSection: some View {
-        if !reviews.isEmpty {
-            VStack(alignment: .leading, spacing: Theme.Space.m) {
-                SectionHeader("What clients say")
-                ForEach(reviews) { review in
-                    ReviewCard(review: review)
-                }
-            }
         }
     }
 }
@@ -85,8 +69,7 @@ private struct BarberBand: View {
     }
 }
 
-/// Their title in mono, the name in Display XL, then how Squire lists them and their Squire rating
-/// (nothing for barbers without one: never "0 reviews").
+/// Their title, then their name.
 private struct BarberNameBlock: View {
     let barber: Barber
 
@@ -97,17 +80,6 @@ private struct BarberNameBlock: View {
             MenuTitleText(barber.name, role: .displayXL)
                 .foregroundStyle(Theme.bone)
                 .accessibilityAddTraits(.isHeader)
-            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                if barber.listedName != barber.name {
-                    Text("Listed as \(barber.listedName) on Squire")
-                        .textRole(.label)
-                        .foregroundStyle(Theme.smoke)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if let rating = barber.rating {
-                    RatingLine(rating: rating, source: "Squire")
-                }
-            }
         }
     }
 }

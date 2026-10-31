@@ -50,8 +50,8 @@ private struct TeamBarberLink: View {
     }
 }
 
-/// An `ink3` row: the 72 pt monogram, the name, their title, their Squire rating if they have one
-/// and their haircut price, all in mono, and a chevron. At accessibility text sizes the monogram
+/// An `ink3` row: the 72 pt monogram, the name, their title and their haircut price, and a
+/// chevron. At accessibility text sizes the monogram
 /// moves above the text so the name keeps the full width.
 private struct TeamBarberRow: View {
     let barber: Barber
@@ -96,9 +96,6 @@ private struct TeamBarberRow: View {
                 .textRole(.label)
                 .foregroundStyle(Theme.smoke)
                 .fixedSize(horizontal: false, vertical: true)
-            if let rating = barber.rating {
-                RatingLine(rating: rating)
-            }
             if let haircut = Self.haircutLine(for: barber) {
                 Text(haircut)
                     .textRole(.detail)
@@ -121,9 +118,6 @@ private struct TeamBarberRow: View {
 
     static func accessibilityText(for barber: Barber, isFavorite: Bool) -> String {
         var parts = [barber.name + (isFavorite ? ", your barber" : ""), barber.title.menuSpokenList]
-        if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5, \(rating.countLabel) on Squire")
-        }
         if let haircut = haircutLine(for: barber) {
             parts.append(haircut)
         }

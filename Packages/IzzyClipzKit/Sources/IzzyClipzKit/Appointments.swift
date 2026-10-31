@@ -1,9 +1,7 @@
 import Foundation
 
-/// An appointment the client booked on Squire and saved in the app.
-///
-/// It's the client's own note of the booking: Squire holds the real one, so
-/// changes and cancellations happen there or with a call to the shop.
+/// An appointment as the app keeps it for reminders, and as the previous version of the app saved
+/// bookings made on Squire (which the app reads once, to carry them over).
 public struct Appointment: Codable, Hashable, Identifiable, Sendable {
     /// Shown as the barber when the client booked whoever is free first.
     public static let firstAvailableName = "First available"

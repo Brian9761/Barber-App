@@ -162,14 +162,9 @@ struct ServiceDetailView: View {
             ) {
                 MonogramTile(barber: barber, side: 56)
             } detail: {
-                if let rating = barber.rating {
-                    RatingLine(rating: rating)
-                } else {
-                    // No published rating: their title ("BARBER"), never "0 reviews".
-                    Text(barber.title)
-                        .textRole(.detail)
-                        .foregroundStyle(Theme.smoke)
-                }
+                Text(barber.title)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
             }
         }
         .buttonStyle(.pressable)
@@ -178,12 +173,9 @@ struct ServiceDetailView: View {
         .accessibilityIdentifier("book-\(offering.id)")
     }
 
-    /// "Book with Carlos, your barber, rated 5.0 out of 5 from 8 reviews, $45, 45 minutes, …".
+    /// "Book with Carlos, your barber, $45, 45 minutes, …".
     private func offeringAccessibilityText(_ offering: Offering, barber: Barber, isFavorite: Bool) -> String {
         var parts = ["Book with \(barber.name)" + (isFavorite ? ", your barber" : "")]
-        if let rating = barber.rating {
-            parts.append("rated \(rating.averageLabel) out of 5 from \(rating.countLabel)")
-        }
         parts.append(offering.price.label.spokenRanges)
         parts.append(DurationText.spoken(minutes: offering.durationMinutes))
         if let note = offering.note { parts.append(note) }

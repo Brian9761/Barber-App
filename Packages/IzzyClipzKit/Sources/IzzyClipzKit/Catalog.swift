@@ -115,11 +115,11 @@ public struct Catalog: Sendable {
             .min()
     }
 
-    /// The best way to book a service with whoever is free first.
+    /// Booking a service with whoever is free first ("Any barber").
     ///
-    /// Squire only lets "any barber" bookings preselect a single menu item, so
-    /// this picks the item the most barbers share. It's `nil` when fewer than
-    /// two barbers share an item, since "first available" would be meaningless.
+    /// It covers the barbers who share the menu item the most barbers share (so they do the same
+    /// thing at about the same price and length). It's `nil` when fewer than two barbers share an
+    /// item. The server's `firstAvailable` list in catalog.json comes from this.
     public func firstAvailableOption(forService serviceID: String) -> FirstAvailableOption? {
         let groups = Dictionary(grouping: offerings.filter { $0.serviceID == serviceID }, by: \.squireServiceID)
         let best = groups
@@ -200,7 +200,7 @@ public struct Catalog: Sendable {
 public struct FirstAvailableOption: Hashable, Sendable {
     public let squireServiceID: String
     public let serviceID: String
-    /// The barbers Squire will choose from, in team order.
+    /// The barbers "Any barber" chooses from, in team order.
     public let barberIDs: [String]
     public let priceLabel: String
     public let durationLabel: String

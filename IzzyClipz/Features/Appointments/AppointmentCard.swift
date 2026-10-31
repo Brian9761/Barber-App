@@ -6,7 +6,7 @@ import UIKit
 /// each as its own button: Add to Calendar, Directions, Cancel appointment (after a confirmation),
 /// or Remove once it's over or cancelled.
 ///
-/// Appointments saved from Squire before this version are read-only: the card says to call the
+/// Appointments saved by the previous version (booked on Squire) are read-only: the card says to call the
 /// shop to change them.
 struct AppointmentCard: View {
     let appointment: SavedAppointment
@@ -89,7 +89,7 @@ struct AppointmentCard: View {
     /// What the client should know beyond the status.
     private func note(isOn: Bool) -> String? {
         if appointment.origin == .squire {
-            return "Booked on Squire before this version of the app. To change or cancel it, call the shop."
+            return "Booked before this version of the app, so it can only be changed by phone. Call the shop to change or cancel it."
         }
         switch appointment.problem {
         case .notFound?, .tokenMissing?:

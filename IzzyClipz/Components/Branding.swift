@@ -164,7 +164,7 @@ private struct MonogramPalette {
 }
 
 extension Barber {
-    /// Whether their title on Squire says they own the shop.
+    /// Whether their title says they own the shop.
     var isOwner: Bool {
         title.localizedCaseInsensitiveContains("owner")
     }
