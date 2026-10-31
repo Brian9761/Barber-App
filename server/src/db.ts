@@ -22,13 +22,24 @@ export function normalizeConnectionString(url: string): string {
 }
 
 export function createPool(connectionString: string, options: { max?: number } = {}): pg.Pool {
-  return new pg.Pool({
+  const pool = new pg.Pool({
     connectionString: normalizeConnectionString(connectionString),
     max: options.max ?? 5,
     min: options.max === 1 ? 0 : 1,
     idleTimeoutMillis: 5_000,
     connectionTimeoutMillis: 10_000,
   });
+  // The database can close a connection the pool is keeping idle (Neon does when
+  // it scales down or restarts). The pool drops that connection and opens a new
+  // one when it's needed; without a listener, node would treat the event as an
+  // uncaught error and stop the whole server.
+  pool.on('error', (error: Error & { code?: string }) => {
+    console.error('A database connection the pool was keeping closed; the next query opens a new one', {
+      code: error.code,
+      message: error.message,
+    });
+  });
+  return pool;
 }
 
 export function poolDb(pool: pg.Pool): Db {
@@ -66,6 +77,18 @@ export function pgErrorCode(error: unknown): string | undefined {
 
 export const EXCLUSION_VIOLATION = '23P01';
 export const UNIQUE_VIOLATION = '23505';
+export const DEADLOCK_DETECTED = '40P01';
+
+/**
+ * Two transactions writing overlapping appointments at the same moment can each
+ * wait for the other inside the exclusion constraint's check; Postgres then
+ * aborts one with a deadlock. Bookings lock their barbers first so that doesn't
+ * happen between them, but whichever way it happens, the loser lost the time.
+ */
+export function isOverlapConflict(error: unknown): boolean {
+  const code = pgErrorCode(error);
+  return code === EXCLUSION_VIOLATION || code === DEADLOCK_DETECTED;
+}
 
 /** The constraint or index a Postgres error names, if any. */
 export function pgConstraint(error: unknown): string | undefined {

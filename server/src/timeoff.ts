@@ -57,8 +57,9 @@ export async function postTimeOff(ctx: Context): Promise<Response> {
   const id = ctx.deps.uuid();
   const now = ctx.deps.now();
   const row = await ctx.deps.db.transaction(async (tx) => {
-    // Wait for in-flight bookings for these barbers (they hold FOR SHARE), and make
-    // new ones wait for this block, so none can slip in unseen.
+    // Wait for in-flight bookings for these barbers (they lock the same rows, in
+    // the same id order), and make new ones wait for this block, so none can slip
+    // in unseen.
     await tx.query(
       barberId === null
         ? 'SELECT id FROM barbers ORDER BY id FOR UPDATE'

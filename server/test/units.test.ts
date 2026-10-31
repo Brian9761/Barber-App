@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { bearerMatches, hashManageToken, manageTokenMatches, newManageToken } from '../src/auth.js';
 import { Catalog, loadCatalog } from '../src/catalog.js';
 import { configFromEnv } from '../src/config.js';
-import { normalizeConnectionString } from '../src/db.js';
+import { createPool, normalizeConnectionString } from '../src/db.js';
 import { addDays, dayBounds, formatInstant, isDate, localDate, parseInstant, wallClock, weekday } from '../src/time.js';
 import { charLength, normalizeUSPhone } from '../src/validation.js';
 
@@ -82,6 +82,20 @@ describe('time helpers', () => {
     expect(process.env.TZ === undefined || typeof process.env.TZ === 'string').toBe(true);
     const zone = 'America/Los_Angeles';
     expect(wallClock('2026-07-04', 600, zone)?.toISOString()).toBe('2026-07-04T17:00:00.000Z');
+  });
+});
+
+describe('database pool', () => {
+  it('survives the database closing an idle connection', async () => {
+    // Nothing connects until a query runs, so any address will do.
+    const pool = createPool('postgres://nobody@127.0.0.1:1/none');
+    const dropped = Object.assign(new Error('terminating connection due to administrator command'), { code: '57P01' });
+    try {
+      // With no listener, an 'error' event throws (and would stop the server).
+      expect(() => pool.emit('error', dropped)).not.toThrow();
+    } finally {
+      await pool.end();
+    }
   });
 });
 

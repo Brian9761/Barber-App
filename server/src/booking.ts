@@ -1,7 +1,7 @@
 import { hashManageToken } from './auth.js';
 import { busyIntervals, gridStarts, isFree } from './availability.js';
 import type { Catalog, Offering } from './catalog.js';
-import { EXCLUSION_VIOLATION, pgErrorCode, type Queryable } from './db.js';
+import { isOverlapConflict, type Queryable } from './db.js';
 import type { Deps } from './deps.js';
 import { ApiError } from './http.js';
 import type { AppointmentRow } from './serialize.js';
@@ -108,8 +108,12 @@ const slotTaken = () => new ApiError('slot_taken', 'Someone just booked that tim
 
 /**
  * Books an appointment in one transaction. Nothing global is locked: the
- * barber rows are share-locked (so time off can't slip in mid-booking), time
+ * barber rows are locked in id order (FOR UPDATE, like time off), so bookings
+ * for the same barber take turns and time off can't slip in mid-booking. Time
  * off is checked, and the exclusion constraint decides overlaps (23P01 → 409).
+ * Taking turns matters: two inserts of overlapping rows at the same moment can
+ * each wait for the other inside the constraint's check, and Postgres aborts
+ * one of them as a deadlock instead of answering "taken".
  * "Any barber" tries the free barbers with the fewest bookings that day first
  * (ties in team order), moving on if one gets taken in the meantime.
  */
@@ -136,7 +140,7 @@ export async function createAppointment(
     const row = await deps.db.transaction(async (tx) => {
       const barberIds = candidates.map((o) => o.barberId);
       const locked = await tx.query<{ id: string }>(
-        'SELECT id FROM barbers WHERE id = ANY($1::text[]) AND active ORDER BY id FOR SHARE',
+        'SELECT id FROM barbers WHERE id = ANY($1::text[]) AND active ORDER BY id FOR UPDATE',
         [barberIds],
       );
       const present = new Set(locked.rows.map((r) => r.id));
@@ -180,7 +184,7 @@ export async function createAppointment(
           await tx.query('RELEASE SAVEPOINT book_any');
           return inserted;
         } catch (error) {
-          if (pgErrorCode(error) !== EXCLUSION_VIOLATION) throw error;
+          if (!isOverlapConflict(error)) throw error;
           await tx.query('ROLLBACK TO SAVEPOINT book_any');
         }
       }
@@ -188,7 +192,7 @@ export async function createAppointment(
     });
     return { row, manageToken };
   } catch (error) {
-    if (pgErrorCode(error) === EXCLUSION_VIOLATION) throw slotTaken();
+    if (isOverlapConflict(error)) throw slotTaken();
     throw error;
   }
 }

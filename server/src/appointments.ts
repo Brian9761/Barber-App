@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { hashManageToken, isNewManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
 import { availability } from './availability.js';
 import { checkStart, createAppointment, resolveTarget, targetOfferings, type Target } from './booking.js';
-import { EXCLUSION_VIOLATION, pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
+import { isOverlapConflict, pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
 import { ApiError, json, readJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
@@ -407,7 +407,7 @@ export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
     if (!row) throw notFound();
     return json({ appointment: appointmentJSON(row) });
   } catch (error) {
-    if (pgErrorCode(error) === EXCLUSION_VIOLATION) {
+    if (isOverlapConflict(error)) {
       throw new ApiError('slot_taken', 'Another appointment is booked at that time now, so this one can’t be restored.');
     }
     throw error;

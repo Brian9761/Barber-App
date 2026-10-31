@@ -457,6 +457,25 @@ describe('concurrency', () => {
     expect(results.filter((r) => r.status === 409)).toHaveLength(9);
   });
 
+  it('ten at once for one time with any barber: each free barber gets one, the rest hear it was taken', async () => {
+    const before = await h.call('GET', '/api/availability?serviceId=haircut&barberId=any&from=2026-11-03&days=1');
+    const slot = before.body.days[0].slots.find((s: { start: string }) => s.start === '2026-11-03T19:00:00Z');
+    const free: string[] = slot.barberIds;
+    expect(free.length).toBeGreaterThan(1);
+    const results = await Promise.all(
+      Array.from({ length: 10 }, (_, i) =>
+        h.call('POST', '/api/appointments', {
+          body: { serviceId: 'haircut', barberId: 'any', start: '2026-11-03T19:00:00Z', customer: { name: `Any racer ${i}`, phone: `44255504${String(i).padStart(2, '0')}` } },
+          ip: `192.0.2.${i + 60}`,
+        }),
+      ),
+    );
+    // Every answer is "booked" or "taken": never a server error from two inserts waiting on each other.
+    expect(results.map((r) => r.status).filter((s) => s !== 201 && s !== 409)).toEqual([]);
+    const booked = results.filter((r) => r.status === 201).map((r) => r.body.appointment.barberId);
+    expect(booked.sort()).toEqual([...free].sort());
+  });
+
   it('two any-barber bookings at once get two different barbers', async () => {
     const results = await Promise.all(
       [1, 2].map((n) =>
