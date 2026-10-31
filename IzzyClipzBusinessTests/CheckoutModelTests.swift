@@ -251,6 +251,59 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertTrue(loaded, "The list still shows the new payment once it loads")
     }
 
+    func testALateListFromBeforeTheLastPaymentDoesntReplaceTheNewerOne() async {
+        await takeTwoPaymentsWhileTheFirstReloadAnswersLast { earlier in earlier }
+    }
+
+    func testALateListThatFailsDoesntPutAnErrorOverTheNewerOne() async {
+        await takeTwoPaymentsWhileTheFirstReloadAnswersLast { _ in throw APIError.offline }
+    }
+
+    /// Takes $35, then $20. The list reload after the $35 reads the server
+    /// straight away but answers (with `lateAnswer`) only after the reload
+    /// after the $20 is done, as when the Wi-Fi drops and the phone moves to
+    /// cellular. That late answer is out of date: the list keeps both payments.
+    private func takeTwoPaymentsWhileTheFirstReloadAnswersLast(
+        _ lateAnswer: @escaping ([IzzyAPI.Payment]) throws -> [IzzyAPI.Payment]
+    ) async {
+        var reloads = 0
+        var releaseFirst = false
+        var firstAnswered = false
+        api.paymentsHandler = { @MainActor [api] day in
+            reloads += 1
+            let reload = reloads
+            let payments = try await api!.base.payments(on: day)
+            guard reload == 1 else { return payments }
+            while !releaseFirst { try await Task.sleep(for: .milliseconds(10)) }
+            defer { firstAnswered = true }
+            return try lateAnswer(payments)
+        }
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 3500)
+        checkout.charge()
+        let firstReload = await eventually { reloads == 1 }
+        XCTAssertTrue(firstReload, "Got \(checkout.phase)")
+        checkout.reset()
+
+        await charge(checkout, cents: 2000)
+        guard case .succeeded = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(reloads, 2)
+        XCTAssertTrue(checkout.todaysPayments.contains { $0.amountCents == 3500 })
+        XCTAssertTrue(checkout.todaysPayments.contains { $0.amountCents == 2000 })
+        XCTAssertFalse(checkout.isLoadingPayments, "The newest list is in")
+
+        releaseFirst = true
+        let answered = await eventually { firstAnswered }
+        XCTAssertTrue(answered)
+        let replaced = await eventually(timeout: 0.3) {
+            !checkout.todaysPayments.contains { $0.amountCents == 2000 } || checkout.paymentsError != nil
+        }
+        XCTAssertFalse(replaced, "The late answer replaced the newer list: \(checkout.todaysPayments.map(\.amountCents)), \(checkout.paymentsError ?? "no error")")
+        XCTAssertTrue(checkout.todaysPayments.contains { $0.amountCents == 3500 })
+        XCTAssertNil(checkout.paymentsError)
+        XCTAssertFalse(checkout.isLoadingPayments)
+    }
+
     // MARK: Not configured
 
     func testStripeNotConfiguredExplainsAndOffersPractice() async {

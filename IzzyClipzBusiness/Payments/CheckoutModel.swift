@@ -144,6 +144,10 @@ final class CheckoutModel {
     /// Reloading today's payments after one went through. Separate from the
     /// payment itself, so the next payment can start while the list loads.
     @ObservationIgnored private var paymentsTask: Task<Void, Never>?
+    /// Bumped by every load of today's payments. Loads can overlap (the
+    /// reloads after two quick payments, pull to refresh), so a slow answer
+    /// for an older load never replaces a newer one.
+    @ObservationIgnored private var paymentsGeneration = 0
     /// Telling Stripe about PaymentIntents given up on, one after another and
     /// never while the reader is busy with a payment (it does one thing at a time).
     @ObservationIgnored private var abandoning: Task<Void, Never>?
@@ -564,17 +568,21 @@ final class CheckoutModel {
     // MARK: Today's payments
 
     func loadPayments() async {
+        paymentsGeneration += 1
+        let requested = paymentsGeneration
         isLoadingPayments = true
-        defer { isLoadingPayments = false }
+        defer { if requested == paymentsGeneration { isLoadingPayments = false } }
         do {
             let today = shopTime.day(containing: clock())
             let payments = try await api.payments(on: today)
+            guard requested == paymentsGeneration else { return }
             // Only money that came in: PaymentIntents the customer never paid stay out.
             todaysPayments = payments.filter(\.isSucceeded).sorted { $0.createdAt > $1.createdAt }
             paymentsError = nil
         } catch is CancellationError {
             return
         } catch {
+            guard requested == paymentsGeneration else { return }
             paymentsError = Self.message(for: error)
         }
     }
