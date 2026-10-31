@@ -142,8 +142,8 @@ const ownerRange = z.object({
   to: calendarDate.optional(),
 });
 
-/** `date`, or `from`&`to` (inclusive shop-local days), defaulting to today. */
-export function dayRange(ctx: Context): { from: string; to: string } {
+/** `date`, or `from`&`to` (inclusive shop-local days, at most `maxDays`), defaulting to today. */
+export function dayRange(ctx: Context, maxDays = MAX_OWNER_RANGE_DAYS): { from: string; to: string } {
   const q = parse(ownerRange, Object.fromEntries(ctx.url.searchParams));
   const today = localDate(ctx.deps.now(), ctx.deps.catalog.timeZone);
   let from: string;
@@ -159,8 +159,8 @@ export function dayRange(ctx: Context): { from: string; to: string } {
   }
   const span = daysBetween(from, to);
   if (span < 0) throw new ApiError('invalid_request', 'to must be on or after from.');
-  if (span >= MAX_OWNER_RANGE_DAYS) {
-    throw new ApiError('invalid_request', `Ask for at most ${MAX_OWNER_RANGE_DAYS} days at a time.`);
+  if (span >= maxDays) {
+    throw new ApiError('invalid_request', `Ask for at most ${maxDays} days at a time.`);
   }
   return { from, to };
 }

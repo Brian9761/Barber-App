@@ -156,6 +156,16 @@ describe('time rules', () => {
     expect((await bookFresh({ offeringId: FLOW45, start: '2027-01-01T18:00:00Z' })).status).toBe(201);
   });
 
+  it("uses the shop's date, not UTC's, for today and the 60-day window", async () => {
+    h.setNow('2026-11-03T07:30:00Z'); // Mon Nov 2, 11:30 PM PST; already Nov 3 in UTC
+    const today = await h.call('GET', `/api/availability?offeringId=${encodeURIComponent(FLOW45)}`);
+    expect(today.body.days).toEqual([{ date: '2026-11-02', slots: [] }]);
+    // Last bookable day: Nov 2 + 60 = Jan 1 (UTC's date would wrongly allow Jan 2).
+    expect((await bookFresh({ offeringId: FLOW45, start: '2027-01-02T18:00:00Z' })).body.error.code).toBe('too_far');
+    expect((await bookFresh({ offeringId: FLOW45, start: '2027-01-01T18:00:00Z' })).status).toBe(201);
+    expect((await bookFresh({ offeringId: FLOW45, start: '2026-11-03T18:00:00Z' })).status).toBe(201);
+  });
+
   it('outside hours: off the 30-minute grid, or running past closing', async () => {
     const offGrid = await bookFresh({ offeringId: FLOW45, start: '2026-11-03T18:15:00Z' });
     expect(offGrid.body.error).toEqual({ code: 'outside_hours', message: "That isn't one of our booking times. Pick a time from the list." });

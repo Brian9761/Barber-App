@@ -38,7 +38,14 @@ export const GOOGLE_FIELD_MASK = 'rating,userRatingCount,reviews,googleMapsUri';
 export const GOOGLE_USAGE_COUNTER = 'google_places_details';
 export const YELP_REFRESH_MS = 12 * 60 * 60 * 1000;
 export const YELP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
-const FETCH_TIMEOUT_MS = 6_000;
+const FETCH_TIMEOUT_MS = 5_000;
+/** After a failed call, wait this long before trying that source again (per server instance). */
+export const GOOGLE_RETRY_MS = 60 * 1000;
+export const YELP_RETRY_MS = 10 * 60 * 1000;
+
+// Keyed by the app's dependencies, so each app instance (and each test) has its own.
+const googleRetryAt = new WeakMap<Deps, number>();
+const yelpRetryAt = new WeakMap<Deps, number>();
 
 export function googleMapsUrl(placeId: string): string {
   return `https://www.google.com/maps/search/?api=1&query=Izzy%20Clipz%20Barbershop&query_place_id=${encodeURIComponent(placeId)}`;
@@ -149,6 +156,13 @@ export async function googleReviews(deps: Deps): Promise<ReviewSource> {
   const mapsUrl = googleMapsUrl(placeId);
   if (!key) return unavailable(mapsUrl);
   const now = deps.now();
+  // Google just failed: don't make every visitor wait for it again right away.
+  if ((googleRetryAt.get(deps) ?? 0) > now.getTime()) return unavailable(mapsUrl);
+  const failed = (details: Record<string, unknown>) => {
+    deps.log.warn('Google Place Details failed', details);
+    googleRetryAt.set(deps, now.getTime() + GOOGLE_RETRY_MS);
+    return unavailable(mapsUrl);
+  };
   try {
     // Counted before calling, so failures and retries are inside the cap too.
     if ((await countGoogleCall(deps, now)) > googleDailyLimit) return unavailable(mapsUrl);
@@ -159,14 +173,10 @@ export async function googleReviews(deps: Deps): Promise<ReviewSource> {
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       },
     );
-    if (!response.ok) {
-      deps.log.warn('Google Place Details failed', { status: response.status });
-      return unavailable(mapsUrl);
-    }
-    return normalizeGoogle(await response.json(), mapsUrl, now) ?? unavailable(mapsUrl);
+    if (!response.ok) return failed({ status: response.status });
+    return normalizeGoogle(await response.json(), mapsUrl, now) ?? failed({ error: 'Unexpected response shape' });
   } catch (error) {
-    deps.log.warn('Google Place Details failed', { error: error instanceof Error ? error.message : String(error) });
-    return unavailable(mapsUrl);
+    return failed({ error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -270,7 +280,10 @@ export async function yelpReviewsSource(deps: Deps): Promise<ReviewSource> {
     );
     const cached = rows[0];
     const age = cached ? now.getTime() - cached.fetched_at.getTime() : Infinity;
-    if (cached && age >= 0 && age < YELP_REFRESH_MS) return cached.payload;
+    const usable = cached && age >= 0 && age < YELP_MAX_AGE_MS ? cached.payload : null;
+    if (usable && age < YELP_REFRESH_MS) return usable;
+    // Yelp failed a moment ago: serve what we may (or nothing) instead of waiting on it again.
+    if ((yelpRetryAt.get(deps) ?? 0) > now.getTime()) return usable ?? unavailable(pageUrl);
 
     const fresh = await fetchYelp(deps, key, businessId, pageUrl, now);
     if (fresh) {
@@ -281,9 +294,9 @@ export async function yelpReviewsSource(deps: Deps): Promise<ReviewSource> {
       );
       return fresh;
     }
+    yelpRetryAt.set(deps, now.getTime() + YELP_RETRY_MS);
     // Yelp is down: a copy younger than 24 hours is still allowed.
-    if (cached && age >= 0 && age < YELP_MAX_AGE_MS) return cached.payload;
-    return unavailable(pageUrl);
+    return usable ?? unavailable(pageUrl);
   } catch (error) {
     deps.log.warn('Yelp cache failed', { error: error instanceof Error ? error.message : String(error) });
     return unavailable(pageUrl);

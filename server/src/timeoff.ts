@@ -9,11 +9,12 @@ import { instant, parse, UUID_RE } from './validation.js';
 
 export const MAX_TIME_OFF_DAYS = 366;
 
-// GET /api/owner/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD → blocks that overlap those shop-local days.
+// GET /api/owner/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD → blocks that overlap those shop-local days
+// (up to a year at a time, so the owner can see every upcoming block in one call).
 
 export async function listTimeOff(ctx: Context): Promise<Response> {
   requireOwner(ctx.request, ctx.deps.config);
-  const { from, to } = dayRange(ctx);
+  const { from, to } = dayRange(ctx, MAX_TIME_OFF_DAYS);
   const zone = ctx.deps.catalog.timeZone;
   const { rows } = await ctx.deps.db.query<TimeOffRow>(
     `SELECT id, barber_id, start_at, end_at, reason FROM time_off

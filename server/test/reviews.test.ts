@@ -151,18 +151,35 @@ describe('Google reviews', () => {
   it('falls back to the Maps link on an API error, a network failure or a response it cannot read', async () => {
     googleOn(GOOGLE_403, 403);
     expect((await h.call('GET', '/api/reviews')).body.google).toMatchObject({ available: false, url: MAPS_URL });
+    const failures: (() => Response)[] = [
+      () => {
+        throw new TypeError('fetch failed');
+      },
+      () => new Response('<html>oops</html>', { status: 200 }),
+      () => jsonResponse({ reviews: 'nope' }),
+    ];
+    for (const failure of failures) {
+      h.advance(2); // past the one-minute pause after a failure
+      h.fetch.clear();
+      h.fetch.on(PLACES, failure);
+      expect((await h.call('GET', '/api/reviews')).body.google.available).toBe(false);
+      expect(h.fetch.calls).toHaveLength(1);
+    }
+    expect(h.logs.filter((l) => l.message.startsWith('Google'))).toHaveLength(4);
+  });
+
+  it('after a failure, waits a minute before asking Google again', async () => {
+    googleOn(GOOGLE_403, 403);
+    await h.call('GET', '/api/reviews');
     h.fetch.clear();
-    h.fetch.on(PLACES, () => {
-      throw new TypeError('fetch failed');
-    });
+    h.fetch.on(PLACES, () => jsonResponse(GOOGLE));
+    h.advance(0.5);
     expect((await h.call('GET', '/api/reviews')).body.google.available).toBe(false);
-    h.fetch.clear();
-    h.fetch.on(PLACES, () => new Response('<html>oops</html>', { status: 200 }));
-    expect((await h.call('GET', '/api/reviews')).body.google.available).toBe(false);
-    h.fetch.clear();
-    h.fetch.on(PLACES, () => jsonResponse({ reviews: 'nope' }));
-    expect((await h.call('GET', '/api/reviews')).body.google.available).toBe(false);
-    expect(h.logs.filter((l) => l.message.startsWith('Google'))).toHaveLength(3);
+    expect(h.fetch.calls).toHaveLength(0);
+    h.advance(0.5);
+    expect((await h.call('GET', '/api/reviews')).body.google.available).toBe(true);
+    // Skipped calls don't count toward the daily limit.
+    expect((await h.database.pool.query('SELECT count FROM api_usage')).rows[0].count).toBe(2);
   });
 
   it('copes with a place that has no reviews yet, and drops unusable entries', () => {
@@ -279,6 +296,23 @@ describe('Yelp reviews', () => {
     expect(expired.body.yelp).toEqual({ available: false, rating: null, count: null, url: YELP_URL, reviews: [], fetchedAt: null });
     // And the expired copy is gone from the database.
     expect((await h.database.pool.query('SELECT count(*)::int AS n FROM yelp_cache')).rows[0].n).toBe(0);
+  });
+
+  it('after a failed refresh, waits 10 minutes before calling Yelp again', async () => {
+    yelpOn();
+    await h.call('GET', '/api/reviews');
+    h.advance(12 * 60);
+    h.fetch.clear();
+    h.fetch.on(YELP_API, () => jsonResponse({ error: { code: 'INTERNAL_ERROR', description: 'down' } }, 503));
+    expect((await h.call('GET', '/api/reviews')).body.yelp.fetchedAt).toBe('2026-11-02T19:10:00Z');
+    expect(h.fetch.calls).toHaveLength(2);
+    h.advance(9);
+    expect((await h.call('GET', '/api/reviews')).body.yelp.fetchedAt).toBe('2026-11-02T19:10:00Z');
+    expect(h.fetch.calls).toHaveLength(2);
+    h.fetch.clear();
+    yelpOn();
+    h.advance(1);
+    expect((await h.call('GET', '/api/reviews')).body.yelp.fetchedAt).toBe('2026-11-03T07:20:00Z');
   });
 
   it('on the Base plan (no review excerpts) shows rating and count only', async () => {

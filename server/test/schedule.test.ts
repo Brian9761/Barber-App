@@ -196,6 +196,13 @@ describe('owner time off', () => {
     expect((await h.call('DELETE', '/api/owner/time-off/not-a-uuid', { owner: true })).status).toBe(404);
   });
 
+  it('lists up to a year of blocks at a time', async () => {
+    expect((await h.call('GET', '/api/owner/time-off?from=2026-11-02&to=2027-11-02', { owner: true })).status).toBe(200);
+    expect((await h.call('GET', '/api/owner/time-off?from=2026-11-02&to=2027-11-03', { owner: true })).status).toBe(400);
+    expect((await h.call('GET', '/api/owner/appointments?from=2026-11-02&to=2027-01-02', { owner: true })).status).toBe(200); // 62 days
+    expect((await h.call('GET', '/api/owner/appointments?from=2026-11-02&to=2027-01-03', { owner: true })).status).toBe(400);
+  });
+
   it('validates the block', async () => {
     const post = (body: unknown) => h.call('POST', '/api/owner/time-off', { owner: true, body });
     expect((await post({ barberId: 'nobody', start: '2026-11-03T18:00:00Z', end: '2026-11-03T19:00:00Z' })).body.error.message).toBe(
