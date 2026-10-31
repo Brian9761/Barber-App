@@ -4,8 +4,9 @@ import Observation
 
 /// New booking: walk-ins and phone bookings. The owner picks a service, a
 /// barber (or anyone free), a time from the owner's availability (no lead
-/// time, so a walk-in can take a slot starting now), and the client's name
-/// with an optional phone number.
+/// time, so a walk-in can take the next slot that hasn't started) or "Now"
+/// for a walk-in who's in the chair, and the client's name with an optional
+/// phone number.
 @MainActor
 @Observable
 final class NewBookingStore {
@@ -121,18 +122,83 @@ final class NewBookingStore {
         slot.barberIds.compactMap { catalog.barber(withID: $0)?.name }.joined(separator: ", ")
     }
 
+    /// The menu items the booking can go to: the barber's, or with "Any barber" each
+    /// barber's version that the server picks from (catalog.json's `firstAvailable`).
+    private var targetOfferings: [Offering] {
+        switch choice {
+        case .offering(let id)?:
+            return catalog.offering(withID: id).map { [$0] } ?? []
+        case .anyBarber?:
+            guard let serviceID, let option = catalog.firstAvailableOption(forService: serviceID) else { return [] }
+            return offerings.filter { option.barberIDs.contains($0.barberID) && $0.squireServiceID == option.squireServiceID }
+        case nil:
+            return []
+        }
+    }
+
     // MARK: Days and times
+
+    /// The last day the server takes bookings for: `windowDays` (60) after today.
+    var lastDay: LocalDate { today.adding(days: shopTime.bookingCalendar.windowDays) }
+
+    /// What the day picker offers: today through the last day bookings are taken for.
+    var dayRange: ClosedRange<Date> { shopTime.startOfDay(today)...shopTime.noon(on: lastDay) }
 
     var dayAsDate: Date {
         get { shopTime.noon(on: day) }
         set { select(day: shopTime.day(containing: newValue)) }
     }
 
+    /// Picks a day, kept between today and the last day bookings are taken for.
     func select(day: LocalDate) {
+        let day = min(max(day, today), lastDay)
         guard day != self.day else { return }
         self.day = day
         clearSlots()
     }
+
+    /// The screen calls this when it appears and when the app comes back to the foreground.
+    /// After the app sat open overnight, a day that has passed moves on to today (and the screen
+    /// loads its times), instead of offering yesterday's. Times already on screen are checked
+    /// again, so ones that have started since, or that clients booked meanwhile, aren't offered
+    /// (a picked one goes with them; Now stays).
+    func catchUpToToday() async {
+        if day < today {
+            select(day: today)
+        } else if slotsState == .loaded {
+            await loadSlots(keepingTheTimes: true)
+        }
+    }
+
+    /// The start "Now" books: this minute on the shop's clock. It's offered when the day on
+    /// screen is today, the shop is open, and the service (with at least one of the barbers,
+    /// for Any barber) ends by closing. The server takes any whole minute inside opening hours
+    /// from the shop, so a walk-in who's in the chair isn't recorded at the next half hour.
+    var nowStart: Date? {
+        guard day == today, let open = shopTime.openInterval(on: day) else { return nil }
+        let start = Date(timeIntervalSince1970: (clock().timeIntervalSince1970 / 60).rounded(.down) * 60)
+        guard start >= open.start else { return nil }
+        let fits = targetOfferings.contains { start.addingTimeInterval(TimeInterval($0.durationMinutes * 60)) <= open.end }
+        return fits ? start : nil
+    }
+
+    /// Picks "Now". The minute is kept from here on, so Book again after a lost answer sends
+    /// the same booking.
+    func selectNow() {
+        guard let start = nowStart else { return }
+        selectedSlot = IzzyAPI.Slot(start: start, barberIds: [])
+    }
+
+    /// The "Now" the screen shows: once picked, the minute it was picked, even when Now
+    /// wouldn't be offered any more (the service no longer ends by closing), since that's what
+    /// Book sends; until then, `nowStart`.
+    var nowChoice: Date? { isNowSelected ? selectedSlot?.start : nowStart }
+
+    /// Whether `slot` is "Now" rather than one of the listed times (those always name the
+    /// barbers who are free then).
+    static func isNow(_ slot: IzzyAPI.Slot) -> Bool { slot.barberIds.isEmpty }
+
+    var isNowSelected: Bool { selectedSlot.map(Self.isNow) ?? false }
 
     private func clearSlots() {
         generation += 1
@@ -164,7 +230,8 @@ final class NewBookingStore {
             // The owner can book a slot that hasn't started yet; the server
             // decides, but hide ones already past on this phone's clock.
             slots = response.slots(on: day).filter { $0.start >= now.addingTimeInterval(-60) }
-            if let selected = selectedSlot, !slots.contains(where: { $0.start == selected.start }) {
+            // "Now" isn't one of the listed times; it stays picked.
+            if let selected = selectedSlot, !Self.isNow(selected), !slots.contains(where: { $0.start == selected.start }) {
                 selectedSlot = nil
             }
             slotsState = .loaded
@@ -247,7 +314,8 @@ final class NewBookingStore {
 
     /// `POST /api/owner/appointments`, with the same key as the last try when
     /// it's the same booking (see `idempotencyKey(for:)`). On "slot taken" the
-    /// times are loaded again so the owner can pick another one.
+    /// times are loaded again so the owner can pick another one; a day that
+    /// has passed moves on to today.
     func book() async {
         guard !isBooking else { return }
         if let missing {
@@ -278,18 +346,33 @@ final class NewBookingStore {
             booked = appointment
             onBooked?(appointment)
         } catch APIError.slotTaken {
-            formError = "Someone just took that time. Pick another one."
+            formError = Self.isNow(slot) ? notFreeNowMessage : "Someone just took that time. Pick another one."
             selectedSlot = nil
             await loadSlots(keepingTheTimes: true)
         } catch APIError.outsideHours {
             formError = "That time is outside the shop's hours. Pick another one."
             selectedSlot = nil
             await loadSlots(keepingTheTimes: true)
+        } catch APIError.tooSoon {
+            // The shop can book any time today, so this means the day has passed.
+            formError = "That day has passed. Pick a time today."
+            selectedSlot = nil
+            select(day: today)
         } catch is CancellationError {
             return
         } catch {
             formError = ErrorText.message(for: error)
         }
+    }
+
+    /// "Now" was turned down: the barber (or every barber, for Any barber) is busy now, or has
+    /// a client before the service would end.
+    private var notFreeNowMessage: String {
+        if case .offering(let id)? = choice, let offering = catalog.offering(withID: id),
+           let barber = catalog.barber(withID: offering.barberID) {
+            return "\(barber.name) can't fit this in right now. Pick another time."
+        }
+        return "No barber can fit this in right now. Pick another time."
     }
 
     /// After the confirmation: ready for the next walk-in, same service.

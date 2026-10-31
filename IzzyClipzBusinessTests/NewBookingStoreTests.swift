@@ -3,7 +3,8 @@ import XCTest
 @testable import IzzyClipzBusiness
 
 /// Walk-ins and phone bookings: the owner's availability (no lead time), the
-/// "next open slot" shortcut, booking, and a slot taken in the meantime.
+/// "next open slot" shortcut, "Now", booking, a slot taken in the meantime, and
+/// a new day after the app sat open overnight.
 @MainActor
 final class NewBookingStoreTests: XCTestCase {
     private var harness: Harness!
@@ -18,6 +19,15 @@ final class NewBookingStoreTests: XCTestCase {
         let store = NewBookingStore(api: harness.api, shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { TestClock.now })
         store.onBooked = { [weak self] in self?.booked.append($0) }
         return store
+    }
+
+    /// A store and its own sample server on one clock that the test moves on.
+    private func makeStore(clock: MovableClock) -> (NewBookingStore, FakeServer) {
+        let server = FakeServer(shopTime: TestClock.shopTime, now: { clock.now })
+        let store = NewBookingStore(
+            api: server.api(ownerKey: FakeServer.ownerKey), shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { clock.now }
+        )
+        return (store, server)
     }
 
     func testPickingAServiceChoosesAnyBarberWhenItCan() {
@@ -380,5 +390,265 @@ final class NewBookingStoreTests: XCTestCase {
         XCTAssertEqual(store.slotsState, .failed(APIError.offline.userMessage))
         await store.findNextOpenSlot()
         XCTAssertEqual(store.formError, APIError.offline.userMessage)
+    }
+
+    // MARK: Now
+
+    /// A walk-in who's in the chair at 11:05 is booked from 11:05, not from the next half hour.
+    func testNowBooksAWalkInFromThisMinute() async throws {
+        let clock = MovableClock(TestClock.at(11, 5).addingTimeInterval(40))
+        let (store, server) = makeStore(clock: clock)
+        XCTAssertNil(store.nowStart, "Not before a service is picked")
+        store.selectService("haircut")
+        XCTAssertEqual(store.nowStart, TestClock.at(11, 5), "This minute, without the seconds")
+        await store.loadSlots()
+        XCTAssertEqual(store.slots.first.map { store.shopTime.time($0.start) }, "11:30 AM", "The listed times stay on the half hour")
+        store.selectNow()
+        XCTAssertTrue(store.isNowSelected)
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        let appointment = try XCTUnwrap(store.booked)
+        XCTAssertEqual(appointment.start, TestClock.at(11, 5))
+        XCTAssertTrue(["flowxbori", "cristian-ceja", "julian-ramos"].contains(appointment.barberId), appointment.barberId)
+        XCTAssertTrue(store.summary(of: appointment).hasSuffix("today at 11:05 AM"))
+        XCTAssertEqual(server.appointments.filter { $0.customer.name == "Walk-in Sample" }.map(\.start), [TestClock.at(11, 5)])
+    }
+
+    /// Izzy is free now but has Andre at 11:30: an hour's cut doesn't fit in, and the owner
+    /// hears that, not "someone just took that time".
+    func testNowWithABarberWhoCantFitItInSaysSo() async throws {
+        let store = makeStore()
+        store.selectService("haircut")
+        let izzy = try XCTUnwrap(store.offerings.first { $0.barberID == "israel-flores" })
+        store.selectChoice(.offering(izzy.id))
+        await store.loadSlots()
+        store.selectNow()
+        XCTAssertEqual(store.selectedSlot?.start, TestClock.at(11, 5))
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        XCTAssertNil(store.booked)
+        XCTAssertEqual(store.formError, "Izzy can't fit this in right now. Pick another time.")
+        XCTAssertNil(store.selectedSlot)
+        XCTAssertEqual(store.slotsState, .loaded, "The times were checked again")
+        XCTAssertNotNil(store.nowStart, "Now is still there, for another barber or service")
+        XCTAssertNil(harness.appointment(named: "Walk-in Sample"))
+    }
+
+    func testNowWithNobodyFreeSaysSo() async {
+        harness.server.options.takeNextSlot = true
+        let store = makeStore()
+        store.selectService("haircut")
+        store.selectNow()
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        XCTAssertEqual(store.formError, "No barber can fit this in right now. Pick another time.")
+        XCTAssertNil(store.selectedSlot)
+    }
+
+    /// Now is for today while the shop is open, when the service ends by closing.
+    func testNowIsOfferedTodayWhileOpenWhenTheServiceFits() {
+        let clock = MovableClock(TestClock.at(9, 30))
+        let (store, _) = makeStore(clock: clock)
+        store.selectService("haircut")
+        XCTAssertNil(store.nowStart, "Not before opening")
+        clock.now = TestClock.at(10)
+        XCTAssertEqual(store.nowStart, TestClock.at(10), "From opening")
+        clock.now = TestClock.at(18, 15)
+        XCTAssertEqual(store.nowStart, TestClock.at(18, 15), "A 45-minute cut still ends by 7 PM")
+        clock.now = TestClock.at(18, 16)
+        XCTAssertNil(store.nowStart, "A 45-minute cut wouldn't end by closing")
+        store.selectService("eyebrows")
+        XCTAssertEqual(store.nowStart, TestClock.at(18, 16), "Carlos's 15 minutes still fit")
+        clock.now = TestClock.at(19)
+        XCTAssertNil(store.nowStart, "Closed")
+
+        clock.now = TestClock.at(11, 5)
+        store.select(day: TestClock.today.adding(days: 1))
+        XCTAssertNil(store.nowStart, "Only today")
+        store.selectNow()
+        XCTAssertNil(store.selectedSlot)
+    }
+
+    /// Picking Now before the times arrive keeps it picked; a listed time replaces it.
+    func testNowStaysPickedWhenTheTimesLoad() async {
+        let store = makeStore()
+        store.selectService("haircut")
+        store.selectNow()
+        await store.loadSlots()
+        XCTAssertTrue(store.isNowSelected)
+        XCTAssertEqual(store.selectedSlot?.start, TestClock.at(11, 5))
+        store.selectedSlot = store.slots.first
+        XCTAssertFalse(store.isNowSelected)
+    }
+
+    /// Now picked at 6:14 PM stays on screen at 6:16, when a 45-minute cut would no longer be
+    /// offered as Now: Book still sends 6:14, so the screen shows that, instead of hiding the
+    /// chip and saying there are no times.
+    func testNowStaysOnScreenOncePickedEvenWhenItWouldntBeOfferedNow() async throws {
+        let clock = MovableClock(TestClock.at(18, 14))
+        let (store, _) = makeStore(clock: clock)
+        store.selectService("haircut")
+        await store.loadSlots()
+        XCTAssertEqual(store.nowChoice, TestClock.at(18, 14), "Before it's picked, the time it is")
+        store.selectNow()
+        clock.now = TestClock.at(18, 16)
+        XCTAssertNil(store.nowStart, "A 45-minute cut from 6:16 wouldn't end by closing")
+        XCTAssertTrue(store.isNowSelected)
+        XCTAssertEqual(store.nowChoice, TestClock.at(18, 14), "The minute Now was picked, which Book sends")
+        store.selectNow()
+        XCTAssertEqual(store.selectedSlot?.start, TestClock.at(18, 14), "Tapping it again keeps it")
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        XCTAssertEqual(store.booked?.start, TestClock.at(18, 14))
+
+        store.startOver()
+        XCTAssertNil(store.nowChoice, "Nothing picked, and Now doesn't fit any more")
+    }
+
+    /// Book again after a lost answer sends the minute Now was picked, so it finds the booking
+    /// that went through instead of putting the client in a second barber's chair.
+    func testBookAgainAfterALostAnswerKeepsNowsMinute() async throws {
+        let clock = MovableClock(TestClock.at(11, 5))
+        let (store, server) = makeStore(clock: clock)
+        server.options.loseNextBookingAnswer = true
+        store.selectService("haircut")
+        store.selectNow()
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        XCTAssertEqual(store.formError, APIError.offline.userMessage)
+        clock.now = TestClock.at(11, 7)
+        await store.book()
+        XCTAssertEqual(store.booked?.start, TestClock.at(11, 5))
+        XCTAssertEqual(server.appointments.filter { $0.customer.name == "Walk-in Sample" }.count, 1, "One appointment, one barber")
+        XCTAssertEqual(Set(server.bookingKeys).count, 1)
+    }
+
+    /// The sample server takes the starts the real one takes from the shop: any whole minute
+    /// inside opening hours, from today (earlier today too, to record a walk-in late) to 60
+    /// days ahead.
+    func testTheSampleServerTakesTheShopsStartsLikeTheServer() async throws {
+        let julian = try XCTUnwrap(Catalog.izzyClipz.offerings.first { $0.barberID == "julian-ramos" && $0.serviceID == "haircut" })
+        let api = harness.api
+        func book(_ start: Date) async throws -> IzzyAPI.Appointment {
+            try await api.createAppointment(
+                .init(target: .offering(id: julian.id), start: start, customer: .init(name: "Sample")), idempotencyKey: .generate()
+            )
+        }
+        func error(booking start: Date) async -> APIError? {
+            do {
+                _ = try await book(start)
+                return nil
+            } catch {
+                return error as? APIError
+            }
+        }
+        let now = try await book(TestClock.at(11, 5).addingTimeInterval(40))
+        XCTAssertEqual(now.start, TestClock.at(11, 5), "Seconds are dropped")
+        let late = try await book(TestClock.at(10, 10))
+        XCTAssertEqual(late.start, TestClock.at(10, 10), "Earlier today, to record a walk-in late")
+        let lastDay = TestClock.today.adding(days: 60)
+        _ = try await book(TestClock.at(14, 0, on: lastDay))
+
+        let passed = await error(booking: TestClock.at(14, 0, on: TestClock.today.adding(days: -1)))
+        XCTAssertEqual(passed, .tooSoon)
+        let tooFar = await error(booking: TestClock.at(14, 0, on: lastDay.adding(days: 1)))
+        XCTAssertEqual(tooFar, .tooFar)
+        let early = await error(booking: TestClock.at(9, 50))
+        XCTAssertEqual(early, .outsideHours, "Before opening")
+        let pastClosing = await error(booking: TestClock.at(18, 30))
+        XCTAssertEqual(pastClosing, .outsideHours, "Wouldn't end by closing")
+    }
+
+    // MARK: A new day
+
+    /// The app sat open overnight: New booking moves on from yesterday to today and loads its
+    /// times, instead of offering yesterday's or saying there are none.
+    func testAfterTheAppSatOpenOvernightNewBookingMovesToToday() async throws {
+        let clock = MovableClock(TestClock.at(11, 5))
+        let (store, _) = makeStore(clock: clock)
+        store.selectService("haircut")
+        await store.loadSlots()
+        store.selectedSlot = store.slots.first
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(9, 0, on: tuesday)
+        await store.catchUpToToday()
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertNil(store.selectedSlot, "Yesterday's time is gone")
+        XCTAssertEqual(store.slotsState, .idle, "The screen loads Tuesday's times")
+        await store.loadSlots()
+        XCTAssertEqual(store.slots.first.map { store.shopTime.time($0.start) }, "10 AM")
+
+        // A day ahead that the owner picked stays.
+        store.select(day: tuesday.adding(days: 2))
+        await store.catchUpToToday()
+        XCTAssertEqual(store.day, tuesday.adding(days: 2))
+    }
+
+    /// Monday evening the owner loads Tuesday's times for a phone booking and locks the phone.
+    /// When the app comes back at 11:30 on Tuesday, the times are checked again: the ones that
+    /// have started and the one a client booked overnight aren't offered, and the picked 10 AM
+    /// goes, so a phone booking isn't recorded in the past.
+    func testTimesOnScreenAreCheckedAgainWhenTheAppComesBack() async throws {
+        let clock = MovableClock(TestClock.at(18))
+        let (store, server) = makeStore(clock: clock)
+        store.selectService("haircut")
+        let julian = try XCTUnwrap(store.offerings.first { $0.barberID == "julian-ramos" })
+        store.selectChoice(.offering(julian.id))
+        let tuesday = TestClock.today.adding(days: 1)
+        store.select(day: tuesday)
+        await store.loadSlots()
+        XCTAssertEqual(store.slots.first?.start, TestClock.at(10, on: tuesday))
+        XCTAssertTrue(store.slots.contains { $0.start == TestClock.at(14, on: tuesday) })
+        store.selectedSlot = store.slots.first
+
+        _ = try server.createAppointment(.init(target: .offering(id: julian.id), start: TestClock.at(14, on: tuesday), customer: .init(name: "Online Sample")))
+        clock.now = TestClock.at(11, 30, on: tuesday)
+        await store.catchUpToToday()
+        XCTAssertEqual(store.day, tuesday, "Tuesday is today now")
+        XCTAssertEqual(store.slotsState, .loaded)
+        XCTAssertEqual(store.slots.first?.start, TestClock.at(11, 30, on: tuesday), "Starts that have passed are gone")
+        XCTAssertFalse(store.slots.contains { $0.start == TestClock.at(14, on: tuesday) }, "Booked overnight")
+        XCTAssertNil(store.selectedSlot, "10 AM has passed")
+
+        // Now, picked meanwhile, stays picked.
+        store.selectNow()
+        clock.now = TestClock.at(11, 34, on: tuesday)
+        await store.catchUpToToday()
+        XCTAssertEqual(store.selectedSlot?.start, TestClock.at(11, 30, on: tuesday))
+        XCTAssertTrue(store.isNowSelected)
+    }
+
+    /// The day picker runs from today to the last day the server takes bookings for.
+    func testTheDayStaysBetweenTodayAndTheLastBookingDay() {
+        let store = makeStore()
+        let last = TestClock.today.adding(days: 60)
+        XCTAssertEqual(store.lastDay, last)
+        XCTAssertEqual(store.dayRange.lowerBound, TestClock.shopTime.startOfDay(TestClock.today))
+        XCTAssertEqual(store.dayRange.upperBound, TestClock.shopTime.noon(on: last))
+        XCTAssertTrue(store.dayRange.contains(store.dayAsDate))
+        store.select(day: TestClock.today.adding(days: 90))
+        XCTAssertEqual(store.day, last)
+        XCTAssertTrue(store.dayRange.contains(store.dayAsDate))
+        store.select(day: TestClock.today.adding(days: -3))
+        XCTAssertEqual(store.day, TestClock.today)
+    }
+
+    /// The app stayed open past midnight with a time picked: booking it says the day has
+    /// passed and moves on to today, instead of "too soon, pick a later time".
+    func testBookingADayThatHasPassedMovesToToday() async throws {
+        let clock = MovableClock(TestClock.at(18))
+        let (store, server) = makeStore(clock: clock)
+        store.selectService("haircut")
+        await store.loadSlots()
+        store.selectedSlot = try XCTUnwrap(store.slots.last)
+        store.clientName = "Late Sample"
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(0, 5, on: tuesday)
+        await store.book()
+        XCTAssertNil(store.booked)
+        XCTAssertEqual(store.formError, "That day has passed. Pick a time today.")
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertNil(store.selectedSlot)
+        XCTAssertFalse(server.appointments.contains { $0.customer.name == "Late Sample" })
     }
 }

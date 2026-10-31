@@ -9,10 +9,12 @@ struct ScheduleView: View {
     let workspace: Workspace
     @State private var showsBlockTime = false
     @State private var blockToRemove: IzzyAPI.TimeOff?
+    /// The appointment whose details are open, if any.
+    @State private var path: [AppointmentLink] = []
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             List {
                 Section {
                     DayPicker(store: store)
@@ -59,13 +61,13 @@ struct ScheduleView: View {
                 titleVisibility: .visible,
                 presenting: blockToRemove
             ) { block in
-                Button("Remove blocked time", role: .destructive) {
+                Button(store.removalQuestion(for: block).button, role: .destructive) {
                     Task { await store.removeTimeOff(block) }
                 }
                 .accessibilityIdentifier("confirmRemoveBlock")
                 Button("Keep it", role: .cancel) {}
             } message: { block in
-                Text("\(store.barberName(for: block.barberId)), \(store.shopTime.timeRange(block.start, block.end)). Clients can book this time again.")
+                Text(store.removalQuestion(for: block).message)
             }
             .alert(
                 "That didn't work",
@@ -78,12 +80,18 @@ struct ScheduleView: View {
         }
         // While the tab is on screen and the app is in the foreground: load
         // now, then every minute. SwiftUI cancels the task when the tab goes
-        // away or the app leaves the foreground.
+        // away or the app leaves the foreground. Today's schedule moves on to
+        // the new today after the app sat open overnight, but not while an
+        // appointment's details are open; the task then starts again for that day.
         .task(id: AutoRefreshKey(day: store.day, isActive: scenePhase == .active)) {
             guard scenePhase == .active else { return }
             await Ticker.run(every: ScheduleStore.refreshInterval) {
-                await store.refresh()
+                await store.autoRefresh(isShowingAnAppointment: !path.isEmpty)
             }
+        }
+        // Back from yesterday's appointment: on to today right away.
+        .onChange(of: path) { _, links in
+            if links.isEmpty { store.catchUpToToday() }
         }
     }
 
@@ -322,7 +330,7 @@ struct TimeOffRow: View {
                 .imageScale(.large)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(store.shopTime.timeRange(block.start, block.end))
+                Text(store.timeText(for: block))
                     .font(.headline.monospacedDigit())
                 Text([store.barberName(for: block.barberId), block.reason].compactMap { $0 }.joined(separator: " · "))
                     .font(.subheadline)
@@ -335,7 +343,7 @@ struct TimeOffRow: View {
         }
         .padding(.vertical, 4)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Blocked, \(store.barberName(for: block.barberId)), \(store.shopTime.timeRange(block.start, block.end))\(block.reason.map { ", \($0)" } ?? "")")
+        .accessibilityLabel("Blocked, \(store.barberName(for: block.barberId)), \(store.timeText(for: block))\(block.reason.map { ", \($0)" } ?? "")")
         .accessibilityHint("Swipe left to remove.")
         .accessibilityIdentifier("timeOff-\(block.reason ?? store.barberName(for: block.barberId))")
     }

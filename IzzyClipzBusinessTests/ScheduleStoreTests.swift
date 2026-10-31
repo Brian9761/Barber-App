@@ -3,7 +3,7 @@ import XCTest
 @testable import IzzyClipzBusiness
 
 /// The schedule: loading a day, filtering, refreshing without losing what's
-/// shown, status changes, and blocked time.
+/// shown, status changes, blocked time, and a new day after the app sat open.
 @MainActor
 final class ScheduleStoreTests: XCTestCase {
     private var harness: Harness!
@@ -243,6 +243,49 @@ final class ScheduleStoreTests: XCTestCase {
         XCTAssertEqual(store.appointmentsOverlapping(shop).map(\.customer.name), ["Chris Sample"], "Cancelled ones don't count")
     }
 
+    /// Flowxbori is away Tuesday 10 AM to Friday 7 PM. On Wednesday the block shows its days,
+    /// and Remove says it removes all of it, not just Wednesday (it does).
+    func testABlockOverSeveralDaysShowsItsDaysAndRemoveSaysItsTheWholeBlock() async throws {
+        let tuesday = TestClock.today.adding(days: 1)
+        let friday = TestClock.today.adding(days: 4)
+        _ = try await harness.api.createTimeOff(.init(
+            barberId: "flowxbori", start: TestClock.at(10, on: tuesday), end: TestClock.at(19, on: friday), reason: "Vacation"
+        ))
+        let store = makeStore()
+        store.select(tuesday.adding(days: 1))
+        await store.refresh()
+        let block = try XCTUnwrap(store.timeOff.first { $0.reason == "Vacation" })
+        XCTAssertTrue(store.runsIntoOtherDays(block))
+        XCTAssertEqual(store.timeText(for: block), "Tue, Nov 3 at 10 AM – Fri, Nov 6 at 7 PM")
+        let question = store.removalQuestion(for: block)
+        XCTAssertEqual(question.message,
+                       "Flowxbori, Tue, Nov 3 at 10 AM – Fri, Nov 6 at 7 PM. This removes the whole block, not just Wed, Nov 4. Clients can book all of it again.")
+        XCTAssertEqual(question.button, "Remove the whole block")
+
+        await store.removeTimeOff(block)
+        XCTAssertFalse(harness.server.timeOff.contains { $0.reason == "Vacation" }, "Every day of it is gone")
+        XCTAssertTrue(store.timeOff.isEmpty)
+    }
+
+    /// The day's own blocks read as clock times, as before; one past midnight shows its days.
+    func testABlockOnTheDayReadsAsClockTimes() async throws {
+        let store = makeStore()
+        await store.refresh()
+        let lunch = try XCTUnwrap(store.timeOff.first)
+        XCTAssertFalse(store.runsIntoOtherDays(lunch))
+        XCTAssertEqual(store.timeText(for: lunch), "1 PM – 2 PM")
+        XCTAssertEqual(store.removalQuestion(for: lunch).message, "Flowxbori, 1 PM – 2 PM. Clients can book this time again.")
+        XCTAssertEqual(store.removalQuestion(for: lunch).button, "Remove blocked time")
+
+        let midnight = TestClock.shopTime.startOfDay(TestClock.today.adding(days: 1))
+        let evening = IzzyAPI.TimeOff(id: "evening", barberId: nil, start: TestClock.at(18), end: midnight)
+        XCTAssertFalse(store.runsIntoOtherDays(evening), "Ending at midnight, it's all on Monday")
+        let overnight = IzzyAPI.TimeOff(id: "overnight", barberId: nil, start: TestClock.at(18), end: TestClock.at(11, on: TestClock.today.adding(days: 1)))
+        XCTAssertEqual(store.timeText(for: overnight), "Mon, Nov 2 at 6 PM – Tue, Nov 3 at 11 AM")
+        XCTAssertEqual(store.removalQuestion(for: overnight).message,
+                       "Whole shop, Mon, Nov 2 at 6 PM – Tue, Nov 3 at 11 AM. This removes the whole block, not just today. Clients can book all of it again.")
+    }
+
     func testDefaultBlockStartsAtTheNextHalfHourToday() {
         let store = makeStore()
         let (start, end) = store.defaultBlockTimes()
@@ -250,6 +293,79 @@ final class ScheduleStoreTests: XCTestCase {
         XCTAssertEqual(end.timeIntervalSince(start), 3_600)
         store.showNextDay()
         XCTAssertEqual(store.shopTime.time(store.defaultBlockTimes().start), "10 AM", "Other days start at opening")
+    }
+
+    // MARK: A new day
+
+    /// The app sat open overnight: today's schedule moves on to the new today. A day the owner
+    /// picked stays, until it's today again.
+    func testTodaysScheduleMovesOnToTheNewToday() async {
+        let clock = MovableClock(TestClock.now)
+        let store = ScheduleStore(api: api, shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { clock.now })
+        await store.refresh()
+        XCTAssertFalse(store.catchUpToToday(), "Still Monday")
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(8, on: tuesday)
+        XCTAssertTrue(store.catchUpToToday())
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertEqual(store.loadState, .idle, "Tuesday loads afresh")
+        XCTAssertTrue(store.appointments.isEmpty, "Monday's list is gone")
+
+        // The owner looks back at Monday: the next morning, it stays on Monday.
+        store.showPreviousDay()
+        clock.now = TestClock.at(8, on: tuesday.adding(days: 1))
+        XCTAssertFalse(store.catchUpToToday())
+        XCTAssertEqual(store.day, TestClock.today)
+
+        // A day picked ahead becomes today, then moves on like today.
+        let thursday = tuesday.adding(days: 2)
+        store.select(thursday)
+        clock.now = TestClock.at(8, on: thursday)
+        XCTAssertFalse(store.catchUpToToday(), "Thursday is today now")
+        clock.now = TestClock.at(8, on: thursday.adding(days: 1))
+        XCTAssertTrue(store.catchUpToToday())
+        XCTAssertEqual(store.day, thursday.adding(days: 1))
+    }
+
+    /// Monday at 6:50 PM the owner opens the last client's details and locks the phone. On
+    /// Tuesday the auto-refresh keeps Monday while the details are open, so the appointment is
+    /// still there to mark completed; going back moves on to Tuesday.
+    func testAnAppointmentLeftOpenOvernightStaysUntilTheOwnerGoesBack() async throws {
+        let clock = MovableClock(TestClock.at(18, 50))
+        let store = ScheduleStore(api: api, shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { clock.now })
+        await store.autoRefresh(isShowingAnAppointment: false)
+        let last = try XCTUnwrap(store.appointments.last { $0.status == .booked })
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(9, on: tuesday)
+
+        await store.autoRefresh(isShowingAnAppointment: true)
+        XCTAssertEqual(store.day, TestClock.today, "Still Monday while the details are open")
+        XCTAssertEqual(store.appointment(withID: last.id)?.id, last.id, "Not \"Appointment not found\"")
+        XCTAssertEqual(store.lastUpdated, clock.now, "Monday was loaded again")
+        let marked = await store.setStatus(.completed, for: last)
+        XCTAssertTrue(marked)
+        XCTAssertEqual(store.appointment(withID: last.id)?.status, .completed)
+
+        // Back to the list.
+        XCTAssertTrue(store.catchUpToToday())
+        XCTAssertEqual(store.day, tuesday)
+        await store.autoRefresh(isShowingAnAppointment: false)
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertEqual(store.loadState, .loaded, "Tuesday loaded")
+        XCTAssertNil(store.appointment(withID: last.id))
+    }
+
+    /// With the list on screen, the auto-refresh moves on to the new today as before.
+    func testTheAutoRefreshMovesOnToTheNewToday() async {
+        let clock = MovableClock(TestClock.now)
+        let store = ScheduleStore(api: api, shopTime: TestClock.shopTime, catalog: .izzyClipz, clock: { clock.now })
+        await store.autoRefresh(isShowingAnAppointment: false)
+        XCTAssertEqual(store.loadState, .loaded)
+        let tuesday = TestClock.today.adding(days: 1)
+        clock.now = TestClock.at(8, on: tuesday)
+        await store.autoRefresh(isShowingAnAppointment: false)
+        XCTAssertEqual(store.day, tuesday)
+        XCTAssertEqual(store.loadState, .idle, "The screen's refresh starts again for Tuesday")
     }
 
     // MARK: Auto refresh

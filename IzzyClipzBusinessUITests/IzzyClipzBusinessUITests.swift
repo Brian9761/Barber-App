@@ -185,6 +185,38 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(row.label.contains("11:30 AM"))
     }
 
+    /// A walk-in who's here at 11:05 is booked from 11:05. Izzy has Andre at 11:30, so an
+    /// hour's cut with him doesn't fit in now; any barber who's free does.
+    func testAWalkInWhosHereIsBookedForNow() {
+        launch()
+        openTab("New booking")
+        chooseService("Haircut")
+        tap("barberPicker")
+        tapButton("Izzy · 1 hr · $40")
+        XCTAssertTrue(element("servicePicker").waitForExistence(timeout: 10))
+        let now = reveal("bookNow")
+        XCTAssertTrue(waitForLabel(now, containing: "Now (11:05 AM)"), "Got: \(now.label)")
+        now.tap()
+        XCTAssertTrue(waitUntil(element("bookNow"), toMatch: NSPredicate(format: "isSelected == true")), "Now wasn't picked")
+        typeInto("clientName", "Now Sample")
+        tap("bookButton")
+        XCTAssertTrue(waitForLabel(reveal("bookingError"), containing: "Izzy can't fit this in right now"))
+
+        reveal("barberPicker", searchingFirst: .up).tap()
+        tapButton("Any barber (first free)")
+        XCTAssertTrue(element("servicePicker").waitForExistence(timeout: 10))
+        tap("bookNow")
+        XCTAssertTrue(waitUntil(element("bookNow"), toMatch: NSPredicate(format: "isSelected == true")))
+        screenshot("O22-Walk-In-Now")
+        tap("bookButton")
+        XCTAssertTrue(waitForLabel(element("bookedTitle"), containing: "Now Sample"))
+        tap("bookedDone")
+
+        openTab("Schedule")
+        let row = reveal("appointment-Now Sample")
+        XCTAssertTrue(row.label.contains("11:05 AM"), "Got: \(row.label)")
+    }
+
     func testPhoneBookingWithABarber() {
         launch()
         openTab("New booking")
