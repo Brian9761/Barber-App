@@ -56,7 +56,6 @@ struct ProductsView: View {
                 Text(store.actionError ?? "")
             }
         }
-        .accessibilityIdentifier("productsScreen")
     }
 
     @ViewBuilder

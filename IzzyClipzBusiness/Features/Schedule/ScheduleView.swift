@@ -85,7 +85,6 @@ struct ScheduleView: View {
                 await store.refresh()
             }
         }
-        .accessibilityIdentifier("scheduleScreen")
     }
 
     @ViewBuilder

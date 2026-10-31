@@ -27,6 +27,7 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
 
     let isSimulated = true
     private(set) var state: TerminalState = .idle
+    let readerMessage: String? = nil
 
     /// When set, every payment resolves this way on its own, without the sheet.
     var automaticOutcome: Outcome?
@@ -40,6 +41,8 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
     /// The sheet's request, while one is up.
     private(set) var pendingTap: PendingTap?
     private var continuation: CheckedContinuation<Outcome, Never>?
+    /// Set by `cancel()` while preparing, so "Cancel" works there too.
+    private var cancelRequested = false
 
     /// How many times `collect` ran, and with which client secrets.
     private(set) var collectedSecrets: [String] = []
@@ -51,10 +54,18 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
 
     func prepare(locationId: String) async throws {
         if state == .ready { return }
+        cancelRequested = false
         state = .preparing(progress: 0)
-        for progress in [0.35, 0.7, 1.0] {
-            try await pause()
-            state = .preparing(progress: progress)
+        do {
+            for progress in [0.35, 0.7, 1.0] {
+                try await pause()
+                if cancelRequested { throw CancellationError() }
+                state = .preparing(progress: progress)
+            }
+        } catch {
+            cancelRequested = false
+            state = .idle
+            throw TerminalError.cancelled
         }
         state = .ready
     }
@@ -104,6 +115,7 @@ final class SimulatedPaymentTerminal: PaymentTerminal {
     }
 
     func cancel() {
+        if case .preparing = state { cancelRequested = true }
         choose(.customerCancels)
     }
 

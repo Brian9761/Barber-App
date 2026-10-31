@@ -103,6 +103,5 @@ struct HowToTapView: View {
                 }
             }
         }
-        .accessibilityIdentifier("howToTapScreen")
     }
 }

@@ -36,7 +36,6 @@ struct NewBookingView: View {
                 BookedSheet(appointment: item.appointment, store: store, workspace: workspace)
             }
         }
-        .accessibilityIdentifier("newBookingScreen")
     }
 
     // MARK: Sections
@@ -268,6 +267,5 @@ private struct BookedSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
-        .accessibilityIdentifier("bookedSheet")
     }
 }

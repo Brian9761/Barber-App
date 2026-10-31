@@ -24,9 +24,9 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     private(set) var state: TerminalState = .idle
     /// What the reader asks the app to show, e.g. "Remove card".
     private(set) var readerMessage: String?
-    /// Set when Apple's Tap to Pay terms were accepted during the last
-    /// connect: the app shows "How to Tap" next, as Apple asks.
-    var termsJustAccepted = false
+    /// Called when Apple's Tap to Pay terms were just accepted: the app
+    /// shows "How to Tap" next, as Apple asks.
+    @ObservationIgnored var onTermsAccepted: (() -> Void)?
 
     /// The name the customer sees on Apple's Tap to Pay screen.
     static let merchantDisplayName = "Izzy Clipz"
@@ -207,6 +207,7 @@ final class StripeTapToPayTerminal: PaymentTerminal {
                 updated = try await process(intent)
             }
             intents[clientSecret] = updated
+            paymentCancelable = nil
             state = .ready
             switch updated.status {
             case .succeeded:
@@ -219,6 +220,7 @@ final class StripeTapToPayTerminal: PaymentTerminal {
                 throw TerminalError.declined(message: "The card wasn't charged. Ask for another card and try again.")
             }
         } catch let error as TerminalError {
+            paymentCancelable = nil
             state = Terminal.shared.connectionStatus == .connected ? .ready : .idle
             throw error
         } catch {
@@ -343,7 +345,7 @@ final class StripeTapToPayTerminal: PaymentTerminal {
     }
 
     fileprivate func readerAcceptedTerms() {
-        termsJustAccepted = true
+        onTermsAccepted?()
     }
 
     // MARK: Errors

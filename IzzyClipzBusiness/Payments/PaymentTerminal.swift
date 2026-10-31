@@ -16,6 +16,10 @@ protocol PaymentTerminal: AnyObject {
     /// update when it changes.
     var state: TerminalState { get }
 
+    /// What the reader asks the app to show while it works, if anything
+    /// ("Remove card", "Try another card").
+    var readerMessage: String? { get }
+
     /// Connects the reader for `locationId` (the Stripe Terminal location the
     /// server reports). The first time on an iPhone, Apple configures it, which
     /// can take a minute or two: `state` reports `.preparing` with progress.

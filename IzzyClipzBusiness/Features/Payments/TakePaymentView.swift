@@ -48,7 +48,6 @@ struct TakePaymentView: View {
                 await checkout.syncPendingPayments()
             }
         }
-        .accessibilityIdentifier("takePaymentScreen")
     }
 
     // MARK: Mode
@@ -71,6 +70,7 @@ struct TakePaymentView: View {
                     .buttonStyle(.bordered)
                     .accessibilityIdentifier("checkStripeAgain")
             }
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("paymentsUnavailable")
         case .practice(let reason):
             VStack(alignment: .leading, spacing: 8) {
@@ -183,7 +183,8 @@ struct TakePaymentView: View {
         }
         .padding(12)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color(.secondarySystemBackground)))
-        .accessibilityIdentifier("paymentAppointment")
+        .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("paymentAppointment")
     }
 
     private var amount: some View {

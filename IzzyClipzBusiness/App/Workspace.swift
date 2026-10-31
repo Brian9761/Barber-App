@@ -23,6 +23,8 @@ final class Workspace {
     private(set) var keyWasRejected = false
     private(set) var health: IzzyAPI.Health?
     private(set) var healthError: String?
+    /// Set when the keychain wouldn't keep the owner key.
+    var keySaveError: String?
 
     /// Shows the app's own "How to Tap" steps (when Apple's can't be shown).
     var showsHowToTap = false
@@ -39,7 +41,7 @@ final class Workspace {
     let products: ProductsStore
 
     private static let setUpKey = "hasSetUpTapToPay"
-    private static let educationKey = "hasSeenHowToTap"
+    fileprivate static let educationKey = "hasSeenHowToTap"
 
     init(environment: AppEnvironment, ownerKey: String, status: IzzyAPI.OwnerStatus?) {
         self.environment = environment
@@ -69,9 +71,17 @@ final class Workspace {
         booking.onBooked = { [weak schedule] appointment in
             schedule?.didBook(appointment)
         }
+        checkout.onReaderConnected = { [weak self] in
+            self?.noteTapToPayConnected()
+        }
         #if canImport(StripeTerminal)
         if case .live = environment.backend {
             TerminalTokenProvider.shared.use { try await api.connectionToken() }
+        }
+        if let stripe = environment.terminal as? StripeTapToPayTerminal {
+            // Freshly accepted terms (a new iPhone or Stripe account): show "How to Tap" again.
+            let defaults = environment.defaults
+            stripe.onTermsAccepted = { defaults.set(false, forKey: Workspace.educationKey) }
         }
         #endif
     }
@@ -83,8 +93,10 @@ final class Workspace {
 
     /// Before signing out or switching keys.
     func tearDown() async {
+        checkout.onReaderConnected = nil
         #if canImport(StripeTerminal)
         TerminalTokenProvider.shared.use(nil)
+        (environment.terminal as? StripeTapToPayTerminal)?.onTermsAccepted = nil
         #endif
         await environment.terminal.disconnect()
         await environment.practiceTerminal.disconnect()

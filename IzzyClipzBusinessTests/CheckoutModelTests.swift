@@ -267,6 +267,41 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(makeCheckout(stripe: nil).mode, .checking)
     }
 
+    func testRealTapToPayWithStripeTestKeysSaysNoRealMoneyMoved() async {
+        // The simulated reader stands in for Tap to Pay; the mode is the real one.
+        let checkout = makeCheckout(stripe: .init(configured: true, mode: .test, locationId: "tml_1"), sampleServer: false, deviceSupported: true)
+        var connected = 0
+        checkout.onReaderConnected = { connected += 1 }
+        XCTAssertEqual(checkout.mode, .live(locationId: "tml_1", stripeTestMode: true))
+        checkout.receiptEmail = "client@example.com"
+        await charge(checkout, cents: 3500)
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertFalse(receipt.isTestMode)
+        XCTAssertTrue(receipt.stripeTestMode)
+        XCTAssertEqual(connected, 1, "A payment that connects Tap to Pay counts as setting it up")
+    }
+
+    func testLiveKeysAreRealMoney() async {
+        let checkout = makeCheckout(stripe: .init(configured: true, mode: .live, locationId: "tml_1"), sampleServer: false, deviceSupported: true)
+        await charge(checkout, cents: 3500)
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertFalse(receipt.isTestMode)
+        XCTAssertFalse(receipt.stripeTestMode)
+    }
+
+    func testCancelWhileTapToPayGetsReady() async {
+        terminal = SimulatedPaymentTerminal(automaticOutcome: .approve, stepDelay: .milliseconds(200))
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        let preparing = await eventually { checkout.phase == .preparing }
+        XCTAssertTrue(preparing)
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(checkout.phase, .cancelled)
+        XCTAssertEqual(api.createdPayments, 0, "Nothing was created before the reader was ready")
+    }
+
     // MARK: Entry
 
     func testAmountsOutsideTheServersRangeAreExplained() async {

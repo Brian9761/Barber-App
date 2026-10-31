@@ -26,7 +26,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         if signedIn {
             XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 30), "The app didn't open signed in")
         } else {
-            XCTAssertTrue(element("signInScreen").waitForExistence(timeout: 30), "The app didn't open on sign in")
+            XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 30), "The app didn't open on sign in")
         }
     }
 
@@ -106,7 +106,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     func testMarkCompletedReopenAndCancelAnAppointment() {
         launch()
         tap("appointment-Andre Sample")
-        XCTAssertTrue(element("appointmentDetail").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("detailClientName").waitForExistence(timeout: 10))
         XCTAssertEqual(element("detailClientName").label, "Andre Sample")
         XCTAssertTrue(element("callClient").exists)
         XCTAssertTrue(element("textClient").exists)
@@ -244,7 +244,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
         // The schedule still shows Andre's details: they're paid now.
         openTab("Schedule")
-        XCTAssertTrue(element("appointmentDetail").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("detailClientName").waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["$55.00"].waitForExistence(timeout: 10), "The appointment shows the payment")
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForLabel(element("appointment-Andre Sample"), containing: "Paid $55.00"))
@@ -284,7 +284,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         enterAmount("25")
         tap("tapToPayButton")
         XCTAssertTrue(waitForLabel(element("paymentValidation"), containing: "$0.50 to $1,000.00"))
-        XCTAssertFalse(element("paymentProgress").exists)
+        XCTAssertFalse(element("statusPreparing").exists || element("simulateApprove").exists, "No payment started")
     }
 
     func testWithoutStripeTakePaymentExplainsAndOffersTestMode() {
@@ -364,10 +364,10 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         screenshot("O18-Settings")
 
         tap("howToTap")
-        XCTAssertTrue(element("howToTapScreen").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("howToTapDone").waitForExistence(timeout: 10))
         screenshot("O19-How-To-Tap")
         tap("howToTapDone")
-        XCTAssertTrue(waitForDisappearance(of: element("howToTapScreen")))
+        XCTAssertTrue(waitForDisappearance(of: element("howToTapDone")))
 
         tap("signOut")
         tapDialogButton("Sign out", identifier: "confirmSignOut")

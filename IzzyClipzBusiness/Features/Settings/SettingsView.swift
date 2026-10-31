@@ -47,7 +47,6 @@ struct SettingsView: View {
                 Text("You'll need the owner key to sign in again.")
             }
         }
-        .accessibilityIdentifier("settingsScreen")
     }
 
     // MARK: Sections
@@ -182,7 +181,7 @@ struct SettingsView: View {
         } header: {
             Text("Owner key")
         } footer: {
-            Text("Kept in this iPhone's keychain. If the key changes on the server, replace it here.")
+            Text(workspace.keySaveError ?? "Kept in this iPhone's keychain. If the key changes on the server, replace it here.")
         }
     }
 

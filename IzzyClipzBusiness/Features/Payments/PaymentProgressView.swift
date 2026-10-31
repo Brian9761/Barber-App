@@ -31,7 +31,6 @@ struct PaymentProgressView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .interactiveDismissDisabled()
-        .accessibilityIdentifier("paymentProgress")
     }
 
     /// The simulated reader's "tap a card" request, while test mode waits for one.
@@ -65,11 +64,23 @@ struct PaymentProgressView: View {
         case .collecting:
             if let pending = simulatedTap {
                 SimulatedTapPanel(terminal: pending.0, amountCents: pending.1.amountCents)
+            } else if case .preparing(let progress) = checkout.currentTerminal.state {
+                // Reconnecting before the card can be read (after the app was in the background).
+                StatusBlock(symbol: "wave.3.right.circle", title: "Getting Tap to Pay ready", detail: "One moment.", id: "statusPreparing") {
+                    if let progress { ProgressView(value: progress) } else { ProgressView() }
+                }
+            } else if checkout.currentTerminal.state == .reconnecting {
+                StatusBlock(symbol: "wave.3.right.circle", title: "Reconnecting Tap to Pay", detail: "One moment.", id: "statusPreparing") {
+                    ProgressView()
+                }
             } else {
                 StatusBlock(
                 symbol: "wave.3.right.circle.fill",
                 title: "Waiting for the card",
-                detail: "\(Money.amount(amountCents)). Hold the iPhone out so the customer can tap their card, phone or watch near the top.",
+                detail: [
+                    "\(Money.amount(amountCents)). Hold the iPhone out so the customer can tap their card, phone or watch near the top.",
+                    checkout.currentTerminal.readerMessage,
+                ].compactMap { $0 }.joined(separator: "\n"),
                 id: "statusCollecting"
                 ) {
                     ProgressView()
@@ -106,7 +117,9 @@ struct PaymentProgressView: View {
         }
         var lines: [String] = []
         if let title = receipt.title { lines.append(title) }
-        if let email = receipt.receiptEmail {
+        if receipt.stripeTestMode {
+            lines.append("Stripe test mode: no real money moved, and Stripe doesn't email receipts in test mode.")
+        } else if let email = receipt.receiptEmail {
             lines.append("Stripe is emailing the receipt to \(email).")
         } else {
             lines.append("No receipt email was given.")
@@ -273,7 +286,6 @@ struct PaymentsTodayView: View {
         }
         .navigationTitle("Payments today")
         .refreshable { await checkout.loadPayments() }
-        .accessibilityIdentifier("paymentsToday")
     }
 }
 

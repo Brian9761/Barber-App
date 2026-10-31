@@ -70,6 +70,22 @@ final class SessionTests: XCTestCase {
         XCTAssertNil(model.workspace)
     }
 
+    func testAKeychainThatRefusesDoesntStopTheOwner() async throws {
+        let (model, _, _) = makeModel()
+        await model.start()
+        let failing = RefusingSecretStore()
+        let environment = model.environment
+        let refusing = AppModel(environment: AppEnvironment(
+            backend: environment.backend, secrets: failing, shopTime: environment.shopTime, clock: environment.clock,
+            defaults: environment.defaults, terminal: environment.terminal, practiceTerminal: environment.practiceTerminal,
+            deviceSupportsTapToPay: true, canShowAppleEducation: false
+        ))
+        await refusing.start()
+        await refusing.signIn(key: FakeServer.ownerKey)
+        let workspace = try XCTUnwrap(refusing.workspace, "Signed in anyway")
+        XCTAssertTrue(workspace.keySaveError?.contains("paste it again next time") == true)
+    }
+
     func testOtherErrorsHavePlainMessages() {
         XCTAssertTrue(AppModel.signInMessage(for: APIError.server(code: "server_error", message: "", status: 500)).contains("isn't answering"))
         XCTAssertTrue(AppModel.signInMessage(for: APIError.decoding("x")).contains("up to date"))
@@ -136,6 +152,14 @@ final class SessionTests: XCTestCase {
     }
 
     // MARK: Keychain
+
+    /// A keychain that refuses everything (a locked or broken one).
+    @MainActor
+    final class RefusingSecretStore: SecretStore {
+        func read() throws -> String? { nil }
+        func save(_ secret: String) throws { throw KeychainError(status: -25308) }
+        func delete() throws {}
+    }
 
     func testKeychainStoreSavesReadsReplacesAndDeletes() throws {
         let store = KeychainSecretStore(service: "com.izzyclipz.business.tests", account: UUID().uuidString)

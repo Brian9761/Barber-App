@@ -88,7 +88,6 @@ struct SignInView: View {
             .navigationTitle("Sign in")
             .navigationBarTitleDisplayMode(.inline)
         }
-        .accessibilityIdentifier("signInScreen")
     }
 
     private func signIn() {

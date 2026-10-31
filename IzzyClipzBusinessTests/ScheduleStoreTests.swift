@@ -130,6 +130,26 @@ final class ScheduleStoreTests: XCTestCase {
         XCTAssertTrue(store.updating.isEmpty)
     }
 
+    func testARefreshFromBeforeAChangeDoesntUndoIt() async throws {
+        let store = makeStore()
+        await store.refresh()
+        let andre = try XCTUnwrap(store.appointments.first { $0.customer.name == "Andre Sample" })
+        // The timer's refresh read the schedule just before the change was saved.
+        let gate = AsyncGate()
+        let before = try await harness.api.appointments(on: TestClock.today)
+        api.appointmentsHandler = { _ in
+            await gate.wait()
+            return before
+        }
+        let refresh = Task { await store.refresh() }
+        try await Task.sleep(for: .milliseconds(50))
+        let changed = await store.setStatus(.completed, for: andre)
+        XCTAssertTrue(changed)
+        await gate.open()
+        await refresh.value
+        XCTAssertEqual(store.appointment(withID: andre.id)?.status, .completed, "The old list didn't bring \"Booked\" back")
+    }
+
     func testReopeningATimeSomeoneElseTookExplainsWhy() async throws {
         let store = makeStore()
         await store.refresh()

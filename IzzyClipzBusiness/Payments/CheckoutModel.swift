@@ -86,7 +86,11 @@ final class CheckoutModel {
     struct Receipt: Equatable {
         let amountCents: Int
         let paymentIntentId: String?
+        /// The simulated reader: no card was read at all.
         let isTestMode: Bool
+        /// A real reader with Stripe's test keys: no real money moved, and
+        /// Stripe doesn't email receipts.
+        var stripeTestMode = false
         let receiptEmail: String?
         let title: String?
     }
@@ -133,6 +137,9 @@ final class CheckoutModel {
 
     @ObservationIgnored private(set) var active: ActivePayment?
     @ObservationIgnored private var flowTask: Task<Void, Never>?
+    /// Telling Stripe about PaymentIntents given up on, one after another and
+    /// never while the reader is busy with a payment (it does one thing at a time).
+    @ObservationIgnored private var abandoning: Task<Void, Never>?
 
     let terminal: any PaymentTerminal
     let practiceTerminal: SimulatedPaymentTerminal
@@ -144,6 +151,9 @@ final class CheckoutModel {
     @ObservationIgnored private let deviceSupportsTapToPay: Bool
     /// Called after a payment for an appointment succeeded, with its ID.
     @ObservationIgnored var onPaid: ((String) -> Void)?
+    /// Called when a payment connected real Tap to Pay (the first time on
+    /// this iPhone, that's its setup).
+    @ObservationIgnored var onReaderConnected: (() -> Void)?
 
     init(
         api: any OwnerAPI,
@@ -378,6 +388,9 @@ final class CheckoutModel {
         case .checking, .unavailable: phase = .editing; return
         }
 
+        // Anything given up on earlier is settled with Stripe first.
+        await abandoning?.value
+
         // 1. The reader. Practice and the simulated reader connect instantly.
         if terminal.state != .ready {
             phase = .preparing
@@ -388,13 +401,17 @@ final class CheckoutModel {
                 return
             }
         }
+        if case .live = mode { onReaderConnected?() }
 
         // 2. The PaymentIntent: the one already made for exactly this, or a new one.
         let payment: ActivePayment
         if let active, active.request == request, active.isPractice == isPractice {
             payment = active
         } else {
-            if let active { discard(active) }
+            if let active {
+                discard(active)
+                await abandoning?.value
+            }
             phase = .creating
             if isPractice {
                 payment = ActivePayment(paymentIntentId: nil, clientSecret: "practice_\(UUID().uuidString)", request: request, isPractice: true)
@@ -457,8 +474,11 @@ final class CheckoutModel {
             if recorded.isSucceeded {
                 pending.remove(paymentIntentId)
                 active = nil
+                var stripeTestMode = false
+                if case .live(_, let testKeys) = mode { stripeTestMode = testKeys }
                 phase = .succeeded(Receipt(
                     amountCents: recorded.amountCents, paymentIntentId: recorded.id, isTestMode: mode.isTestMode,
+                    stripeTestMode: stripeTestMode,
                     receiptEmail: payment.request.receiptEmail, title: payment.request.description
                 ))
                 if let appointmentId = recorded.appointmentId ?? payment.request.appointmentId {
@@ -489,7 +509,11 @@ final class CheckoutModel {
         if let id = payment.paymentIntentId { pending.remove(id) }
         let terminal = self.terminal
         let secret = payment.clientSecret
-        Task { await terminal.abandon(clientSecret: secret) }
+        let previous = abandoning
+        abandoning = Task {
+            await previous?.value
+            await terminal.abandon(clientSecret: secret)
+        }
     }
 
     private func failurePhase(for error: Error) -> Phase {

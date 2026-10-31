@@ -86,9 +86,9 @@ final class AppModel {
         defer { isSigningIn = false }
         do {
             let status = try await environment.api(ownerKey: key).ownerStatus()
-            try environment.secrets.save(key)
             signInError = nil
             let workspace = makeWorkspace(ownerKey: key, status: status)
+            workspace.keySaveError = saveKey(key)
             phase = .signedIn(workspace)
             await workspace.didSignIn()
         } catch is CancellationError {
@@ -107,9 +107,9 @@ final class AppModel {
         }
         do {
             let status = try await environment.api(ownerKey: key).ownerStatus()
-            try environment.secrets.save(key)
             if let old = workspace { await old.tearDown() }
             let workspace = makeWorkspace(ownerKey: key, status: status)
+            workspace.keySaveError = saveKey(key)
             phase = .signedIn(workspace)
             await workspace.didSignIn()
             return nil
@@ -124,6 +124,17 @@ final class AppModel {
         signInError = nil
         self.notice = notice
         phase = .signedOut
+    }
+
+    /// Keeps the key in the keychain. A keychain that refuses doesn't stop
+    /// the owner working: they're told they'll need to paste it again.
+    private func saveKey(_ key: String) -> String? {
+        do {
+            try environment.secrets.save(key)
+            return nil
+        } catch {
+            return "This iPhone couldn't keep the owner key, so you'll need to paste it again next time. \(ErrorText.message(for: error))"
+        }
     }
 
     private func makeWorkspace(ownerKey: String, status: IzzyAPI.OwnerStatus? = nil) -> Workspace {

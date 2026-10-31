@@ -104,7 +104,6 @@ struct ProductEditorView: View {
                 Text("It disappears from the customer app.")
             }
         }
-        .accessibilityIdentifier("productEditor")
     }
 
     // MARK: Photo
@@ -115,7 +114,7 @@ struct ProductEditorView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 200)
                 .listRowInsets(EdgeInsets())
-            PhotosPicker(selection: $pickerItem, matching: .images, photoLibrary: .shared()) {
+            PhotosPicker(selection: $pickerItem, matching: .images) {
                 Label("Choose from library", systemImage: "photo.on.rectangle")
                     .frame(minHeight: BusinessTheme.minimumTapSize)
             }

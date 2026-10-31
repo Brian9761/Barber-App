@@ -163,6 +163,8 @@ final class ScheduleStore {
         defer { updating.remove(appointment.id) }
         do {
             let updated = try await api.setStatus(status, ofAppointment: appointment.id)
+            // A refresh that started before this change would bring the old status back.
+            generation += 1
             replace(updated)
             return true
         } catch is CancellationError {
@@ -196,6 +198,7 @@ final class ScheduleStore {
         guard end > start else { throw ScheduleError(message: "The end has to be after the start.") }
         do {
             let block = try await api.createTimeOff(IzzyAPI.NewTimeOff(barberId: barberId, start: start, end: end, reason: reason))
+            generation += 1
             let dayStart = shopTime.startOfDay(day)
             let dayEnd = shopTime.startOfDay(day.adding(days: 1))
             if block.start < dayEnd, dayStart < block.end {
@@ -213,6 +216,7 @@ final class ScheduleStore {
         defer { removingTimeOff.remove(block.id) }
         do {
             try await api.deleteTimeOff(id: block.id)
+            generation += 1
             timeOff.removeAll { $0.id == block.id }
         } catch let error as APIError where error.code == IzzyAPI.ErrorCode.notFound {
             // Already gone (removed on another phone).

@@ -99,7 +99,6 @@ struct AppointmentDetailView: View {
         } message: {
             Text(paymentBusyMessage ?? "")
         }
-        .accessibilityIdentifier("appointmentDetail")
     }
 
     @ViewBuilder
