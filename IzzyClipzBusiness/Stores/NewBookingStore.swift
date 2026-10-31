@@ -47,6 +47,12 @@ final class NewBookingStore {
     @ObservationIgnored private let api: any OwnerAPI
     @ObservationIgnored private let clock: () -> Date
     @ObservationIgnored private var generation = 0
+    /// The booking last sent (as sent) and its `Idempotency-Key`. Book again with the same
+    /// booking, after an offline error or an answer that never arrived, sends the same key, so
+    /// the server answers with the appointment that went through instead of booking a second
+    /// barber or saying the shop's own time was taken. Anything that changes what's sent gets a
+    /// new key, and so does the next booking once this one is made.
+    @ObservationIgnored private var attempt: (body: Data, key: IzzyAPI.IdempotencyKey)?
     @ObservationIgnored var onBooked: ((IzzyAPI.Appointment) -> Void)?
 
     /// How far "Next open slot" looks ahead.
@@ -229,8 +235,19 @@ final class NewBookingStore {
         return nil
     }
 
-    /// `POST /api/owner/appointments`. On "slot taken" the times are loaded
-    /// again so the owner can pick another one.
+    /// The key to send `request` with: the last one if this is the same booking again.
+    func idempotencyKey(for request: IzzyAPI.NewAppointment) -> IzzyAPI.IdempotencyKey {
+        // What's sent decides (names are trimmed and numbers put in E.164 on the way).
+        let body = (try? IzzyAPI.makeEncoder().encode(request)) ?? Data(UUID().uuidString.utf8)
+        if let attempt, attempt.body == body { return attempt.key }
+        let key = IzzyAPI.IdempotencyKey.generate()
+        attempt = (body, key)
+        return key
+    }
+
+    /// `POST /api/owner/appointments`, with the same key as the last try when
+    /// it's the same booking (see `idempotencyKey(for:)`). On "slot taken" the
+    /// times are loaded again so the owner can pick another one.
     func book() async {
         guard !isBooking else { return }
         if let missing {
@@ -248,10 +265,17 @@ final class NewBookingStore {
             customer: IzzyAPI.NewCustomer(name: clientName, phone: phone.isEmpty ? nil : phone),
             note: note
         )
+        let key = idempotencyKey(for: request)
         do {
-            let appointment = try await api.createAppointment(request)
-            booked = appointment
+            let appointment = try await api.createAppointment(request, idempotencyKey: key)
+            attempt = nil
             onBooked?(appointment)
+            guard appointment.status == .booked else {
+                // An earlier try went through, but it has been cancelled (or closed) since.
+                formError = "Your first try went through, but that appointment isn't booked any more. Book again to add it back."
+                return
+            }
+            booked = appointment
         } catch APIError.slotTaken {
             formError = "Someone just took that time. Pick another one."
             selectedSlot = nil
@@ -269,6 +293,7 @@ final class NewBookingStore {
 
     /// After the confirmation: ready for the next walk-in, same service.
     func startOver() {
+        attempt = nil
         booked = nil
         clientName = ""
         clientPhone = ""

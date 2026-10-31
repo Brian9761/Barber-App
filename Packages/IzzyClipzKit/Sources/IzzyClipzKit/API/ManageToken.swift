@@ -84,3 +84,38 @@ extension IzzyAPI {
         }
     }
 }
+
+extension IzzyAPI {
+    /// The owner app's key for one walk-in or phone booking, sent as `Idempotency-Key` with
+    /// `POST /api/owner/appointments`: 32 random bytes in base64url, the same form as a manage
+    /// token.
+    ///
+    /// Make one for each booking and send the same one when the owner books it again after an
+    /// answer that never arrived (offline, a dropped connection): if the first try went through,
+    /// the server answers with that appointment (200) instead of booking a second barber or
+    /// saying the shop's own time was taken. A booking that changed, and the next booking, get a
+    /// new key. The server keeps only its SHA-256.
+    public struct IdempotencyKey: RawRepresentable, Hashable, Sendable {
+        public let rawValue: String
+
+        /// `nil` unless `rawValue` is what `generate()` makes (see `ManageToken.init(rawValue:)`).
+        public init?(rawValue: String) {
+            guard let token = ManageToken(rawValue: rawValue) else { return nil }
+            self.init(token)
+        }
+
+        private init(_ token: ManageToken) {
+            rawValue = token.rawValue
+        }
+
+        /// A new key from the system's cryptographically secure random number generator.
+        public static func generate() -> IdempotencyKey {
+            IdempotencyKey(ManageToken.generate())
+        }
+
+        /// A new key from `generator`. Use `generate()` in the apps; this is for tests.
+        public static func generate<Generator: RandomNumberGenerator>(using generator: inout Generator) -> IdempotencyKey {
+            IdempotencyKey(ManageToken.generate(using: &generator))
+        }
+    }
+}

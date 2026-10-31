@@ -314,7 +314,7 @@ final class ClientTests: XCTestCase {
                                      "customer": .object(["name": .string("Walk-in")])])) {
                 _ = try await $0.createAppointment(IzzyAPI.NewAppointment(
                     target: .offering(id: "carlos-rafael/x"), start: utc(2026, 11, 2, 19), customer: IzzyAPI.NewCustomer(name: "Walk-in")
-                ))
+                ), idempotencyKey: .generate())
             },
             OwnerCall(name: "status", reply: .fixture("appointment.json"), method: "PATCH", path: "/api/owner/appointments/a1",
                       body: .object(["status": .string("noShow")])) {
@@ -393,6 +393,52 @@ final class ClientTests: XCTestCase {
                 XCTAssertNil(sent.body, call.name)
             }
         }
+    }
+
+    /// A walk-in carries its Idempotency-Key, Book again sends the same one, and the server's 200
+    /// for a booking that key already made decodes like a new booking.
+    func testAWalkInSendsItsIdempotencyKey() async throws {
+        let key = IzzyAPI.IdempotencyKey.generate()
+        let walkIn = IzzyAPI.NewAppointment(
+            target: .anyBarber(serviceId: "haircut"), start: utc(2026, 11, 2, 19), customer: IzzyAPI.NewCustomer(name: "Walk-in")
+        )
+        StubURLProtocol.reply { _ in .fixture("appointment.json", status: 201) }
+        let first = try await client.createAppointment(walkIn, idempotencyKey: key)
+        XCTAssertEqual(try only().header("Idempotency-Key"), key.rawValue)
+
+        StubURLProtocol.reply { _ in .fixture("appointment.json", status: 200) }
+        let again = try await client.createAppointment(walkIn, idempotencyKey: key)
+        XCTAssertEqual(again, first)
+        let sent = try only()
+        XCTAssertEqual(sent.header("Idempotency-Key"), key.rawValue)
+        XCTAssertEqual(sent.header("Authorization"), "Bearer " + ownerKey)
+        XCTAssertNil(sent.header("X-Manage-Token"))
+
+        // The same key for another booking is turned down in the server's words.
+        StubURLProtocol.reply { _ in .json(400, #"{"error":{"code":"invalid_request","message":"That booking key was already used for another booking."}}"#) }
+        await assertThrows(.server(code: "invalid_request", message: "That booking key was already used for another booking.", status: 400)) {
+            try await self.client.createAppointment(walkIn, idempotencyKey: key)
+        }
+
+        // Nothing else sends one.
+        StubURLProtocol.reply { _ in .fixture("health.json") }
+        _ = try await client.health()
+        XCTAssertNil(try only().header("Idempotency-Key"))
+    }
+
+    func testIdempotencyKeysAreRandomAndWellFormed() {
+        var keys: Set<String> = []
+        for _ in 0..<100 {
+            let key = IzzyAPI.IdempotencyKey.generate()
+            XCTAssertEqual(key.rawValue.count, 43)
+            XCTAssertNotNil(IzzyAPI.ManageToken(rawValue: key.rawValue), "the server checks it like a manage token")
+            XCTAssertEqual(IzzyAPI.IdempotencyKey(rawValue: key.rawValue), key)
+            keys.insert(key.rawValue)
+        }
+        XCTAssertEqual(keys.count, 100)
+        XCTAssertNil(IzzyAPI.IdempotencyKey(rawValue: ""))
+        XCTAssertNil(IzzyAPI.IdempotencyKey(rawValue: String(repeating: "A", count: 42) + "B"))
+        XCTAssertNil(IzzyAPI.IdempotencyKey(rawValue: String(repeating: "A", count: 42) + "\n"))
     }
 
     func testPhotoUploadSendsTheJPEGItself() async throws {

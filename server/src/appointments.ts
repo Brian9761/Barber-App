@@ -87,30 +87,34 @@ const tokenUsed = () => new ApiError('invalid_request', 'That booking token was 
 const MANAGE_TOKEN_INDEX = 'appointments_manage_token_hash_key';
 
 /**
- * The app's own manage token from `X-Manage-Token`, if it sent one. It must be
- * exactly what the server would make (32 random bytes, base64url); anything
- * else, an empty header included, is a 400.
+ * A key the app made itself and sent in `header`, if it sent one. It must be
+ * exactly what the server makes for a manage token (32 random bytes,
+ * base64url); anything else, an empty header included, is a 400.
  */
-function clientManageToken(request: Request): string | undefined {
-  const header = request.headers.get('x-manage-token');
-  if (header === null) return undefined;
-  const token = header.trim();
-  if (!isNewManageToken(token)) {
-    throw new ApiError('invalid_request', 'X-Manage-Token must be 32 random bytes in base64url (43 characters).');
+function appMadeKey(request: Request, header: 'X-Manage-Token' | 'Idempotency-Key'): string | undefined {
+  const value = request.headers.get(header);
+  if (value === null) return undefined;
+  const key = value.trim();
+  if (!isNewManageToken(key)) {
+    throw new ApiError('invalid_request', `${header} must be 32 random bytes in base64url (43 characters).`);
   }
-  return token;
+  return key;
+}
+
+/** The app's own manage token from `X-Manage-Token`, if it sent one. */
+function clientManageToken(request: Request): string | undefined {
+  return appMadeKey(request, 'X-Manage-Token');
 }
 
 /**
- * Whether `row` is the booking `body` asks for: the same target, asked for the
- * same way (that offering, or that service with "any barber", whichever barber
- * the server picked), the same start and the same phone number. The name, email
- * and note aren't compared.
+ * Whether `row` was booked for the target `body` asks for, asked for the same
+ * way: that offering, or that service with "any barber" (whichever barber the
+ * server picked).
  */
-function sameBooking(row: AppointmentRow, body: CustomerBooking): boolean {
-  if (row.booked_by !== 'customer') return false;
-  if (row.start_at.getTime() !== body.start.getTime()) return false;
-  if (row.customer_phone !== body.customer.phone) return false;
+function sameTarget(
+  row: AppointmentRow,
+  body: { offeringId?: string | undefined; serviceId?: string | undefined; barberId?: string | undefined },
+): boolean {
   if (body.offeringId !== undefined) {
     return (
       !row.any_barber &&
@@ -120,6 +124,18 @@ function sameBooking(row: AppointmentRow, body: CustomerBooking): boolean {
     );
   }
   return row.any_barber && body.barberId === 'any' && body.serviceId === row.service_id;
+}
+
+/**
+ * Whether `row` is the booking `body` asks for: the same target, asked for the
+ * same way, the same start and the same phone number. The name, email and note
+ * aren't compared.
+ */
+function sameBooking(row: AppointmentRow, body: CustomerBooking): boolean {
+  if (row.booked_by !== 'customer') return false;
+  if (row.start_at.getTime() !== body.start.getTime()) return false;
+  if (row.customer_phone !== body.customer.phone) return false;
+  return sameTarget(row, body);
 }
 
 /**
@@ -293,21 +309,76 @@ const ownerBooking = z.object({
   note: note.optional(),
 });
 
+type OwnerBooking = z.output<typeof ownerBooking>;
+
+const keyUsed = () => new ApiError('invalid_request', 'That booking key was already used for another booking.');
+
+/** The unique index on `appointments.idempotency_key_hash` (migrations/003). */
+const IDEMPOTENCY_KEY_INDEX = 'appointments_idempotency_key_hash_key';
+
+/**
+ * Whether `row` is the walk-in or phone booking `body` asks for: booked by the
+ * shop, for the same target asked for the same way, at the same start (to the
+ * minute), for the same client name and phone number (or none). The email and
+ * note aren't compared.
+ */
+function sameShopBooking(row: AppointmentRow, body: OwnerBooking, start: Date): boolean {
+  if (row.booked_by !== 'shop') return false;
+  if (row.start_at.getTime() !== start.getTime()) return false;
+  if (row.customer_name !== body.customer.name) return false;
+  if (row.customer_phone !== (body.customer.phone ?? null)) return false;
+  return sameTarget(row, body);
+}
+
+/**
+ * Book again after a lost answer: 200 with the appointment that key already
+ * booked, as it is now. `null` if the key is new; a 400 if it booked something else.
+ */
+async function ownerReplay(db: Queryable, key: string, body: OwnerBooking, start: Date): Promise<Response | null> {
+  const { rows } = await db.query<AppointmentRow>('SELECT * FROM appointments WHERE idempotency_key_hash = $1', [
+    hashManageToken(key),
+  ]);
+  const row = rows[0];
+  if (!row) return null;
+  if (!sameShopBooking(row, body, start)) throw keyUsed();
+  return json({ appointment: appointmentJSON(row) });
+}
+
 export async function postOwnerAppointment(ctx: Context): Promise<Response> {
   requireOwner(ctx.request, ctx.deps.config);
+  // The owner app's key for this booking, so Book again after a lost answer can't book twice.
+  const key = appMadeKey(ctx.request, 'Idempotency-Key');
   const body = parse(ownerBooking, await readJsonObject(ctx.request));
-  const target = resolveTarget(ctx.deps.catalog, body);
   // The shop can book "now": any whole minute inside opening hours, no lead time.
   const start = floorToMinute(body.start);
-  preflight(ctx, target, start, 'shop');
-  const { row } = await createAppointment(ctx.deps, {
-    target,
-    start,
-    customer: { name: body.customer.name, phone: body.customer.phone ?? null, email: body.customer.email ?? null },
-    note: body.note ?? null,
-    mode: 'shop',
-  });
-  return json({ appointment: appointmentJSON(row) }, 201);
+
+  // A retry is answered before the time rules, like the customers' (see postAppointment).
+  if (key) {
+    const replayed = await ownerReplay(ctx.deps.db, key, body, start);
+    if (replayed) return replayed;
+  }
+
+  try {
+    const target = resolveTarget(ctx.deps.catalog, body);
+    preflight(ctx, target, start, 'shop');
+    const { row } = await createAppointment(ctx.deps, {
+      target,
+      start,
+      customer: { name: body.customer.name, phone: body.customer.phone ?? null, email: body.customer.email ?? null },
+      note: body.note ?? null,
+      mode: 'shop',
+      idempotencyKey: key,
+    });
+    return json({ appointment: appointmentJSON(row) }, 201);
+  } catch (error) {
+    // Another copy of this request may have booked it meanwhile: answer like a retry.
+    if (key) {
+      const replayed = await ownerReplay(ctx.deps.db, key, body, start);
+      if (replayed) return replayed;
+      if (pgErrorCode(error) === UNIQUE_VIOLATION && pgConstraint(error) === IDEMPOTENCY_KEY_INDEX) throw keyUsed();
+    }
+    throw error;
+  }
 }
 
 const statusPatch = z.object({

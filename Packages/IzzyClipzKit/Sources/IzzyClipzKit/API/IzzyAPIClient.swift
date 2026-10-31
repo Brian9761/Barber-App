@@ -134,8 +134,9 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.ownerAppointments(from: from, to: to)).appointments
     }
 
-    public func createAppointment(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.Appointment {
-        try await send(try encoded { try IzzyAPI.Endpoints.createOwnerAppointment(appointment) }).appointment
+    /// Answers 201 for a new booking and 200 for one this key already made; both decode the same way.
+    public func createAppointment(_ appointment: IzzyAPI.NewAppointment, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Appointment {
+        try await send(try encoded { try IzzyAPI.Endpoints.createOwnerAppointment(appointment, idempotencyKey: idempotencyKey) }).appointment
     }
 
     public func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {

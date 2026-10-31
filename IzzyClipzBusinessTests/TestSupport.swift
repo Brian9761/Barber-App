@@ -57,7 +57,9 @@ final class ScriptedAPI: OwnerAPI {
         return try await base.appointments(on: date)
     }
     func appointments(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.Appointment] { try await base.appointments(from: from, to: to) }
-    func createAppointment(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.Appointment { try await base.createAppointment(appointment) }
+    func createAppointment(_ appointment: IzzyAPI.NewAppointment, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Appointment {
+        try await base.createAppointment(appointment, idempotencyKey: idempotencyKey)
+    }
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {
         try await base.setStatus(status, ofAppointment: id)
     }

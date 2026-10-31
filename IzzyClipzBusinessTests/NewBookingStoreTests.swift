@@ -139,7 +139,7 @@ final class NewBookingStoreTests: XCTestCase {
         do {
             _ = try await harness.api.createAppointment(.init(
                 target: .anyBarber(serviceId: "haircut"), start: slot.start, customer: .init(name: "Sample", phone: "(442) 911-3053")
-            ))
+            ), idempotencyKey: .generate())
             XCTFail("An N11 exchange was booked")
         } catch {
             XCTAssertEqual(error as? APIError, .server(
@@ -196,6 +196,166 @@ final class NewBookingStoreTests: XCTestCase {
         store.selectedSlot = store.slots.first
         await store.book()
         XCTAssertNotNil(store.booked)
+    }
+
+    // MARK: Book again after a lost answer
+
+    /// The walk-in went through but the answer never arrived: Book again sends the same
+    /// Idempotency-Key and gets that appointment, instead of putting the client in a second
+    /// barber's chair.
+    func testALostAnswerThenBookAgainMakesOneAppointment() async throws {
+        harness.server.options.loseNextBookingAnswer = true
+        let store = makeStore()
+        store.selectService("haircut")
+        await store.findNextOpenSlot()
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        XCTAssertNil(store.booked)
+        XCTAssertEqual(store.formError, APIError.offline.userMessage)
+        XCTAssertNotNil(store.selectedSlot, "The form stays as it was")
+        let first = try XCTUnwrap(harness.appointment(named: "Walk-in Sample"), "It went through on the server")
+
+        await store.book()
+        let appointment = try XCTUnwrap(store.booked)
+        XCTAssertNil(store.formError)
+        XCTAssertEqual(appointment, first)
+        XCTAssertEqual(harness.server.appointments.filter { $0.customer.name == "Walk-in Sample" }.map(\.id), [first.id],
+                       "One appointment, one barber")
+        XCTAssertEqual(harness.server.bookingKeys.count, 2)
+        XCTAssertEqual(Set(harness.server.bookingKeys).count, 1, "Both tries sent the same key")
+        XCTAssertEqual(booked.map(\.id), [first.id], "The schedule hears about it once")
+    }
+
+    /// With a specific barber, Book again used to find the shop's own booking in the way and say
+    /// "Someone just took that time".
+    func testBookAgainWithASpecificBarberIsntSlotTaken() async throws {
+        harness.server.options.loseNextBookingAnswer = true
+        let store = makeStore()
+        store.selectService("haircut")
+        let julian = try XCTUnwrap(store.offerings.first { $0.barberID == "julian-ramos" })
+        store.selectChoice(.offering(julian.id))
+        await store.loadSlots()
+        store.selectedSlot = store.slots.first
+        store.clientName = "Phone Sample"
+        store.clientPhone = "(442) 555-0123"
+        await store.book()
+        XCTAssertEqual(store.formError, APIError.offline.userMessage)
+        await store.book()
+        XCTAssertNotEqual(store.formError, "Someone just took that time. Pick another one.")
+        XCTAssertEqual(store.booked?.customer.phone, "+14425550123")
+        XCTAssertEqual(harness.server.appointments.filter { $0.customer.name == "Phone Sample" }.count, 1)
+    }
+
+    /// One key per booking: the same booking (as sent) keeps it, anything that changes what's
+    /// sent gets a new one.
+    func testAnythingThatChangesTheBookingGetsANewKey() {
+        let store = makeStore()
+        let start = TestClock.at(15)
+        func request(name: String = "Sample", phone: String? = nil, note: String? = nil, start: Date? = nil,
+                     target: IzzyAPI.BookingTarget = .anyBarber(serviceId: "haircut")) -> IzzyAPI.NewAppointment {
+            IzzyAPI.NewAppointment(target: target, start: start ?? TestClock.at(15), customer: .init(name: name, phone: phone), note: note)
+        }
+        let key = store.idempotencyKey(for: request())
+        XCTAssertEqual(store.idempotencyKey(for: request()), key, "Book again")
+        XCTAssertEqual(store.idempotencyKey(for: request(name: " Sample ", note: " ")), key, "The same once sent: spaces are trimmed")
+        var previous = key
+        let changes = [
+            request(name: "Sample Two"),
+            request(name: "Sample Two", phone: "(442) 555-0123"),
+            request(name: "Sample Two", phone: "(442) 555-0123", note: "Beard too"),
+            request(name: "Sample Two", phone: "(442) 555-0123", note: "Beard too", start: start.addingTimeInterval(1_800)),
+            request(name: "Sample Two", phone: "(442) 555-0123", note: "Beard too", start: start.addingTimeInterval(1_800),
+                    target: .offering(id: "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a")),
+        ]
+        for changed in changes {
+            let next = store.idempotencyKey(for: changed)
+            XCTAssertNotEqual(next, previous, "\(changed)")
+            XCTAssertEqual(store.idempotencyKey(for: changed), next)
+            previous = next
+        }
+        // The number as typed doesn't matter, only the number.
+        XCTAssertEqual(store.idempotencyKey(for: request(name: "Sample Two", phone: "442.555.0123", note: "Beard too", start: start.addingTimeInterval(1_800),
+                                                         target: .offering(id: "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a"))), previous)
+    }
+
+    /// A change after a lost answer is a new booking the owner asked for; once one is booked,
+    /// the next walk-in gets a key of its own, even for the same client and time.
+    func testAChangedOrNextBookingIsntTakenForBookAgain() async throws {
+        harness.server.options.loseNextBookingAnswer = true
+        let store = makeStore()
+        store.selectService("haircut")
+        await store.findNextOpenSlot()
+        let slot = try XCTUnwrap(store.selectedSlot)
+        store.clientName = "Sample One"
+        await store.book()
+        XCTAssertNotNil(harness.appointment(named: "Sample One"))
+        store.clientName = "Sample Two"
+        await store.book()
+        XCTAssertEqual(store.booked?.customer.name, "Sample Two")
+        XCTAssertEqual(Set(harness.server.bookingKeys).count, 2)
+        XCTAssertNotNil(harness.appointment(named: "Sample One"), "Both were booked, as the owner asked")
+
+        // Booked: the very same details again would be another walk-in, with a key of its own.
+        let same = IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: slot.start, customer: .init(name: "Sample Two"), note: "")
+        XCTAssertFalse(harness.server.bookingKeys.contains(store.idempotencyKey(for: same)))
+        store.startOver()
+        await store.findNextOpenSlot()
+        store.clientName = "Sample Two"
+        await store.book()
+        XCTAssertNotNil(store.booked)
+        XCTAssertEqual(Set(harness.server.bookingKeys).count, 3)
+        XCTAssertEqual(harness.server.appointments.filter { $0.customer.name == "Sample Two" }.count, 2,
+                       "A second walk-in with the same name is booked, not mistaken for the first")
+    }
+
+    /// The first try went through, then was cancelled from the schedule before Book again: say
+    /// so, and the next Book books it afresh.
+    func testBookAgainFindsItCancelledSince() async throws {
+        harness.server.options.loseNextBookingAnswer = true
+        let store = makeStore()
+        store.selectService("haircut")
+        await store.findNextOpenSlot()
+        store.clientName = "Walk-in Sample"
+        await store.book()
+        let first = try XCTUnwrap(harness.appointment(named: "Walk-in Sample"))
+        _ = try await harness.api.setStatus(.cancelled, ofAppointment: first.id)
+
+        await store.book()
+        XCTAssertNil(store.booked)
+        XCTAssertEqual(store.formError, "Your first try went through, but that appointment isn't booked any more. Book again to add it back.")
+        XCTAssertEqual(booked.map(\.status), [.cancelled], "The schedule shows it as it is")
+
+        await store.book()
+        let again = try XCTUnwrap(store.booked)
+        XCTAssertNotEqual(again.id, first.id)
+        XCTAssertEqual(again.status, .booked)
+    }
+
+    /// The sample server follows the real one: the same key with another booking is a 400.
+    func testTheSampleServerTurnsDownAKeyUsedForAnotherBooking() async throws {
+        let key = IzzyAPI.IdempotencyKey.generate()
+        let walkIn = IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: TestClock.at(15), customer: .init(name: "Sample"))
+        let first = try await harness.api.createAppointment(walkIn, idempotencyKey: key)
+        let again = try await harness.api.createAppointment(
+            IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: TestClock.at(15), customer: .init(name: " Sample "), note: "Changed"),
+            idempotencyKey: key
+        )
+        XCTAssertEqual(again, first, "The note may differ, as on the server")
+        for other in [
+            IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: TestClock.at(16), customer: .init(name: "Sample")),
+            IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: TestClock.at(15), customer: .init(name: "Someone Else")),
+            IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: TestClock.at(15), customer: .init(name: "Sample", phone: "4425550123")),
+        ] {
+            do {
+                _ = try await harness.api.createAppointment(other, idempotencyKey: key)
+                XCTFail("Booked \(other) with a used key")
+            } catch {
+                XCTAssertEqual(error as? APIError, .server(
+                    code: "invalid_request", message: "That booking key was already used for another booking.", status: 400
+                ))
+            }
+        }
+        XCTAssertEqual(harness.server.appointments.filter { $0.customer.name == "Sample" }.count, 1)
     }
 
     func testChangingTheDayOrBarberClearsTheTime() async throws {

@@ -98,6 +98,8 @@ export interface NewAppointment {
   mode: BookingMode;
   /** The customer's own manage token (`X-Manage-Token`), used instead of a new one. Ignored for the shop. */
   manageToken?: string | undefined;
+  /** The owner app's `Idempotency-Key` for this booking; only its hash is stored. Shop bookings only. */
+  idempotencyKey?: string | undefined;
 }
 
 export const MAX_UPCOMING_PER_PHONE = 3;
@@ -246,8 +248,8 @@ async function insertAppointment(
     `INSERT INTO appointments (
        id, offering_id, service_id, barber_id, service_name, barber_name, price_label, price_cents, price_kind,
        start_at, end_at, status, cancelled_by, booked_by, customer_name, customer_phone, customer_email, note,
-       manage_token_hash, any_barber, payment_status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'booked', NULL, $12, $13, $14, $15, $16, $17, $19, 'unpaid', $18, $18)
+       manage_token_hash, any_barber, idempotency_key_hash, payment_status, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'booked', NULL, $12, $13, $14, $15, $16, $17, $19, $20, 'unpaid', $18, $18)
      RETURNING *`,
     [
       id,
@@ -269,6 +271,7 @@ async function insertAppointment(
       manageToken ? hashManageToken(manageToken) : null,
       now,
       input.target.kind === 'any',
+      input.mode === 'shop' && input.idempotencyKey ? hashManageToken(input.idempotencyKey) : null,
     ],
   );
   const row = rows[0];

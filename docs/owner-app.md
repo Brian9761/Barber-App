@@ -14,7 +14,9 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
   **Block time** blocks a barber or the whole shop; swipe a block to remove it.
 - **New booking**: walk-ins and phone bookings. Pick the service and a
   barber (or anyone free), then **Next open slot** for a walk-in, or a day
-  and time. The client's name is needed; a phone number is optional.
+  and time. The client's name is needed; a phone number is optional. If
+  the connection drops before the answer arrives, Book again finds the
+  booking that went through instead of booking the client twice.
 - **Take payment**: the amount on the keypad (filled in from an
   appointment's fixed price), an optional note and receipt email, then
   **Tap to Pay on iPhone**. The result screen says Paid, Declined,

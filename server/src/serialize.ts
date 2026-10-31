@@ -24,6 +24,8 @@ export interface AppointmentRow {
   customer_email: string | null;
   note: string | null;
   manage_token_hash: string | null;
+  /** SHA-256 of the owner app's `Idempotency-Key` (migrations/003); shop bookings only. */
+  idempotency_key_hash: string | null;
   payment_status: 'unpaid' | 'paid';
   paid_cents: number | null;
   paid_at: Date | null;

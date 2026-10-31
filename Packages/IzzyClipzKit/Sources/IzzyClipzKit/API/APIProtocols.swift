@@ -63,7 +63,14 @@ public protocol OwnerAPI: Sendable {
 
     /// `POST /api/owner/appointments`: walk-ins and phone bookings. No lead
     /// time and no phone needed, but still no overlaps and inside hours.
-    func createAppointment(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.Appointment
+    ///
+    /// Sends `idempotencyKey` as `Idempotency-Key`. Make one per booking
+    /// (`IdempotencyKey.generate()`) and send the same one when booking it
+    /// again after an error that leaves the outcome unknown (offline, a lost
+    /// answer): if the earlier try went through, the server answers with that
+    /// appointment, as it is now, instead of booking twice. A new key for a
+    /// booking that changed, and for the next one.
+    func createAppointment(_ appointment: IzzyAPI.NewAppointment, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Appointment
 
     /// `PATCH /api/owner/appointments/:id`. Cancelling here records the shop
     /// as the one who cancelled.

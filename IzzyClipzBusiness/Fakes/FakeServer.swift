@@ -27,6 +27,10 @@ final class FakeServer {
         /// The next booking fails with `slot_taken` because someone booked
         /// that time on the phone a moment earlier (the fake adds that booking).
         var takeNextSlot = false
+        /// The next booking goes through, but its answer is lost on the way
+        /// back and the app sees it as offline. Book again with the same
+        /// `Idempotency-Key` gets it.
+        var loseNextBookingAnswer = false
         /// `completePayment` reports this status instead of Stripe's real one,
         /// e.g. "processing" or "requires_payment_method".
         var completeStatusOverride: String?
@@ -47,6 +51,10 @@ final class FakeServer {
     private(set) var payments: [StoredPayment] = []
     /// Every call, in order ("ownerStatus", "createPayment", …), for tests.
     private(set) var calls: [String] = []
+    /// Every `Idempotency-Key` a booking came with, in order, for tests.
+    private(set) var bookingKeys: [IzzyAPI.IdempotencyKey] = []
+    /// What each key booked: the appointment's ID and the request, to recognize Book again.
+    private var keyed: [IzzyAPI.IdempotencyKey: (id: String, request: IzzyAPI.NewAppointment)] = [:]
 
     struct StoredPayment: Equatable {
         var payment: IzzyAPI.Payment
@@ -162,8 +170,11 @@ final class FakeServer {
         return appointments.filter { $0.start >= start && $0.start < end }.sorted { $0.start < $1.start }
     }
 
-    func createAppointment(_ request: IzzyAPI.NewAppointment) throws -> IzzyAPI.Appointment {
-        let candidates = try offerings(for: request.target)
+    /// Books like the server: with a key it already booked and the same booking (Book again
+    /// after a lost answer), the appointment as it is now; with that key and another booking, a
+    /// 400; otherwise a new appointment, kept under the key.
+    func createAppointment(_ request: IzzyAPI.NewAppointment, idempotencyKey: IzzyAPI.IdempotencyKey? = nil) throws -> IzzyAPI.Appointment {
+        if let idempotencyKey { bookingKeys.append(idempotencyKey) }
         let start = request.start
         let name = request.customer.name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
@@ -181,6 +192,18 @@ final class FakeServer {
             }
             phone = number.e164
         }
+        // Book again: answered before the time rules, as on the server.
+        if let idempotencyKey, let earlier = keyed[idempotencyKey] {
+            guard Self.isSameBooking(earlier.request, request),
+                  let appointment = appointments.first(where: { $0.id == earlier.id })
+            else {
+                throw APIError.server(
+                    code: IzzyAPI.ErrorCode.invalidRequest, message: "That booking key was already used for another booking.", status: 400
+                )
+            }
+            return appointment
+        }
+        let candidates = try offerings(for: request.target)
         let day = shopTime.day(containing: start)
         guard let open = shopTime.openInterval(on: day) else { throw APIError.outsideHours }
 
@@ -211,7 +234,28 @@ final class FakeServer {
             note: request.note
         )
         appointments.append(appointment)
+        if let idempotencyKey {
+            keyed[idempotencyKey] = (appointment.id, request)
+        }
+        if options.loseNextBookingAnswer {
+            // Booked, but the answer never reaches the phone.
+            options.loseNextBookingAnswer = false
+            throw APIError.offline
+        }
         return appointment
+    }
+
+    /// The server's rule for Book again: the same target asked for the same way, the same start,
+    /// and the same client name and phone number (or none). The email and note may differ.
+    private static func isSameBooking(_ earlier: IzzyAPI.NewAppointment, _ retry: IzzyAPI.NewAppointment) -> Bool {
+        func name(_ request: IzzyAPI.NewAppointment) -> String {
+            request.customer.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        func phone(_ request: IzzyAPI.NewAppointment) -> String? {
+            request.customer.phone?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmptyOrNil.map { PhoneNumber(parsing: $0)?.e164 ?? $0 }
+        }
+        return earlier.target == retry.target && earlier.start == retry.start
+            && name(earlier) == name(retry) && phone(earlier) == phone(retry)
     }
 
     private func bookings(of barberID: String, on day: LocalDate) -> Int {

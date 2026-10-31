@@ -105,7 +105,7 @@ final class ScheduleStoreTests: XCTestCase {
         await store.refresh()
         let walkIn = try await harness.api.createAppointment(.init(
             target: .anyBarber(serviceId: "haircut"), start: TestClock.at(16, 30), customer: .init(name: "Elsewhere Sample")
-        ))
+        ), idempotencyKey: .generate())
         await store.refresh()
         XCTAssertTrue(store.appointments.contains { $0.id == walkIn.id })
     }
@@ -157,7 +157,9 @@ final class ScheduleStoreTests: XCTestCase {
         XCTAssertEqual(sam.status, .cancelled)
         // Someone booked Cristian at 1 PM after Sam cancelled.
         let cut = try XCTUnwrap(Catalog.izzyClipz.offering(withID: sam.offeringId))
-        _ = try await harness.api.createAppointment(.init(target: .offering(cut), start: sam.start, customer: .init(name: "New Sample")))
+        _ = try await harness.api.createAppointment(
+            .init(target: .offering(cut), start: sam.start, customer: .init(name: "New Sample")), idempotencyKey: .generate()
+        )
 
         let reopened = await store.setStatus(.booked, for: sam)
         XCTAssertFalse(reopened)
@@ -181,12 +183,12 @@ final class ScheduleStoreTests: XCTestCase {
         await store.refresh()
         let appointment = try await harness.api.createAppointment(.init(
             target: .anyBarber(serviceId: "haircut"), start: TestClock.at(17), customer: .init(name: "Walk-in Sample")
-        ))
+        ), idempotencyKey: .generate())
         store.didBook(appointment)
         XCTAssertEqual(store.appointments.last?.id, appointment.id)
         let tomorrow = try await harness.api.createAppointment(.init(
             target: .anyBarber(serviceId: "haircut"), start: TestClock.at(11, on: TestClock.today.adding(days: 1)), customer: .init(name: "Later Sample")
-        ))
+        ), idempotencyKey: .generate())
         store.didBook(tomorrow)
         XCTAssertFalse(store.appointments.contains { $0.id == tomorrow.id })
     }

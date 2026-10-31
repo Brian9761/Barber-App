@@ -40,6 +40,8 @@ extension IzzyAPI {
         public let body: Data?
         public let contentType: String?
         public let credential: Credential
+        /// Sent as `Idempotency-Key`, so the server can tell a retry from a new request.
+        public let idempotencyKey: IdempotencyKey?
         public let timeout: TimeInterval
 
         init(
@@ -49,6 +51,7 @@ extension IzzyAPI {
             body: Data? = nil,
             contentType: String? = nil,
             credential: Credential = .none,
+            idempotencyKey: IdempotencyKey? = nil,
             timeout: TimeInterval = 30
         ) {
             // A POST always has a body, `{}` if nothing else, so servers that
@@ -60,6 +63,7 @@ extension IzzyAPI {
             self.body = body
             self.contentType = contentType ?? (body == nil ? nil : "application/json")
             self.credential = credential
+            self.idempotencyKey = idempotencyKey
             self.timeout = timeout
         }
 
@@ -103,6 +107,10 @@ extension IzzyAPI {
             case .ownerKey:
                 guard let ownerKey, Endpoints.isHeaderSafe(ownerKey) else { throw APIError.unauthorized }
                 request.setValue("Bearer " + ownerKey, forHTTPHeaderField: "Authorization")
+            }
+            if let idempotencyKey {
+                // Always 43 base64url characters, so always safe in a header.
+                request.setValue(idempotencyKey.rawValue, forHTTPHeaderField: "Idempotency-Key")
             }
             return request
         }
@@ -184,9 +192,11 @@ extension IzzyAPI {
             )
         }
 
-        /// `POST /api/owner/appointments` → 201 `{ appointment }`.
-        public static func createOwnerAppointment(_ appointment: NewAppointment) throws -> Endpoint<AppointmentResponse> {
-            Endpoint(.post, "/api/owner/appointments", body: try json(appointment), credential: .ownerKey)
+        /// `POST /api/owner/appointments` with `Idempotency-Key` → 201 `{ appointment }`, or 200
+        /// with the same when this key already booked this appointment (Book again after a lost
+        /// answer).
+        public static func createOwnerAppointment(_ appointment: NewAppointment, idempotencyKey: IdempotencyKey) throws -> Endpoint<AppointmentResponse> {
+            Endpoint(.post, "/api/owner/appointments", body: try json(appointment), credential: .ownerKey, idempotencyKey: idempotencyKey)
         }
 
         /// `PATCH /api/owner/appointments/:id` `{ status }` → `{ appointment }`.

@@ -37,9 +37,9 @@ struct FakeOwnerAPI: OwnerAPI {
         return await server.appointments(from: from, to: to)
     }
 
-    func createAppointment(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.Appointment {
+    func createAppointment(_ appointment: IzzyAPI.NewAppointment, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Appointment {
         try await server.begin("createAppointment", key: ownerKey)
-        return try await server.createAppointment(appointment)
+        return try await server.createAppointment(appointment, idempotencyKey: idempotencyKey)
     }
 
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {

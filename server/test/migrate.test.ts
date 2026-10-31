@@ -19,7 +19,7 @@ describe('npm run migrate', () => {
   it('applied every migration once, recorded with its checksum', async () => {
     const { rows } = await db.pool.query('SELECT version, checksum FROM schema_migrations ORDER BY version');
     expect(rows).toEqual(migrationFiles().map((f) => ({ version: f.name, checksum: f.checksum })));
-    expect(rows.map((r) => r.version)).toEqual(['001_init.sql', '002_manage_token_unique.sql']);
+    expect(rows.map((r) => r.version)).toEqual(['001_init.sql', '002_manage_token_unique.sql', '003_owner_idempotency_key.sql']);
   });
 
   it('is idempotent: running again applies nothing', async () => {
@@ -77,6 +77,17 @@ describe('npm run migrate', () => {
     } finally {
       client.release();
     }
+  });
+
+  it('003 adds the owner app’s idempotency key: hashes only, unique when set', async () => {
+    const column = await db.pool.query(
+      `SELECT data_type, is_nullable FROM information_schema.columns WHERE table_name = 'appointments' AND column_name = 'idempotency_key_hash'`,
+    );
+    expect(column.rows).toEqual([{ data_type: 'text', is_nullable: 'YES' }]);
+    const index = await db.pool.query(`SELECT indexdef FROM pg_indexes WHERE indexname = 'appointments_idempotency_key_hash_key'`);
+    expect(index.rows[0].indexdef).toBe(
+      'CREATE UNIQUE INDEX appointments_idempotency_key_hash_key ON public.appointments USING btree (idempotency_key_hash) WHERE (idempotency_key_hash IS NOT NULL)',
+    );
   });
 
   it('the schema has the exclusion constraint and btree_gist', async () => {
