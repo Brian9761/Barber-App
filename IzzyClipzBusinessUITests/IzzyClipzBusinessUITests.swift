@@ -519,20 +519,34 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     private func reveal(_ identifier: String, searchingFirst first: Direction = .down, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
         let target = element(identifier)
         // Most are on screen already, or show up once the screen has loaded.
-        if target.waitForExistence(timeout: 8), target.isHittable {
+        if target.waitForExistence(timeout: 8), isOnScreen(target) {
             return target
         }
-        for direction in first == .down ? [Direction.down, .up] : [.up, .down] {
-            for _ in 0..<8 {
-                if target.exists, target.isHittable {
-                    settle(target)
-                    return target
-                }
-                drag(direction)
+        let other: Direction = first == .down ? .up : .down
+        for attempt in 0..<16 {
+            if isOnScreen(target) {
+                settle(target)
+                return target
+            }
+            if target.exists, !target.frame.isEmpty {
+                // Built but out of sight: scroll toward it.
+                drag(target.frame.midY < app.frame.midY ? .up : .down)
+            } else {
+                drag(attempt < 8 ? first : other)
             }
         }
-        XCTAssertTrue(target.exists && target.isHittable, "Couldn't find \(identifier) on the screen", file: file, line: line)
+        XCTAssertTrue(isOnScreen(target), "Couldn't find \(identifier) on the screen", file: file, line: line)
         return target
+    }
+
+    /// On screen and tappable. isHittable is only asked about an element whose middle is on the
+    /// screen: for one scrolled out of sight, XCUITest can fail the test ("Activation point
+    /// invalid") instead of answering no.
+    private func isOnScreen(_ target: XCUIElement) -> Bool {
+        guard target.exists else { return false }
+        let frame = target.frame
+        guard !frame.isEmpty, app.frame.contains(CGPoint(x: frame.midX, y: frame.midY)) else { return false }
+        return target.isHittable
     }
 
     /// Drags the page about a third of the screen and holds still before letting go, so it
