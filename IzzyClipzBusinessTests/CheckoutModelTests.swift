@@ -313,6 +313,14 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(api.createdPayments, 0)
     }
 
+    func testALongNoteIsCaughtBeforeCharging() async {
+        let checkout = makeCheckout()
+        checkout.note = String(repeating: "n", count: 201)
+        await charge(checkout, cents: 2000)
+        XCTAssertEqual(checkout.validationMessage, "Keep the note to 200 characters or fewer.")
+        XCTAssertEqual(api.createdPayments, 0)
+    }
+
     func testABadReceiptEmailIsCaughtBeforeCharging() async {
         let checkout = makeCheckout()
         checkout.receiptEmail = "client at example"

@@ -282,6 +282,10 @@ final class CheckoutModel {
             return
         }
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedNote.count <= 200 else {
+            validationMessage = "Keep the note to 200 characters or fewer."
+            return
+        }
         let request = IzzyAPI.NewPayment(
             amountCents: entry.cents,
             description: trimmedNote.isEmpty ? appointment?.title : trimmedNote,
@@ -391,15 +395,14 @@ final class CheckoutModel {
         // Anything given up on earlier is settled with Stripe first.
         await abandoning?.value
 
-        // 1. The reader. Practice and the simulated reader connect instantly.
-        if terminal.state != .ready {
-            phase = .preparing
-            do {
-                try await terminal.prepare(locationId: locationId ?? "practice")
-            } catch {
-                phase = failurePhase(for: error)
-                return
-            }
+        // 1. The reader. Already connected to this location, it's ready at
+        // once; otherwise it connects (or moves to the shop's new location).
+        if terminal.state != .ready { phase = .preparing }
+        do {
+            try await terminal.prepare(locationId: locationId ?? "practice")
+        } catch {
+            phase = failurePhase(for: error)
+            return
         }
         if case .live = mode { onReaderConnected?() }
 
