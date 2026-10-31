@@ -1,0 +1,517 @@
+import XCTest
+
+/// Every flow of the owner app, the way the shop owner uses it, with
+/// screenshots ("O01-Sign-In", "O02-…").
+///
+/// The app runs with `-ui-testing`: the in-memory sample server, an in-memory
+/// keychain, the simulated card reader ("Test mode — no real charge"), and a
+/// fixed "now" of Monday, November 2, 2026 at 11:05 AM in the shop, so the
+/// schedule and the open times are the same on every run. `-signed-in` starts
+/// with the sample owner key; `-fake-…` arguments make the sample server fail
+/// in specific ways.
+final class IzzyClipzBusinessUITests: XCTestCase {
+    private var app: XCUIApplication!
+
+    /// The sample server's owner key (FakeServer.ownerKey).
+    private let ownerKey = "izzy-clipz-demo-owner-key-0123456789"
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    private func launch(signedIn: Bool = true, _ arguments: String...) {
+        app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"] + (signedIn ? ["-signed-in"] : []) + arguments
+        app.launch()
+        if signedIn {
+            XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 30), "The app didn't open signed in")
+        } else {
+            XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 30), "The app didn't open on sign in")
+        }
+    }
+
+    // MARK: Sign in
+
+    func testSignInWithTheOwnerKey() {
+        launch(signedIn: false)
+        XCTAssertTrue(element("ownerKeyField").exists)
+        screenshot("O01-Sign-In")
+        signIn(with: ownerKey)
+        XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 15), "Signing in didn't open the schedule")
+        for tab in ["Schedule", "New booking", "Take payment", "Products", "Settings"] {
+            XCTAssertTrue(tabButton(tab).exists, "Missing the \(tab) tab")
+        }
+        XCTAssertTrue(element("appointment-Andre Sample").waitForExistence(timeout: 10))
+    }
+
+    func testAWrongKeyIsTurnedDown() {
+        launch(signedIn: false)
+        signIn(with: String(repeating: "x", count: 40))
+        let error = element("signInError")
+        XCTAssertTrue(error.waitForExistence(timeout: 10))
+        XCTAssertTrue(error.label.contains("isn't right"), "Got: \(error.label)")
+        XCTAssertFalse(tabButton("Schedule").exists)
+        screenshot("O02-Sign-In-Error")
+    }
+
+    func testAShortKeyIsExplained() {
+        launch(signedIn: false)
+        signIn(with: "too-short")
+        XCTAssertTrue(waitForLabel(element("signInError"), containing: "too short"))
+    }
+
+    func testAnUnreachableServerIsExplained() {
+        launch(signedIn: false, "-fake-offline")
+        signIn(with: ownerKey)
+        XCTAssertTrue(waitForLabel(element("signInError"), containing: "couldn't reach the server"))
+    }
+
+    func testAServerWithoutAnOwnerKeyIsExplained() {
+        launch(signedIn: false, "-fake-owner-not-configured")
+        signIn(with: ownerKey)
+        XCTAssertTrue(waitForLabel(element("signInError"), containing: "OWNER_KEY"))
+    }
+
+    // MARK: Schedule
+
+    func testScheduleShowsTheDayAndFiltersByBarber() {
+        launch()
+        let andre = element("appointment-Andre Sample")
+        XCTAssertTrue(andre.waitForExistence(timeout: 10))
+        XCTAssertTrue(andre.label.contains("11:30 AM"), "Got: \(andre.label)")
+        XCTAssertTrue(andre.label.contains("Haircut & Beard with Izzy"))
+        XCTAssertTrue(element("appointment-Marcus Sample").label.contains("Paid $40.00"), "Marcus paid for his cut")
+        XCTAssertTrue(element("appointment-Sam Sample").label.contains("Cancelled"))
+        XCTAssertTrue(element("timeOff-Lunch").exists, "Flowxbori's lunch is blocked")
+        XCTAssertTrue(app.staticTexts["Today"].exists)
+        screenshot("O03-Schedule")
+
+        tap("barberFilter")
+        tapButton("Izzy")
+        XCTAssertTrue(waitForDisappearance(of: element("appointment-Luis Sample")), "Julian's client still shows")
+        XCTAssertTrue(element("appointment-Andre Sample").exists)
+        XCTAssertFalse(element("timeOff-Lunch").exists)
+        screenshot("O04-Schedule-Filtered")
+        tap("barberFilter")
+        tapButton("Everyone")
+        XCTAssertTrue(element("appointment-Luis Sample").waitForExistence(timeout: 10))
+
+        tap("nextDay")
+        XCTAssertTrue(element("scheduleEmpty").waitForExistence(timeout: 10), "Tuesday has nothing booked")
+        XCTAssertTrue(app.staticTexts["Tomorrow"].exists)
+        tap("backToToday")
+        XCTAssertTrue(element("appointment-Andre Sample").waitForExistence(timeout: 10))
+    }
+
+    func testMarkCompletedReopenAndCancelAnAppointment() {
+        launch()
+        tap("appointment-Andre Sample")
+        XCTAssertTrue(element("detailClientName").waitForExistence(timeout: 10))
+        XCTAssertEqual(element("detailClientName").label, "Andre Sample")
+        XCTAssertTrue(element("callClient").exists)
+        XCTAssertTrue(element("textClient").exists)
+        XCTAssertTrue(app.staticTexts["Likes a low fade"].exists, "The client's note shows")
+        screenshot("O05-Appointment")
+
+        tap("markCompleted")
+        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Completed"))
+        tap("reopenAppointment")
+        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Booked"))
+        tap("markNoShow")
+        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "No-show"))
+        tap("reopenAppointment")
+        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Booked"))
+
+        tap("cancelAppointment")
+        tapDialogButton("Cancel appointment", identifier: "confirmCancelAppointment")
+        XCTAssertTrue(waitForLabel(element("detailStatus"), containing: "Cancelled"))
+        XCTAssertFalse(element("takePaymentForAppointment").exists, "No payment for a cancelled appointment")
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForLabel(element("appointment-Andre Sample"), containing: "Cancelled"))
+    }
+
+    func testBlockTimeAndRemoveIt() {
+        launch()
+        tap("blockTimeButton")
+        XCTAssertTrue(element("saveBlock").waitForExistence(timeout: 10))
+        let reason = element("blockReason")
+        reason.tap()
+        reason.typeText("Staff meeting")
+        screenshot("O06-Block-Time")
+        tap("saveBlock")
+        let block = element("timeOff-Staff meeting")
+        XCTAssertTrue(block.waitForExistence(timeout: 10), "The new block isn't on the schedule")
+        XCTAssertTrue(block.label.contains("Whole shop"), "Got: \(block.label)")
+        XCTAssertTrue(block.label.contains("11:30 AM"), "It starts at the next half hour: \(block.label)")
+
+        block.swipeLeft()
+        tapButton("Remove")
+        tapDialogButton("Remove blocked time", identifier: "confirmRemoveBlock")
+        XCTAssertTrue(waitForDisappearance(of: block), "The block wasn't removed")
+    }
+
+    // MARK: New booking
+
+    func testWalkInTakesTheNextOpenSlot() {
+        launch()
+        openTab("New booking")
+        XCTAssertTrue(element("servicePicker").waitForExistence(timeout: 10))
+        chooseService("Haircut")
+        tap("nextOpenSlot")
+        let slot = element("slot-11:30 AM")
+        XCTAssertTrue(waitUntil(slot, toMatch: NSPredicate(format: "isSelected == true")), "11:30 AM wasn't picked")
+        typeInto("clientName", "Walk-in Sample")
+        screenshot("O07-New-Booking")
+        tap("bookButton")
+        let title = element("bookedTitle")
+        XCTAssertTrue(title.waitForExistence(timeout: 10), "No confirmation")
+        XCTAssertEqual(title.label, "Booked Walk-in Sample")
+        screenshot("O08-Booked")
+        tap("bookedDone")
+        XCTAssertTrue(waitForDisappearance(of: title))
+
+        openTab("Schedule")
+        let row = element("appointment-Walk-in Sample")
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The walk-in isn't on the schedule")
+        XCTAssertTrue(row.label.contains("11:30 AM"))
+    }
+
+    func testPhoneBookingWithABarber() {
+        launch()
+        openTab("New booking")
+        chooseService("Haircut")
+        tap("barberPicker")
+        tapButton("Julian · 45 min · $35")
+        XCTAssertTrue(element("servicePicker").waitForExistence(timeout: 10))
+        tap("slot-2 PM")
+        typeInto("clientName", "Phone Sample")
+        typeInto("clientPhone", "4425550123")
+        tap("bookButton")
+        XCTAssertTrue(waitForLabel(element("bookedTitle"), containing: "Phone Sample"))
+        tap("bookedDone")
+    }
+
+    func testASlotTakenMeanwhileAsksForAnotherTime() {
+        launch("-fake-slot-taken")
+        openTab("New booking")
+        chooseService("Haircut")
+        tap("nextOpenSlot")
+        XCTAssertTrue(waitUntil(element("slot-11:30 AM"), toMatch: NSPredicate(format: "isSelected == true")))
+        typeInto("clientName", "Late Sample")
+        tap("bookButton")
+        XCTAssertTrue(waitForLabel(element("bookingError"), containing: "Someone just took that time"))
+        screenshot("O09-Slot-Taken")
+        // The list was refreshed: another time works.
+        tap("slot-12 PM")
+        tap("bookButton")
+        XCTAssertTrue(waitForLabel(element("bookedTitle"), containing: "Late Sample"))
+    }
+
+    // MARK: Take payment
+
+    func testTakePaymentForAnAppointmentWithTheSimulatedReader() {
+        launch()
+        tap("appointment-Andre Sample")
+        tap("takePaymentForAppointment")
+        XCTAssertTrue(waitUntil(tabButton("Take payment"), toMatch: NSPredicate(format: "isSelected == true")), "Didn't switch to Take payment")
+        let amount = element("paymentAmount")
+        XCTAssertTrue(amount.waitForExistence(timeout: 10))
+        XCTAssertEqual(amount.value as? String, "55 dollars", "Izzy's Haircut & Beard is $55")
+        XCTAssertTrue(element("paymentAppointment").exists)
+        XCTAssertTrue(element("testModeBanner").exists, "Test mode is labelled")
+        let button = element("tapToPayButton")
+        XCTAssertEqual(button.label, "Tap to Pay on iPhone")
+        screenshot("O10-Take-Payment")
+
+        button.tap()
+        let approve = element("simulateApprove")
+        XCTAssertTrue(approve.waitForExistence(timeout: 15), "The simulated Tap to Pay screen didn't show")
+        screenshot("O11-Simulated-Tap")
+        approve.tap()
+        let paid = element("statusPaid")
+        XCTAssertTrue(paid.waitForExistence(timeout: 15), "No result")
+        XCTAssertEqual(paid.label, "Test payment approved")
+        XCTAssertTrue(app.staticTexts["$55.00. Test mode: no card was charged."].exists)
+        screenshot("O12-Paid")
+        tap("paymentDone")
+        XCTAssertTrue(waitForDisappearance(of: paid))
+        XCTAssertEqual(element("paymentAmount").value as? String, "0 dollars", "Ready for the next customer")
+
+        tap("paymentsTodayLink")
+        XCTAssertTrue(app.staticTexts["$95.00"].waitForExistence(timeout: 10), "Marcus's $40 and Andre's $55")
+        screenshot("O13-Payments-Today")
+
+        // The schedule still shows Andre's details: they're paid now.
+        openTab("Schedule")
+        XCTAssertTrue(element("detailClientName").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["$55.00"].waitForExistence(timeout: 10), "The appointment shows the payment")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForLabel(element("appointment-Andre Sample"), containing: "Paid $55.00"))
+    }
+
+    func testADeclinedCardCanBeTriedAgain() {
+        launch()
+        openTab("Take payment")
+        enterAmount("1250")
+        XCTAssertEqual(element("paymentAmount").value as? String, "12 dollars and 50 cents")
+        tap("tapToPayButton")
+        tap("simulateDecline")
+        let declined = element("statusDeclined")
+        XCTAssertTrue(declined.waitForExistence(timeout: 15))
+        screenshot("O14-Declined")
+        tap("retryPayment")
+        tap("simulateApprove")
+        XCTAssertTrue(element("statusPaid").waitForExistence(timeout: 15))
+        tap("paymentDone")
+    }
+
+    func testTheCustomerCancellingKeepsTheAmount() {
+        launch()
+        openTab("Take payment")
+        enterAmount("2000")
+        tap("tapToPayButton")
+        tap("simulateCancel")
+        XCTAssertTrue(element("statusCancelled").waitForExistence(timeout: 15))
+        tap("backToAmount")
+        XCTAssertTrue(waitForDisappearance(of: element("statusCancelled")))
+        XCTAssertEqual(element("paymentAmount").value as? String, "20 dollars")
+    }
+
+    func testATooSmallAmountIsExplained() {
+        launch()
+        openTab("Take payment")
+        enterAmount("25")
+        tap("tapToPayButton")
+        XCTAssertTrue(waitForLabel(element("paymentValidation"), containing: "$0.50 to $1,000.00"))
+        XCTAssertFalse(element("statusPreparing").exists || element("simulateApprove").exists, "No payment started")
+    }
+
+    func testWithoutStripeTakePaymentExplainsAndOffersTestMode() {
+        launch("-fake-stripe-not-configured")
+        openTab("Take payment")
+        let card = element("paymentsUnavailable")
+        XCTAssertTrue(card.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Card payments aren't set up yet"].exists)
+        screenshot("O15-Payments-Not-Set-Up")
+        tap("startPractice")
+        XCTAssertTrue(element("testModeBanner").waitForExistence(timeout: 10))
+        enterAmount("500")
+        tap("tapToPayButton")
+        tap("simulateApprove")
+        XCTAssertTrue(waitForLabel(element("statusPaid"), containing: "Test payment approved"))
+        tap("paymentDone")
+        tap("stopPractice")
+        XCTAssertTrue(element("paymentsUnavailable").waitForExistence(timeout: 10))
+    }
+
+    func testOnlyASucceededPaymentShowsPaid() {
+        launch("-fake-payment-incomplete")
+        openTab("Take payment")
+        enterAmount("3000")
+        tap("tapToPayButton")
+        tap("simulateApprove")
+        let notPaid = element("statusNotPaid")
+        XCTAssertTrue(notPaid.waitForExistence(timeout: 15), "The server said it isn't complete, so it isn't paid")
+        XCTAssertFalse(element("statusPaid").exists)
+        tap("backToAmount")
+    }
+
+    // MARK: Products
+
+    func testAddEditHideAndDeleteAProduct() {
+        launch()
+        openTab("Products")
+        XCTAssertTrue(element("product-Sample pomade").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("product-Sample beard oil").label.contains("hidden"))
+        screenshot("O16-Products")
+
+        tap("addProduct")
+        typeInto("productName", "Sample wax")
+        typeInto("productPrice", "15")
+        tap("useTestPhoto")
+        XCTAssertTrue(element("newPhotoPreview").waitForExistence(timeout: 10), "The photo wasn't prepared")
+        screenshot("O17-Product-Editor")
+        tap("saveProduct")
+        let row = element("product-Sample wax")
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The new product isn't listed")
+        XCTAssertTrue(row.label.contains("$15.00"), "Got: \(row.label)")
+
+        // Edit: hide it from the customer app in the editor.
+        row.tap()
+        let visible = element("productVisible")
+        XCTAssertTrue(visible.waitForExistence(timeout: 10))
+        // The switch is at the row's trailing end; the row's middle is its label.
+        visible.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        tap("saveProduct")
+        XCTAssertTrue(waitForLabel(element("product-Sample wax"), containing: "hidden"))
+
+        // Show it again with a swipe.
+        element("product-Sample wax").swipeLeft()
+        tapButton("Show")
+        XCTAssertTrue(waitUntil(element("product-Sample wax"), toMatch: NSPredicate(format: "NOT (label CONTAINS %@)", "hidden")))
+
+        element("product-Sample wax").swipeLeft()
+        tapButton("Delete")
+        tapDialogButton("Delete Sample wax", identifier: "confirmDeleteProduct")
+        XCTAssertTrue(waitForDisappearance(of: element("product-Sample wax")))
+    }
+
+    // MARK: Settings
+
+    func testSettingsShowStatusHowToTapAndSignOut() {
+        launch()
+        openTab("Settings")
+        XCTAssertTrue(app.staticTexts["Test mode: no real money"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["tml_sample_location"].exists)
+        XCTAssertTrue(app.staticTexts["Online"].waitForExistence(timeout: 10), "The server's health check")
+        XCTAssertTrue(element("appVersion").exists)
+        screenshot("O18-Settings")
+
+        tap("howToTap")
+        XCTAssertTrue(element("howToTapDone").waitForExistence(timeout: 10))
+        screenshot("O19-How-To-Tap")
+        tap("howToTapDone")
+        XCTAssertTrue(waitForDisappearance(of: element("howToTapDone")))
+
+        tap("signOut")
+        tapDialogButton("Sign out", identifier: "confirmSignOut")
+        XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 10), "Signing out didn't go back to sign in")
+    }
+
+    // MARK: Empty and offline
+
+    func testAnEmptyShop() {
+        launch("-fake-empty")
+        XCTAssertTrue(element("scheduleEmpty").waitForExistence(timeout: 10))
+        screenshot("O20-Empty-Day")
+        openTab("Products")
+        XCTAssertTrue(element("productsEmpty").waitForExistence(timeout: 10))
+    }
+
+    func testOfflineScheduleOffersToTryAgain() {
+        launch("-fake-offline")
+        XCTAssertTrue(element("retrySchedule").waitForExistence(timeout: 10), "No way to try again")
+        XCTAssertTrue(app.staticTexts["Couldn't load the schedule"].exists)
+        screenshot("O21-Offline")
+    }
+
+    // MARK: Helpers
+
+    private func signIn(with key: String) {
+        let field = element("ownerKeyField")
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        field.typeText(key)
+        tap("signInButton")
+    }
+
+    private func chooseService(_ name: String) {
+        tap("servicePicker")
+        tapButton(name)
+        XCTAssertTrue(element("servicePicker").waitForExistence(timeout: 10), "Didn't come back from the service list")
+    }
+
+    /// Types an amount on the keypad: "1250" is $12.50.
+    private func enterAmount(_ digits: String) {
+        for digit in digits {
+            tap("key-\(digit)")
+        }
+    }
+
+    private func typeInto(_ identifier: String, _ text: String, file: StaticString = #filePath, line: UInt = #line) {
+        let field = element(identifier)
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "Missing \(identifier)", file: file, line: line)
+        field.tap()
+        field.typeText(text)
+    }
+
+    private func tabButton(_ name: String) -> XCUIElement {
+        app.tabBars.buttons[name]
+    }
+
+    private func openTab(_ name: String, file: StaticString = #filePath, line: UInt = #line) {
+        let tab = tabButton(name)
+        XCTAssertTrue(tab.waitForExistence(timeout: 10), "Missing the \(name) tab", file: file, line: line)
+        tab.tap()
+        if !waitUntil(tab, toMatch: NSPredicate(format: "isSelected == true")) {
+            // Slow simulators occasionally drop a tap.
+            tab.tap()
+        }
+        XCTAssertTrue(waitUntil(tab, toMatch: NSPredicate(format: "isSelected == true")), "\(name) didn't open", file: file, line: line)
+    }
+
+    private func element(_ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    /// Waits for an element, scrolls it into view if needed, and taps it.
+    private func tap(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) {
+        let target = element(identifier)
+        XCTAssertTrue(target.waitForExistence(timeout: 15), "Missing \(identifier)", file: file, line: line)
+        var swipes = 0
+        while !target.isHittable, swipes < 6 {
+            app.swipeUp(velocity: .slow)
+            swipes += 1
+        }
+        target.tap()
+    }
+
+    /// Taps a button by its label: menu items, picker rows, swipe actions.
+    private func tapButton(_ label: String, file: StaticString = #filePath, line: UInt = #line) {
+        let predicate = NSPredicate(format: "label == %@", label)
+        let button = app.buttons.matching(predicate).firstMatch
+        if button.waitForExistence(timeout: 5) {
+            button.tap()
+            return
+        }
+        // Menus and pickers can show their choices as menu items, cells or text.
+        for query in [app.menuItems, app.cells, app.staticTexts] {
+            let match = query.matching(predicate).firstMatch
+            if match.exists {
+                match.tap()
+                return
+            }
+        }
+        XCTFail("Missing the \(label) button", file: file, line: line)
+    }
+
+    /// Taps a button in a confirmation dialog: by identifier when SwiftUI
+    /// passes it on, otherwise the dialog's button with that label (the last
+    /// one, since the dialog is on top of a button with the same name).
+    private func tapDialogButton(_ label: String, identifier: String, file: StaticString = #filePath, line: UInt = #line) {
+        let byIdentifier = element(identifier)
+        if byIdentifier.waitForExistence(timeout: 3) {
+            byIdentifier.tap()
+            return
+        }
+        let inSheet = app.sheets.buttons[label]
+        if inSheet.exists {
+            inSheet.tap()
+            return
+        }
+        let matches = app.buttons.matching(NSPredicate(format: "label == %@", label))
+        XCTAssertTrue(matches.firstMatch.waitForExistence(timeout: 10), "No \(label) button in the dialog", file: file, line: line)
+        matches.element(boundBy: max(matches.count - 1, 0)).tap()
+    }
+
+    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 10) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
+        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+    }
+
+    private func waitForLabel(_ element: XCUIElement, containing text: String, timeout: TimeInterval = 10) -> Bool {
+        waitUntil(element, toMatch: NSPredicate(format: "label CONTAINS %@", text), timeout: timeout)
+    }
+
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
+        waitUntil(element, toMatch: NSPredicate(format: "exists == false"), timeout: timeout)
+    }
+
+    private func screenshot(_ name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+}

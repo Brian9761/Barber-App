@@ -1,0 +1,289 @@
+import Foundation
+import IzzyClipzKit
+import Observation
+
+/// New booking: walk-ins and phone bookings. The owner picks a service, a
+/// barber (or anyone free), a time from the owner's availability (no lead
+/// time, so a walk-in can take a slot starting now), and the client's name
+/// with an optional phone number.
+@MainActor
+@Observable
+final class NewBookingStore {
+    /// Who does it: a specific barber's offering, or anyone free.
+    enum Choice: Hashable {
+        case anyBarber
+        case offering(String)
+    }
+
+    enum SlotsState: Equatable {
+        case idle
+        case loading
+        case loaded
+        case failed(String)
+    }
+
+    private(set) var serviceID: String?
+    private(set) var choice: Choice?
+    private(set) var day: LocalDate
+    private(set) var slots: [IzzyAPI.Slot] = []
+    private(set) var slotsState: SlotsState = .idle
+    /// Bumped whenever the times are cleared, so the screen loads them again
+    /// even when the service, barber and day stay the same (after a booking).
+    private(set) var slotsVersion = 0
+    var selectedSlot: IzzyAPI.Slot?
+    var clientName = ""
+    var clientPhone = ""
+    var note = ""
+
+    private(set) var isFindingNextSlot = false
+    private(set) var isBooking = false
+    /// A problem to show above the Book button.
+    var formError: String?
+    /// The appointment just booked, for the confirmation.
+    private(set) var booked: IzzyAPI.Appointment?
+
+    let shopTime: ShopTime
+    let catalog: Catalog
+    @ObservationIgnored private let api: any OwnerAPI
+    @ObservationIgnored private let clock: () -> Date
+    @ObservationIgnored private var generation = 0
+    @ObservationIgnored var onBooked: ((IzzyAPI.Appointment) -> Void)?
+
+    /// How far "Next open slot" looks ahead.
+    static let nextSlotSearchDays = 14
+
+    init(api: any OwnerAPI, shopTime: ShopTime, catalog: Catalog, clock: @escaping () -> Date) {
+        self.api = api
+        self.shopTime = shopTime
+        self.catalog = catalog
+        self.clock = clock
+        self.day = shopTime.day(containing: clock())
+    }
+
+    var today: LocalDate { shopTime.day(containing: clock()) }
+
+    // MARK: Choices
+
+    /// Picks a service; "Any barber" is chosen when the service offers it.
+    func selectService(_ id: String?) {
+        guard id != serviceID else { return }
+        serviceID = id
+        if let id, catalog.firstAvailableOption(forService: id) != nil {
+            choice = .anyBarber
+        } else {
+            choice = offerings.first.map { .offering($0.id) }
+        }
+        clearSlots()
+    }
+
+    func selectChoice(_ choice: Choice?) {
+        guard choice != self.choice else { return }
+        self.choice = choice
+        clearSlots()
+    }
+
+    var services: [Service] { catalog.services }
+
+    var service: Service? { serviceID.flatMap { catalog.service(withID: $0) } }
+
+    /// Every barber's version of the chosen service.
+    var offerings: [Offering] {
+        guard let serviceID else { return [] }
+        return catalog.offerings(forService: serviceID)
+    }
+
+    var offersAnyBarber: Bool {
+        guard let serviceID else { return false }
+        return catalog.firstAvailableOption(forService: serviceID) != nil
+    }
+
+    var target: IzzyAPI.BookingTarget? {
+        switch choice {
+        case .anyBarber?: return serviceID.map { .anyBarber(serviceId: $0) }
+        case .offering(let id)?: return .offering(id: id)
+        case nil: return nil
+        }
+    }
+
+    /// "Izzy · 1 hr · $40".
+    func label(for offering: Offering) -> String {
+        let name = catalog.barber(withID: offering.barberID)?.name ?? offering.barberID
+        return "\(name) · \(offering.durationLabel) · \(offering.price.label)"
+    }
+
+    func barberNames(for slot: IzzyAPI.Slot) -> String {
+        slot.barberIds.compactMap { catalog.barber(withID: $0)?.name }.joined(separator: ", ")
+    }
+
+    // MARK: Days and times
+
+    var dayAsDate: Date {
+        get { shopTime.noon(on: day) }
+        set { select(day: shopTime.day(containing: newValue)) }
+    }
+
+    func select(day: LocalDate) {
+        guard day != self.day else { return }
+        self.day = day
+        clearSlots()
+    }
+
+    private func clearSlots() {
+        generation += 1
+        slotsVersion += 1
+        slots = []
+        selectedSlot = nil
+        slotsState = .idle
+    }
+
+    /// Open start times on the chosen day (`GET /api/owner/availability`).
+    func loadSlots() async {
+        guard let target else {
+            clearSlots()
+            return
+        }
+        generation += 1
+        let requested = generation
+        let day = self.day
+        slotsState = .loading
+        do {
+            let response = try await api.ownerAvailability(IzzyAPI.AvailabilityQuery(target: target, from: day, days: 1))
+            guard requested == generation else { return }
+            let now = clock()
+            // The owner can book a slot that hasn't started yet; the server
+            // decides, but hide ones already past on this phone's clock.
+            slots = response.slots(on: day).filter { $0.start >= now.addingTimeInterval(-60) }
+            if let selected = selectedSlot, !slots.contains(where: { $0.start == selected.start }) {
+                selectedSlot = nil
+            }
+            slotsState = .loaded
+        } catch is CancellationError {
+            if requested == generation { slotsState = .idle }
+        } catch {
+            guard requested == generation else { return }
+            slotsState = .failed(ErrorText.message(for: error))
+        }
+    }
+
+    /// The walk-in shortcut: the earliest open slot from now, today or on the
+    /// next days.
+    func findNextOpenSlot() async {
+        guard let target else {
+            formError = "Pick a service first."
+            return
+        }
+        guard !isFindingNextSlot else { return }
+        isFindingNextSlot = true
+        defer { isFindingNextSlot = false }
+        formError = nil
+        let today = self.today
+        do {
+            let response = try await api.ownerAvailability(
+                IzzyAPI.AvailabilityQuery(target: target, from: today, days: Self.nextSlotSearchDays)
+            )
+            let now = clock()
+            let first = response.days.sorted { $0.date < $1.date }
+                .lazy
+                .compactMap { day in day.slots.sorted { $0.start < $1.start }.first { $0.start >= now.addingTimeInterval(-60) }.map { (day.date, $0) } }
+                .first
+            guard let (date, slot) = first else {
+                formError = "No open times in the next \(Self.nextSlotSearchDays) days for this choice. Try another barber."
+                return
+            }
+            if date != day {
+                day = date
+            }
+            generation += 1
+            slots = response.slots(on: date).filter { $0.start >= now.addingTimeInterval(-60) }
+            slotsState = .loaded
+            selectedSlot = slot
+        } catch is CancellationError {
+            return
+        } catch {
+            formError = ErrorText.message(for: error)
+        }
+    }
+
+    // MARK: Booking
+
+    var phoneIsValid: Bool {
+        let typed = clientPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+        return typed.isEmpty || PhoneNumber(parsing: typed) != nil
+    }
+
+    /// What's still missing, in the order the form asks for it.
+    var missing: String? {
+        if serviceID == nil { return "Pick a service." }
+        if choice == nil { return "Pick a barber." }
+        if selectedSlot == nil { return "Pick a time." }
+        let name = clientName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if name.isEmpty { return "Enter the client's name." }
+        if name.count > 60 { return "Keep the name to 60 characters or fewer." }
+        if !phoneIsValid { return "Check the phone number: it should be a US number like (442) 555-0123, or leave it empty." }
+        if note.count > 300 { return "Keep the note to 300 characters or fewer." }
+        return nil
+    }
+
+    /// `POST /api/owner/appointments`. On "slot taken" the times are loaded
+    /// again so the owner can pick another one.
+    func book() async {
+        guard !isBooking else { return }
+        if let missing {
+            formError = missing
+            return
+        }
+        guard let target, let slot = selectedSlot else { return }
+        isBooking = true
+        defer { isBooking = false }
+        formError = nil
+        let phone = clientPhone.trimmingCharacters(in: .whitespacesAndNewlines)
+        let request = IzzyAPI.NewAppointment(
+            target: target,
+            start: slot.start,
+            customer: IzzyAPI.NewCustomer(name: clientName, phone: phone.isEmpty ? nil : phone),
+            note: note
+        )
+        do {
+            let appointment = try await api.createAppointment(request)
+            booked = appointment
+            onBooked?(appointment)
+        } catch APIError.slotTaken {
+            formError = "Someone just took that time. Pick another one."
+            selectedSlot = nil
+            await loadSlots()
+        } catch APIError.outsideHours {
+            formError = "That time is outside the shop's hours. Pick another one."
+            selectedSlot = nil
+            await loadSlots()
+        } catch is CancellationError {
+            return
+        } catch {
+            formError = ErrorText.message(for: error)
+        }
+    }
+
+    /// After the confirmation: ready for the next walk-in, same service.
+    func startOver() {
+        booked = nil
+        clientName = ""
+        clientPhone = ""
+        note = ""
+        formError = nil
+        selectedSlot = nil
+        day = today
+        clearSlots()
+    }
+
+    /// "Haircut with Izzy, today at 2:30 PM".
+    func summary(of appointment: IzzyAPI.Appointment) -> String {
+        let dayText = shopTime.relativeDay(shopTime.day(containing: appointment.start), today: today)
+        return "\(appointment.serviceName) with \(appointment.barberName), \(dayText.lowercasedFirstIfRelative) at \(shopTime.time(appointment.start))"
+    }
+}
+
+private extension String {
+    /// "today", "tomorrow" read better mid-sentence; dates stay as they are.
+    var lowercasedFirstIfRelative: String {
+        ["Today", "Tomorrow", "Yesterday"].contains(self) ? lowercased() : self
+    }
+}

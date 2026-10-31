@@ -31,6 +31,11 @@ settings:
 packages:
   IzzyClipzKit:
     path: Packages/IzzyClipzKit
+  # Tap to Pay on iPhone, for the owner app only. 6.0.0 and later ship only
+  # through SPM; pinned exactly, since Stripe ships breaking changes in majors.
+  StripeTerminal:
+    url: https://github.com/stripe/stripe-terminal-ios-spm
+    exactVersion: 6.0.0
 
 targets:
   IzzyClipz:
@@ -109,6 +114,89 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         TEST_TARGET_NAME: IzzyClipz
 
+  # The owner app, "Izzy Clipz Business": schedule, walk-ins, time off,
+  # products and Tap to Pay on iPhone. iOS 18 for Apple's Tap to Pay
+  # education screens (ProximityReaderDiscovery).
+  IzzyClipzBusiness:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: IzzyClipzBusiness
+    dependencies:
+      - package: IzzyClipzKit
+      - package: StripeTerminal
+        product: StripeTerminal
+    info:
+      path: IzzyClipzBusiness/Info.plist
+      properties:
+        CFBundleDisplayName: Izzy Clipz Business
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        LSRequiresIPhoneOS: true
+        ITSAppUsesNonExemptEncryption: false
+        IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
+        NSBluetoothAlwaysUsageDescription: Stripe's card payment software can also work with Bluetooth card readers, so iOS asks every app that includes it to explain Bluetooth. Izzy Clipz Business takes cards with Tap to Pay on iPhone and doesn't connect to Bluetooth devices.
+        NSCameraUsageDescription: Take photos of the shop's products to show them in the Izzy Clipz app.
+        NSLocationWhenInUseUsageDescription: Card networks require the location of every card payment, so Stripe checks this iPhone's location while you take a payment with Tap to Pay on iPhone.
+        NSPhotoLibraryUsageDescription: Choose photos of the shop's products to show them in the Izzy Clipz app.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        # Tap to Pay on iPhone needs an iPhone XS (A12) or later.
+        UIRequiredDeviceCapabilities:
+          - arm64
+          - iphone-ipad-minimum-performance-a12
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIUserInterfaceStyle: Dark
+    entitlements:
+      path: IzzyClipzBusiness/IzzyClipzBusiness.entitlements
+      properties:
+        com.apple.developer.proximity-reader.payment.acceptance: true
+    settings:
+      base:
+        PRODUCT_NAME: IzzyClipzBusiness
+        PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.business
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_ENTITLEMENTS: IzzyClipzBusiness/IzzyClipzBusiness.entitlements
+        GENERATE_INFOPLIST_FILE: NO
+        SUPPORTS_MACCATALYST: NO
+        ENABLE_PREVIEWS: YES
+
+  IzzyClipzBusinessTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: IzzyClipzBusinessTests
+    dependencies:
+      - target: IzzyClipzBusiness
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.business.tests
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+
+  IzzyClipzBusinessUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.0"
+    sources:
+      - path: IzzyClipzBusinessUITests
+    dependencies:
+      - target: IzzyClipzBusiness
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.business.uitests
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: IzzyClipzBusiness
+
 schemes:
   IzzyClipz:
     build:
@@ -124,6 +212,27 @@ schemes:
       targets:
         - name: IzzyClipzTests
         - name: IzzyClipzUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  IzzyClipzBusiness:
+    build:
+      targets:
+        IzzyClipzBusiness: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      coverageTargets:
+        - IzzyClipzBusiness
+      targets:
+        - name: IzzyClipzBusinessTests
+        - name: IzzyClipzBusinessUITests
     profile:
       config: Release
     analyze:

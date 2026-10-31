@@ -182,9 +182,188 @@ jobs:
             build/*.log
           if-no-files-found: ignore
 
+  owner-app:
+    name: Owner app on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ inputs.macs == 'intel' && 120 || 60 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # The same two Xcodes as the customer app: 26 (App Store SDK) and 16.
+        runner: ${{ fromJSON(inputs.macs == 'intel' && '["macos-26-intel", "macos-15-intel"]' || '["macos-26", "macos-15"]') }}
+    env:
+      # Swift packages (Stripe Terminal's 34 MB binary) are fetched once here and reused by every step.
+      PACKAGES: build/SourcePackages
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # The committed IzzyClipz.xcodeproj is regenerated from project.yml with XcodeGen. Until that happens
+      # for the owner app's targets, build from a project generated here (it isn't committed).
+      - name: Generate the Xcode project if it lacks the owner app
+        run: |
+          if grep -q "IzzyClipzBusiness" IzzyClipz.xcodeproj/project.pbxproj; then
+            echo "The committed project has the owner app"
+          else
+            echo "Generating the project from project.yml with XcodeGen"
+            brew install xcodegen
+            xcodegen generate
+          fi
+
+      - uses: actions/cache@v4
+        with:
+          path: build/SourcePackages
+          key: spm-${{ matrix.runner }}-${{ hashFiles('project.yml') }}
+
+      - name: Resolve Swift packages (Stripe Terminal 6.0.0)
+        run: |
+          for attempt in 1 2 3; do
+            xcodebuild -resolvePackageDependencies \
+              -project IzzyClipz.xcodeproj \
+              -scheme IzzyClipzBusiness \
+              -clonedSourcePackagesDirPath "$PACKAGES" && exit 0
+            echo "Resolving failed (attempt $attempt); retrying"
+            sleep 10
+          done
+          exit 1
+
+      - name: Pick an iPhone simulator
+        run: |
+          SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          best = None
+          for runtime, devices in json.load(sys.stdin)["devices"].items():
+              if ".iOS-" not in runtime:
+                  continue
+              version = tuple(int(part) for part in runtime.split(".iOS-")[-1].split("-"))
+              # The owner app needs iOS 18.
+              if version < (18,):
+                  continue
+              for device in devices:
+                  name = device["name"]
+                  if not name.startswith("iPhone") or not device.get("isAvailable", True):
+                      continue
+                  rank = (version, name.endswith(" Pro"), name)
+                  if best is None or rank > best[0]:
+                      best = (rank, device["udid"], name, runtime)
+          if best is None:
+              sys.exit("No iOS 18+ iPhone simulator available")
+          print(best[1], best[2], best[3], file=sys.stderr)
+          print(best[1])
+          ')
+          echo "SIMULATOR=$SIMULATOR" >> "$GITHUB_ENV"
+          xcrun simctl boot "$SIMULATOR" || true
+          xcrun simctl bootstatus "$SIMULATOR" -b
+          xcrun simctl status_bar "$SIMULATOR" override --time "9:41" --dataNetwork wifi --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+
+      - name: Build and test the owner app
+        run: |
+          mkdir -p build
+          set +e
+          xcodebuild test \
+            -project IzzyClipz.xcodeproj \
+            -scheme IzzyClipzBusiness \
+            -destination "id=$SIMULATOR" \
+            -clonedSourcePackagesDirPath "$PACKAGES" \
+            -resultBundlePath build/OwnerTestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            > build/owner-test.log 2>&1
+          status=$?
+          grep -E "error:|warning:|\*\* TEST|Executed [0-9]+ test" build/owner-test.log | sort -u | head -200
+          grep -iE "^Test case .*(passed|failed|skipped)" build/owner-test.log | head -300
+          if [ $status -ne 0 ]; then tail -80 build/owner-test.log; fi
+          exit $status
+
+      - name: Build the owner app for devices (Release)
+        run: |
+          set +e
+          xcodebuild build \
+            -project IzzyClipz.xcodeproj \
+            -scheme IzzyClipzBusiness \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -clonedSourcePackagesDirPath "$PACKAGES" \
+            CODE_SIGNING_ALLOWED=NO \
+            > build/owner-release.log 2>&1
+          status=$?
+          grep -E "error:|warning:|\*\* BUILD" build/owner-release.log | sort -u | head -200
+          if [ $status -ne 0 ]; then tail -80 build/owner-release.log; fi
+          exit $status
+
+      - name: Export screenshots
+        if: always()
+        run: |
+          mkdir -p build/attachments build/screenshots
+          if [ -d build/OwnerTestResults.xcresult ]; then
+            xcrun xcresulttool export attachments --path build/OwnerTestResults.xcresult --output-path build/attachments || true
+          fi
+          if [ -f build/attachments/manifest.json ]; then
+            # Name each file after its screenshot ("O03-Schedule.png") and shrink it for the web.
+            python3 - <<'EOF'
+          import json, pathlib, re, shutil
+          source = pathlib.Path("build/attachments")
+          target = pathlib.Path("build/screenshots")
+          failures = pathlib.Path("build/failures")
+          failures.mkdir(exist_ok=True)
+          try:
+              for test in json.loads((source / "manifest.json").read_text()):
+                  for attachment in test.get("attachments", []):
+                      if attachment["suggestedHumanReadableName"].startswith("App UI hierarchy"):
+                          test_name = test.get("testIdentifier") or test.get("testName") or "test"
+                          test_name = re.sub(r"[^A-Za-z0-9._-]", "-", str(test_name))
+                          count = len(list(failures.glob(f"{test_name}-hierarchy*.txt")))
+                          shutil.copy(source / attachment["exportedFileName"], failures / f"{test_name}-hierarchy-{count + 1}.txt")
+                          continue
+                      if not attachment["exportedFileName"].lower().endswith(".png"):
+                          continue
+                      name = attachment["suggestedHumanReadableName"].split("_0_")[0]
+                      name = re.sub(r"[^A-Za-z0-9._ -]", "-", name)
+                      # Owner app screenshots start with "O" so they never clash with the customer app's.
+                      if not name.startswith("O"):
+                          name = "O-" + name
+                      shutil.copy(source / attachment["exportedFileName"], target / f"{name}.png")
+          except Exception as error:
+              print(f"Couldn't read the attachment manifest ({error}); keeping original names")
+              for png in source.glob("*.png"):
+                  shutil.copy(png, target / ("O-" + png.name))
+          EOF
+            for file in build/screenshots/*.png; do sips -Z 1400 "$file" > /dev/null || echo "Couldn't resize $file"; done
+          fi
+          ls build/screenshots
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots-owner-${{ matrix.runner }}
+          path: build/screenshots
+          if-no-files-found: warn
+
+      - name: Upload failure details
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failures-owner-${{ matrix.runner }}
+          path: build/failures
+          if-no-files-found: ignore
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-results-owner-${{ matrix.runner }}
+          path: |
+            build/OwnerTestResults.xcresult
+            build/owner-*.log
+          if-no-files-found: ignore
+
   publish-screenshots:
     name: Publish screenshots
-    needs: app
+    needs: [app, owner-app]
     # Pushes to main publish to "screenshots" (the README shows those). Runs started
     # by hand on another branch publish to "screenshots-<branch>", even when a test
     # failed, so the screens can be reviewed before merging.
@@ -199,6 +378,14 @@ jobs:
         continue-on-error: true
         with:
           pattern: screenshots-macos-26*
+          merge-multiple: true
+          path: screenshots
+
+      # The owner app's, named "O01-Sign-In.png" and so on.
+      - uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          pattern: screenshots-owner-macos-26*
           merge-multiple: true
           path: screenshots
 
