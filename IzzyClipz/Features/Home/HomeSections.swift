@@ -170,6 +170,7 @@ struct HomeBookSection: View {
 
     var body: some View {
         let upcoming = appointments.upcoming
+        let refreshError = appointments.refreshError
         // Re-checked every minute, so an appointment that's over drops off.
         TimelineView(.everyMinute) { context in
             // The next one that's on and, so the client hears about it, one the shop cancelled
@@ -181,6 +182,11 @@ struct HomeBookSection: View {
                     walkInLine(at: context.date)
                 } else {
                     VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
+                        // The check with the shop failed (offline, say): the shop may have
+                        // changed something, so say so, as the Book tab does.
+                        if let refreshError {
+                            StaleDataNote(text: "Couldn't check for changes. \(refreshError.userMessage)")
+                        }
                         // A card of its own for each appointment, so an open "Cancel?" can't carry
                         // over to another one.
                         ForEach(shown) { saved in

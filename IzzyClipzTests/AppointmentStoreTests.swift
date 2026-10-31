@@ -291,6 +291,23 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertNil(store.refreshError)
     }
 
+    /// Pulling Home down offline: the appointment stays as it was last known, and the store says
+    /// the check failed, which Home shows as "Couldn't check for changes" above it.
+    func testAnOfflinePullOnHomeKeepsTheAppointmentAndSaysTheCheckFailed() async {
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(), remind: false)
+        api.appointmentHandler = { id, _ in TestData.appointment(id: id) }
+        await store.refresh(force: true)
+        XCTAssertNil(store.refreshError)
+
+        api.appointmentHandler = { _, _ in throw APIError.offline }
+        await store.refresh(force: true)
+        XCTAssertEqual(store.homeAppointments.map(\.id), [id])
+        XCTAssertEqual(store.homeAppointments.first?.status, .booked)
+        XCTAssertEqual(store.refreshError, .offline)
+        XCTAssertEqual(store.refreshError?.userMessage, "We couldn't reach the shop. Check your internet connection and try again.")
+    }
+
     /// The server answering 404 (wrong token or unknown ID) keeps the appointment and flags it.
     func testAnAppointmentTheServerDoesNotKnowIsKeptAndFlagged() async {
         let store = makeStore(defaults: TestData.defaults())

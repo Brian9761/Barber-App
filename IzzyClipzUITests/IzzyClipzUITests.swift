@@ -580,6 +580,21 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("cancelAppointmentButton").exists, "The new booking can be cancelled from Home")
     }
 
+    /// Offline, Home still shows the appointment as it was, and says it couldn't check it with the
+    /// shop (the shop may have cancelled it), when the app opens and after pulling down.
+    func testHomeSaysWhenItCouldNotCheckTheAppointment() {
+        launch(UITestArguments.bookedAppointment, UITestArguments.offline)
+        XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 15), "Home doesn't show the booked appointment")
+        let note = element("staleDataNote")
+        XCTAssertTrue(note.waitForExistence(timeout: 15), "Home doesn't say it couldn't check the appointment")
+        XCTAssertTrue(note.label.contains("Couldn't check for changes"), note.label)
+        XCTAssertTrue(note.label.contains("internet"), note.label)
+
+        app.swipeDown()
+        XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10))
+        XCTAssertTrue(element("staleDataNote").waitForExistence(timeout: 15), "After pulling down offline, Home doesn't say the check failed")
+    }
+
     /// An appointment the previous version saved after booking on Squire stays listed, read-only,
     /// until it's over.
     func testAppointmentFromThePreviousVersion() {
