@@ -16,8 +16,11 @@ public protocol ShopAPI: Sendable {
     /// token (`X-Manage-Token`). Make one token per booking (`ManageToken.generate()`)
     /// and send the same one with every retry of that same booking: if an
     /// earlier try went through but its answer was lost, the server answers
-    /// with that appointment (200) instead of booking twice. A new token for
-    /// a booking that changed.
+    /// with that appointment (200) instead of booking twice. "The same
+    /// booking" is what the server compares, `NewAppointment.retryKey` (the
+    /// target, start and phone number): a retry with the name or note edited
+    /// is still that booking, and gets it back as it was first made. A new
+    /// token only for a booking with another key.
     ///
     /// Keep the confirmation's manage token (the one sent, from a server that
     /// takes it): it's the only way to look up or cancel the appointment later.

@@ -199,6 +199,19 @@ final class BookingSubmitter {
             case .timeGone, .rateLimited, .details: return false
             }
         }
+
+        /// The heading over the message. When the shop couldn't be reached, the booking may have
+        /// gone through with only its answer lost, so it isn't "not booked" for sure.
+        var title: String {
+            if case .offline = self { return "Not confirmed yet" }
+            return "Not booked yet"
+        }
+
+        /// Said under the message when trying again is safe even if it went through.
+        var retryNote: String? {
+            if case .offline = self { return "Trying again won't book it twice." }
+            return nil
+        }
     }
 
     private(set) var isBooking = false

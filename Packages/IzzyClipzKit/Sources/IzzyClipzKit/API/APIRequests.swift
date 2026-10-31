@@ -107,6 +107,17 @@ extension IzzyAPI {
             try container.encode(customer, forKey: Key("customer"))
             try container.encodeIfPresent(note?.trimmed.nonEmpty, forKey: Key("note"))
         }
+
+        /// What the server compares when the same manage token comes back
+        /// (`ShopAPI.book(_:token:)`): the target, asked for the same way, the
+        /// start as it's sent, and the phone number as it's sent (E.164). The
+        /// name, email and note aren't part of it, so two requests with the
+        /// same key are one booking to the server, even with those edited.
+        public var retryKey: String {
+            let target = target.fields.map { "\($0.name)=\($0.value)" }.joined(separator: "&")
+            let phone = customer.phone?.trimmed.nonEmpty.map { PhoneNumber(parsing: $0)?.e164 ?? $0 } ?? ""
+            return [target, Timestamp.string(from: start), phone].joined(separator: "|")
+        }
     }
 
     /// `PATCH /api/owner/appointments/:id` body `{ status }`.

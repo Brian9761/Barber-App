@@ -221,6 +221,8 @@ final class BookingSubmitterTests: XCTestCase {
         XCTAssertNil(confirmation)
         XCTAssertEqual(submitter.failure, .timeGone("Someone just booked 2:30 PM. Pick another time."))
         XCTAssertFalse(submitter.failure?.canRetry ?? true)
+        XCTAssertEqual(submitter.failure?.title, "Not booked yet", "The server said no: it's not booked")
+        XCTAssertNil(submitter.failure?.retryNote)
     }
 
     func testTimesThatCanNoLongerBeBookedGoBackToTheTimes() {
@@ -238,6 +240,9 @@ final class BookingSubmitterTests: XCTestCase {
         _ = await submitter.book(try draft())
         XCTAssertEqual(submitter.failure, .offline(APIError.offline.userMessage))
         XCTAssertTrue(submitter.failure?.canRetry ?? false)
+        // It may have reached the shop with only the answer lost: not "not booked".
+        XCTAssertEqual(submitter.failure?.title, "Not confirmed yet")
+        XCTAssertEqual(submitter.failure?.retryNote, "Trying again won't book it twice.")
 
         api.bookHandler = { _ in TestData.confirmation() }
         let confirmation = await submitter.book(try draft())
@@ -299,7 +304,8 @@ final class BookingSubmitterTests: XCTestCase {
     }
 
     /// The pending token is kept in the Keychain, so a retry after the app was closed and opened
-    /// again (the booking steps filled in the same way) is still safe.
+    /// again is still safe: the same service, barber, time and number get the same token, even
+    /// with the name typed again another way and the note left out this time.
     func testTheTokenSurvivesTheAppClosing() async throws {
         api.bookHandler = { _ in throw APIError.offline }
         _ = await makeSubmitter().book(try draft(note: "Low fade"))
@@ -307,25 +313,28 @@ final class BookingSubmitterTests: XCTestCase {
 
         let reopened = makeAppointments()
         api.bookHandler = { _ in TestData.confirmation(token: first.rawValue) }
-        let saved = await makeSubmitter(reopened).book(try draft(note: "  Low fade "))
+        let retyped = BookingDraft(plan: try draft().plan, customer: CustomerDetails(name: "Alex Smith", phone: "442-555-0123"), note: "")
+        let saved = await makeSubmitter(reopened).book(retyped)
         XCTAssertEqual(api.bookingTokens.last, first, "The same booking after a relaunch sends the same token")
         XCTAssertNotNil(saved)
         // Booked: the token is the appointment's now, and nothing is pending.
         XCTAssertEqual(tokens.secrets, [TestData.appointment().id: first.rawValue])
     }
 
-    /// A booking that's different in anything that's sent gets its own token; one tried before
-    /// keeps the one it had.
+    /// Another time, number, or service and barber is another booking, with its own token; one
+    /// tried before keeps the one it had. A fixed name or an added note isn't: the server would
+    /// answer it with the booking already made, so it keeps the token, and a new one would book
+    /// a second appointment.
     func testAChangedBookingGetsItsOwnToken() async throws {
         api.bookHandler = { _ in throw APIError.offline }
         let appointments = makeAppointments()
         let later = TestData.friday.addingTimeInterval(30 * 60)
+        let option = try XCTUnwrap(AppData.catalog.firstAvailableOption(forService: "haircut"))
         let drafts = [
             try draft(),
             try draft(start: later),
-            try draft(note: "Low fade"),
             try draft(phone: "(442) 555-0124"),
-            BookingDraft(plan: try draft().plan, customer: CustomerDetails(name: "Sam", phone: "(442) 555-0123"), note: ""),
+            BookingDraft(plan: BookingPlan(choice: .anyBarber(option), start: TestData.friday), customer: try draft().customer, note: ""),
         ]
         for draft in drafts {
             _ = await makeSubmitter(appointments).book(draft)
@@ -334,6 +343,16 @@ final class BookingSubmitterTests: XCTestCase {
         // Back to the first one: the token it was tried with.
         _ = await makeSubmitter(appointments).book(drafts[0])
         XCTAssertEqual(api.bookingTokens.last, api.bookingTokens.first)
+
+        // The first one with its details fixed: still that booking, still its token.
+        let edited = [
+            try draft(note: "Low fade"),
+            BookingDraft(plan: try draft().plan, customer: CustomerDetails(name: "Sam", phone: "(442) 555-0123"), note: "Skin fade"),
+        ]
+        for draft in edited {
+            _ = await makeSubmitter(appointments).book(draft)
+            XCTAssertEqual(api.bookingTokens.last, api.bookingTokens.first)
+        }
     }
 
     /// The whole thing against the in-memory server: the booking goes through but its answer is
@@ -367,6 +386,42 @@ final class BookingSubmitterTests: XCTestCase {
         let token = try XCTUnwrap(tokens.secrets[saved.id])
         let found = try await fake.appointment(id: saved.id, manageToken: token)
         XCTAssertEqual(found.id, saved.id, "The kept token manages the appointment")
+    }
+
+    /// On the in-memory server: the booking goes through but its answer is lost, then the client
+    /// fixes their name and adds a note before trying again. That's the same booking to the
+    /// server, so it comes back as it was made: one appointment, not a second barber at the same
+    /// time ("Any barber") or "Someone just booked" about their own time (one barber).
+    func testALostAnswerThenEditedDetailsBooksOnce() async throws {
+        let option = try XCTUnwrap(AppData.catalog.firstAvailableOption(forService: "haircut"))
+        let carlos = try XCTUnwrap(AppData.catalog.offering(withID: TestData.carlosHaircutID))
+        for choice in [BookingChoice.anyBarber(option), .offering(carlos)] {
+            var options = FakeShopAPI.Options()
+            options.latency = .zero
+            options.loseBookingResponseOnce = true
+            let fake = FakeShopAPI(options: options, now: TestData.now)
+            let tomorrow = TestData.calendarDay(2026, 10, 29)
+            let slots = try await fake.availability(IzzyAPI.AvailabilityQuery(target: choice.target, from: tomorrow, days: 1))
+            let start = try XCTUnwrap(slots.slots(on: tomorrow).first?.start)
+            let keychain = InMemorySecretStore()
+            let appointments = AppointmentStore(api: fake, tokens: keychain, scheduler: FakeNotificationScheduler(), defaults: TestData.defaults(), calendar: AppData.bookingCalendar, now: { TestData.now })
+            let plan = BookingPlan(choice: choice, start: start)
+
+            let first = BookingDraft(plan: plan, customer: CustomerDetails(name: "Alx", phone: "(442) 555-0123"), note: "")
+            let lost = await BookingSubmitter(api: fake, appointments: appointments).book(first)
+            XCTAssertNil(lost)
+            XCTAssertEqual(fake.bookingsMade, 1, "The server booked it")
+
+            // Change, fix the details, Continue: a new review for the edited booking.
+            let edited = BookingDraft(plan: plan, customer: CustomerDetails(name: "Alex", phone: "4425550123"), note: "Low fade")
+            let submitter = BookingSubmitter(api: fake, appointments: appointments)
+            let retried = await submitter.book(edited)
+            let saved = try XCTUnwrap(retried, "\(choice): \(String(describing: submitter.failure))")
+            XCTAssertEqual(fake.bookingsMade, 1, "\(choice): still one appointment on the server")
+            XCTAssertEqual(appointments.appointments.map(\.id), [saved.id])
+            XCTAssertEqual(saved.snapshot.customer.name, "Alx", "As the shop has it: the first try's details")
+            XCTAssertEqual(Array(keychain.secrets.keys), [saved.id], "Only the appointment's token; nothing left pending")
+        }
     }
 
     /// Without the same token, the same retry would have found its own time taken. This is what

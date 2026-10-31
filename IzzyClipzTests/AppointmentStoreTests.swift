@@ -89,27 +89,31 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertEqual(store.bookingToken(for: request()), token)
         // Typed differently, sent the same: the same booking.
         XCTAssertEqual(store.bookingToken(for: request(name: "  Alex ", phone: "(442) 555-0123", note: "  ")), token)
+        // A fixed name or an added note is still the booking the server would find with this
+        // token (it compares the service and barber, the time and the number), so it keeps it.
+        // A new token would book a second appointment.
+        XCTAssertEqual(store.bookingToken(for: request(name: "Sam")), token)
+        XCTAssertEqual(store.bookingToken(for: request(note: "Low fade")), token)
         XCTAssertNotNil(tokens.secrets[AppointmentStore.pendingBookingsAccount])
         XCTAssertFalse(String(describing: defaults.dictionaryRepresentation()).contains(token.rawValue))
 
-        // Anything sent that's different is another booking.
+        // Another time, number, or service and barber is another booking.
         let others = [
             request(start: TestData.friday.addingTimeInterval(30 * 60)),
-            request(name: "Sam"),
             request(phone: "4425550124"),
-            request(note: "Low fade"),
             IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: TestData.friday, customer: IzzyAPI.NewCustomer(name: "Alex", phone: "4425550123")),
         ]
         let otherTokens = others.map { store.bookingToken(for: $0) }
         XCTAssertEqual(Set(otherTokens + [token]).count, others.count + 1)
 
-        // The app opened again: the same tokens.
+        // The app opened again: the same tokens, whatever name and note are typed this time.
         let reopened = makeStore(defaults: defaults)
         XCTAssertEqual(reopened.bookingToken(for: request()), token)
+        XCTAssertEqual(reopened.bookingToken(for: request(name: "Alex Smith", note: "Skin fade")), token)
         XCTAssertEqual(others.map { reopened.bookingToken(for: $0) }, otherTokens)
 
-        // Booked: the next booking of the same time is a new one.
-        reopened.finishedBooking(request())
+        // Booked (with whatever name the retry had): the next booking of the same time is a new one.
+        reopened.finishedBooking(request(name: "Sam"))
         XCTAssertNotEqual(makeStore(defaults: defaults).bookingToken(for: request()), token)
     }
 

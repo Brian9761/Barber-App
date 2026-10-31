@@ -454,8 +454,9 @@ final class IzzyClipzUITests: XCTestCase {
         continueToReview()
         tapPinned("bookAppointmentButton")
         let error = element("bookingError")
-        XCTAssertTrue(error.waitForExistence(timeout: 15), "Offline, booking should say it didn't go through")
-        XCTAssertTrue(error.label.contains("Not booked yet"), error.label)
+        XCTAssertTrue(error.waitForExistence(timeout: 15), "Offline, booking should say it isn't confirmed")
+        XCTAssertTrue(error.label.contains("Not confirmed yet"), error.label)
+        XCTAssertTrue(error.label.contains("won't book it twice"), error.label)
         XCTAssertTrue(element("bookingCallButton").exists)
         screenshot("33-Book-Offline-Booking")
         tap("retryBookingButton")
@@ -478,7 +479,8 @@ final class IzzyClipzUITests: XCTestCase {
         tapPinned("bookAppointmentButton")
         let error = element("bookingError")
         XCTAssertTrue(error.waitForExistence(timeout: 15), "A lost answer should look like the connection dropped")
-        XCTAssertTrue(error.label.contains("Not booked yet"), error.label)
+        // It did go through, so the app mustn't say it's not booked.
+        XCTAssertTrue(error.label.contains("Not confirmed yet"), error.label)
 
         tap("retryBookingButton")
         // With a new token the retry would find its own time taken and go back to the times.

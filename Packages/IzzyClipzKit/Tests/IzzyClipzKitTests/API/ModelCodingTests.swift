@@ -343,6 +343,60 @@ final class RequestEncodingTests: XCTestCase {
         XCTAssertEqual(IzzyAPI.BookingTarget.offering(offering), .offering(id: offering.id))
     }
 
+    /// The server takes a booking sent again with the same token as the same booking when the
+    /// target, start and phone number match (`sameBooking` in server/src/appointments.ts); the
+    /// name, email and note don't count. The key is exactly that.
+    func testTheRetryKeyIsWhatTheServerCompares() {
+        let carlos = "carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41"
+        let slot = utc(2026, 11, 3, 18)
+        func booking(
+            target: IzzyAPI.BookingTarget? = nil,
+            start: Date? = nil,
+            name: String = "Alex",
+            phone: String? = "4425550123",
+            email: String? = nil,
+            note: String? = nil
+        ) -> IzzyAPI.NewAppointment {
+            IzzyAPI.NewAppointment(
+                target: target ?? .offering(id: carlos),
+                start: start ?? slot,
+                customer: IzzyAPI.NewCustomer(name: name, phone: phone, email: email),
+                note: note
+            )
+        }
+        let key = booking().retryKey
+        XCTAssertEqual(key, "offeringId=\(carlos)|2026-11-03T18:00:00Z|+14425550123")
+        XCTAssertEqual(
+            booking(target: .anyBarber(serviceId: "haircut")).retryKey,
+            "serviceId=haircut&barberId=any|2026-11-03T18:00:00Z|+14425550123"
+        )
+
+        // Edited details, or the same number typed another way: the same booking.
+        let same = [
+            booking(name: "Alex Smith"),
+            booking(phone: " (442) 555-0123 "),
+            booking(phone: "+1 442 555 0123"),
+            booking(email: "alex@example.com"),
+            booking(note: "Low fade"),
+            // Sent in whole seconds, as the server gets it.
+            booking(start: slot.addingTimeInterval(0.4)),
+        ]
+        for request in same {
+            XCTAssertEqual(request.retryKey, key, "\(request)")
+        }
+
+        // Anything the server compares that's different: another booking.
+        let others = [
+            booking(start: slot.addingTimeInterval(30 * 60)),
+            booking(phone: "4425550124"),
+            booking(phone: nil),
+            booking(target: .anyBarber(serviceId: "haircut")),
+            booking(target: .anyBarber(serviceId: "vip")),
+            booking(target: .offering(id: "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a")),
+        ]
+        XCTAssertEqual(Set(others.map(\.retryKey) + [key]).count, others.count + 1)
+    }
+
     func testStatusChange() throws {
         XCTAssertEqual(try encodeAPI(IzzyAPI.StatusChange(status: .noShow)), .object(["status": .string("noShow")]))
         XCTAssertEqual(try encodeAPI(IzzyAPI.StatusChange(status: .cancelled)), .object(["status": .string("cancelled")]))

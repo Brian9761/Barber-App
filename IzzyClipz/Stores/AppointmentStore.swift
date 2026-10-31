@@ -150,7 +150,8 @@ enum AppointmentActionError: Error, Equatable {
 /// A booking this iPhone has sent and not yet seen confirmed, with the manage token it was sent
 /// with. Kept (in the Keychain) so every try of that same booking sends the same token.
 struct PendingBooking: Codable, Equatable {
-    /// The request exactly as it's sent (its JSON), to tell a retry of it from a new booking.
+    /// What tells a retry of it from a new booking: what the server compares
+    /// (`IzzyAPI.NewAppointment.retryKey`, the target, start and number).
     let request: String
     let token: IzzyAPI.ManageToken
     /// When the appointment would start. After that there's nothing left to retry.
@@ -298,13 +299,15 @@ final class AppointmentStore {
 
     /// The manage token to book `request` with (`ShopAPI.book(_:token:)`).
     ///
-    /// Every try of the same booking gets the same token: Try again after an error, and a retry
-    /// after the app went to the background or was closed and opened again. So if an earlier try
-    /// went through but its answer never arrived, the server recognizes the retry and answers
-    /// with that appointment instead of booking it twice (or saying the time was just taken).
-    /// A booking that differs in anything that's sent (service, barber, time, name, number or
-    /// note) gets a token of its own. Tokens are kept until `finishedBooking(_:)` or until the
-    /// appointment's start has passed.
+    /// Every try of the same booking gets the same token: Try again after an error, a retry after
+    /// fixing the name or note, and a retry after the app went to the background or was closed
+    /// and opened again. So if an earlier try went through but its answer never arrived, the
+    /// server recognizes the retry and answers with that appointment instead of booking it twice
+    /// (or saying the time was just taken). "The same booking" is what the server compares: the
+    /// service and barber as picked, the time and the number. A booking that differs in one of
+    /// those gets a token of its own; a changed name or note doesn't, because with a new token
+    /// the server would book a second appointment (or find the client's own time taken). Tokens
+    /// are kept until `finishedBooking(_:)` or until the appointment's start has passed.
     func bookingToken(for request: IzzyAPI.NewAppointment) -> IzzyAPI.ManageToken {
         let key = Self.bookingKey(for: request)
         var pending = currentPendingBookings()
@@ -326,14 +329,11 @@ final class AppointmentStore {
         savePendingBookings(pending.filter { $0.request != key })
     }
 
-    /// What tells two tries of a booking apart: the request as it's sent (sorted keys, the name
-    /// and note trimmed, the number in E.164).
+    /// What tells a retry of a booking from a new one: exactly what the server compares when the
+    /// same token comes back (the target, the start, the number in E.164), so a retry the server
+    /// would answer with the earlier appointment always gets the earlier token.
     static func bookingKey(for request: IzzyAPI.NewAppointment) -> String {
-        guard let data = try? IzzyAPI.makeEncoder().encode(request) else {
-            // Never happens (the request types always encode); a key that's never reused is safe.
-            return UUID().uuidString
-        }
-        return String(decoding: data, as: UTF8.self)
+        request.retryKey
     }
 
     func setReminders(_ remind: Bool, for id: String) {

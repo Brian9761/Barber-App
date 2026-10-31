@@ -5,8 +5,9 @@ import SwiftUI
 ///
 /// If booking fails, the card under the button says why in plain words and offers the way
 /// forward: a taken time goes back to the times (refreshed), a problem with the details goes back
-/// to them, being offline offers "Try again" and "Call the shop", and a limit says which one (in
-/// the server's words) with the client's appointments, where one can be cancelled.
+/// to them, being offline says it isn't confirmed yet (it may have gone through) and offers "Try
+/// again" (which won't book it twice) and "Call the shop", and a limit says which one (in the
+/// server's words) with the client's appointments, where one can be cancelled.
 struct BookingReviewView: View {
     let draft: BookingDraft
 
@@ -211,13 +212,19 @@ private struct BookingFailureCard: View {
                     .foregroundStyle(Theme.caution)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text("Not booked yet")
+                    Text(failure.title)
                         .textRole(.headline)
                         .foregroundStyle(Theme.bone)
                     Text(failure.message)
                         .textRole(.body)
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let note = failure.retryNote {
+                        Text(note)
+                            .textRole(.body)
+                            .foregroundStyle(Theme.smoke)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
                 Spacer(minLength: 0)
             }
