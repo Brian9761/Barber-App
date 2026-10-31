@@ -67,8 +67,24 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(TextRole.displayXL.textStyle, .largeTitle)
     }
 
-    func testPrivacyManifestIsBundled() {
-        XCTAssertNotNil(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
+    /// The name, number and note sent with a booking are declared: used for the app's own
+    /// functionality, linked to the client, never for tracking.
+    func testPrivacyManifestDeclaresWhatGoesToTheShop() throws {
+        let url = try XCTUnwrap(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
+        let manifest = try XCTUnwrap(try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
+        XCTAssertEqual(manifest["NSPrivacyTracking"] as? Bool, false)
+        let collected = try XCTUnwrap(manifest["NSPrivacyCollectedDataTypes"] as? [[String: Any]])
+        let types = collected.compactMap { $0["NSPrivacyCollectedDataType"] as? String }
+        XCTAssertEqual(Set(types), [
+            "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypePhoneNumber",
+            "NSPrivacyCollectedDataTypeOtherUserContent",
+        ])
+        for entry in collected {
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypeLinked"] as? Bool, true)
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypeTracking"] as? Bool, false)
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypePurposes"] as? [String], ["NSPrivacyCollectedDataTypePurposeAppFunctionality"])
+        }
     }
 
     func testServerAddress() throws {
