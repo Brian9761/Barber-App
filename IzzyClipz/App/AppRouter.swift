@@ -142,6 +142,13 @@ struct BookingDetailsInProgress: Hashable {
     static func start(kept: BookingDetailsInProgress?, saved: CustomerDetails?) -> BookingDetailsInProgress {
         kept ?? BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: "", remember: true)
     }
+
+    /// The same booking after the client changed the remembered name and number in "Your
+    /// details" (`saved`), or forgot them (`nil`): those are the ones it fills in now, with
+    /// "Remember me" on, and the note stays. Otherwise Continue would remember the old ones again.
+    func remembering(_ saved: CustomerDetails?) -> BookingDetailsInProgress {
+        BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: note, remember: true)
+    }
 }
 
 /// What the time step is told when the client is sent back to it: reload, and say why (e.g.
@@ -180,13 +187,20 @@ final class AppRouter {
     var selectedTab: AppTab = .home
     /// Home pushes services, barbers and `HomeRoute`s, so its path holds any of them.
     var homePath = NavigationPath()
-    var bookingPath: [BookingStep] = []
+    var bookingPath: [BookingStep] = [] {
+        didSet {
+            // Back at step 1 (the back button, the Book tab tapped again, Start over): that
+            // booking was left, so what was typed for it doesn't fill in the next one.
+            if bookingPath.isEmpty, !oldValue.isEmpty { detailsInProgress = nil }
+        }
+    }
     /// Set when the client is sent back to the times; the time step shows it and refreshes.
     private(set) var timeStepNotice: TimeStepNotice?
     /// Goes up by one each time an appointment is booked.
     private(set) var finishedBookings = 0
     /// What the client has typed on the details step in this booking. Kept until it's booked,
-    /// the client starts over, or a new booking starts from elsewhere in the app.
+    /// the client goes back to step 1 or starts over, or a new booking starts from elsewhere in
+    /// the app. Changing the service from the review keeps it.
     var detailsInProgress: BookingDetailsInProgress?
     /// The sheet on screen. Set it through `present(_:)` so dismissal knows what was showing;
     /// SwiftUI sets it back to `nil` when it goes away.
@@ -201,8 +215,10 @@ final class AppRouter {
     /// service of the booking they're making (from its review), so what they typed stays.
     func startBooking(keepingDetails: Bool = false) {
         closeSheet()
-        if !keepingDetails { detailsInProgress = nil }
+        let kept = keepingDetails ? detailsInProgress : nil
         bookingPath = []
+        // Back at step 1 drops them (see `bookingPath`), but this is still the same booking.
+        detailsInProgress = kept
         selectedTab = .book
     }
 
@@ -310,6 +326,13 @@ final class AppRouter {
 
     func editCustomerDetails() {
         present(.customerDetails)
+    }
+
+    /// The client changed the remembered name and number in "Your details", or forgot them
+    /// (`nil`). The booking they're making fills in those too, so its details step doesn't bring
+    /// back the old ones and remember them again.
+    func rememberedDetailsChanged(to saved: CustomerDetails?) {
+        detailsInProgress = detailsInProgress?.remembering(saved)
     }
 
     /// Shows a sheet. If another one is up, that one closes first and the new one opens once it

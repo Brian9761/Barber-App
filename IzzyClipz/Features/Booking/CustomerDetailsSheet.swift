@@ -1,9 +1,11 @@
 import SwiftUI
 
 /// "Your details" in a sheet, from Book: change the name and number the app fills in, or forget
-/// them. Appointments already booked keep the details they were booked with.
+/// them. Appointments already booked keep the details they were booked with; the booking being
+/// made takes the new ones.
 struct CustomerDetailsSheet: View {
     @Environment(CustomerDetailsStore.self) private var store
+    @Environment(AppRouter.self) private var router
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var phone = ""
@@ -61,6 +63,7 @@ struct CustomerDetailsSheet: View {
             .confirmationDialog("Forget your name and number?", isPresented: $isConfirmingForget, titleVisibility: .visible) {
                 Button("Forget", role: .destructive) {
                     store.forget()
+                    router.rememberedDetailsChanged(to: nil)
                     dismiss()
                 }
                 Button("Keep them", role: .cancel) {}
@@ -80,6 +83,7 @@ struct CustomerDetailsSheet: View {
             return
         }
         store.remember(details)
+        router.rememberedDetailsChanged(to: store.saved)
         dismiss()
     }
 }

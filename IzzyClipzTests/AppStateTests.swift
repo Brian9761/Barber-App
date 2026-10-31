@@ -109,7 +109,8 @@ final class AppRouterTests: XCTestCase {
 
     /// What the client typed on the details step survives going back to the times (a taken time,
     /// "Change", the back button) and changing the service or barber from the review. It's
-    /// dropped once booked, on "Start over", and when a new booking starts elsewhere in the app.
+    /// dropped once booked, on "Start over", back at step 1, and when a new booking starts
+    /// elsewhere in the app.
     func testTypedDetailsAreKeptWhileBooking() throws {
         let router = AppRouter()
         let draft = try draft()
@@ -125,8 +126,19 @@ final class AppRouterTests: XCTestCase {
         // "Change" on the service or the barber, from the review.
         router.startBooking(keepingDetails: true)
         XCTAssertEqual(router.detailsInProgress, typed)
+        router.bookingPath.append(.chooseBarber(serviceID: "vip"))
+        XCTAssertEqual(router.detailsInProgress, typed, "Picking the new service keeps them")
         router.startBooking(serviceID: "haircut", keepingDetails: true)
         XCTAssertEqual(router.detailsInProgress, typed)
+
+        // Back at step 1 by hand (the back button, or the Book tab tapped again): that booking
+        // was left, so a booking from the list starts fresh.
+        router.bookingPath.removeLast()
+        XCTAssertNil(router.detailsInProgress, "Back at step 1")
+        router.bookingPath = [.chooseBarber(serviceID: "haircut"), .chooseTime(draft.plan.choice), .details(draft.plan)]
+        router.detailsInProgress = typed
+        router.bookingPath = []
+        XCTAssertNil(router.detailsInProgress, "Back at step 1 from the details")
 
         router.showBooked(appointmentID: "abc")
         XCTAssertNil(router.detailsInProgress, "Booked: the next booking starts fresh")
@@ -148,6 +160,27 @@ final class AppRouterTests: XCTestCase {
             start(router)
             XCTAssertNil(router.detailsInProgress, "A booking started from elsewhere in the app starts fresh")
         }
+    }
+
+    /// The remembered name and number changed (or forgotten) in "Your details" while a booking
+    /// keeps what was typed (after "Change" on the service): the booking takes the new ones, so
+    /// Continue doesn't remember the old ones again. The note stays.
+    func testChangingTheRememberedDetailsChangesTheBookingsToo() throws {
+        let router = AppRouter()
+        router.rememberedDetailsChanged(to: CustomerDetails(name: "Alex", phone: "(442) 555-0199"))
+        XCTAssertNil(router.detailsInProgress, "No booking under way: nothing to change")
+
+        let draft = try draft()
+        router.bookingPath = [.chooseBarber(serviceID: "haircut"), .chooseTime(draft.plan.choice), .details(draft.plan), .review(draft)]
+        router.detailsInProgress = BookingDetailsInProgress(customer: draft.customer, note: "Low fade", remember: true)
+        router.startBooking(keepingDetails: true)
+
+        let changed = CustomerDetails(name: "Alex", phone: "(442) 555-0199")
+        router.rememberedDetailsChanged(to: changed)
+        XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: changed, note: "Low fade", remember: true))
+
+        router.rememberedDetailsChanged(to: nil)
+        XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: true))
     }
 
     /// A booking's late answer only moves the flow while its review is the step on screen.
