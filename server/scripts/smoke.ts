@@ -2,7 +2,8 @@
 //
 // End-to-end check against a running API (production after a deploy, or
 // `npm run dev`): health, then a real booking far in the future that's seen
-// leaving availability, cancelled with its manage token, and seen coming back.
+// leaving availability, retried safely with the same token, cancelled with its
+// manage token, and seen coming back.
 // With SMOKE_OWNER_KEY it also checks the owner API sees the booking, and cleans
 // up through it if the customer cancel fails.
 //
@@ -10,6 +11,7 @@
 // under the name "Smoke test" and a 555-01xx number (reserved for fiction), then
 // cancels it straight away.
 
+import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
 
 // Real environment variables win over .env.local.
@@ -60,11 +62,22 @@ try {
   check(day, `found an open day near the end of the window (${day?.date})`);
   const slot = day.slots[day.slots.length - 1].start as string;
 
-  const created = await call('POST', '/api/appointments', {
+  // Booked like the app does it: with a manage token of its own, so a retry is safe.
+  const token = randomBytes(32).toString('base64url');
+  const request = {
     body: { offeringId: OFFERING, start: slot, customer: { name: 'Smoke test', phone: '(442) 555-0199' }, note: 'Automated check, cancelled right away.' },
-  });
+    headers: { 'x-manage-token': token },
+  };
+  const created = await call('POST', '/api/appointments', request);
   check(created.status === 201, `booked ${slot} (${created.status} ${created.body?.error?.code ?? ''})`);
   booked = { id: created.body.appointment.id, token: created.body.manageToken };
+  check(booked.token === token, 'the booking uses the token the client sent');
+
+  const retried = await call('POST', '/api/appointments', request);
+  check(
+    retried.status === 200 && retried.body.appointment.id === booked.id && retried.body.manageToken === token,
+    `a retry with the same token gets the same booking (${retried.status} ${retried.body?.error?.code ?? ''})`,
+  );
 
   const after = await call('GET', availabilityPath(day.date));
   const stillListed = after.body.days[0].slots.some((s: { start: string }) => s.start === slot);

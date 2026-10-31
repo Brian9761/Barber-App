@@ -19,7 +19,7 @@ describe('npm run migrate', () => {
   it('applied every migration once, recorded with its checksum', async () => {
     const { rows } = await db.pool.query('SELECT version, checksum FROM schema_migrations ORDER BY version');
     expect(rows).toEqual(migrationFiles().map((f) => ({ version: f.name, checksum: f.checksum })));
-    expect(rows[0].version).toBe('001_init.sql');
+    expect(rows.map((r) => r.version)).toEqual(['001_init.sql', '002_manage_token_unique.sql']);
   });
 
   it('is idempotent: running again applies nothing', async () => {
@@ -36,17 +36,17 @@ describe('npm run migrate', () => {
   it('applies new files in order and refuses an edited one', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'izzy-migrations-'));
     for (const f of migrationFiles()) writeFileSync(join(dir, f.name), f.sql);
-    writeFileSync(join(dir, '002_extra.sql'), 'CREATE TABLE migration_probe (id int);');
+    writeFileSync(join(dir, '900_extra.sql'), 'CREATE TABLE migration_probe (id int);');
     writeFileSync(join(dir, 'notes.txt'), 'ignored');
     const url = pathToFileURL(`${dir}/`);
     const client = await db.pool.connect();
     try {
-      expect((await migrate(client, url)).applied).toEqual(['002_extra.sql']);
+      expect((await migrate(client, url)).applied).toEqual(['900_extra.sql']);
       expect((await migrate(client, url)).applied).toEqual([]);
-      writeFileSync(join(dir, '002_extra.sql'), 'CREATE TABLE migration_probe (id bigint);');
-      await expect(migrate(client, url)).rejects.toThrow('002_extra.sql changed after it was applied');
+      writeFileSync(join(dir, '900_extra.sql'), 'CREATE TABLE migration_probe (id bigint);');
+      await expect(migrate(client, url)).rejects.toThrow('900_extra.sql changed after it was applied');
       // The failed run left nothing half-done.
-      expect((await client.query(`SELECT count(*)::int AS n FROM schema_migrations`)).rows[0].n).toBe(2);
+      expect((await client.query(`SELECT count(*)::int AS n FROM schema_migrations`)).rows[0].n).toBe(migrationFiles().length + 1);
     } finally {
       client.release();
     }

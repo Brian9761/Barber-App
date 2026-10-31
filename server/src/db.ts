@@ -65,3 +65,11 @@ export function pgErrorCode(error: unknown): string | undefined {
 }
 
 export const EXCLUSION_VIOLATION = '23P01';
+export const UNIQUE_VIOLATION = '23505';
+
+/** The constraint or index a Postgres error names, if any. */
+export function pgConstraint(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'constraint' in error && typeof error.constraint === 'string'
+    ? error.constraint
+    : undefined;
+}

@@ -1,8 +1,8 @@
 import { z } from 'zod';
-import { isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
+import { hashManageToken, isNewManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
 import { availability } from './availability.js';
 import { checkStart, createAppointment, resolveTarget, targetOfferings, type Target } from './booking.js';
-import { EXCLUSION_VIOLATION, pgErrorCode } from './db.js';
+import { EXCLUSION_VIOLATION, pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
 import { ApiError, json, readJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
@@ -79,30 +79,112 @@ function preflight(ctx: Context, target: Target, start: Date, mode: 'customer' |
   if (problems.every((p) => p !== null)) throw problems[0] ?? new ApiError('slot_taken', 'Pick another time.');
 }
 
+type CustomerBooking = z.output<typeof customerBooking>;
+
+const tokenUsed = () => new ApiError('invalid_request', 'That booking token was already used.');
+
+/** The unique index on `appointments.manage_token_hash` (migrations/002). */
+const MANAGE_TOKEN_INDEX = 'appointments_manage_token_hash_key';
+
+/**
+ * The app's own manage token from `X-Manage-Token`, if it sent one. It must be
+ * exactly what the server would make (32 random bytes, base64url); anything
+ * else, an empty header included, is a 400.
+ */
+function clientManageToken(request: Request): string | undefined {
+  const header = request.headers.get('x-manage-token');
+  if (header === null) return undefined;
+  const token = header.trim();
+  if (!isNewManageToken(token)) {
+    throw new ApiError('invalid_request', 'X-Manage-Token must be 32 random bytes in base64url (43 characters).');
+  }
+  return token;
+}
+
+/**
+ * Whether `row` is the booking `body` asks for: the same target, asked for the
+ * same way (that offering, or that service with "any barber", whichever barber
+ * the server picked), the same start and the same phone number. The name, email
+ * and note aren't compared.
+ */
+function sameBooking(row: AppointmentRow, body: CustomerBooking): boolean {
+  if (row.booked_by !== 'customer') return false;
+  if (row.start_at.getTime() !== body.start.getTime()) return false;
+  if (row.customer_phone !== body.customer.phone) return false;
+  if (body.offeringId !== undefined) {
+    return (
+      !row.any_barber &&
+      row.offering_id === body.offeringId &&
+      (body.serviceId === undefined || body.serviceId === row.service_id) &&
+      (body.barberId === undefined || body.barberId === row.barber_id)
+    );
+  }
+  return row.any_barber && body.barberId === 'any' && body.serviceId === row.service_id;
+}
+
+/**
+ * A retry of a booking that already went through (its answer was lost, or two
+ * copies of the request crossed): 200 with the appointment as it is now (it may
+ * have been cancelled since) and the same token. `null` if the token is new; a
+ * 400 if it was used for a different booking.
+ */
+async function replay(db: Queryable, token: string, body: CustomerBooking): Promise<Response | null> {
+  const { rows } = await db.query<AppointmentRow>('SELECT * FROM appointments WHERE manage_token_hash = $1', [
+    hashManageToken(token),
+  ]);
+  const row = rows[0];
+  if (!row) return null;
+  if (!sameBooking(row, body)) throw tokenUsed();
+  return json({ appointment: appointmentJSON(row), manageToken: token });
+}
+
 export async function postAppointment(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
+  const token = clientManageToken(request);
   const body = parse(customerBooking, await readJsonObject(request));
-  const target = resolveTarget(deps.catalog, body);
-  preflight(ctx, target, body.start, 'customer');
 
-  const hits = await hit(deps.db, ipKey('book', deps.clientIp(request)), deps.now(), {
-    max: BOOKINGS_PER_IP_PER_HOUR,
-    windowMinutes: 60,
-  });
-  if (hits > BOOKINGS_PER_IP_PER_HOUR) {
-    throw new ApiError('rate_limited', 'Too many booking attempts from this network. Try again in an hour, or call the shop.', {
-      headers: { 'retry-after': '3600' },
-    });
+  // A retry is answered before the time rules and the rate limit: it books
+  // nothing, so it doesn't count as an attempt and works even after the lead
+  // time has passed or the network has used up its attempts.
+  if (token) {
+    const replayed = await replay(deps.db, token, body);
+    if (replayed) return replayed;
   }
 
-  const { row, manageToken } = await createAppointment(deps, {
-    target,
-    start: body.start,
-    customer: { name: body.customer.name, phone: body.customer.phone, email: body.customer.email ?? null },
-    note: body.note ?? null,
-    mode: 'customer',
-  });
-  return json({ appointment: appointmentJSON(row), manageToken }, 201);
+  try {
+    const target = resolveTarget(deps.catalog, body);
+    preflight(ctx, target, body.start, 'customer');
+
+    const hits = await hit(deps.db, ipKey('book', deps.clientIp(request)), deps.now(), {
+      max: BOOKINGS_PER_IP_PER_HOUR,
+      windowMinutes: 60,
+    });
+    if (hits > BOOKINGS_PER_IP_PER_HOUR) {
+      throw new ApiError('rate_limited', 'Too many booking attempts from this network. Try again in an hour, or call the shop.', {
+        headers: { 'retry-after': '3600' },
+      });
+    }
+
+    const { row, manageToken } = await createAppointment(deps, {
+      target,
+      start: body.start,
+      customer: { name: body.customer.name, phone: body.customer.phone, email: body.customer.email ?? null },
+      note: body.note ?? null,
+      mode: 'customer',
+      manageToken: token,
+    });
+    return json({ appointment: appointmentJSON(row), manageToken }, 201);
+  } catch (error) {
+    // Another copy of this request with the same token may have booked it
+    // meanwhile (its own slot then looks taken, or the token's unique index
+    // stops this insert): answer like a retry.
+    if (token) {
+      const replayed = await replay(deps.db, token, body);
+      if (replayed) return replayed;
+      if (pgErrorCode(error) === UNIQUE_VIOLATION && pgConstraint(error) === MANAGE_TOKEN_INDEX) throw tokenUsed();
+    }
+    throw error;
+  }
 }
 
 // GET /api/appointments/:id and POST /api/appointments/:id/cancel (X-Manage-Token)

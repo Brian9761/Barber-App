@@ -17,6 +17,8 @@ export interface AppointmentRow {
   status: 'booked' | 'cancelled' | 'completed' | 'no_show';
   cancelled_by: 'customer' | 'shop' | null;
   booked_by: 'customer' | 'shop';
+  /** Booked for "any barber": the server picked `barber_id`. */
+  any_barber: boolean;
   customer_name: string;
   customer_phone: string | null;
   customer_email: string | null;

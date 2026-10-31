@@ -49,6 +49,15 @@ export function isWellFormedManageToken(token: string): boolean {
   return TOKEN_RE.test(token);
 }
 
+/**
+ * A token the app made itself for `POST /api/appointments` (`X-Manage-Token`):
+ * exactly what `newManageToken` makes, 32 bytes in canonical base64url (so the
+ * last character's two unused bits are zero). Anything else is turned down.
+ */
+export function isNewManageToken(token: string): boolean {
+  return TOKEN_RE.test(token) && Buffer.from(token, 'base64url').toString('base64url') === token;
+}
+
 /** Constant-time comparison of a presented token with a stored digest. */
 export function manageTokenMatches(token: string, storedHash: string | null): boolean {
   if (!storedHash || !/^[0-9a-f]{64}$/.test(storedHash) || !isWellFormedManageToken(token)) return false;
