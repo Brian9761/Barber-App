@@ -102,7 +102,7 @@ final class FakeShopAPI: ShopAPI {
         return IzzyAPI.AvailabilityResponse(timeZone: shop.timeZoneIdentifier, days: days)
     }
 
-    func book(_ request: IzzyAPI.NewAppointment) async throws -> IzzyAPI.BookingConfirmation {
+    func book(_ request: IzzyAPI.NewAppointment, token manageToken: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation {
         try await respond()
         if options.bookingOfflineOnce {
             options.bookingOfflineOnce = false
@@ -133,7 +133,7 @@ final class FakeShopAPI: ShopAPI {
         }
         let appointment = makeAppointment(offering: offering, start: request.start, name: name, phone: phone.e164, note: request.note)
         bookingCount += 1
-        let token = "fake-manage-token-\(bookingCount)"
+        let token = manageToken.rawValue
         stored[appointment.id] = Stored(appointment: appointment, token: token, isSeeded: false)
         markBusy(offering.barberID, from: appointment.start, minutes: appointment.durationMinutes)
         return IzzyAPI.BookingConfirmation(appointment: appointment, manageToken: token)

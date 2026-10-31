@@ -175,22 +175,54 @@ final class ClientTests: XCTestCase {
 
     func testBookingSendsTheContractBodyAndReadsA201() async throws {
         StubURLProtocol.reply { _ in .fixture("booking-confirmation.json", status: 201) }
+        let token = IzzyAPI.ManageToken.generate()
         let confirmation = try await client.book(IzzyAPI.NewAppointment(
             target: .anyBarber(serviceId: "haircut"),
             start: utc(2026, 11, 2, 18),
             customer: IzzyAPI.NewCustomer(name: "Test Customer", phone: PhoneNumber(parsing: "(442) 555-0123")?.e164)
-        ))
+        ), token: token)
         XCTAssertEqual(confirmation.appointment.barberId, "flowxbori")
         XCTAssertEqual(confirmation.manageToken, "dGVzdC1tYW5hZ2UtdG9rZW4tZm9yLWZpeHR1cmVzLTAx")
         let sent = try only()
         XCTAssertEqual(sent.method, "POST")
         XCTAssertEqual(sent.path, "/api/appointments")
         XCTAssertEqual(sent.header("Content-Type"), "application/json")
+        // The app's own manage token, which makes a retry safe.
+        XCTAssertEqual(sent.header("X-Manage-Token"), token.rawValue)
         XCTAssertNil(sent.header("Authorization"))
         XCTAssertEqual(sent.json, .object([
             "serviceId": .string("haircut"), "barberId": .string("any"), "start": .string("2026-11-02T18:00:00Z"),
             "customer": .object(["name": .string("Test Customer"), "phone": .string("+14425550123")]),
         ]))
+    }
+
+    /// A retry of a booking that went through: the server answers 200 with the same appointment
+    /// and token, which decodes like a new booking. Each try sends the token it was given.
+    func testABookingRetryIsAnsweredWith200() async throws {
+        let token = IzzyAPI.ManageToken.generate()
+        let appointment = IzzyAPI.NewAppointment(
+            target: .offering(id: "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a"),
+            start: utc(2026, 11, 3, 18),
+            customer: IzzyAPI.NewCustomer(name: "Test Customer", phone: "4425550123")
+        )
+        let body = String(decoding: try kitFixture("booking-confirmation.json"), as: UTF8.self)
+            .replacingOccurrences(of: "dGVzdC1tYW5hZ2UtdG9rZW4tZm9yLWZpeHR1cmVzLTAx", with: token.rawValue)
+        XCTAssertTrue(body.contains(token.rawValue))
+        StubURLProtocol.reply { _ in .json(201, body) }
+        let first = try await client.book(appointment, token: token)
+        StubURLProtocol.reply { _ in .json(200, body) }
+        let retry = try await client.book(appointment, token: token)
+        XCTAssertEqual(retry, first)
+        XCTAssertEqual(retry.manageToken, token.rawValue)
+        let sent = try only()
+        XCTAssertEqual(sent.header("X-Manage-Token"), token.rawValue)
+        XCTAssertEqual(sent.json?["start"], .string("2026-11-03T18:00:00Z"))
+
+        // The same token used for another booking is turned down in the server's words.
+        StubURLProtocol.reply { _ in .json(400, #"{"error":{"code":"invalid_request","message":"That booking token was already used."}}"#) }
+        await assertThrows(.server(code: "invalid_request", message: "That booking token was already used.", status: 400)) {
+            try await self.client.book(appointment, token: token)
+        }
     }
 
     func testManageTokenCalls() async throws {
@@ -432,7 +464,7 @@ final class ClientTests: XCTestCase {
             StubURLProtocol.reply { _ in .json(status, #"{"error":{"code":"\#(code)","message":"Message for \#(code)"}}"#) }
             await assertThrows(expected) { try await self.client.book(IzzyAPI.NewAppointment(
                 target: .anyBarber(serviceId: "haircut"), start: utc(2026, 11, 2, 18), customer: IzzyAPI.NewCustomer(name: "T", phone: "+14425550123")
-            )) }
+            ), token: .generate()) }
         }
         // The code wins over the status.
         StubURLProtocol.reply { _ in .json(400, #"{"error":{"code":"slot_taken","message":"x"}}"#) }

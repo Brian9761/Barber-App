@@ -210,7 +210,8 @@ extension IzzyAPI {
         }
     }
 
-    /// `POST /api/appointments` → 201 `{ appointment, manageToken }`.
+    /// `POST /api/appointments` → 201 `{ appointment, manageToken }` (200 for a retry of a
+    /// booking that already went through).
     public struct BookingConfirmation: Codable, Hashable, Sendable, CustomStringConvertible {
         public var appointment: Appointment
         /// The secret that lets this phone look up and cancel the appointment.

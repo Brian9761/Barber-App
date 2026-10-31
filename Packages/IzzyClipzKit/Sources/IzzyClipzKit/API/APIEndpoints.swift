@@ -126,9 +126,11 @@ extension IzzyAPI {
             ])
         }
 
-        /// `POST /api/appointments` → 201 `{ appointment, manageToken }`.
-        public static func book(_ appointment: NewAppointment) throws -> Endpoint<BookingConfirmation> {
-            Endpoint(.post, "/api/appointments", body: try json(appointment))
+        /// `POST /api/appointments` with the app's own `X-Manage-Token` → 201 `{ appointment,
+        /// manageToken }`, or 200 with the same when this token already booked this appointment
+        /// (a retry after a lost answer).
+        public static func book(_ appointment: NewAppointment, token: ManageToken) throws -> Endpoint<BookingConfirmation> {
+            Endpoint(.post, "/api/appointments", body: try json(appointment), credential: .manageToken(token.rawValue))
         }
 
         /// `GET /api/appointments/:id` with `X-Manage-Token` → `{ appointment }`.

@@ -213,7 +213,7 @@ final class BookingSubmitter {
             note: draft.note
         )
         do {
-            return try await api.book(request)
+            return try await api.book(request, token: .generate())
         } catch where error.isCancellation {
             return nil
         } catch {

@@ -94,8 +94,10 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.availability(query))
     }
 
-    public func book(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.BookingConfirmation {
-        try await send(try encoded { try IzzyAPI.Endpoints.book(appointment) })
+    /// Answers 201 for a new booking and 200 for a retry the server recognized; both decode the
+    /// same way.
+    public func book(_ appointment: IzzyAPI.NewAppointment, token: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation {
+        try await send(try encoded { try IzzyAPI.Endpoints.book(appointment, token: token) })
     }
 
     public func appointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {

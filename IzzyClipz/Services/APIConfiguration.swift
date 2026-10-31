@@ -44,7 +44,7 @@ struct UnconfiguredShopAPI: ShopAPI {
 
     func health() async throws -> IzzyAPI.Health { throw error }
     func availability(_ query: IzzyAPI.AvailabilityQuery) async throws -> IzzyAPI.AvailabilityResponse { throw error }
-    func book(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.BookingConfirmation { throw error }
+    func book(_ appointment: IzzyAPI.NewAppointment, token: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation { throw error }
     func appointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment { throw error }
     func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment { throw error }
     func reviews() async throws -> IzzyAPI.ReviewsResponse { throw error }

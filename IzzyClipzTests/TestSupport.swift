@@ -17,6 +17,8 @@ final class ScriptedShopAPI: ShopAPI {
 
     private(set) var availabilityQueries: [IzzyAPI.AvailabilityQuery] = []
     private(set) var bookings: [IzzyAPI.NewAppointment] = []
+    /// The manage token each booking was sent with.
+    private(set) var bookingTokens: [IzzyAPI.ManageToken] = []
     private(set) var lookups: [(id: String, token: String)] = []
     private(set) var cancellations: [(id: String, token: String)] = []
     private(set) var reviewRequests = 0
@@ -29,8 +31,9 @@ final class ScriptedShopAPI: ShopAPI {
         return try availabilityHandler(query)
     }
 
-    func book(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.BookingConfirmation {
+    func book(_ appointment: IzzyAPI.NewAppointment, token: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation {
         bookings.append(appointment)
+        bookingTokens.append(token)
         return try bookHandler(appointment)
     }
 

@@ -12,9 +12,16 @@ public protocol ShopAPI: Sendable {
     /// `GET /api/availability`: open start times, by shop day.
     func availability(_ query: IzzyAPI.AvailabilityQuery) async throws -> IzzyAPI.AvailabilityResponse
 
-    /// `POST /api/appointments`. Keep the confirmation's manage token: it's
-    /// the only way to look up or cancel the appointment later.
-    func book(_ appointment: IzzyAPI.NewAppointment) async throws -> IzzyAPI.BookingConfirmation
+    /// `POST /api/appointments`, sending `token` as the appointment's manage
+    /// token (`X-Manage-Token`). Make one token per booking (`ManageToken.generate()`)
+    /// and send the same one with every retry of that same booking: if an
+    /// earlier try went through but its answer was lost, the server answers
+    /// with that appointment (200) instead of booking twice. A new token for
+    /// a booking that changed.
+    ///
+    /// Keep the confirmation's manage token (the one sent, from a server that
+    /// takes it): it's the only way to look up or cancel the appointment later.
+    func book(_ appointment: IzzyAPI.NewAppointment, token: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation
 
     /// `GET /api/appointments/:id`: the appointment as it is now (the shop may
     /// have cancelled or completed it).

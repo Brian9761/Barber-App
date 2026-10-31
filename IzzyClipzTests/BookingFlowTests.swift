@@ -283,7 +283,7 @@ final class FakeShopAPITests: XCTestCase {
         let firstSlots = try await fake.availability(query).slots(on: tomorrow)
 
         let first = try XCTUnwrap(firstSlots.first)
-        let confirmation = try await fake.book(IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: first.start, customer: customer()))
+        let confirmation = try await fake.book(IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: first.start, customer: customer()), token: .generate())
         XCTAssertEqual(confirmation.appointment.start, first.start)
         XCTAssertEqual(confirmation.appointment.customer.phone, "+14425550123")
 
@@ -313,7 +313,7 @@ final class FakeShopAPITests: XCTestCase {
 
         let slot = try XCTUnwrap(slotSlots.first)
         XCTAssertFalse(slot.barberIds.isEmpty)
-        let confirmation = try await fake.book(IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: slot.start, customer: customer()))
+        let confirmation = try await fake.book(IzzyAPI.NewAppointment(target: .anyBarber(serviceId: "haircut"), start: slot.start, customer: customer()), token: .generate())
         XCTAssertTrue(slot.barberIds.contains(confirmation.appointment.barberId))
         XCTAssertTrue(["flowxbori", "cristian-ceja", "julian-ramos"].contains(confirmation.appointment.barberId))
     }
@@ -326,7 +326,7 @@ final class FakeShopAPITests: XCTestCase {
         let first = try XCTUnwrap(firstSlots.first)
         let request = IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: first.start, customer: customer())
         do {
-            _ = try await fake.book(request)
+            _ = try await fake.book(request, token: .generate())
             XCTFail("The first booking finds the time taken")
         } catch {
             XCTAssertEqual(error as? APIError, .slotTaken)
@@ -336,14 +336,14 @@ final class FakeShopAPITests: XCTestCase {
         let secondSlots = try await fake.availability(query).slots(on: tomorrow)
 
         let second = try XCTUnwrap(secondSlots.first)
-        _ = try await fake.book(IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: second.start, customer: customer()))
+        _ = try await fake.book(IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: second.start, customer: customer()), token: .generate())
     }
 
     func testTurnsDownTimesItDoesNotOffer() async throws {
         let fake = makeFake()
         let past = TestData.now.addingTimeInterval(-3600)
         do {
-            _ = try await fake.book(IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: past, customer: customer()))
+            _ = try await fake.book(IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: past, customer: customer()), token: .generate())
             XCTFail("A time in the past can't be booked")
         } catch {
             XCTAssertEqual(error as? APIError, .tooSoon)
@@ -366,12 +366,12 @@ final class FakeShopAPITests: XCTestCase {
         let first = try XCTUnwrap(firstSlots.first)
         let request = IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: first.start, customer: customer())
         do {
-            _ = try await once.book(request)
+            _ = try await once.book(request, token: .generate())
             XCTFail("The first booking is offline")
         } catch {
             XCTAssertEqual(error as? APIError, .offline)
         }
-        _ = try await once.book(request)
+        _ = try await once.book(request, token: .generate())
     }
 
     func testSampleDataIsClearlySamples() async throws {
