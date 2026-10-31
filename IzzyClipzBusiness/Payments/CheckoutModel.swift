@@ -140,6 +140,9 @@ final class CheckoutModel {
 
     @ObservationIgnored private(set) var active: ActivePayment?
     @ObservationIgnored private var flowTask: Task<Void, Never>?
+    /// Reloading today's payments after one went through. Separate from the
+    /// payment itself, so the next payment can start while the list loads.
+    @ObservationIgnored private var paymentsTask: Task<Void, Never>?
     /// Telling Stripe about PaymentIntents given up on, one after another and
     /// never while the reader is busy with a payment (it does one thing at a time).
     @ObservationIgnored private var abandoning: Task<Void, Never>?
@@ -386,9 +389,10 @@ final class CheckoutModel {
         }
     }
 
-    /// Waits for the running payment step, for tests.
+    /// Waits for the running payment step (and the list it reloads), for tests.
     func waitUntilSettled() async {
         await flowTask?.value
+        await paymentsTask?.value
     }
 
     private func run(_ request: IzzyAPI.NewPayment) async {
@@ -496,7 +500,9 @@ final class CheckoutModel {
                 if let appointmentId = recorded.appointmentId ?? payment.request.appointmentId {
                     onPaid?(appointmentId)
                 }
-                await loadPayments()
+                // Not awaited: the payment is done, and Tap to Pay must work
+                // for the next customer even while the list is slow to load.
+                paymentsTask = Task { await self.loadPayments() }
             } else if recorded.status == "processing" {
                 active?.needsCheck = true
                 phase = .outcomeUnknown("Stripe is still processing this payment. Check again in a moment before taking another payment.")

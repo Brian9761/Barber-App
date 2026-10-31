@@ -221,6 +221,36 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(api.createdPayments, 1)
     }
 
+    func testTheNextPaymentStartsWhileTodaysPaymentsAreStillLoading() async {
+        // A slow shop connection: the payments list takes a while after each payment.
+        var listIsSlow = true
+        api.paymentsHandler = { @MainActor [api] day in
+            while listIsSlow { try await Task.sleep(for: .milliseconds(10)) }
+            return try await api!.base.payments(on: day)
+        }
+        let checkout = makeCheckout()
+        checkout.entry = AmountEntry(cents: 3500)
+        checkout.charge()
+        let paid = await eventually { if case .succeeded = checkout.phase { return true } else { return false } }
+        XCTAssertTrue(paid, "Got \(checkout.phase)")
+        let loading = await eventually { checkout.isLoadingPayments }
+        XCTAssertTrue(loading, "The list is still loading")
+        checkout.reset()
+
+        // The next customer: Tap to Pay on iPhone starts their payment straight away.
+        checkout.entry = AmountEntry(cents: 2000)
+        checkout.charge()
+        let started = await eventually(timeout: 2) { checkout.phase != .editing }
+        XCTAssertTrue(started, "Tap to Pay on iPhone did nothing while the list was loading")
+        listIsSlow = false
+        await checkout.waitUntilSettled()
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(receipt.amountCents, 2000)
+        XCTAssertEqual(api.createdPayments, 2)
+        let loaded = await eventually { checkout.todaysPayments.contains { $0.amountCents == 2000 } }
+        XCTAssertTrue(loaded, "The list still shows the new payment once it loads")
+    }
+
     // MARK: Not configured
 
     func testStripeNotConfiguredExplainsAndOffersPractice() async {
