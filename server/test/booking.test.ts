@@ -321,9 +321,43 @@ describe('validation', () => {
   });
 
   it('rejects oversized bodies with 413', async () => {
-    const res = await h.call('POST', '/api/appointments', { rawBody: JSON.stringify({ note: 'x'.repeat(20_000) }) });
+    const res = await h.call('POST', '/api/appointments', {
+      rawBody: JSON.stringify({ note: 'x'.repeat(20_000) }),
+      headers: { 'content-type': 'application/json' },
+    });
     expect(res.status).toBe(413);
     expect(res.body.error.code).toBe('invalid_request');
+  });
+
+  it('only takes JSON sent as application/json, so another website can’t book from its visitors’ browsers', async () => {
+    // A page's no-cors fetch or form post can send text/plain, a form or multipart without a
+    // CORS preflight; application/json needs one, and this API never answers it.
+    const body = JSON.stringify({ offeringId: FLOW45, start: '2026-11-03T18:00:00Z', customer });
+    const types = [null, 'text/plain;charset=UTF-8', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x', 'application/jsonx', 'application/vnd.api+json'];
+    for (const type of types) {
+      const headers: Record<string, string> = { origin: 'https://elsewhere.example' };
+      if (type) headers['content-type'] = type;
+      const request = new Request('https://izzy-clipz-api.test/api/appointments', { method: 'POST', headers, body });
+      if (!type) request.headers.delete('content-type');
+      const res = await h.app.fetch(request);
+      expect(res.status, String(type)).toBe(415);
+      expect(await res.json()).toEqual({
+        error: { code: 'invalid_request', message: 'Send the request body as JSON (Content-Type: application/json).' },
+      });
+    }
+    const { rows } = await h.database.pool.query('SELECT (SELECT count(*) FROM appointments)::int AS booked, (SELECT count(*) FROM rate_limits)::int AS counted');
+    expect(rows[0]).toEqual({ booked: 0, counted: 0 });
+    // The owner's JSON endpoints too.
+    const owner = await h.call('POST', '/api/owner/appointments', { owner: true, rawBody: body, headers: { 'content-type': 'text/plain' } });
+    expect(owner.status).toBe(415);
+    // Parameters and letter case don't matter.
+    for (const [i, type] of ['application/json; charset=utf-8', 'Application/JSON'].entries()) {
+      const res = await h.call('POST', '/api/appointments', {
+        rawBody: JSON.stringify({ offeringId: FLOW45, start: `2026-11-0${4 + i}T18:00:00Z`, customer }),
+        headers: { 'content-type': type },
+      });
+      expect(res.status, type).toBe(201);
+    }
   });
 });
 

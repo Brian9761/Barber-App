@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { requireOwner } from './auth.js';
-import { ApiError, json, noContent, readBytes, readJsonObject } from './http.js';
+import { ApiError, json, mediaType, noContent, readBytes, readJsonObject } from './http.js';
 import type { Context } from './router.js';
 import { productJSON, type ProductRow } from './serialize.js';
 import { charLength, parse, UUID_RE } from './validation.js';
@@ -121,8 +121,7 @@ export async function deleteProduct(ctx: Context): Promise<Response> {
 export async function uploadProductPhoto(ctx: Context): Promise<Response> {
   requireOwner(ctx.request, ctx.deps.config);
   const id = productId(ctx);
-  const type = (ctx.request.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase();
-  if (type !== 'image/jpeg') {
+  if (mediaType(ctx.request) !== 'image/jpeg') {
     throw new ApiError('invalid_request', 'Send the photo as a JPEG (Content-Type: image/jpeg).', { status: 415 });
   }
   const bytes = await readBytes(ctx.request, MAX_PHOTO_BYTES);

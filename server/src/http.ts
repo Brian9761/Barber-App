@@ -99,8 +99,21 @@ function tooLarge(maxBytes: number): ApiError {
 
 export const MAX_JSON_BYTES = 16 * 1024;
 
-/** Reads a JSON object body. Anything else is a 400. */
+/** The media type of `Content-Type`, lowercased and without parameters ("application/json"). */
+export function mediaType(request: Request): string {
+  return (request.headers.get('content-type') ?? '').split(';')[0]?.trim().toLowerCase() ?? '';
+}
+
+/**
+ * Reads a JSON object body. It must be sent as `Content-Type: application/json`
+ * (415 otherwise): a web page can only send that cross-site after a CORS
+ * preflight, which this API never allows, so no other site can make its
+ * visitors' browsers book. Anything that isn't a JSON object is a 400.
+ */
 export async function readJsonObject(request: Request, maxBytes = MAX_JSON_BYTES): Promise<Record<string, unknown>> {
+  if (mediaType(request) !== 'application/json') {
+    throw new ApiError('invalid_request', 'Send the request body as JSON (Content-Type: application/json).', { status: 415 });
+  }
   const bytes = await readLimited(request, maxBytes);
   let text: string;
   try {

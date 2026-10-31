@@ -128,7 +128,7 @@ Vercel's Hobby plan is for non-commercial use only; a shop taking bookings and p
 ### Contract details worth knowing
 
 - `POST /api/appointments` takes an optional `X-Manage-Token` header (the app's own manage token, 32 random bytes in base64url) and answers 201 for a new booking or 200 for a retry of one that went through (see safe retries above). Without it, nothing changes.
-- `invalid_request` also covers 405 (wrong method, with an `Allow` header), 413 (body too large: 16 KB for JSON, 4 MB for photos) and 415 (photo that isn't `image/jpeg`).
+- `invalid_request` also covers 405 (wrong method, with an `Allow` header), 413 (body too large: 16 KB for JSON, 4 MB for photos) and 415 (a JSON body sent without `Content-Type: application/json`, or a photo that isn't `image/jpeg`). Requiring the JSON type means no other website can make its visitors' browsers book: a page can only send it cross-site after a CORS preflight, and the API answers none.
 - `POST /api/owner/payments/:id/complete` answers 200 with the payment and Stripe's current `status`; the app should treat only `"succeeded"` as paid.
 - `GET /api/owner/availability`: the same query and answer as `GET /api/availability`, with the owner key and without the lead time, so a walk-in can take the next slot that hasn't started yet.
 - `GET /api/owner/me`: `stripe.locationId` is the Terminal location the owner app connects Tap to Pay to (`STRIPE_TERMINAL_LOCATION_ID`), `null` until Stripe is configured.
