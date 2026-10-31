@@ -347,9 +347,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
         // Edit: hide it from the customer app in the editor.
         row.tap()
-        let visible = reveal("productVisible")
-        // The switch is at the row's trailing end; the row's middle is its label.
-        visible.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5)).tap()
+        flipSwitch(reveal("productVisible"))
         tap("saveProduct")
         XCTAssertTrue(waitForLabel(element("product-Sample wax"), containing: "hidden"))
 
@@ -516,6 +514,26 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             let now = target.frame
             if now == last { return }
             last = now
+        }
+    }
+
+    /// Flips a switch row. The switch sits at the row's trailing end (a tap on the row's middle
+    /// lands on its label and does nothing), so this taps the switch itself and checks it moved.
+    private func flipSwitch(_ row: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
+        let inner = row.switches.firstMatch
+        let control = inner.exists ? inner : row
+        let before = control.value as? String
+        let trailingEnd = row.coordinate(withNormalizedOffset: CGVector(dx: 0.93, dy: 0.5))
+        if inner.exists {
+            inner.tap()
+        } else {
+            trailingEnd.tap()
+        }
+        guard let before, before == "0" || before == "1" else { return }
+        let flipped = NSPredicate(format: "value == %@", before == "1" ? "0" : "1")
+        if !waitUntil(control, toMatch: flipped, timeout: 3) {
+            trailingEnd.tap()
+            XCTAssertTrue(waitUntil(control, toMatch: flipped, timeout: 5), "The switch didn't move", file: file, line: line)
         }
     }
 
