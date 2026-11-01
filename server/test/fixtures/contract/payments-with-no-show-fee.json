@@ -1,0 +1,13 @@
+{
+  "payments": [
+    {
+      "id": "pi_3TestFixture000006",
+      "amountCents": 1750,
+      "description": "No-show fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM",
+      "appointmentId": "00000000-0000-4000-8000-000000000005",
+      "status": "succeeded",
+      "createdAt": "2026-11-03T18:20:00Z",
+      "kind": "noShowFee"
+    }
+  ]
+}

@@ -1,8 +1,11 @@
 import { cancelAppointment, getAppointment, getAvailability, getOwnerAvailability, listOwnerAppointments, patchOwnerAppointment, postAppointment, postOwnerAppointment } from './appointments.js';
+import { cardCheckoutCancel, cardCheckoutReturn, createCardCheckout, saveCard } from './cards.js';
 import { dailyCron } from './cron.js';
 import type { Deps } from './deps.js';
 import { json } from './http.js';
 import { completePayment, connectionToken, createPayment, listPayments, ownerMe, stripeWebhook } from './payments.js';
+import { getNoShowPolicy, getNoShowSettings, patchNoShowSettings } from './noshow.js';
+import { chargeNoShowFee } from './noshowfee.js';
 import { createProduct, deleteProduct, listOwnerProducts, listPublicProducts, updateProduct, uploadProductPhoto } from './products.js';
 import { getReviews } from './reviews.js';
 import { Router } from './router.js';
@@ -21,12 +24,21 @@ export function createRouter(): Router {
       .on('POST', '/api/appointments/:id/cancel', cancelAppointment)
       .on('GET', '/api/reviews', getReviews)
       .on('GET', '/api/products', listPublicProducts)
+      // No-show protection (a card on file)
+      .on('GET', '/api/no-show-policy', getNoShowPolicy)
+      .on('POST', '/api/cards/checkout', createCardCheckout)
+      .on('GET', '/api/cards/return', cardCheckoutReturn)
+      .on('GET', '/api/cards/cancel', cardCheckoutCancel)
+      .on('POST', '/api/cards', saveCard)
       // Owner (Authorization: Bearer OWNER_KEY)
       .on('GET', '/api/owner/me', ownerMe)
       .on('GET', '/api/owner/availability', getOwnerAvailability)
       .on('GET', '/api/owner/appointments', listOwnerAppointments)
       .on('POST', '/api/owner/appointments', postOwnerAppointment)
       .on('PATCH', '/api/owner/appointments/:id', patchOwnerAppointment)
+      .on('POST', '/api/owner/appointments/:id/no-show-fee', chargeNoShowFee)
+      .on('GET', '/api/owner/no-show-settings', getNoShowSettings)
+      .on('PATCH', '/api/owner/no-show-settings', patchNoShowSettings)
       .on('GET', '/api/owner/time-off', listTimeOff)
       .on('POST', '/api/owner/time-off', postTimeOff)
       .on('DELETE', '/api/owner/time-off/:id', deleteTimeOff)

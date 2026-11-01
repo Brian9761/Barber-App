@@ -1,6 +1,6 @@
 {
   "appointment": {
-    "id": "00000000-0000-4000-8000-000000000005",
+    "id": "00000000-0000-4000-8000-000000000006",
     "offeringId": "cristian-ceja/bbb0c294-87a6-465d-9f55-6f579dcb399a",
     "serviceId": "haircut",
     "serviceName": "Haircut",
@@ -23,6 +23,16 @@
       "email": null
     },
     "note": null,
-    "createdAt": "2026-11-02T17:00:00Z"
+    "createdAt": "2026-11-02T17:00:00Z",
+    "card": {
+      "brand": "visa",
+      "last4": "4242"
+    },
+    "noShowFee": {
+      "amountCents": 1750,
+      "status": "none",
+      "chargedAt": null,
+      "message": null
+    }
   }
 }

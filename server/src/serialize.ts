@@ -32,7 +32,30 @@ export interface AppointmentRow {
   payment_intent_id: string | null;
   created_at: Date;
   updated_at: Date;
+  // No-show protection (migrations/004): all set when the booking has a card on file, else all null.
+  saved_card_id: string | null;
+  card_brand: string | null;
+  card_last4: string | null;
+  no_show_fee_cents: number | null;
+  no_show_policy: string | null;
+  no_show_consent_at: Date | null;
+  no_show_fee_status: NoShowFeeRowStatus;
+  no_show_fee_attempt: number;
+  no_show_fee_payment_intent_id: string | null;
+  no_show_fee_message: string | null;
+  no_show_fee_charged_at: Date | null;
 }
+
+export type NoShowFeeRowStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needs_action';
+export type NoShowFeeStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needsAction';
+
+const FEE_STATUS_OUT: Record<NoShowFeeRowStatus, NoShowFeeStatus> = {
+  none: 'none',
+  pending: 'pending',
+  charged: 'charged',
+  declined: 'declined',
+  needs_action: 'needsAction',
+};
 
 export type AppointmentStatus = 'booked' | 'cancelled' | 'completed' | 'noShow';
 
@@ -53,6 +76,10 @@ export interface Appointment {
   customer: { name: string; phone: string | null; email: string | null };
   note: string | null;
   createdAt: string;
+  /** The card on file for no-shows, or null when the booking has none. */
+  card: { brand: string; last4: string } | null;
+  /** The no-show fee agreed at booking and what happened to it, or null without a card on file. */
+  noShowFee: { amountCents: number; status: NoShowFeeStatus; chargedAt: string | null; message: string | null } | null;
 }
 
 const STATUS_OUT: Record<AppointmentRow['status'], AppointmentStatus> = {
@@ -91,6 +118,17 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
     customer: { name: row.customer_name, phone: row.customer_phone, email: row.customer_email },
     note: row.note,
     createdAt: formatInstant(row.created_at),
+    card: row.saved_card_id && row.card_brand && row.card_last4 ? { brand: row.card_brand, last4: row.card_last4 } : null,
+    noShowFee:
+      row.saved_card_id && row.no_show_fee_cents !== null
+        ? {
+            amountCents: row.no_show_fee_cents,
+            // Only a fee Stripe reported as succeeded is "charged" (see noshowfee.ts).
+            status: FEE_STATUS_OUT[row.no_show_fee_status],
+            chargedAt: row.no_show_fee_charged_at ? formatInstant(row.no_show_fee_charged_at) : null,
+            message: row.no_show_fee_message,
+          }
+        : null,
   };
 }
 
@@ -141,7 +179,10 @@ export interface PaymentRow {
   status: string;
   receipt_email: string | null;
   created_at: Date;
+  kind: 'in_person' | 'no_show_fee';
 }
+
+export const PAYMENT_COLUMNS = 'id, amount_cents, description, appointment_id, status, receipt_email, created_at, kind';
 
 export function paymentJSON(row: PaymentRow) {
   return {
@@ -151,5 +192,7 @@ export function paymentJSON(row: PaymentRow) {
     appointmentId: row.appointment_id,
     status: row.status,
     createdAt: formatInstant(row.created_at),
+    /** "inPerson" (Tap to Pay in the shop) or "noShowFee" (charged to the card on file). */
+    kind: row.kind === 'no_show_fee' ? ('noShowFee' as const) : ('inPerson' as const),
   };
 }

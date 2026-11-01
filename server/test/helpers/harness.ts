@@ -13,12 +13,43 @@ export type RequestBody = NonNullable<RequestInit['body']>;
 export const OWNER_KEY = 'test-owner-key-0123456789abcdefghijklmnop';
 export const CRON_SECRET = 'test-cron-secret-0123456789';
 
+/** What the next off-session charge does (`paymentIntents.create` with `confirm` and `off_session`). */
+export type ChargeOutcome =
+  | 'succeed'
+  | 'processing'
+  | 'decline'
+  | 'insufficient_funds'
+  | 'authentication_required'
+  | 'requires_action'
+  | 'card_removed';
+
+/** A card the client typed on Stripe's page (test card 4242 unless a test says otherwise). */
+export interface FakeCard {
+  brand: string;
+  last4: string;
+  exp_month: number;
+  exp_year: number;
+}
+
+/** A Stripe-like error, as stripe-node throws them. */
+export function stripeError(type: string, fields: Record<string, unknown> = {}, message = 'Stripe error'): Error {
+  return Object.assign(new Error(message), { type, ...fields });
+}
+
 /** A fake of the Stripe calls the server makes, with Stripe-shaped objects. */
 export class FakeStripe implements StripeClient {
   readonly intents = new Map<string, Stripe.PaymentIntent>();
+  readonly sessions = new Map<string, Stripe.Checkout.Session>();
+  readonly customerIds: string[] = [];
   readonly calls: { method: string; params: unknown; options?: unknown }[] = [];
   readonly keys: string[] = [];
   nextError: unknown = null;
+  /** The next off-session charge's outcome; then back to 'succeed'. */
+  nextCharge: ChargeOutcome = 'succeed';
+  /** The next off-session charge goes through at Stripe, but its answer is lost (a connection error). */
+  loseNextChargeAnswer = false;
+  /** Idempotency keys Stripe has seen, with what it answered (like Stripe, a repeat gets the same answer). */
+  private readonly idempotent = new Map<string, { params: string; intent?: Stripe.PaymentIntent; error?: unknown }>();
   private counter = 0;
 
   private maybeFail(): void {
@@ -43,6 +74,48 @@ export class FakeStripe implements StripeClient {
     create: async (params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions) => {
       this.calls.push({ method: 'paymentIntents.create', params, options });
       this.maybeFail();
+      const key = options?.idempotencyKey;
+      if (key) {
+        const seen = this.idempotent.get(key);
+        if (seen) {
+          if (seen.params !== JSON.stringify(params)) {
+            throw stripeError('StripeIdempotencyError', { code: 'idempotency_error', statusCode: 400 }, 'Keys for idempotent requests can only be used with the same parameters');
+          }
+          if (seen.error) throw seen.error;
+          return seen.intent as Stripe.PaymentIntent;
+        }
+      }
+      try {
+        const intent = this.makeIntent(params);
+        if (key) this.idempotent.set(key, { params: JSON.stringify(params), intent });
+        if (params.confirm && this.loseNextChargeAnswer) {
+          this.loseNextChargeAnswer = false;
+          throw stripeError('StripeConnectionError', {}, 'socket hang up');
+        }
+        return intent;
+      } catch (error) {
+        const e = error as { type?: string };
+        if (key && e.type === 'StripeCardError') this.idempotent.set(key, { params: JSON.stringify(params), error });
+        throw error;
+      }
+    },
+    retrieve: async (id: string) => {
+      this.calls.push({ method: 'paymentIntents.retrieve', params: id });
+      this.maybeFail();
+      const intent = this.intents.get(id);
+      if (!intent) {
+        throw Object.assign(new Error(`No such payment_intent: '${id}'`), {
+          type: 'StripeInvalidRequestError',
+          code: 'resource_missing',
+          statusCode: 404,
+        });
+      }
+      return intent;
+    },
+  };
+
+  private makeIntent(params: Stripe.PaymentIntentCreateParams): Stripe.PaymentIntent {
+    {
       this.counter += 1;
       const id = `pi_3TestFixture${String(this.counter).padStart(6, '0')}`;
       const intent = {
@@ -59,24 +132,106 @@ export class FakeStripe implements StripeClient {
         metadata: params.metadata ?? {},
         status: 'requires_payment_method',
         livemode: false,
+        customer: params.customer ?? null,
+        payment_method: params.payment_method ?? null,
+        last_payment_error: null,
       } as unknown as Stripe.PaymentIntent;
       this.intents.set(id, intent);
-      return intent;
-    },
-    retrieve: async (id: string) => {
-      this.calls.push({ method: 'paymentIntents.retrieve', params: id });
-      this.maybeFail();
-      const intent = this.intents.get(id);
-      if (!intent) {
-        throw Object.assign(new Error(`No such payment_intent: '${id}'`), {
-          type: 'StripeInvalidRequestError',
-          code: 'resource_missing',
-          statusCode: 404,
-        });
+      if (!(params.confirm && params.off_session)) return intent;
+      // An off-session charge of a saved card: Stripe answers at once.
+      const outcome = this.nextCharge;
+      this.nextCharge = 'succeed';
+      const pm = typeof params.payment_method === 'string' ? params.payment_method : '';
+      const known = [...this.sessions.values()].some((session) => {
+        const setup = session.setup_intent as Stripe.SetupIntent | null;
+        const method = setup?.payment_method as Stripe.PaymentMethod | null | undefined;
+        return method?.id === pm && method.customer === params.customer;
+      });
+      if (outcome === 'card_removed' || !known) {
+        throw stripeError(
+          'StripeInvalidRequestError',
+          { code: 'resource_missing', param: 'payment_method', statusCode: 400 },
+          `No such PaymentMethod: '${pm}'`,
+        );
       }
-      return intent;
+      if (outcome === 'succeed') {
+        Object.assign(intent, { status: 'succeeded', amount_received: intent.amount });
+        return intent;
+      }
+      if (outcome === 'processing' || outcome === 'requires_action') {
+        Object.assign(intent, { status: outcome });
+        return intent;
+      }
+      const declineCode = outcome === 'insufficient_funds' ? 'insufficient_funds' : outcome === 'decline' ? 'generic_decline' : 'authentication_required';
+      const code = outcome === 'authentication_required' ? 'authentication_required' : 'card_declined';
+      Object.assign(intent, { status: 'requires_payment_method', last_payment_error: { type: 'card_error', code, decline_code: declineCode } });
+      throw stripeError(
+        'StripeCardError',
+        { code, decline_code: declineCode, statusCode: 402, requestId: 'req_fixture_decline', payment_intent: intent },
+        'Your card was declined.',
+      );
+    }
+  }
+
+  readonly customers = {
+    create: async (params: Stripe.CustomerCreateParams) => {
+      this.calls.push({ method: 'customers.create', params });
+      this.maybeFail();
+      this.counter += 1;
+      const id = `cus_TestFixture${String(this.counter).padStart(6, '0')}`;
+      this.customerIds.push(id);
+      return { id, object: 'customer', description: params.description ?? null, metadata: params.metadata ?? {} } as unknown as Stripe.Customer;
     },
   };
+
+  readonly checkout = {
+    sessions: {
+      create: async (params: Stripe.Checkout.SessionCreateParams) => {
+        this.calls.push({ method: 'checkout.sessions.create', params });
+        this.maybeFail();
+        this.counter += 1;
+        const id = `cs_test_Fixture${String(this.counter).padStart(6, '0')}`;
+        const session = {
+          id,
+          object: 'checkout.session',
+          mode: params.mode,
+          status: 'open',
+          url: `https://checkout.stripe.com/c/pay/${id}#fixture`,
+          customer: params.customer ?? null,
+          metadata: params.metadata ?? {},
+          livemode: false,
+          setup_intent: null,
+          success_url: params.success_url,
+          cancel_url: params.cancel_url,
+        } as unknown as Stripe.Checkout.Session;
+        this.sessions.set(id, session);
+        return session;
+      },
+      retrieve: async (id: string, params?: Stripe.Checkout.SessionRetrieveParams) => {
+        this.calls.push({ method: 'checkout.sessions.retrieve', params: { id, ...params } });
+        this.maybeFail();
+        const session = this.sessions.get(id);
+        if (!session) {
+          throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'session', statusCode: 404 }, `No such checkout.session: '${id}'`);
+        }
+        // Expanded like the server asks: setup_intent.payment_method.
+        return structuredClone(session);
+      },
+    },
+  };
+
+  /** What happens when the client types a card on Stripe's page and taps Save. */
+  completeSession(id: string, card: FakeCard = { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 }): Stripe.Checkout.Session {
+    const session = this.sessions.get(id);
+    if (!session) throw new Error(`unknown ${id}`);
+    this.counter += 1;
+    const n = String(this.counter).padStart(6, '0');
+    const customer = typeof session.customer === 'string' ? session.customer : null;
+    const paymentMethod = { id: `pm_TestFixture${n}`, object: 'payment_method', type: 'card', card, customer };
+    const setupIntent = { id: `seti_TestFixture${n}`, object: 'setup_intent', status: 'succeeded', customer, payment_method: paymentMethod };
+    Object.assign(session, { status: 'complete', setup_intent: setupIntent });
+    return session;
+  }
 
   /** What happens when the card is tapped and approved. */
   succeed(id: string): Stripe.PaymentIntent {

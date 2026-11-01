@@ -26,6 +26,15 @@ export const Appointment = z.strictObject({
   customer: z.strictObject({ name: z.string(), phone: z.string().regex(/^\+1\d{10}$/).nullable(), email: z.string().nullable() }),
   note: z.string().nullable(),
   createdAt: instant,
+  card: z.strictObject({ brand: z.string().regex(/^[a-z0-9_]+$/), last4: z.string().regex(/^\d{4}$/) }).nullable(),
+  noShowFee: z
+    .strictObject({
+      amountCents: int.min(50),
+      status: z.enum(['none', 'pending', 'charged', 'declined', 'needsAction']),
+      chargedAt: instant.nullable(),
+      message: z.string().min(1).nullable(),
+    })
+    .nullable(),
 });
 
 export const Slot = z.strictObject({ start: instant, barberIds: z.array(id) });
@@ -64,6 +73,25 @@ export const Payment = z.strictObject({
   appointmentId: id.nullable(),
   status: z.string(),
   createdAt: instant,
+  kind: z.enum(['inPerson', 'noShowFee']),
+});
+export const SavedCard = z.strictObject({
+  brand: z.string().regex(/^[a-z0-9_]+$/),
+  last4: z.string().regex(/^\d{4}$/),
+  expMonth: int.min(1).max(12),
+  expYear: int.min(2000),
+});
+export const NoShowSettings = z.strictObject({
+  enabled: z.boolean(),
+  feeMode: z.enum(['percent', 'flat']),
+  percent: int.min(1).max(100),
+  flatCents: int.min(50).max(50_000),
+});
+export const NoShowPolicy = z.strictObject({
+  required: z.boolean(),
+  minFeeCents: int.min(50).nullable(),
+  maxFeeCents: int.min(50).nullable(),
+  policyText: z.string().min(1).nullable(),
 });
 export const ErrorBody = z.strictObject({
   error: z.strictObject({
@@ -77,6 +105,9 @@ export const ErrorBody = z.strictObject({
       'too_soon',
       'too_far',
       'rate_limited',
+      'card_required',
+      'policy_changed',
+      'not_chargeable',
       'stripe_not_configured',
       'owner_not_configured',
       'server_error',
@@ -112,6 +143,16 @@ export const RESPONSES = {
   'payment-created': z.strictObject({ paymentIntentId: z.string().regex(/^pi_/), clientSecret: z.string().min(1) }),
   'payment-completed': z.strictObject({ payment: Payment }),
   payments: z.strictObject({ payments: z.array(Payment) }),
+  // No-show protection
+  'no-show-policy': NoShowPolicy,
+  'no-show-policy-not-required': NoShowPolicy,
+  'card-checkout': z.strictObject({ url: z.string().regex(/^https:\/\//), sessionId: z.string().regex(/^cs_(test|live)_/) }),
+  'card-saved': z.strictObject({ card: SavedCard }),
+  'no-show-settings': z.strictObject({ noShowSettings: NoShowSettings }),
+  'no-show-settings-updated': z.strictObject({ noShowSettings: NoShowSettings }),
+  'payments-with-no-show-fee': z.strictObject({ payments: z.array(Payment) }),
+  'no-show-fee-charged': z.strictObject({ appointment: Appointment }),
+  'no-show-fee-declined': z.strictObject({ appointment: Appointment }),
 } as const;
 
 export type ResponseName = keyof typeof RESPONSES;

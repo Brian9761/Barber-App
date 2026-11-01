@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { hashManageToken, isNewManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
 import { availability } from './availability.js';
 import { checkStart, createAppointment, resolveTarget, targetOfferings, type Target } from './booking.js';
+import { cardTokenFrom, noShowTermsForBooking } from './cards.js';
 import { isOverlapConflict, pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
 import { ApiError, json, readJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
@@ -71,6 +72,8 @@ const customerBooking = z.object({
     { error: 'Add your name and mobile number.' },
   ),
   note: note.optional(),
+  /** No-show protection: the policy text the client was shown and agreed to (from GET /api/no-show-policy). */
+  noShowPolicy: z.string({ error: 'noShowPolicy must be text.' }).max(1200, { error: 'noShowPolicy is too long.' }).optional(),
 });
 
 function preflight(ctx: Context, target: Target, start: Date, mode: 'customer' | 'shop'): void {
@@ -157,6 +160,7 @@ async function replay(db: Queryable, token: string, body: CustomerBooking): Prom
 export async function postAppointment(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
   const token = clientManageToken(request);
+  const cardToken = cardTokenFrom(request);
   const body = parse(customerBooking, await readJsonObject(request));
 
   // A retry is answered before the time rules and the rate limit: it books
@@ -170,6 +174,9 @@ export async function postAppointment(ctx: Context): Promise<Response> {
   try {
     const target = resolveTarget(deps.catalog, body);
     preflight(ctx, target, body.start, 'customer');
+    // No-show protection: a card on file and the policy the client agreed to, when this booking needs them.
+    // Checked before the rate limit, like the other things a booking must have.
+    const noShow = await noShowTermsForBooking(deps, target, body.start, cardToken, body.noShowPolicy);
 
     const hits = await hit(deps.db, ipKey('book', deps.clientIp(request)), deps.now(), {
       max: BOOKINGS_PER_IP_PER_HOUR,
@@ -188,6 +195,7 @@ export async function postAppointment(ctx: Context): Promise<Response> {
       note: body.note ?? null,
       mode: 'customer',
       manageToken: token,
+      noShow,
     });
     return json({ appointment: appointmentJSON(row), manageToken }, 201);
   } catch (error) {

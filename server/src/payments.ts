@@ -7,7 +7,8 @@ import type { Queryable } from './db.js';
 import type { Deps, StripeClient } from './deps.js';
 import { ApiError, json, readJsonObject, readText } from './http.js';
 import type { Context } from './router.js';
-import { paymentJSON, type PaymentRow } from './serialize.js';
+import { syncNoShowFeeFromStripe } from './noshowfee.js';
+import { PAYMENT_COLUMNS, paymentJSON, type PaymentRow } from './serialize.js';
 import { dayBounds } from './time.js';
 import { charLength, email, parse, UUID_RE } from './validation.js';
 
@@ -28,7 +29,7 @@ export function stripeMode(config: Config): StripeMode {
   return null;
 }
 
-function stripeClient(deps: Deps): StripeClient {
+export function stripeClient(deps: Deps): StripeClient {
   const key = deps.config.stripeSecretKey;
   if (!key) {
     throw new ApiError('stripe_not_configured', "Card payments aren't set up yet. Add the shop's Stripe key on the server.");
@@ -36,10 +37,18 @@ function stripeClient(deps: Deps): StripeClient {
   return deps.stripe(key);
 }
 
-type StripeCall = 'connection token' | 'create payment' | 'retrieve payment';
+export type StripeCall =
+  | 'connection token'
+  | 'create payment'
+  | 'retrieve payment'
+  | 'create customer'
+  | 'create card checkout'
+  | 'retrieve card checkout'
+  | 'charge no-show fee'
+  | 'retrieve no-show fee';
 
 /** The parts of a stripe-node error worth logging. */
-interface StripeErrorLike {
+export interface StripeErrorLike {
   type?: string;
   code?: string;
   param?: string;
@@ -59,7 +68,7 @@ function redactSecrets(text: string | undefined): string | undefined {
  * or key Stripe turns down is a 500 that names the server setting; anything
  * else is a 500 asking to try again.
  */
-function stripeFailure(deps: Deps, error: unknown, what: StripeCall): ApiError {
+export function stripeFailure(deps: Deps, error: unknown, what: StripeCall): ApiError {
   if (error instanceof ApiError) return error;
   const e = (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
   deps.log.error(`Stripe ${what} failed`, {
@@ -71,8 +80,11 @@ function stripeFailure(deps: Deps, error: unknown, what: StripeCall): ApiError {
     message: redactSecrets(e.message),
   });
   const missing = e.code === 'resource_missing' || e.statusCode === 404;
-  if (what === 'retrieve payment' && missing) {
+  if ((what === 'retrieve payment' || what === 'retrieve no-show fee') && missing) {
     return new ApiError('not_found', "Stripe doesn't know that payment.");
+  }
+  if (what === 'retrieve card checkout' && missing) {
+    return new ApiError('not_found', "We couldn't find that card. Add it again.");
   }
   if (what === 'connection token' && (missing || e.param === 'location')) {
     // Usually a test-mode location with a live key (or the other way round), or a typo.
@@ -185,14 +197,11 @@ export async function syncPayment(
       WHERE id = $1 AND status <> $2 AND status NOT IN ('succeeded', 'canceled')`,
     [intent.id, intent.status, now],
   );
-  const { rows } = await db.query<PaymentRow>(
-    `SELECT id, amount_cents, description, appointment_id, status, receipt_email, created_at
-       FROM payments WHERE id = $1`,
-    [intent.id],
-  );
+  const { rows } = await db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [intent.id]);
   const row = rows[0];
   if (!row) return null;
-  if (row.status === 'succeeded' && row.appointment_id) {
+  // A no-show fee isn't a payment for the service: it never marks the appointment paid.
+  if (row.status === 'succeeded' && row.appointment_id && row.kind === 'in_person') {
     await db.query(
       `UPDATE appointments a
           SET payment_status = 'paid',
@@ -201,7 +210,7 @@ export async function syncPayment(
               payment_intent_id = $2,
               updated_at = $3
          FROM (SELECT COALESCE(sum(amount_cents), 0)::int AS total FROM payments
-                WHERE appointment_id = $1 AND status = 'succeeded') s
+                WHERE appointment_id = $1 AND status = 'succeeded' AND kind = 'in_person') s
         WHERE a.id = $1`,
       [row.appointment_id, row.id, now],
     );
@@ -240,7 +249,7 @@ export async function listPayments(ctx: Context): Promise<Response> {
   const { from, to } = dayRange(ctx);
   const zone = ctx.deps.catalog.timeZone;
   const { rows } = await ctx.deps.db.query<PaymentRow>(
-    `SELECT id, amount_cents, description, appointment_id, status, receipt_email, created_at FROM payments
+    `SELECT ${PAYMENT_COLUMNS} FROM payments
       WHERE created_at >= $1 AND created_at < $2
       ORDER BY created_at DESC, id`,
     [dayBounds(from, zone).start, dayBounds(to, zone).end],
@@ -271,10 +280,35 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
     throw new ApiError('invalid_request', "The webhook signature doesn't match.");
   }
   if (HANDLED_EVENTS.has(event.type)) {
-    const object = event.data.object as { object?: string; id?: string; status?: string };
+    const object = event.data.object as {
+      object?: string;
+      id?: string;
+      status?: string;
+      metadata?: Record<string, string> | null;
+      last_payment_error?: { code?: string | null; decline_code?: string | null } | null;
+    };
     if (object.object === 'payment_intent' && typeof object.id === 'string' && typeof object.status === 'string') {
       const intent = { id: object.id, status: object.status as Stripe.PaymentIntent.Status };
-      await ctx.deps.db.transaction((tx) => syncPayment(tx, intent, ctx.deps.now()));
+      const now = ctx.deps.now();
+      await ctx.deps.db.transaction(async (tx) => {
+        const { rows } = await tx.query<{ kind: string; appointment_id: string | null }>(
+          'SELECT kind, appointment_id FROM payments WHERE id = $1',
+          [intent.id],
+        );
+        const known = rows[0];
+        // No-show fees follow the appointment's fee; one this server never got to record is found by its metadata.
+        if (known?.kind === 'no_show_fee' || (!known && object.metadata?.kind === 'no_show_fee')) {
+          await syncNoShowFeeFromStripe(
+            tx,
+            { ...intent, metadata: object.metadata ?? null, last_payment_error: object.last_payment_error ?? null },
+            known?.appointment_id ?? null,
+            ctx.deps,
+            now,
+          );
+          return;
+        }
+        await syncPayment(tx, intent, now);
+      });
     }
   }
   return json({ received: true });

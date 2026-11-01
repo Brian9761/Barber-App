@@ -22,6 +22,9 @@ const OWNER_ROUTES: [string, string][] = [
   ['POST', '/api/owner/payments'],
   ['POST', '/api/owner/payments/pi_123/complete'],
   ['GET', '/api/owner/payments?date=2026-11-02'],
+  ['POST', '/api/owner/appointments/00000000-0000-4000-8000-000000000001/no-show-fee'],
+  ['GET', '/api/owner/no-show-settings'],
+  ['PATCH', '/api/owner/no-show-settings'],
 ];
 
 describe('owner auth', () => {

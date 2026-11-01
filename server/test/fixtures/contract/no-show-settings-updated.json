@@ -1,0 +1,8 @@
+{
+  "noShowSettings": {
+    "enabled": true,
+    "feeMode": "flat",
+    "percent": 50,
+    "flatCents": 2500
+  }
+}

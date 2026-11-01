@@ -135,6 +135,8 @@ describe('config', () => {
     expect(c.yelpBusinessId).toBe('izzy-clipz-barbershop-oceanside');
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '100' }).googleDailyLimit).toBe(100);
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '0' }).googleDailyLimit).toBe(0);
+    expect(configFromEnv({}).publicBaseUrl).toBeUndefined();
+    expect(configFromEnv({ PUBLIC_BASE_URL: ' https://api.izzyclipz.example ' }).publicBaseUrl).toBe('https://api.izzyclipz.example');
   });
 
   it("silences pg's sslmode=require warning by saying verify-full", () => {
@@ -179,5 +181,18 @@ describe('catalog.json (exported from IzzyClipzKit)', () => {
   it('counts characters as people do', () => {
     expect(charLength('José')).toBe(4);
     expect(charLength('💈💈')).toBe(2);
+  });
+});
+
+describe('production log lines', () => {
+  it('keep our message, with a message from the details (Stripe’s) as detail', async () => {
+    const { logLine } = await import('../src/production.js');
+    expect(JSON.parse(logLine('error', 'Stripe create customer failed', { type: 'StripeAuthenticationError', message: 'Invalid API Key provided' }))).toEqual({
+      level: 'error',
+      message: 'Stripe create customer failed',
+      type: 'StripeAuthenticationError',
+      detail: 'Invalid API Key provided',
+    });
+    expect(JSON.parse(logLine('warn', 'Plain'))).toEqual({ level: 'warn', message: 'Plain' });
   });
 });

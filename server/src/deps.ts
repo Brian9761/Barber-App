@@ -20,6 +20,16 @@ export interface StripeClient {
     create(params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent>;
     retrieve(id: string): Promise<Stripe.PaymentIntent>;
   };
+  /** No-show protection: a Customer to save the card to, and Checkout in setup mode to collect it. */
+  customers: {
+    create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer>;
+  };
+  checkout: {
+    sessions: {
+      create(params: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Checkout.Session>;
+      retrieve(id: string, params?: Stripe.Checkout.SessionRetrieveParams): Promise<Stripe.Checkout.Session>;
+    };
+  };
 }
 
 export interface Logger {

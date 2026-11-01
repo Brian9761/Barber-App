@@ -37,6 +37,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const FLOW45 = 'flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a';
 const JULIAN45 = 'julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a';
+/** Included with a cut: no fee, so no card needed. */
+const CARLOS_LINEUP = 'carlos-rafael/0b5b851e-ab05-44a1-8d42-dc9dbc5f02eb';
+/** A card token the app made (32 bytes of 0x01, base64url). */
+const CARD_TOKEN = Buffer.alloc(32, 1).toString('base64url');
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9]);
 
 const h = useHarness({ now: '2026-11-02T17:00:00Z' });
@@ -61,6 +65,7 @@ describe('contract fixtures (API v1)', () => {
     check('reviews-unavailable', await h.call('GET', '/api/reviews'));
 
     check('owner-me', await h.call('GET', '/api/owner/me', owner));
+    check('no-show-settings', await h.call('GET', '/api/owner/no-show-settings', owner));
 
     // Products
     const pomade = check(
@@ -78,15 +83,31 @@ describe('contract fixtures (API v1)', () => {
     check('products', await h.call('GET', '/api/products'));
     check('owner-products', await h.call('GET', '/api/owner/products', owner));
 
-    // Customer bookings
+    // No-show protection: the policy, then a card saved with Stripe Checkout (setup mode).
+    check('no-show-policy', await h.call('GET', '/api/no-show-policy?serviceId=haircut-and-beard&barberId=any'));
+    check('no-show-policy-not-required', await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(CARLOS_LINEUP)}`));
+    const flowPolicy = (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText;
+    const anyPolicy = (await h.call('GET', '/api/no-show-policy?serviceId=haircut&barberId=any')).body.policyText;
+    const cardHeaders = { 'x-card-token': CARD_TOKEN };
+    const checkout = check(
+      'card-checkout',
+      await h.call('POST', '/api/cards/checkout', { headers: cardHeaders, body: { offeringId: FLOW45 } }),
+      201,
+    );
+    h.stripe.completeSession(checkout.sessionId);
+    check('card-saved', await h.call('POST', '/api/cards', { headers: cardHeaders, body: { sessionId: checkout.sessionId } }), 201);
+
+    // Customer bookings (with the card on file)
     const created = check(
       'appointment-created',
       await h.call('POST', '/api/appointments', {
+        headers: cardHeaders,
         body: {
           offeringId: FLOW45,
           start: '2026-11-03T18:00:00Z',
           customer: { name: 'Fixture Client', phone: '(442) 555-0123', email: 'client@example.com' },
           note: 'Low skin fade, please.',
+          noShowPolicy: flowPolicy,
         },
       }),
       201,
@@ -95,7 +116,14 @@ describe('contract fixtures (API v1)', () => {
     check('appointment', await h.call('GET', `/api/appointments/${created.appointment.id}`, token));
 
     const anyBooking = await h.call('POST', '/api/appointments', {
-      body: { serviceId: 'haircut', barberId: 'any', start: '2026-11-03T18:00:00Z', customer: { name: 'Second Client', phone: '4425550124' } },
+      headers: cardHeaders,
+      body: {
+        serviceId: 'haircut',
+        barberId: 'any',
+        start: '2026-11-03T18:00:00Z',
+        customer: { name: 'Second Client', phone: '4425550124' },
+        noShowPolicy: anyPolicy,
+      },
     });
     check(
       'appointment-cancelled',
@@ -148,6 +176,27 @@ describe('contract fixtures (API v1)', () => {
 
     // Availability last, so it shows a mix of free barbers.
     check('availability', await h.call('GET', '/api/availability?serviceId=haircut&barberId=any&from=2026-11-03&days=2'));
+
+    // The shop changes the fee; then a client who booked with a card doesn't come (Tuesday 10:20 AM).
+    check('no-show-settings-updated', await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { feeMode: 'flat', flatCents: 2500 } }));
+    h.setNow('2026-11-03T18:20:00Z');
+    await h.call('PATCH', `/api/owner/appointments/${created.appointment.id}`, { ...owner, body: { status: 'noShow' } });
+    check('no-show-fee-charged', await h.call('POST', `/api/owner/appointments/${created.appointment.id}/no-show-fee`, owner));
+    check('payments-with-no-show-fee', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
+    // Another one, whose card is declined.
+    const later = await h.call('POST', '/api/appointments', {
+      headers: cardHeaders,
+      body: {
+        offeringId: JULIAN45,
+        start: '2026-11-03T19:00:00Z',
+        customer: { name: 'Third Client', phone: '4425550125' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(JULIAN45)}`)).body.policyText,
+      },
+    });
+    h.setNow('2026-11-03T19:25:00Z');
+    await h.call('PATCH', `/api/owner/appointments/${later.body.appointment.id}`, { ...owner, body: { status: 'noShow' } });
+    h.stripe.nextCharge = 'insufficient_funds';
+    check('no-show-fee-declined', await h.call('POST', `/api/owner/appointments/${later.body.appointment.id}/no-show-fee`, owner));
   });
 
   it('one example error for every error code', async () => {
@@ -173,6 +222,19 @@ describe('contract fixtures (API v1)', () => {
       await book({ offeringId: FLOW45, start: `2026-11-${day}T18:00:00Z` }, `203.0.113.${4 + i}`);
     }
     examples.rate_limited = await book({ offeringId: FLOW45, start: '2026-11-09T18:00:00Z' }, '203.0.113.7');
+    // No-show protection's own errors, with Stripe set up.
+    h.config.stripeSecretKey = 'sk_test_fixture';
+    examples.card_required = await book({ offeringId: FLOW45, start: '2026-11-10T18:00:00Z' }, '203.0.113.8');
+    const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': CARD_TOKEN }, body: { offeringId: FLOW45 } });
+    h.stripe.completeSession(checkout.body.sessionId);
+    await h.call('POST', '/api/cards', { headers: { 'x-card-token': CARD_TOKEN }, body: { sessionId: checkout.body.sessionId } });
+    examples.policy_changed = await h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': CARD_TOKEN },
+      body: { offeringId: FLOW45, start: '2026-11-10T18:00:00Z', customer: { name: 'Fixture Client', phone: '4425550126' }, noShowPolicy: 'An old policy.' },
+      ip: '203.0.113.8',
+    });
+    examples.not_chargeable = await h.call('POST', `/api/owner/appointments/${first.body.appointment.id}/no-show-fee`, { owner: true });
+    h.config.stripeSecretKey = undefined;
     examples.stripe_not_configured = await h.call('POST', '/api/owner/terminal/connection-token', { owner: true });
     h.config.ownerKey = undefined;
     examples.owner_not_configured = await h.call('GET', '/api/owner/me', { owner: true });
@@ -201,6 +263,9 @@ describe('contract fixtures (API v1)', () => {
       too_soon: 422,
       too_far: 422,
       rate_limited: 429,
+      card_required: 400,
+      policy_changed: 409,
+      not_chargeable: 409,
       stripe_not_configured: 503,
       owner_not_configured: 503,
       server_error: 500,

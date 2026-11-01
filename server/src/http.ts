@@ -9,6 +9,10 @@ export const ERROR_STATUS = {
   too_soon: 422,
   too_far: 422,
   rate_limited: 429,
+  // No-show protection
+  card_required: 400,
+  policy_changed: 409,
+  not_chargeable: 409,
   stripe_not_configured: 503,
   owner_not_configured: 503,
   server_error: 500,
@@ -41,6 +45,26 @@ const BASE_HEADERS = {
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...BASE_HEADERS, ...headers } });
+}
+
+/**
+ * A 302 to `location` (the apps' own `izzyclipz://` links after Stripe Checkout),
+ * with a tiny page linking to it for a browser that doesn't follow it by itself.
+ * `location` must already be safe to put in HTML (the callers only use fixed
+ * text and Stripe ids).
+ */
+export function redirect(location: string): Response {
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Izzy Clipz</title><p><a href="${location}">Back to Izzy Clipz</a></p>`;
+  return new Response(page, {
+    status: 302,
+    headers: {
+      location,
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+    },
+  });
 }
 
 export function noContent(): Response {

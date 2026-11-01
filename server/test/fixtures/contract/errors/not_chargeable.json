@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "not_chargeable",
+    "message": "This booking has no card on file, so there's no fee to charge."
+  }
+}
