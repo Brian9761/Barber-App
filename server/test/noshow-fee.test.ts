@@ -225,6 +225,20 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.retrieve')).toHaveLength(2);
   });
 
+  it('checking a fee with …/complete (like an in-person payment) keeps the fee right and never marks the appointment paid', async () => {
+    const id = await noShow();
+    h.stripe.nextCharge = 'processing';
+    await charge(id);
+    const piId = (await feeRow(id)).no_show_fee_payment_intent_id;
+    h.stripe.succeed(piId);
+    const res = await h.call('POST', `/api/owner/payments/${piId}/complete`, owner);
+    expect(res.status).toBe(200);
+    expect(res.body.payment).toMatchObject({ id: piId, status: 'succeeded', kind: 'noShowFee', appointmentId: id });
+    const day = await h.call('GET', '/api/owner/appointments?date=2026-11-03', owner);
+    expect(day.body.appointments[0].noShowFee.status).toBe('charged');
+    expect(day.body.appointments[0].payment).toEqual({ status: 'unpaid', amountCents: null, paidAt: null });
+  });
+
   it('a lost answer leaves it pending; charging again uses the same key, so Stripe answers with the same charge', async () => {
     const id = await noShow();
     h.stripe.loseNextChargeAnswer = true;

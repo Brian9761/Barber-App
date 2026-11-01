@@ -47,6 +47,21 @@ struct FakeOwnerAPI: OwnerAPI {
         return try await server.setStatus(status, of: id)
     }
 
+    func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment {
+        try await server.begin("chargeNoShowFee", key: ownerKey)
+        return try await server.chargeNoShowFee(appointmentId: appointmentId)
+    }
+
+    func noShowSettings() async throws -> IzzyAPI.NoShowSettings {
+        try await server.begin("noShowSettings", key: ownerKey)
+        return await server.noShowSettings
+    }
+
+    func updateNoShowSettings(_ update: IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings {
+        try await server.begin("updateNoShowSettings", key: ownerKey)
+        return try await server.updateNoShowSettings(update)
+    }
+
     func timeOff(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.TimeOff] {
         try await server.begin("timeOff", key: ownerKey)
         return await server.timeOff(from: from, to: to)

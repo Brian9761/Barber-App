@@ -105,6 +105,10 @@ extension IzzyAPI {
         public var customer: Customer
         public var note: String?
         public var createdAt: Date
+        /// The card on file for no-shows (no-show protection), or `nil` when the booking has none.
+        public var card: CardOnFile?
+        /// The no-show fee agreed at booking and what happened to it, or `nil` without a card on file.
+        public var noShowFee: NoShowFee?
 
         public init(
             id: String,
@@ -122,7 +126,9 @@ extension IzzyAPI {
             payment: AppointmentPayment = .unpaid,
             customer: Customer,
             note: String? = nil,
-            createdAt: Date
+            createdAt: Date,
+            card: CardOnFile? = nil,
+            noShowFee: NoShowFee? = nil
         ) {
             self.id = id
             self.offeringId = offeringId
@@ -140,6 +146,16 @@ extension IzzyAPI {
             self.customer = customer
             self.note = note
             self.createdAt = createdAt
+            self.card = card
+            self.noShowFee = noShowFee
+        }
+
+        /// What the server lets the owner charge as a no-show fee now: a no-show whose start has
+        /// passed, with a card on file and a fee that isn't charged yet. `pending` counts: charging
+        /// again only asks Stripe how the earlier try went (it never charges twice).
+        public func canChargeNoShowFee(at now: Date) -> Bool {
+            guard status == .noShow, start <= now, card != nil, let noShowFee else { return false }
+            return noShowFee.status != .charged
         }
 
         /// Hasn't finished yet: it's later, or happening right now.
@@ -160,6 +176,7 @@ extension IzzyAPI {
         private enum CodingKeys: String, CodingKey {
             case id, offeringId, serviceId, serviceName, barberId, barberName, start, end, durationMinutes, priceLabel
             case status, cancelledBy, payment, customer, note, createdAt
+            case card, noShowFee
         }
 
         public init(from decoder: Decoder) throws {
@@ -185,7 +202,10 @@ extension IzzyAPI {
                 payment: try container.decode(AppointmentPayment.self, forKey: .payment),
                 customer: try container.decode(Customer.self, forKey: .customer),
                 note: try container.decodeIfPresent(String.self, forKey: .note),
-                createdAt: try container.decode(Date.self, forKey: .createdAt)
+                createdAt: try container.decode(Date.self, forKey: .createdAt),
+                // Missing on a server from before no-show protection: no card, no fee.
+                card: try container.decodeIfPresent(CardOnFile.self, forKey: .card),
+                noShowFee: try container.decodeIfPresent(NoShowFee.self, forKey: .noShowFee)
             )
         }
 
@@ -207,6 +227,8 @@ extension IzzyAPI {
             try container.encode(customer, forKey: .customer)
             try container.encode(note, forKey: .note)
             try container.encode(createdAt, forKey: .createdAt)
+            try container.encode(card, forKey: .card)
+            try container.encode(noShowFee, forKey: .noShowFee)
         }
     }
 
@@ -657,6 +679,8 @@ extension IzzyAPI {
         /// Stripe's PaymentIntent status, e.g. "succeeded".
         public var status: String
         public var createdAt: Date
+        /// Taken in the shop, or a no-show fee charged to the card on file.
+        public var kind: PaymentKind
 
         public init(
             id: String,
@@ -664,7 +688,8 @@ extension IzzyAPI {
             description: String? = nil,
             appointmentId: String? = nil,
             status: String,
-            createdAt: Date
+            createdAt: Date,
+            kind: PaymentKind = .inPerson
         ) {
             self.id = id
             self.amountCents = amountCents
@@ -672,6 +697,7 @@ extension IzzyAPI {
             self.appointmentId = appointmentId
             self.status = status
             self.createdAt = createdAt
+            self.kind = kind
         }
 
         public var isSucceeded: Bool { status == "succeeded" }
@@ -680,7 +706,19 @@ extension IzzyAPI {
         public var amountLabel: String { Price.currencyString(cents: amountCents) }
 
         private enum CodingKeys: String, CodingKey {
-            case id, amountCents, description, appointmentId, status, createdAt
+            case id, amountCents, description, appointmentId, status, createdAt, kind
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            amountCents = try container.decode(Int.self, forKey: .amountCents)
+            description = try container.decodeIfPresent(String.self, forKey: .description)
+            appointmentId = try container.decodeIfPresent(String.self, forKey: .appointmentId)
+            status = try container.decode(String.self, forKey: .status)
+            createdAt = try container.decode(Date.self, forKey: .createdAt)
+            // Missing on a server from before no-show protection: every payment was in person.
+            kind = try container.decodeIfPresent(PaymentKind.self, forKey: .kind) ?? .inPerson
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -691,6 +729,7 @@ extension IzzyAPI {
             try container.encode(appointmentId, forKey: .appointmentId)
             try container.encode(status, forKey: .status)
             try container.encode(createdAt, forKey: .createdAt)
+            try container.encode(kind, forKey: .kind)
         }
     }
 
@@ -761,6 +800,12 @@ extension IzzyAPI {
         public static let tooSoon = "too_soon"
         public static let tooFar = "too_far"
         public static let rateLimited = "rate_limited"
+        /// 400: this booking needs a saved card (no-show protection), or the card can't be used.
+        public static let cardRequired = "card_required"
+        /// 409: the no-show policy sent with a booking isn't the current one; show the new one.
+        public static let policyChanged = "policy_changed"
+        /// 409: no no-show fee can be charged for this appointment (now).
+        public static let notChargeable = "not_chargeable"
         public static let stripeNotConfigured = "stripe_not_configured"
         public static let ownerNotConfigured = "owner_not_configured"
         public static let serverError = "server_error"

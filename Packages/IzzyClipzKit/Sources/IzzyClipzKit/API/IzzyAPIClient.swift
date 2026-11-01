@@ -116,6 +116,19 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.products()).products
     }
 
+    public func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy {
+        try await send(IzzyAPI.Endpoints.noShowPolicy(for: target))
+    }
+
+    public func startCardCheckout(for target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardCheckout {
+        try await send(try encoded { try IzzyAPI.Endpoints.startCardCheckout(for: target, token: token) })
+    }
+
+    /// Answers 201 for a newly saved card and 200 for one this token saved before; both decode the same way.
+    public func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard {
+        try await send(try encoded { try IzzyAPI.Endpoints.saveCard(sessionId: sessionId, token: token) }).card
+    }
+
     // MARK: OwnerAPI
 
     public func ownerStatus() async throws -> IzzyAPI.OwnerStatus {
@@ -141,6 +154,18 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
 
     public func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {
         try await send(try encoded { try IzzyAPI.Endpoints.setAppointmentStatus(id: id, to: status) }).appointment
+    }
+
+    public func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment {
+        try await send(IzzyAPI.Endpoints.chargeNoShowFee(appointmentId: appointmentId)).appointment
+    }
+
+    public func noShowSettings() async throws -> IzzyAPI.NoShowSettings {
+        try await send(IzzyAPI.Endpoints.noShowSettings()).noShowSettings
+    }
+
+    public func updateNoShowSettings(_ update: IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings {
+        try await send(try encoded { try IzzyAPI.Endpoints.updateNoShowSettings(update) }).noShowSettings
     }
 
     public func timeOff(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.TimeOff] {

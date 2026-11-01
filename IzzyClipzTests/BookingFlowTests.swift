@@ -537,6 +537,43 @@ final class FakeShopAPITests: XCTestCase {
         IzzyAPI.NewCustomer(name: "Test", phone: "4425550123")
     }
 
+    func testNoShowProtectionIsOffSoBookingNeedsNoCard() async throws {
+        let fake = makeFake()
+        let policy = try await fake.noShowPolicy(for: .offering(id: TestData.carlosHaircutID))
+        XCTAssertEqual(policy, .notRequired)
+        let anyBarberPolicy = try await fake.noShowPolicy(for: .anyBarber(serviceId: "haircut"))
+        XCTAssertEqual(anyBarberPolicy, .notRequired)
+        do {
+            _ = try await fake.noShowPolicy(for: .offering(id: "not-on-the-menu"))
+            XCTFail("An unknown offering is a 400, as on the server")
+        } catch {
+            XCTAssertEqual((error as? APIError)?.code, IzzyAPI.ErrorCode.invalidRequest)
+        }
+        do {
+            _ = try await fake.startCardCheckout(for: .offering(id: TestData.carlosHaircutID), token: .generate())
+            XCTFail("No card page when no card is needed")
+        } catch {
+            XCTAssertEqual(error as? APIError, .server(code: IzzyAPI.ErrorCode.invalidRequest, message: "This booking doesn't need a card. Go ahead and book.", status: 400))
+        }
+        do {
+            _ = try await fake.saveCard(sessionId: "cs_test_sample", token: .generate())
+            XCTFail("No session to save")
+        } catch {
+            XCTAssertEqual((error as? APIError)?.code, IzzyAPI.ErrorCode.notFound)
+        }
+        // A card sent anyway is ignored, as on the server: the booking has no card on file.
+        let query = IzzyAPI.AvailabilityQuery(target: .offering(id: TestData.carlosHaircutID), from: tomorrow, days: 1)
+        let slots = try await fake.availability(query).slots(on: tomorrow)
+        let slot = try XCTUnwrap(slots.first)
+        let agreement = IzzyAPI.NoShowAgreement(cardToken: .generate(), policyText: "An old policy.")
+        let confirmation = try await fake.book(
+            IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: slot.start, customer: customer(), noShow: agreement),
+            token: .generate()
+        )
+        XCTAssertNil(confirmation.appointment.card)
+        XCTAssertNil(confirmation.appointment.noShowFee)
+    }
+
     func testOffersTheShopsTimesMinusItsBookings() async throws {
         let fake = makeFake()
         let response = try await fake.availability(IzzyAPI.AvailabilityQuery(target: .offering(id: TestData.carlosHaircutID), from: tomorrow, days: 1))

@@ -599,3 +599,129 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertTrue(store.entries.isEmpty)
     }
 }
+
+/// The sample server's no-show protection answers like the real server's.
+@MainActor
+final class SampleServerNoShowTests: XCTestCase {
+    func testSettingsStartAtHalfTheServiceAndChangeOnlyWhatIsSent() async throws {
+        let harness = Harness()
+        let settings = try await harness.api.noShowSettings()
+        XCTAssertEqual(settings, .default)
+        let flat = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(feeMode: .flat, flatCents: 2_500))
+        XCTAssertEqual(flat, IzzyAPI.NoShowSettings(enabled: true, feeMode: .flat, percent: 50, flatCents: 2_500))
+        let off = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(enabled: false))
+        XCTAssertFalse(off.enabled)
+        let reread = try await harness.api.noShowSettings()
+        XCTAssertEqual(reread, off)
+        XCTAssertEqual(harness.server.calls.suffix(4), ["noShowSettings", "updateNoShowSettings", "updateNoShowSettings", "noShowSettings"])
+    }
+
+    func testSettingsTurnDownWhatTheServerTurnsDown() async {
+        let harness = Harness()
+        for (update, message) in [
+            (IzzyAPI.NoShowSettingsUpdate(percent: 0), "Pick a percentage from 1% to 100%."),
+            (IzzyAPI.NoShowSettingsUpdate(percent: 101), "Pick a percentage from 1% to 100%."),
+            (IzzyAPI.NoShowSettingsUpdate(flatCents: 49), "Pick a flat fee from $0.50 to $500."),
+            (IzzyAPI.NoShowSettingsUpdate(enabled: false, flatCents: 50_001), "Pick a flat fee from $0.50 to $500."),
+        ] {
+            do {
+                _ = try await harness.api.updateNoShowSettings(update)
+                XCTFail("Expected a 400 for \(update)")
+            } catch {
+                XCTAssertEqual(error as? APIError, .server(code: IzzyAPI.ErrorCode.invalidRequest, message: message, status: 400))
+            }
+        }
+        XCTAssertEqual(harness.server.noShowSettings, .default, "nothing changed")
+        do {
+            _ = try await harness.server.api(ownerKey: "wrong").noShowSettings()
+            XCTFail("Expected unauthorized")
+        } catch {
+            XCTAssertEqual(error as? APIError, .unauthorized)
+        }
+    }
+
+    func testChargingANoShowWithACardOnFileChargesOnceAndListsTheFee() async throws {
+        var options = FakeServer.Options()
+        options.noShowWithCard = true
+        let harness = Harness(options: options)
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        XCTAssertEqual(kim.card?.label, "Visa •••• 4242")
+        XCTAssertEqual(kim.noShowFee, IzzyAPI.NoShowFee(amountCents: 1_750))
+        XCTAssertTrue(kim.canChargeNoShowFee(at: TestClock.now))
+
+        let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        XCTAssertEqual(charged.noShowFee?.status, .charged)
+        XCTAssertEqual(charged.noShowFee?.chargedAt, TestClock.now)
+        XCTAssertEqual(charged.payment, .unpaid, "a no-show fee isn't a payment for the service")
+        XCTAssertFalse(charged.canChargeNoShowFee(at: TestClock.now))
+        let payments = try await harness.api.payments(on: TestClock.today)
+        let fee = try XCTUnwrap(payments.first { $0.kind == .noShowFee })
+        XCTAssertEqual(fee.amountCents, 1_750)
+        XCTAssertEqual(fee.appointmentId, kim.id)
+        XCTAssertTrue(fee.isSucceeded)
+
+        // Again: the same answer, no second charge.
+        let again = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        XCTAssertEqual(again, charged)
+        let afterAgain = try await harness.api.payments(on: TestClock.today)
+        XCTAssertEqual(afterAgain.filter { $0.kind == .noShowFee }.count, 1)
+
+        // Reopened and paid at the shop after all: only that payment counts as paid.
+        _ = try await harness.api.setStatus(.completed, ofAppointment: kim.id)
+        let intent = try await harness.api.createPayment(IzzyAPI.NewPayment(amountCents: 3_500, appointmentId: kim.id))
+        harness.server.cardApproved(clientSecret: intent.clientSecret)
+        _ = try await harness.api.completePayment(id: intent.paymentIntentId)
+        let paid = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        XCTAssertEqual(paid.payment.amountCents, 3_500)
+        XCTAssertEqual(paid.noShowFee?.status, .charged, "reopening doesn't refund")
+    }
+
+    func testOnlyANoShowWithACardThatHasStartedCanBeCharged() async throws {
+        var options = FakeServer.Options()
+        options.noShowWithCard = true
+        let harness = Harness(options: options)
+        func expect(_ id: String, _ expected: APIError, line: UInt = #line) async {
+            do {
+                _ = try await harness.api.chargeNoShowFee(appointmentId: id)
+                XCTFail("Expected \(expected)", line: line)
+            } catch {
+                XCTAssertEqual(error as? APIError, expected, line: line)
+            }
+        }
+        // Jay didn't come either, but booked by phone: no card on file.
+        let jay = try XCTUnwrap(harness.appointment(named: "Jay Sample"))
+        await expect(jay.id, .server(code: IzzyAPI.ErrorCode.notChargeable, message: "This booking has no card on file, so there's no fee to charge.", status: 409))
+        await expect("00000000-0000-4000-8000-0000000000ff", .server(code: IzzyAPI.ErrorCode.notFound, message: "We couldn't find that appointment.", status: 404))
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        _ = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+        await expect(kim.id, .server(code: IzzyAPI.ErrorCode.notChargeable, message: "Mark the appointment as a no-show first.", status: 409))
+
+        // Marked a no-show before it started.
+        let early = Harness(options: options, now: TestClock.at(9, 30))
+        let kimEarly = try XCTUnwrap(early.appointment(named: "Kim Sample"))
+        do {
+            _ = try await early.api.chargeNoShowFee(appointmentId: kimEarly.id)
+            XCTFail("Expected not_chargeable")
+        } catch {
+            XCTAssertEqual(error as? APIError, .server(
+                code: IzzyAPI.ErrorCode.notChargeable, message: "The appointment hasn't started yet, so it can't be a no-show.", status: 409
+            ))
+        }
+
+        // Without Stripe on the server: 503, before anything else.
+        options.stripeConfigured = false
+        let noStripe = Harness(options: options)
+        do {
+            _ = try await noStripe.api.chargeNoShowFee(appointmentId: "anything")
+            XCTFail("Expected stripe_not_configured")
+        } catch {
+            XCTAssertEqual(error as? APIError, .notConfigured(APIError.Feature.stripe))
+        }
+    }
+
+    func testTheUsualSampleDayHasNoCardsOnFile() {
+        let harness = Harness()
+        XCTAssertTrue(harness.server.appointments.allSatisfy { $0.card == nil && $0.noShowFee == nil })
+        XCTAssertNil(harness.appointment(named: "Kim Sample"))
+    }
+}

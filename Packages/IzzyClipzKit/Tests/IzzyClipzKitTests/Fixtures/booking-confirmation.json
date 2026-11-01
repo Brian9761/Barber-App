@@ -15,7 +15,9 @@
     "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
     "customer": { "name": "Test Customer", "phone": "+14425550123", "email": null },
     "note": null,
-    "createdAt": "2026-10-31T17:05:09Z"
+    "createdAt": "2026-10-31T17:05:09Z",
+    "card": { "brand": "visa", "last4": "4242" },
+    "noShowFee": { "amountCents": 1750, "status": "none", "chargedAt": null, "message": null }
   },
   "manageToken": "dGVzdC1tYW5hZ2UtdG9rZW4tZm9yLWZpeHR1cmVzLTAx"
 }

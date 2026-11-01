@@ -73,6 +73,11 @@ final class ScriptedAPI: OwnerAPI {
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {
         try await base.setStatus(status, ofAppointment: id)
     }
+    func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment { try await base.chargeNoShowFee(appointmentId: appointmentId) }
+    func noShowSettings() async throws -> IzzyAPI.NoShowSettings { try await base.noShowSettings() }
+    func updateNoShowSettings(_ update: IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings {
+        try await base.updateNoShowSettings(update)
+    }
     func timeOff(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.TimeOff] { try await base.timeOff(from: from, to: to) }
     func createTimeOff(_ timeOff: IzzyAPI.NewTimeOff) async throws -> IzzyAPI.TimeOff { try await base.createTimeOff(timeOff) }
     func deleteTimeOff(id: String) async throws { try await base.deleteTimeOff(id: id) }

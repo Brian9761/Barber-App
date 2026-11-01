@@ -38,6 +38,23 @@ public protocol ShopAPI: Sendable {
 
     /// `GET /api/products`: the products on show, in the shop's order.
     func products() async throws -> [IzzyAPI.Product]
+
+    // MARK: No-show protection
+
+    /// `GET /api/no-show-policy`: whether booking `target` needs a saved card, the fee (a range
+    /// for "any barber" when the barbers' fees differ) and the policy to show. Not required when
+    /// Stripe isn't set up, the shop turned protection off, or the item has no fee.
+    func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy
+
+    /// `POST /api/cards/checkout`: Stripe's card page for saving a card under `token` (a new
+    /// `CardToken.generate()` for each "Add a card"). Open its `url` in
+    /// `ASWebAuthenticationSession` with `CardCheckout.callbackScheme`, then read the callback
+    /// with `CardCheckoutResult(callbackURL:)`.
+    func startCardCheckout(for target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardCheckout
+
+    /// `POST /api/cards`: saves the card from a completed Checkout Session under `token` (the
+    /// one the checkout was started with). Safe to call again after a lost answer.
+    func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard
 }
 
 /// What the owner app needs from the server. Every call but `health` and
@@ -78,6 +95,19 @@ public protocol OwnerAPI: Sendable {
     /// `PATCH /api/owner/appointments/:id`. Cancelling here records the shop
     /// as the one who cancelled.
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment
+
+    /// `POST /api/owner/appointments/:id/no-show-fee`: charges the fee agreed at booking to the
+    /// card on file, for a no-show whose start has passed (`Appointment.canChargeNoShowFee(at:)`).
+    /// Returns the appointment as it is now: its `noShowFee.status` says whether it was charged,
+    /// declined (`message` says why), needs the client, or is still pending. Charged at most once:
+    /// calling again after a lost answer or a pending charge never charges twice.
+    func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment
+
+    /// `GET /api/owner/no-show-settings`.
+    func noShowSettings() async throws -> IzzyAPI.NoShowSettings
+
+    /// `PATCH /api/owner/no-show-settings`: changes only the fields that are set.
+    func updateNoShowSettings(_ update: IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings
 
     /// `GET /api/owner/time-off?from=&to=`.
     func timeOff(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.TimeOff]

@@ -272,7 +272,10 @@ final class ResponseEncodingTests: XCTestCase {
         XCTAssertEqual(json["customer"], .object(["name": .string("Test"), "phone": .null, "email": .null]))
         XCTAssertEqual(json["start"], .string("2026-11-02T18:00:00Z"))
         XCTAssertEqual(json["status"], .string("booked"))
-        XCTAssertEqual(json.keys.count, 16)
+        // No-show protection: no card on file, no fee.
+        XCTAssertEqual(json["card"], .null)
+        XCTAssertEqual(json["noShowFee"], .null)
+        XCTAssertEqual(json.keys.count, 18)
 
         let product = try encodeAPI(IzzyAPI.Product(id: "p", name: "Comb"))
         XCTAssertEqual(product, .object([

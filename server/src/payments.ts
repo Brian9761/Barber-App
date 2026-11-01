@@ -226,8 +226,12 @@ export async function completePayment(ctx: Context): Promise<Response> {
   const id = ctx.params.id ?? '';
   const notFound = () => new ApiError('not_found', "We couldn't find that payment.");
   if (!/^pi_[A-Za-z0-9_]+$/.test(id)) throw notFound();
-  const known = await ctx.deps.db.query('SELECT 1 FROM payments WHERE id = $1', [id]);
-  if (!known.rowCount) throw notFound();
+  const known = await ctx.deps.db.query<{ kind: string; appointment_id: string | null }>(
+    'SELECT kind, appointment_id FROM payments WHERE id = $1',
+    [id],
+  );
+  const payment = known.rows[0];
+  if (!payment) throw notFound();
 
   let intent: Stripe.PaymentIntent;
   try {
@@ -236,7 +240,16 @@ export async function completePayment(ctx: Context): Promise<Response> {
     throw stripeFailure(ctx.deps, error, 'retrieve payment');
   }
   if (intent.id !== id) throw notFound();
-  const row = await ctx.deps.db.transaction((tx) => syncPayment(tx, intent, ctx.deps.now()));
+  const now = ctx.deps.now();
+  const row = await ctx.deps.db.transaction(async (tx) => {
+    // A no-show fee checked this way keeps its appointment's fee right too (and never marks it paid).
+    if (payment.kind === 'no_show_fee') {
+      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now);
+      const { rows } = await tx.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [id]);
+      return rows[0] ?? null;
+    }
+    return syncPayment(tx, intent, now);
+  });
   if (!row) throw notFound();
   // `status` is Stripe's: "succeeded" means the money is in. Anything else is not paid (yet).
   return json({ payment: paymentJSON(row) });

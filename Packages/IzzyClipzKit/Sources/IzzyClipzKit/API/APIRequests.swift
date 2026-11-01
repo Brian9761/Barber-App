@@ -75,19 +75,24 @@ extension IzzyAPI {
     }
 
     /// `POST /api/appointments` and `POST /api/owner/appointments`:
-    /// `{ offeringId? | (serviceId + barberId: "any"), start, customer, note? }`.
+    /// `{ offeringId? | (serviceId + barberId: "any"), start, customer, note?, noShowPolicy? }`.
     public struct NewAppointment: Encodable, Hashable, Sendable {
         public var target: BookingTarget
         /// A slot's `start`, exactly as the server listed it.
         public var start: Date
         public var customer: NewCustomer
         public var note: String?
+        /// No-show protection, when the policy says a card is required: the saved card (sent as
+        /// `X-Card-Token`) and the policy text shown (sent as `noShowPolicy`). Customer bookings
+        /// only; the shop's own bookings never send it. Not part of `retryKey`.
+        public var noShow: NoShowAgreement?
 
-        public init(target: BookingTarget, start: Date, customer: NewCustomer, note: String? = nil) {
+        public init(target: BookingTarget, start: Date, customer: NewCustomer, note: String? = nil, noShow: NoShowAgreement? = nil) {
             self.target = target
             self.start = start
             self.customer = customer
             self.note = note
+            self.noShow = noShow
         }
 
         private struct Key: CodingKey {
@@ -106,6 +111,8 @@ extension IzzyAPI {
             try container.encode(start, forKey: Key("start"))
             try container.encode(customer, forKey: Key("customer"))
             try container.encodeIfPresent(note?.trimmed.nonEmpty, forKey: Key("note"))
+            // Exactly as the server gave it: the server compares it with the current policy.
+            try container.encodeIfPresent(noShow?.policyText, forKey: Key("noShowPolicy"))
         }
 
         /// What the server compares when the same manage token comes back
@@ -118,6 +125,32 @@ extension IzzyAPI {
             let phone = customer.phone?.trimmed.nonEmpty.map { PhoneNumber(parsing: $0)?.e164 ?? $0 } ?? ""
             return [target, Timestamp.string(from: start), phone].joined(separator: "|")
         }
+    }
+
+    /// A body of only a booking target: `{ offeringId }` or `{ serviceId, barberId: "any" }`
+    /// (`POST /api/cards/checkout`).
+    struct TargetBody: Encodable, Hashable, Sendable {
+        var target: BookingTarget
+
+        private struct Key: CodingKey {
+            let stringValue: String
+            var intValue: Int? { nil }
+            init(_ string: String) { stringValue = string }
+            init?(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { nil }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: Key.self)
+            for field in target.fields {
+                try container.encode(field.value, forKey: Key(field.name))
+            }
+        }
+    }
+
+    /// `POST /api/cards` body `{ sessionId }`.
+    struct SaveCardBody: Encodable, Hashable, Sendable {
+        var sessionId: String
     }
 
     /// `PATCH /api/owner/appointments/:id` body `{ status }`.

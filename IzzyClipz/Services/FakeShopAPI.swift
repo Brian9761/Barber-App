@@ -312,6 +312,31 @@ final class FakeShopAPI: ShopAPI {
         ]
     }
 
+    // MARK: No-show protection
+
+    // The sample server has no-show protection off, as the real one is while the shop's Stripe
+    // isn't set up or the owner turned it off: no card is needed to book, a card token sent with
+    // a booking is ignored, and there's no card page to open.
+
+    func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy {
+        try await respond()
+        // An unknown offering or service is a 400, as on the server.
+        _ = try slots(on: LocalDate(calendar.day(containing: now)), for: target)
+        return .notRequired
+    }
+
+    func startCardCheckout(for target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardCheckout {
+        try await respond()
+        _ = try slots(on: LocalDate(calendar.day(containing: now)), for: target)
+        throw APIError.server(code: IzzyAPI.ErrorCode.invalidRequest, message: "This booking doesn't need a card. Go ahead and book.", status: 400)
+    }
+
+    func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard {
+        try await respond()
+        // No card page was opened, so there's no session to save.
+        throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "We couldn't find that card. Add it again.", status: 404)
+    }
+
     // MARK: Seeding
 
     /// A booking that already exists when the app starts: a haircut with Carlos at his first open
