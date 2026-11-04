@@ -1,0 +1,132 @@
+{
+  "date": "2026-11-02",
+  "sales": [
+    {
+      "id": "00000000-0000-4000-8000-000000000013",
+      "barberId": "julian-ramos",
+      "barberName": "Julian",
+      "appointmentId": null,
+      "customerName": null,
+      "method": "cash",
+      "paymentIntentId": null,
+      "totalCents": 3500,
+      "items": [
+        {
+          "kind": "service",
+          "serviceId": "haircut",
+          "productId": null,
+          "name": "Haircut",
+          "quantity": 1,
+          "unitCents": 3500,
+          "totalCents": 3500
+        }
+      ],
+      "soldAt": "2026-11-02T22:00:00Z",
+      "voidedAt": "2026-11-02T22:02:00Z",
+      "voidReason": "Rang up twice"
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "barberId": "israel-flores",
+      "barberName": "Izzy",
+      "appointmentId": null,
+      "customerName": "Walk-in",
+      "method": "other",
+      "paymentIntentId": null,
+      "totalCents": 2500,
+      "items": [
+        {
+          "kind": "service",
+          "serviceId": "military-haircut",
+          "productId": null,
+          "name": "Military Haircut",
+          "quantity": 1,
+          "unitCents": 2500,
+          "totalCents": 2500
+        }
+      ],
+      "soldAt": "2026-11-02T21:30:00Z",
+      "voidedAt": null,
+      "voidReason": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000008",
+      "barberId": "carlos-rafael",
+      "barberName": "Carlos",
+      "appointmentId": "00000000-0000-4000-8000-000000000003",
+      "customerName": "Chris",
+      "method": "card",
+      "paymentIntentId": "pi_3TestFixture000001",
+      "totalCents": 6300,
+      "items": [
+        {
+          "kind": "service",
+          "serviceId": "haircut",
+          "productId": null,
+          "name": "Haircut",
+          "quantity": 1,
+          "unitCents": 4500,
+          "totalCents": 4500
+        },
+        {
+          "kind": "product",
+          "serviceId": null,
+          "productId": "00000000-0000-4000-8000-000000000001",
+          "name": "Matte pomade",
+          "quantity": 1,
+          "unitCents": 1800,
+          "totalCents": 1800
+        }
+      ],
+      "soldAt": "2026-11-02T19:50:00Z",
+      "voidedAt": null,
+      "voidReason": null
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "barberId": "flowxbori",
+      "barberName": "Flowxbori",
+      "appointmentId": "00000000-0000-4000-8000-000000000002",
+      "customerName": "Andre",
+      "method": "cash",
+      "paymentIntentId": null,
+      "totalCents": 9600,
+      "items": [
+        {
+          "kind": "service",
+          "serviceId": "haircut",
+          "productId": null,
+          "name": "Haircut",
+          "quantity": 1,
+          "unitCents": 3500,
+          "totalCents": 3500
+        },
+        {
+          "kind": "product",
+          "serviceId": null,
+          "productId": "00000000-0000-4000-8000-000000000001",
+          "name": "Matte pomade",
+          "quantity": 2,
+          "unitCents": 1800,
+          "totalCents": 3600
+        },
+        {
+          "kind": "custom",
+          "serviceId": null,
+          "productId": null,
+          "name": "Gift card",
+          "quantity": 1,
+          "unitCents": 2500,
+          "totalCents": 2500
+        }
+      ],
+      "soldAt": "2026-11-02T19:05:00Z",
+      "voidedAt": null,
+      "voidReason": null
+    }
+  ],
+  "totals": {
+    "totalCents": 18400,
+    "count": 3
+  }
+}

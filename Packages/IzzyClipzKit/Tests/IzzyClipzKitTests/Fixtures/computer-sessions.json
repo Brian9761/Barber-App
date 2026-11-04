@@ -1,0 +1,20 @@
+{
+  "sessions": [
+    {
+      "id": "8a9b0c1d-2e3f-4a4b-9c5d-6e7f8a9b0c1d",
+      "name": "Chrome on Mac",
+      "createdAt": "2026-11-02T18:01:30Z",
+      "lastUsedAt": "2026-11-02T18:45:00Z",
+      "expiresAt": "2026-12-02T18:01:30Z",
+      "current": false
+    },
+    {
+      "id": "9b0c1d2e-3f4a-4b5c-8d6e-7f8a9b0c1d2e",
+      "name": "Edge on Windows",
+      "createdAt": "2026-10-28T23:12:04Z",
+      "lastUsedAt": "2026-11-01T19:30:00Z",
+      "expiresAt": "2026-11-27T23:12:04Z",
+      "current": false
+    }
+  ]
+}

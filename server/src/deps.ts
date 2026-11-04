@@ -9,16 +9,35 @@ export interface BlobStore {
   del(url: string): Promise<void>;
 }
 
-/** The part of stripe-node the server uses, so tests can pass a fake. */
+/**
+ * The part of stripe-node the server uses, so tests can pass a fake. Every call
+ * made for the shop goes through `shopStripe` (stripeaccount.ts) and passes its
+ * `requestOptions`: in connect mode that's the shop's connected account (the
+ * Stripe-Account header). Only `accounts` and `accountLinks` are the platform's
+ * own calls about that account.
+ */
 export interface StripeClient {
+  /** Stripe Connect (the platform): the shop's own account, made once and read back for its status. */
+  accounts: {
+    create(params: Stripe.AccountCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Account>;
+    retrieve(id: string, params?: Stripe.AccountRetrieveParams, options?: Stripe.RequestOptions): Promise<Stripe.Account>;
+  };
+  /** Stripe Connect (the platform): the link to Stripe's own onboarding for that account. */
+  accountLinks: {
+    create(params: Stripe.AccountLinkCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.AccountLink>;
+  };
   terminal: {
     connectionTokens: {
-      create(params?: Stripe.Terminal.ConnectionTokenCreateParams): Promise<{ secret: string }>;
+      create(params?: Stripe.Terminal.ConnectionTokenCreateParams, options?: Stripe.RequestOptions): Promise<{ secret: string }>;
+    };
+    /** Connect mode: the shop's Terminal location, made on its connected account the first time it's needed. */
+    locations: {
+      create(params: Stripe.Terminal.LocationCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Terminal.Location>;
     };
   };
   paymentIntents: {
     create(params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent>;
-    retrieve(id: string): Promise<Stripe.PaymentIntent>;
+    retrieve(id: string, params?: Stripe.PaymentIntentRetrieveParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent>;
     /** One page (the newest first); a no-show fee whose answer was lost is looked up this way. */
     list(params: Stripe.PaymentIntentListParams, options?: Stripe.RequestOptions): Promise<Stripe.ApiList<Stripe.PaymentIntent>>;
   };
@@ -29,7 +48,7 @@ export interface StripeClient {
   checkout: {
     sessions: {
       create(params: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Checkout.Session>;
-      retrieve(id: string, params?: Stripe.Checkout.SessionRetrieveParams): Promise<Stripe.Checkout.Session>;
+      retrieve(id: string, params?: Stripe.Checkout.SessionRetrieveParams, options?: Stripe.RequestOptions): Promise<Stripe.Checkout.Session>;
     };
   };
 }
@@ -46,7 +65,10 @@ export interface Deps {
   catalog: Catalog;
   now(): Date;
   uuid(): string;
+  /** 32 random bytes in base64url: a manage token, or a computer's sign-in token. */
   manageToken(): string;
+  /** A 6-digit code for signing in on a computer, from crypto random ("004219"). */
+  computerCode(): string;
   /** A Stripe client for this secret key. */
   stripe(secretKey: string): StripeClient;
   blob: BlobStore;

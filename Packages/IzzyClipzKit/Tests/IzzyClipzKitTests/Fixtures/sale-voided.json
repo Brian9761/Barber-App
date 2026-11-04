@@ -1,0 +1,19 @@
+{
+  "sale": {
+    "id": "1d2e3f4a-5b6c-4d7e-8f9a-0b1c2d3e4f5a",
+    "barberId": "julian-ramos",
+    "barberName": "Julian",
+    "appointmentId": null,
+    "customerName": "Test Customer Three",
+    "method": "card",
+    "paymentIntentId": "pi_3SampleSampleSample04",
+    "totalCents": 3500,
+    "items": [
+      { "kind": "service", "serviceId": "haircut", "productId": null, "name": "Haircut", "quantity": 1, "unitCents": 3500, "totalCents": 3500 }
+    ],
+    "soldAt": "2026-11-02T21:10:00Z",
+    "voidedAt": "2026-11-02T21:12:00Z",
+    "voidReason": "Charged twice"
+  },
+  "message": "The sale was voided, so it no longer counts in your sales. Voiding doesn't refund the card: refunds are made in the Stripe Dashboard."
+}

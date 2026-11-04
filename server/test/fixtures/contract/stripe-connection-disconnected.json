@@ -1,0 +1,14 @@
+{
+  "mode": "connect",
+  "status": "notConnected",
+  "accountId": null,
+  "businessName": null,
+  "livemode": null,
+  "chargesEnabled": false,
+  "payoutsEnabled": false,
+  "detailsSubmitted": false,
+  "requirementsDue": 0,
+  "message": "Stripe is disconnected. Your Stripe account isn't closed: you can still sign in to Stripe to see its payments and payouts.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": null
+}

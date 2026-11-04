@@ -1,0 +1,66 @@
+{
+  "appointments": [
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "flowxbori",
+      "barberName": "Flowxbori",
+      "start": "2026-11-02T18:20:00Z",
+      "end": "2026-11-02T19:05:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$35",
+      "status": "completed",
+      "cancelledBy": null,
+      "payment": {
+        "status": "paid",
+        "amountCents": 9600,
+        "paidAt": "2026-11-02T19:05:00Z"
+      },
+      "customer": {
+        "name": "Andre",
+        "phone": null,
+        "email": null
+      },
+      "note": null,
+      "createdAt": "2026-11-02T18:20:00Z",
+      "card": null,
+      "noShowFee": null,
+      "sale": {
+        "id": "00000000-0000-4000-8000-000000000004",
+        "totalCents": 9600,
+        "method": "cash"
+      }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "offeringId": "carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "carlos-rafael",
+      "barberName": "Carlos",
+      "start": "2026-11-02T19:00:00Z",
+      "end": "2026-11-02T19:45:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$45",
+      "status": "booked",
+      "cancelledBy": null,
+      "payment": {
+        "status": "unpaid",
+        "amountCents": null,
+        "paidAt": null
+      },
+      "customer": {
+        "name": "Chris",
+        "phone": null,
+        "email": null
+      },
+      "note": null,
+      "createdAt": "2026-11-02T18:20:00Z",
+      "card": null,
+      "noShowFee": null,
+      "sale": null
+    }
+  ]
+}

@@ -1,4 +1,5 @@
 {
   "ok": true,
-  "stripe": { "configured": true, "mode": "test", "locationId": "tml_FixtureLocation" }
+  "stripe": { "configured": true, "mode": "test", "locationId": "tml_FixtureLocation" },
+  "connection": { "mode": "connect", "status": "active", "businessName": "Izzy Clipz Barbershop" }
 }

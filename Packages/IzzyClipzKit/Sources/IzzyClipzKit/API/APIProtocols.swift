@@ -156,13 +156,115 @@ public protocol OwnerAPI: Sendable {
     func connectionToken() async throws -> String
 
     /// `POST /api/owner/payments`: the server creates the PaymentIntent, so
-    /// the app can't change the amount afterwards.
+    /// the app can't change the amount afterwards. With a checkout's ticket
+    /// (`NewPayment.sale`), the server records the card sale once the payment
+    /// goes through, and the amount must be the ticket's total.
     func createPayment(_ payment: IzzyAPI.NewPayment) async throws -> IzzyAPI.PaymentIntentCreated
 
     /// `POST /api/owner/payments/:id/complete`, after Tap to Pay succeeds:
-    /// the server checks with Stripe and marks the appointment paid.
+    /// the server checks with Stripe and marks the appointment paid (and, with
+    /// a ticket, records the sale: see `Payment.saleId`).
     func completePayment(id: String) async throws -> IzzyAPI.Payment
 
     /// `GET /api/owner/payments?date=`.
     func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment]
+
+    // MARK: The shop's Stripe account
+    //
+    // These and the rest below came after the first owner app: a conformer that
+    // doesn't implement one answers like a server without it (see the extension).
+
+    /// `GET /api/owner/stripe`: how the server takes card payments and how the
+    /// shop's own Stripe account is doing, read live from Stripe (Settings).
+    func stripeConnection() async throws -> IzzyAPI.StripeConnection
+
+    /// `POST /api/owner/stripe/connect`: Stripe's page to connect (or finish
+    /// setting up) the shop's own account, made the first time. Open its `url`
+    /// in `ASWebAuthenticationSession` with `StripeConnectLink.callbackScheme`,
+    /// read the callback with `StripeConnectReturn(callbackURL:)`, then ask
+    /// `stripeConnection()` again. 409 `stripe_connect_off` when the server
+    /// uses its own Stripe key.
+    func connectStripe() async throws -> IzzyAPI.StripeConnectLink
+
+    /// `DELETE /api/owner/stripe/connect`: forgets the shop's account, which
+    /// stays open at Stripe. Card payments stop until the owner connects again,
+    /// and cards clients saved with the old account can't be used.
+    func disconnectStripe() async throws -> IzzyAPI.StripeConnection
+
+    // MARK: Computers
+
+    /// `POST /api/owner/computer-codes`: a new 6-digit code for signing in on
+    /// a computer (Settings → Use on a computer). It replaces the one before.
+    func createComputerCode() async throws -> IzzyAPI.ComputerCode
+
+    /// `GET /api/owner/computer-sessions`: the computers signed in now.
+    func computerSessions() async throws -> [IzzyAPI.ComputerSession]
+
+    /// `DELETE /api/owner/computer-sessions/:id`: signs that computer out.
+    func signOutComputer(id: String) async throws
+
+    /// `DELETE /api/owner/computer-sessions`: signs every computer out.
+    func signOutAllComputers() async throws
+
+    // MARK: Sales and analytics
+
+    /// `POST /api/owner/sales`: records a cash or other sale (a card sale goes
+    /// with its payment instead), checking out its appointment if it has one.
+    /// Returns the sale with names and prices filled in.
+    ///
+    /// Sends `idempotencyKey` as `Idempotency-Key`. Make one per checkout and
+    /// send the same one when saving it again after an error that leaves the
+    /// outcome unknown: if the earlier try went through, the server answers
+    /// with that sale instead of recording it twice. A new key once the ticket
+    /// changes (`NewSale.retryKey`).
+    func recordSale(_ sale: IzzyAPI.NewSale, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Sale
+
+    /// `GET /api/owner/sales?date=`: one shop day's sales, newest first,
+    /// voided ones too (the totals leave them out).
+    func sales(on date: LocalDate) async throws -> IzzyAPI.SalesDay
+
+    /// `POST /api/owner/sales/:id/void`: the sale stops counting. Safe to call
+    /// again. Voiding a card sale doesn't refund the card (refunds are made in
+    /// the Stripe Dashboard); the answer's `message` says so.
+    func voidSale(id: String, reason: String?) async throws -> IzzyAPI.VoidedSale
+
+    /// `GET /api/owner/analytics`: the shop's (or one barber's) numbers for the
+    /// days asked, fast enough to ask every 30 seconds.
+    func analytics(_ query: IzzyAPI.AnalyticsQuery) async throws -> IzzyAPI.Analytics
+}
+
+extension OwnerAPI {
+    /// What a server from before these routes answers: 404 `not_found`. A
+    /// conformer (an app's fake) that hasn't been taught one of them yet gets
+    /// this instead of failing to build.
+    private func unavailable() -> APIError {
+        APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "This isn't available here yet.", status: 404)
+    }
+
+    public func stripeConnection() async throws -> IzzyAPI.StripeConnection { throw unavailable() }
+
+    public func connectStripe() async throws -> IzzyAPI.StripeConnectLink { throw unavailable() }
+
+    public func disconnectStripe() async throws -> IzzyAPI.StripeConnection { throw unavailable() }
+
+    public func createComputerCode() async throws -> IzzyAPI.ComputerCode { throw unavailable() }
+
+    public func computerSessions() async throws -> [IzzyAPI.ComputerSession] { throw unavailable() }
+
+    public func signOutComputer(id: String) async throws { throw unavailable() }
+
+    public func signOutAllComputers() async throws { throw unavailable() }
+
+    public func recordSale(_ sale: IzzyAPI.NewSale, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Sale { throw unavailable() }
+
+    public func sales(on date: LocalDate) async throws -> IzzyAPI.SalesDay { throw unavailable() }
+
+    public func voidSale(id: String, reason: String?) async throws -> IzzyAPI.VoidedSale { throw unavailable() }
+
+    public func analytics(_ query: IzzyAPI.AnalyticsQuery) async throws -> IzzyAPI.Analytics { throw unavailable() }
+
+    /// `voidSale(id:reason:)` without a reason.
+    public func voidSale(id: String) async throws -> IzzyAPI.VoidedSale {
+        try await voidSale(id: id, reason: nil)
+    }
 }

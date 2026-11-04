@@ -1,0 +1,19 @@
+{
+  "sale": {
+    "id": "7f8a9b0c-1d2e-4f3a-8b4c-5d6e7f8a9b0c",
+    "barberId": "carlos-rafael",
+    "barberName": "Carlos",
+    "appointmentId": "4e5f6a7b-8c9d-4eaf-9b0c-3d4e5f6a7b8c",
+    "customerName": "Test Customer",
+    "method": "cash",
+    "paymentIntentId": null,
+    "totalCents": 8100,
+    "items": [
+      { "kind": "service", "serviceId": "haircut", "productId": null, "name": "Haircut", "quantity": 1, "unitCents": 4500, "totalCents": 4500 },
+      { "kind": "product", "serviceId": null, "productId": "6d7e8f9a-0b1c-4d2e-8f3a-4b5c6d7e8f9a", "name": "Sample pomade", "quantity": 2, "unitCents": 1800, "totalCents": 3600 }
+    ],
+    "soldAt": "2026-11-02T20:05:12Z",
+    "voidedAt": null,
+    "voidReason": null
+  }
+}

@@ -81,6 +81,7 @@ describe('with Stripe configured', () => {
         status: 'requires_payment_method',
         createdAt: '2026-11-02T19:10:00Z',
         kind: 'inPerson',
+        saleId: null,
       },
     ]);
   });
@@ -123,16 +124,18 @@ describe('with Stripe configured', () => {
         status: 'succeeded',
         createdAt: '2026-11-02T19:10:00Z',
         kind: 'inPerson',
+        saleId: null,
       },
     });
+    // Paid when the card went through (Stripe's charge), not when the app confirmed it three minutes later.
     const paid = await h.call('GET', '/api/owner/appointments?date=2026-11-02', { owner: true });
-    expect(paid.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:13:00Z' });
+    expect(paid.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:10:00Z' });
 
     // Calling again changes nothing.
     h.advance(10);
     await complete();
     const again = await h.call('GET', '/api/owner/appointments?date=2026-11-02', { owner: true });
-    expect(again.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:13:00Z' });
+    expect(again.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:10:00Z' });
   });
 
   it('adds up two payments for one appointment', async () => {
@@ -322,7 +325,11 @@ describe('GET /api/owner/me', () => {
   it('reports Stripe as not configured, with no location', async () => {
     const res = await h.call('GET', '/api/owner/me', { owner: true });
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, stripe: { configured: false, mode: null, locationId: null } });
+    expect(res.body).toEqual({
+      ok: true,
+      stripe: { configured: false, mode: null, locationId: null },
+      connection: { mode: 'off', status: 'off', businessName: null },
+    });
   });
 
   it('gives the app the Terminal location it needs to connect Tap to Pay', async () => {

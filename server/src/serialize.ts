@@ -53,7 +53,14 @@ export interface AppointmentRow {
   no_show_fee_charged_at: Date | null;
   /** When the client cancelled in the app, or asked to, before the start; never cleared. No fee then. */
   customer_cancelled_at: Date | null;
+  /** The appointment's live sale (migrations/006), copied from `sales`: all three set, or all null. */
+  sale_id: string | null;
+  sale_total_cents: number | null;
+  sale_method: SaleMethod | null;
 }
+
+/** How a sale was paid: Tap to Pay, cash, or another way the shop only records (Zelle, Cash App…). */
+export type SaleMethod = 'card' | 'cash' | 'other';
 
 export type NoShowFeeRowStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needs_action';
 export type NoShowFeeStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needsAction';
@@ -115,7 +122,12 @@ export interface Appointment {
      */
     reason: NoShowFeeReason | null;
   } | null;
+  /** The appointment's checkout (its live sale), or null. Only the shop sees it. */
+  sale: { id: string; totalCents: number; method: SaleMethod } | null;
 }
+
+/** What a client sees of their own appointment: everything but the shop's checkout. */
+export type CustomerAppointment = Omit<Appointment, 'sale'>;
 
 const STATUS_OUT: Record<AppointmentRow['status'], AppointmentStatus> = {
   booked: 'booked',
@@ -168,7 +180,17 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
             reason: feeReasonOf(row),
           }
         : null,
+    sale:
+      row.sale_id && row.sale_total_cents !== null && row.sale_method
+        ? { id: row.sale_id, totalCents: row.sale_total_cents, method: row.sale_method }
+        : null,
   };
+}
+
+/** The appointment as its client sees it (the customer endpoints): without the shop's checkout. */
+export function customerAppointmentJSON(row: AppointmentRow): CustomerAppointment {
+  const { sale: _sale, ...appointment } = appointmentJSON(row);
+  return appointment;
 }
 
 /**
@@ -230,6 +252,8 @@ export interface PaymentRow {
   receipt_email: string | null;
   created_at: Date;
   kind: 'in_person' | FeeKind;
+  /** The card sale recorded for this payment (migrations/006), voided or not. */
+  sale_id: string | null;
 }
 
 const PAYMENT_KIND_OUT: Record<PaymentRow['kind'], 'inPerson' | 'noShowFee' | 'lateCancelFee'> = {
@@ -238,7 +262,10 @@ const PAYMENT_KIND_OUT: Record<PaymentRow['kind'], 'inPerson' | 'noShowFee' | 'l
   late_cancel_fee: 'lateCancelFee',
 };
 
-export const PAYMENT_COLUMNS = 'id, amount_cents, description, appointment_id, status, receipt_email, created_at, kind';
+/** The columns of a PaymentRow, for `SELECT … FROM payments` (the sale's lookup names the table, so no alias). */
+export const PAYMENT_COLUMNS =
+  'id, amount_cents, description, appointment_id, status, receipt_email, created_at, kind, ' +
+  '(SELECT s.id FROM sales s WHERE s.payment_intent_id = payments.id) AS sale_id';
 
 export function paymentJSON(row: PaymentRow) {
   return {
@@ -250,5 +277,7 @@ export function paymentJSON(row: PaymentRow) {
     createdAt: formatInstant(row.created_at),
     /** "inPerson" (Tap to Pay in the shop), or a fee charged to the card on file: "noShowFee" or "lateCancelFee". */
     kind: PAYMENT_KIND_OUT[row.kind] ?? ('inPerson' as const),
+    /** The card sale (checkout) this payment recorded once it succeeded, or null. */
+    saleId: row.sale_id ?? null,
   };
 }

@@ -1,0 +1,44 @@
+{
+  "sale": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "barberId": "flowxbori",
+    "barberName": "Flowxbori",
+    "appointmentId": "00000000-0000-4000-8000-000000000002",
+    "customerName": "Andre",
+    "method": "cash",
+    "paymentIntentId": null,
+    "totalCents": 9600,
+    "items": [
+      {
+        "kind": "service",
+        "serviceId": "haircut",
+        "productId": null,
+        "name": "Haircut",
+        "quantity": 1,
+        "unitCents": 3500,
+        "totalCents": 3500
+      },
+      {
+        "kind": "product",
+        "serviceId": null,
+        "productId": "00000000-0000-4000-8000-000000000001",
+        "name": "Matte pomade",
+        "quantity": 2,
+        "unitCents": 1800,
+        "totalCents": 3600
+      },
+      {
+        "kind": "custom",
+        "serviceId": null,
+        "productId": null,
+        "name": "Gift card",
+        "quantity": 1,
+        "unitCents": 2500,
+        "totalCents": 2500
+      }
+    ],
+    "soldAt": "2026-11-02T19:05:00Z",
+    "voidedAt": null,
+    "voidReason": null
+  }
+}

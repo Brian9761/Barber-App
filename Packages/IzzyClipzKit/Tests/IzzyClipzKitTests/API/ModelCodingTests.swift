@@ -217,9 +217,14 @@ final class ResponseDecodingTests: XCTestCase {
 
     func testOwnerResponses() throws {
         let me = try decoder.decode(IzzyAPI.OwnerStatus.self, from: try kitFixture("owner-me.json"))
-        XCTAssertEqual(me, IzzyAPI.OwnerStatus(ok: true, stripe: IzzyAPI.StripeStatus(configured: true, mode: .test, locationId: "tml_FixtureLocation")))
+        XCTAssertEqual(me, IzzyAPI.OwnerStatus(
+            ok: true,
+            stripe: IzzyAPI.StripeStatus(configured: true, mode: .test, locationId: "tml_FixtureLocation"),
+            connection: IzzyAPI.StripeConnectionSummary(mode: .connect, status: .active, businessName: "Izzy Clipz Barbershop")
+        ))
         let unconfigured = try decoder.decode(IzzyAPI.OwnerStatus.self, from: try kitFixture("owner-me-unconfigured.json"))
         XCTAssertEqual(unconfigured.stripe, IzzyAPI.StripeStatus(configured: false, mode: nil))
+        XCTAssertEqual(unconfigured.connection, IzzyAPI.StripeConnectionSummary(mode: .off, status: .off))
 
         let health = try decoder.decode(IzzyAPI.Health.self, from: try kitFixture("health.json"))
         XCTAssertEqual(health, IzzyAPI.Health(ok: true, version: "1.0.0"))

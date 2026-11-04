@@ -6,6 +6,7 @@
     "appointmentId": "00000000-0000-4000-8000-000000000007",
     "status": "succeeded",
     "createdAt": "2026-11-02T19:05:00Z",
-    "kind": "inPerson"
+    "kind": "inPerson",
+    "saleId": null
   }
 }

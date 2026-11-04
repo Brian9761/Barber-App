@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "not_checkoutable",
+    "message": "This appointment was cancelled, so it can't be checked out. Reopen it first, or check out without the appointment."
+  }
+}

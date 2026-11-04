@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "stripe_connect_off",
+    "message": "This server uses its own Stripe key, so there's nothing to connect."
+  }
+}

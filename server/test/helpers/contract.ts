@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { expect } from 'vitest';
 import { z } from 'zod';
 
 // The API v1 contract's response types as strict schemas: every key present, no extra keys, exact types.
@@ -41,6 +43,11 @@ export const Appointment = z.strictObject({
     .nullable(),
 });
 
+/** The owner's view of an appointment: the client's view plus its checkout (live sale). */
+export const OwnerAppointment = Appointment.extend({
+  sale: z.strictObject({ id, totalCents: int.min(0).max(1_000_000), method: z.enum(['card', 'cash', 'other']) }).nullable(),
+});
+
 export const Slot = z.strictObject({ start: instant, barberIds: z.array(id) });
 export const DaySlots = z.strictObject({ date, slots: z.array(Slot) });
 export const Product = z.strictObject({
@@ -78,6 +85,7 @@ export const Payment = z.strictObject({
   status: z.string(),
   createdAt: instant,
   kind: z.enum(['inPerson', 'noShowFee', 'lateCancelFee']),
+  saleId: id.nullable(),
 });
 export const SavedCard = z.strictObject({
   brand: z.string().regex(/^[a-z0-9_]+$/),
@@ -101,6 +109,127 @@ export const NoShowPolicy = z.strictObject({
   lateCancelWindowMinutes: int.min(30).max(2880).nullable(),
   warning: z.strictObject({ title: z.string().min(1), message: z.string().min(1) }).nullable(),
 });
+// The shop's own Stripe account (STRIPE_CONNECT) and computer sign-in
+const SETUP_MODE = z.enum(['connect', 'direct', 'off']);
+const CONNECTION_STATUS = z.enum(['notConnected', 'needsInfo', 'pending', 'active', 'restricted', 'direct', 'off']);
+export const StripeConnection = z.strictObject({
+  mode: SETUP_MODE,
+  status: CONNECTION_STATUS,
+  accountId: z.string().regex(/^acct_[A-Za-z0-9]+$/).nullable(),
+  businessName: z.string().min(1).nullable(),
+  livemode: z.boolean().nullable(),
+  chargesEnabled: z.boolean(),
+  payoutsEnabled: z.boolean(),
+  detailsSubmitted: z.boolean(),
+  requirementsDue: int.min(0),
+  message: z.string().min(1),
+  dashboardUrl: z.string().regex(/^https:\/\//),
+  checkedAt: instant.nullable(),
+});
+export const ComputerSession = z.strictObject({
+  id,
+  name: z.string().min(1).max(80),
+  createdAt: instant,
+  lastUsedAt: instant,
+  expiresAt: instant,
+  current: z.boolean(),
+});
+export const SaleItem = z.strictObject({
+  kind: z.enum(['service', 'product', 'custom']),
+  serviceId: id.nullable(),
+  productId: id.nullable(),
+  name: z.string().min(1).max(80),
+  quantity: int.min(1).max(99),
+  unitCents: int.min(0).max(1_000_000),
+  totalCents: int.min(0),
+});
+export const Sale = z.strictObject({
+  id,
+  barberId: id,
+  barberName: z.string().min(1),
+  appointmentId: id.nullable(),
+  customerName: z.string().min(1).max(60).nullable(),
+  method: z.enum(['card', 'cash', 'other']),
+  paymentIntentId: z.string().regex(/^pi_/).nullable(),
+  totalCents: int.min(0).max(1_000_000),
+  items: z.array(SaleItem).min(1).max(20),
+  soldAt: instant,
+  voidedAt: instant.nullable(),
+  voidReason: z.string().nullable(),
+});
+const month = z.string().regex(/^\d{4}-\d{2}$/);
+const cents = int.min(0);
+const rate = z.number().min(0);
+export const Analytics = z.strictObject({
+  from: date,
+  to: date,
+  barberId: id.nullable(),
+  timeZone: z.string().min(1),
+  generatedAt: instant,
+  granularity: z.enum(['day', 'month']),
+  totals: z.strictObject({
+    salesCents: cents,
+    servicesCents: cents,
+    productsCents: cents,
+    otherCents: cents,
+    feesCents: cents,
+    servicesCount: int.min(0),
+    productsCount: int.min(0),
+    clientsServed: int.min(0),
+    checkouts: int.min(0),
+    averageTicketCents: cents,
+  }),
+  previous: z.strictObject({ from: date, to: date, salesCents: cents }),
+  productivity: z.strictObject({
+    openMinutes: int.min(0),
+    bookedMinutes: int.min(0),
+    chairTimeBooked: rate,
+    appointments: z.strictObject({
+      booked: int.min(0),
+      completed: int.min(0),
+      noShows: int.min(0),
+      cancelled: int.min(0),
+      lateCancellations: int.min(0),
+      upcoming: int.min(0),
+    }),
+    completionRate: rate.max(1),
+    noShowRate: rate.max(1),
+    salesPerHourCents: cents,
+    productAttachRate: rate.max(1),
+  }),
+  topBarber: z
+    .strictObject({ barberId: id, name: z.string().min(1), salesCents: cents, servicesCount: int.min(0), productsCount: int.min(0) })
+    .nullable(),
+  leaderboard: z.array(
+    z.strictObject({
+      rank: int.min(1),
+      barberId: id,
+      name: z.string().min(1),
+      salesCents: cents,
+      servicesCents: cents,
+      productsCents: cents,
+      servicesCount: int.min(0),
+      productsCount: int.min(0),
+      clientsServed: int.min(0),
+      averageTicketCents: cents,
+    }),
+  ),
+  services: z.array(z.strictObject({ serviceId: id, name: z.string().min(1), count: int.min(0), salesCents: cents })),
+  products: z.array(z.strictObject({ productId: id.nullable(), name: z.string().min(1), quantity: int.min(0), salesCents: cents })),
+  series: z.array(
+    z.strictObject({
+      date: z.union([date, month]),
+      salesCents: cents,
+      servicesCents: cents,
+      productsCents: cents,
+      otherCents: cents,
+      feesCents: cents,
+      servicesCount: int.min(0),
+      productsCount: int.min(0),
+    }),
+  ),
+  barbers: z.array(z.strictObject({ barberId: id, name: z.string().min(1) })),
+});
 export const ErrorBody = z.strictObject({
   error: z.strictObject({
     code: z.enum([
@@ -118,8 +247,14 @@ export const ErrorBody = z.strictObject({
       'not_chargeable',
       'not_started',
       'late_cancel_fee',
+      'not_checkoutable',
+      'already_checked_out',
+      'amount_mismatch',
       'stripe_not_configured',
       'owner_not_configured',
+      'stripe_connect_off',
+      'wrong_code',
+      'forbidden',
       'server_error',
     ]),
     message: z.string().min(1),
@@ -207,10 +342,11 @@ export const RESPONSES = {
   'owner-me': z.strictObject({
     ok: z.literal(true),
     stripe: z.strictObject({ configured: z.boolean(), mode: z.enum(['test', 'live']).nullable(), locationId: z.string().nullable() }),
+    connection: z.strictObject({ mode: SETUP_MODE, status: CONNECTION_STATUS, businessName: z.string().min(1).nullable() }),
   }),
-  'owner-appointments': z.strictObject({ appointments: z.array(Appointment) }),
-  'owner-appointment-created': z.strictObject({ appointment: Appointment }),
-  'owner-appointment-updated': z.strictObject({ appointment: Appointment }),
+  'owner-appointments': z.strictObject({ appointments: z.array(OwnerAppointment) }),
+  'owner-appointment-created': z.strictObject({ appointment: OwnerAppointment }),
+  'owner-appointment-updated': z.strictObject({ appointment: OwnerAppointment }),
   'time-off-list': z.strictObject({ timeOff: z.array(TimeOff) }),
   'time-off-created': z.strictObject({ timeOff: TimeOff }),
   'owner-products': z.strictObject({ products: z.array(Product) }),
@@ -229,10 +365,68 @@ export const RESPONSES = {
   'no-show-settings': z.strictObject({ noShowSettings: NoShowSettings }),
   'no-show-settings-updated': z.strictObject({ noShowSettings: NoShowSettings }),
   'payments-with-fees': z.strictObject({ payments: z.array(Payment) }),
-  'no-show-fee-charged': z.strictObject({ appointment: Appointment }),
-  'no-show-fee-declined': z.strictObject({ appointment: Appointment }),
+  'no-show-fee-charged': z.strictObject({ appointment: OwnerAppointment }),
+  'no-show-fee-declined': z.strictObject({ appointment: OwnerAppointment }),
   'appointment-cancelled-late': z.strictObject({ appointment: Appointment }),
-  'late-cancel-fee-charged': z.strictObject({ appointment: Appointment }),
+  'late-cancel-fee-charged': z.strictObject({ appointment: OwnerAppointment }),
+  // The shop's own Stripe account (STRIPE_CONNECT=on): GET /api/owner/stripe and the connect routes
+  'owner-me-connected': z.strictObject({
+    ok: z.literal(true),
+    stripe: z.strictObject({ configured: z.boolean(), mode: z.enum(['test', 'live']).nullable(), locationId: z.string().nullable() }),
+    connection: z.strictObject({ mode: SETUP_MODE, status: CONNECTION_STATUS, businessName: z.string().min(1).nullable() }),
+  }),
+  'stripe-connection-off': StripeConnection,
+  'stripe-connection-direct': StripeConnection,
+  'stripe-connection-not-connected': StripeConnection,
+  'stripe-connection-needs-info': StripeConnection,
+  'stripe-connection-pending': StripeConnection,
+  'stripe-connection-active': StripeConnection,
+  'stripe-connection-restricted': StripeConnection,
+  'stripe-connection-disconnected': StripeConnection,
+  'stripe-connect-link': z.strictObject({ url: z.string().regex(/^https:\/\/connect\.stripe\.com\//), expiresAt: instant }),
+  // Signing in on a computer
+  'computer-code': z.strictObject({ code: z.string().regex(/^\d{6}$/), expiresAt: instant, expiresInSeconds: int.positive() }),
+  'computer-session-created': z.strictObject({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/), session: ComputerSession }),
+  'computer-sessions': z.strictObject({ sessions: z.array(ComputerSession) }),
+  // Sales and analytics
+  'sale-created': z.strictObject({ sale: Sale }),
+  'sales-day': z.strictObject({ date, sales: z.array(Sale), totals: z.strictObject({ totalCents: int.min(0), count: int.min(0) }) }),
+  'sale-voided': z.strictObject({ sale: Sale, message: z.string().min(1) }),
+  'payment-created-with-sale': z.strictObject({ paymentIntentId: z.string().regex(/^pi_/), clientSecret: z.string().min(1) }),
+  'payment-completed-with-sale': z.strictObject({ payment: Payment }),
+  'owner-appointments-with-sale': z.strictObject({ appointments: z.array(OwnerAppointment) }),
+  analytics: Analytics,
+  'analytics-barber': Analytics,
 } as const;
 
 export type ResponseName = keyof typeof RESPONSES;
+
+// Writing the fixtures (test/contract.test.ts has its own copy of these two; they work the same way).
+
+const FIXTURES = new URL('../fixtures/contract/', import.meta.url);
+const UPDATE = process.env.UPDATE_CONTRACT_FIXTURES === '1';
+
+/** Writes `body` to test/fixtures/contract/`path` (with UPDATE_CONTRACT_FIXTURES=1, or when it's new); otherwise checks it's unchanged. */
+export function recordFixture(path: string, body: unknown): void {
+  const file = new URL(path, FIXTURES);
+  const text = `${JSON.stringify(body, null, 2)}\n`;
+  if (UPDATE || !existsSync(file)) {
+    mkdirSync(new URL('.', file), { recursive: true });
+    writeFileSync(file, text);
+    return;
+  }
+  expect(JSON.parse(readFileSync(file, 'utf8')), `${path} is out of date: run UPDATE_CONTRACT_FIXTURES=1 npm test`).toEqual(body);
+}
+
+/** Checks a response against the contract's strict schema for `name` and records it as `name`.json. */
+export function checkFixture<N extends ResponseName>(
+  name: N,
+  res: { status: number; body: unknown; text: string },
+  status = 200,
+): z.output<(typeof RESPONSES)[N]> {
+  expect(res.status, `${name}: ${res.text}`).toBe(status);
+  const parsed = RESPONSES[name].safeParse(res.body);
+  if (!parsed.success) throw new Error(`${name} doesn't match the contract: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  recordFixture(`${name}.json`, res.body);
+  return parsed.data as z.output<(typeof RESPONSES)[N]>;
+}

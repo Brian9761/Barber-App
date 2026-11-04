@@ -2,130 +2,89 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import { dayRange } from './appointments.js';
 import { requireOwner } from './auth.js';
-import type { Config } from './config.js';
 import type { Queryable } from './db.js';
-import type { Deps, StripeClient } from './deps.js';
+import type { Deps } from './deps.js';
 import { isFeeKind } from './feecase.js';
 import { ApiError, json, readJsonObject, readText } from './http.js';
 import type { Context } from './router.js';
 import { syncNoShowFeeFromStripe } from './noshowfee.js';
+import { cardSaleBody, cardSaleDraft, recordCardSale } from './sales.js';
 import { PAYMENT_COLUMNS, paymentJSON, type PaymentRow } from './serialize.js';
+import {
+  currentConnection,
+  keyLivemode,
+  requestOptions,
+  shopStripe,
+  stripeFailure,
+  stripeMode,
+  stripeOff,
+  stripeSetup,
+  succeededAt,
+  type StripeErrorLike,
+} from './stripeaccount.js';
+import { accountDeauthorized, accountUpdated, connectionSummary, forgetTerminalLocation, terminalLocation } from './stripeconnect.js';
 import { dayBounds } from './time.js';
 import { charLength, email, parse, UUID_RE } from './validation.js';
 
+// Moved to stripeaccount.ts with the shop's Stripe account; still importable from here.
+export { stripeFailure, stripeMode, type StripeCall, type StripeErrorLike, type StripeMode } from './stripeaccount.js';
+
 // In-person card payments with Stripe Terminal (Tap to Pay on iPhone). The
 // server creates every PaymentIntent, so the app can't change the amount, and
-// checks with Stripe before marking anything paid.
+// checks with Stripe before marking anything paid. With Stripe Connect they're
+// direct charges on the shop's own connected account (stripeaccount.ts).
 
 export const MIN_AMOUNT_CENTS = 50;
 export const MAX_AMOUNT_CENTS = 100_000;
 
-export type StripeMode = 'test' | 'live' | null;
-
-export function stripeMode(config: Config): StripeMode {
-  const key = config.stripeSecretKey;
-  if (!key) return null;
-  if (/^(sk|rk)_test_/.test(key)) return 'test';
-  if (/^(sk|rk)_live_/.test(key)) return 'live';
-  return null;
-}
-
-export function stripeClient(deps: Deps): StripeClient {
-  const key = deps.config.stripeSecretKey;
-  if (!key) {
-    throw new ApiError('stripe_not_configured', "Card payments aren't set up yet. Add the shop's Stripe key on the server.");
-  }
-  return deps.stripe(key);
-}
-
-export type StripeCall =
-  | 'connection token'
-  | 'create payment'
-  | 'retrieve payment'
-  | 'create customer'
-  | 'create card checkout'
-  | 'retrieve card checkout'
-  | 'charge no-show fee'
-  | 'retrieve no-show fee'
-  | 'find no-show fee';
-
-/** The parts of a stripe-node error worth logging. */
-export interface StripeErrorLike {
-  type?: string;
-  code?: string;
-  param?: string;
-  statusCode?: number;
-  requestId?: string;
-  message?: string;
-}
-
-/** Keys and client secrets never reach the logs, even if Stripe quotes one in a message. */
-function redactSecrets(text: string | undefined): string | undefined {
-  return text?.replace(/\b((?:sk|rk)_(?:test|live)_)[A-Za-z0-9]+/g, '$1…').replace(/(_secret_)[A-Za-z0-9]+/g, '$1…');
-}
-
-/**
- * Stripe's own errors, logged (what failed and why, never a key) and answered
- * with what to fix: a payment Stripe doesn't have is a 404; a Terminal location
- * or key Stripe turns down is a 500 that names the server setting; anything
- * else is a 500 asking to try again.
- */
-export function stripeFailure(deps: Deps, error: unknown, what: StripeCall): ApiError {
-  if (error instanceof ApiError) return error;
-  const e = (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
-  deps.log.error(`Stripe ${what} failed`, {
-    type: e.type,
-    code: e.code,
-    param: e.param,
-    status: e.statusCode,
-    requestId: e.requestId,
-    message: redactSecrets(e.message),
-  });
-  const missing = e.code === 'resource_missing' || e.statusCode === 404;
-  if ((what === 'retrieve payment' || what === 'retrieve no-show fee') && missing) {
-    return new ApiError('not_found', "Stripe doesn't know that payment.");
-  }
-  if (what === 'retrieve card checkout' && missing) {
-    return new ApiError('not_found', "We couldn't find that card. Add it again.");
-  }
-  if (what === 'connection token' && (missing || e.param === 'location')) {
-    // Usually a test-mode location with a live key (or the other way round), or a typo.
-    return new ApiError(
-      'server_error',
-      "Stripe didn't accept the Terminal location set on the server. Check STRIPE_TERMINAL_LOCATION_ID: it must be a location from the same Stripe account and mode (test or live) as the key.",
-    );
-  }
-  if (e.type === 'StripeAuthenticationError' || e.type === 'StripePermissionError') {
-    return new ApiError('server_error', "Stripe didn't accept the server's Stripe key. Check STRIPE_SECRET_KEY on the server.");
-  }
-  return new ApiError('server_error', "We couldn't reach Stripe. Please try again.");
-}
-
 // GET /api/owner/me
 
 export async function ownerMe(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
-  const configured = Boolean(ctx.deps.config.stripeSecretKey);
-  // The app needs the Terminal location to connect Tap to Pay (TapToPayConnectionConfiguration).
-  const locationId = configured ? (ctx.deps.config.stripeTerminalLocationId ?? null) : null;
-  return json({ ok: true, stripe: { configured, mode: configured ? stripeMode(ctx.deps.config) : null, locationId } });
+  await requireOwner(ctx);
+  const { deps } = ctx;
+  const setup = stripeSetup(deps.config);
+  const connection = await currentConnection(deps);
+  // `stripe` stays what older apps know: in connect mode, Stripe counts as set up once the shop's account can take card payments.
+  const configured = setup === 'direct' || (setup === 'connect' && connection?.chargesEnabled === true);
+  // The app needs the Terminal location to connect Tap to Pay (TapToPayConnectionConfiguration). In
+  // connect mode it's the connected account's, made when the account was found able to take card
+  // payments (stripeconnect.ts). All from the cache: this never asks Stripe.
+  const locationId = setup === 'direct' ? (deps.config.stripeTerminalLocationId ?? null) : configured ? (connection?.locationId ?? null) : null;
+  return json({
+    ok: true,
+    stripe: { configured, mode: configured ? stripeMode(deps.config) : null, locationId },
+    connection: connectionSummary(setup, connection),
+  });
 }
 
-// POST /api/owner/terminal/connection-token
+/** Whether Stripe turned down a connection token's location (it doesn't exist on that account, or in that mode). */
+function locationRefused(error: unknown): boolean {
+  const e = (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
+  return e.code === 'resource_missing' || e.statusCode === 404 || e.param === 'location';
+}
+
+// POST /api/owner/terminal/connection-token (the owner key only: Tap to Pay is iPhone-only)
 
 export async function connectionToken(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
-  const stripe = stripeClient(ctx.deps);
-  const location = ctx.deps.config.stripeTerminalLocationId;
+  await requireOwner(ctx, { keyOnly: true });
+  const { deps } = ctx;
+  const shop = await shopStripe(deps);
+  const location = await terminalLocation(deps, shop);
   try {
-    const token = await stripe.terminal.connectionTokens.create(location ? { location } : {});
+    const token = await shop.stripe.terminal.connectionTokens.create(location ? { location } : {}, requestOptions(shop));
     return json({ secret: token.secret });
   } catch (error) {
-    throw stripeFailure(ctx.deps, error, 'connection token');
+    if (shop.stripeAccount && location && locationRefused(error)) {
+      // The location we made is gone (deleted in the shop's Dashboard): the next try makes a new one.
+      stripeFailure(deps, error, 'connection token');
+      await forgetTerminalLocation(deps, shop.stripeAccount, location);
+      throw new ApiError('server_error', "Stripe couldn't find the shop's Tap to Pay location. Try again, and a new one is set up.");
+    }
+    throw stripeFailure(deps, error, 'connection token');
   }
 }
 
-// POST /api/owner/payments { amountCents, description?, appointmentId?, receiptEmail? }
+// POST /api/owner/payments { amountCents, description?, appointmentId?, receiptEmail?, sale? }
 
 const paymentBody = z.object({
   amountCents: z
@@ -143,14 +102,19 @@ const paymentBody = z.object({
     .refine((v) => v === null || charLength(v) <= 200, { error: 'Keep the note to 200 characters or fewer.' }),
   appointmentId: z.string({ error: 'appointmentId must be an appointment id.' }).nullish(),
   receiptEmail: email.optional(),
+  /** A checkout's ticket (sales.ts): recorded as a card sale once this payment succeeds. */
+  sale: cardSaleBody.optional(),
 });
 
 export async function createPayment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
-  const stripe = stripeClient(ctx.deps);
+  // The owner key only: Tap to Pay is iPhone-only.
+  await requireOwner(ctx, { keyOnly: true });
+  const shop = await shopStripe(ctx.deps);
   const body = parse(paymentBody, await readJsonObject(ctx.request));
-  const appointmentId = body.appointmentId ?? null;
-  if (appointmentId !== null) {
+  const draft = body.sale ? await cardSaleDraft(ctx.deps.db, ctx.deps.catalog, body.sale, body) : null;
+  const appointmentId = draft ? draft.appointmentId : (body.appointmentId ?? null);
+  // A checkout's ticket has already found its appointment.
+  if (appointmentId !== null && !draft) {
     const known =
       UUID_RE.test(appointmentId) &&
       ((await ctx.deps.db.query('SELECT 1 FROM appointments WHERE id = $1', [appointmentId])).rowCount ?? 0) > 0;
@@ -159,59 +123,88 @@ export async function createPayment(ctx: Context): Promise<Response> {
 
   let intent: Stripe.PaymentIntent;
   try {
-    intent = await stripe.paymentIntents.create({
-      amount: body.amountCents,
-      currency: 'usd',
-      // Not payment_method_types: that's a 400 since API version 2026-09-30.endive.
-      allowed_payment_method_types: ['card_present'],
-      capture_method: 'automatic',
-      ...(body.description ? { description: body.description } : {}),
-      ...(body.receiptEmail ? { receipt_email: body.receiptEmail } : {}),
-      metadata: { source: 'izzy-clipz-business', ...(appointmentId ? { appointment_id: appointmentId } : {}) },
-    });
+    intent = await shop.stripe.paymentIntents.create(
+      {
+        amount: body.amountCents,
+        currency: 'usd',
+        // Not payment_method_types: that's a 400 since API version 2026-09-30.endive.
+        allowed_payment_method_types: ['card_present'],
+        capture_method: 'automatic',
+        ...(body.description ? { description: body.description } : {}),
+        ...(body.receiptEmail ? { receipt_email: body.receiptEmail } : {}),
+        metadata: { source: 'izzy-clipz-business', ...(appointmentId ? { appointment_id: appointmentId } : {}) },
+      },
+      requestOptions(shop),
+    );
   } catch (error) {
     throw stripeFailure(ctx.deps, error, 'create payment');
   }
   if (!intent.client_secret) throw stripeFailure(ctx.deps, new Error('PaymentIntent has no client secret'), 'create payment');
 
   const now = ctx.deps.now();
+  // With the account it was made on, so it's always looked up there, even after the shop connects
+  // another; and with the checkout's ticket, recorded as a sale once the payment succeeds.
   await ctx.deps.db.query(
-    `INSERT INTO payments (id, amount_cents, description, appointment_id, status, receipt_email, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+    `INSERT INTO payments (id, amount_cents, description, appointment_id, status, receipt_email, created_at, updated_at, stripe_account_id, sale_draft)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9::jsonb)
      ON CONFLICT (id) DO NOTHING`,
-    [intent.id, body.amountCents, body.description, appointmentId, intent.status, body.receiptEmail ?? null, now],
+    [
+      intent.id,
+      body.amountCents,
+      body.description,
+      appointmentId,
+      intent.status,
+      body.receiptEmail ?? null,
+      now,
+      shop.stripeAccount ?? null,
+      draft ? JSON.stringify(draft) : null,
+    ],
   );
   return json({ paymentIntentId: intent.id, clientSecret: intent.client_secret }, 201);
 }
 
 /**
- * Records Stripe's view of a PaymentIntent and, once it succeeded, marks its
- * appointment paid (paid amount = all succeeded payments for it). Idempotent.
+ * Records Stripe's view of a PaymentIntent and, once it succeeded, records its
+ * checkout's card sale (if it has a ticket) and marks its appointment paid
+ * (paid amount = all succeeded payments for it). Idempotent. `succeeded` is when
+ * Stripe says it went through (`succeededAt`), kept with the payment the first
+ * time it's seen as succeeded: its card sale is sold, and its appointment paid, then.
  */
 export async function syncPayment(
   db: Queryable,
   intent: Pick<Stripe.PaymentIntent, 'id' | 'status'>,
   now: Date,
+  deps: Pick<Deps, 'uuid' | 'log'>,
+  succeeded: Date = now,
 ): Promise<PaymentRow | null> {
   // succeeded and canceled are final in Stripe, so a late or replayed event can't undo them.
   await db.query(
-    `UPDATE payments SET status = $2, updated_at = $3
+    `UPDATE payments SET status = $2, updated_at = $3, succeeded_at = CASE WHEN $2 = 'succeeded' THEN $4::timestamptz END
       WHERE id = $1 AND status <> $2 AND status NOT IN ('succeeded', 'canceled')`,
-    [intent.id, intent.status, now],
+    [intent.id, intent.status, now, succeeded],
   );
   const { rows } = await db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [intent.id]);
-  const row = rows[0];
+  let row = rows[0];
   if (!row) return null;
+  if (row.status === 'succeeded' && row.kind === 'in_person' && row.sale_id === null) {
+    // In this same transaction, so the money is in the sales exactly when the payment is.
+    if (await recordCardSale(db, deps, row.id, now)) {
+      const { rows: recorded } = await db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [intent.id]);
+      row = recorded[0] ?? row;
+    }
+  }
   // A fee charged to the card on file isn't a payment for the service: it never marks the appointment paid.
   if (row.status === 'succeeded' && row.appointment_id && row.kind === 'in_person') {
     await db.query(
       `UPDATE appointments a
           SET payment_status = 'paid',
               paid_cents = s.total,
-              paid_at = COALESCE(a.paid_at, $3),
+              paid_at = COALESCE(a.paid_at, s.succeeded_at, $3),
               payment_intent_id = $2,
               updated_at = $3
-         FROM (SELECT COALESCE(sum(amount_cents), 0)::int AS total FROM payments
+         FROM (SELECT COALESCE(sum(amount_cents), 0)::int AS total,
+                      (SELECT succeeded_at FROM payments WHERE id = $2) AS succeeded_at
+                 FROM payments
                 WHERE appointment_id = $1 AND status = 'succeeded' AND kind = 'in_person') s
         WHERE a.id = $1`,
       [row.appointment_id, row.id, now],
@@ -223,34 +216,38 @@ export async function syncPayment(
 // POST /api/owner/payments/:id/complete — the app calls this after Tap to Pay finishes.
 
 export async function completePayment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
-  const stripe = stripeClient(ctx.deps);
+  await requireOwner(ctx);
+  if (stripeSetup(ctx.deps.config) === 'off') throw stripeOff();
   const id = ctx.params.id ?? '';
   const notFound = () => new ApiError('not_found', "We couldn't find that payment.");
   if (!/^pi_[A-Za-z0-9_]+$/.test(id)) throw notFound();
-  const known = await ctx.deps.db.query<{ kind: string; appointment_id: string | null }>(
-    'SELECT kind, appointment_id FROM payments WHERE id = $1',
+  const known = await ctx.deps.db.query<{ kind: string; appointment_id: string | null; stripe_account_id: string | null }>(
+    'SELECT kind, appointment_id, stripe_account_id FROM payments WHERE id = $1',
     [id],
   );
   const payment = known.rows[0];
   if (!payment) throw notFound();
+  // Asked on the account the payment was made on: Stripe keeps it there, even after the shop connects another.
+  const shop = await shopStripe(ctx.deps, { account: payment.stripe_account_id });
 
   let intent: Stripe.PaymentIntent;
   try {
-    intent = await stripe.paymentIntents.retrieve(id);
+    // With its charge, whose time is when the card went through (the app may confirm much later).
+    intent = await shop.stripe.paymentIntents.retrieve(id, { expand: ['latest_charge'] }, requestOptions(shop));
   } catch (error) {
     throw stripeFailure(ctx.deps, error, 'retrieve payment');
   }
   if (intent.id !== id) throw notFound();
   const now = ctx.deps.now();
+  const succeeded = succeededAt(intent, now);
   const row = await ctx.deps.db.transaction(async (tx) => {
     // A fee (no-show or late cancellation) checked this way keeps its appointment's fee right too (and never marks it paid).
     if (isFeeKind(payment.kind)) {
-      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now, payment.kind);
+      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now, payment.kind, payment.stripe_account_id, succeeded);
       const { rows } = await tx.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [id]);
       return rows[0] ?? null;
     }
-    return syncPayment(tx, intent, now);
+    return syncPayment(tx, intent, now, ctx.deps, succeeded);
   });
   if (!row) throw notFound();
   // `status` is Stripe's: "succeeded" means the money is in. Anything else is not paid (yet).
@@ -260,7 +257,7 @@ export async function completePayment(ctx: Context): Promise<Response> {
 // GET /api/owner/payments?date=YYYY-MM-DD — payments started that shop-local day, newest first.
 
 export async function listPayments(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const { from, to } = dayRange(ctx);
   const zone = ctx.deps.catalog.timeZone;
   const { rows } = await ctx.deps.db.query<PaymentRow>(
@@ -273,6 +270,9 @@ export async function listPayments(ctx: Context): Promise<Response> {
 }
 
 // POST /api/stripe/webhook — signed by Stripe; the source of truth if the app never calls complete.
+// Two endpoints may send here: the shop's own account's (STRIPE_WEBHOOK_SECRET), and in connect
+// mode the platform's Connect endpoint, for events on connected accounts
+// (STRIPE_CONNECT_WEBHOOK_SECRET). Those carry `account`.
 
 const HANDLED_EVENTS = new Set([
   'payment_intent.succeeded',
@@ -282,18 +282,79 @@ const HANDLED_EVENTS = new Set([
   'payment_intent.requires_action',
 ]);
 
+/** The event, if Stripe signed it with the secret of one of our two endpoints. */
+function verifiedEvent(payload: string, signature: string, secrets: string[]): Stripe.Event | null {
+  for (const secret of secrets) {
+    try {
+      return Stripe.webhooks.constructEvent(payload, signature, secret);
+    } catch {
+      // Signed for the other endpoint, or not by Stripe: try the next secret.
+    }
+  }
+  return null;
+}
+
+interface PaymentRecord {
+  kind: string;
+  appointment_id: string | null;
+  stripe_account_id: string | null;
+}
+
+/**
+ * Whether an event from connected account `account` is about the shop: the account connected
+ * now, the one the payment was made on, or (a fee this server never got to write down) the
+ * one the appointment's card was saved on. A connected account of the platform that isn't the
+ * shop's is ignored.
+ */
+async function shopsAccount(
+  deps: Deps,
+  tx: Queryable,
+  account: string,
+  known: PaymentRecord | undefined,
+  metadata: Record<string, string> | null | undefined,
+): Promise<boolean> {
+  if (known) return known.stripe_account_id === account || (await currentConnection(deps, tx))?.accountId === account;
+  if ((await currentConnection(deps, tx))?.accountId === account) return true;
+  const appointmentId = metadata?.appointment_id ?? '';
+  if (!isFeeKind(metadata?.kind) || !UUID_RE.test(appointmentId)) return false;
+  const { rows } = await tx.query<{ stripe_account_id: string | null }>(
+    'SELECT c.stripe_account_id FROM appointments a JOIN saved_cards c ON c.id = a.saved_card_id WHERE a.id = $1',
+    [appointmentId],
+  );
+  return rows[0]?.stripe_account_id === account;
+}
+
 export async function stripeWebhook(ctx: Context): Promise<Response> {
-  const secret = ctx.deps.config.stripeWebhookSecret;
-  if (!secret) throw new ApiError('stripe_not_configured', 'Stripe webhooks are not set up on this server.');
+  const { config } = ctx.deps;
+  const secrets = [config.stripeWebhookSecret, config.stripeConnectWebhookSecret].filter((s): s is string => Boolean(s));
+  if (secrets.length === 0) throw new ApiError('stripe_not_configured', 'Stripe webhooks are not set up on this server.');
   const signature = ctx.request.headers.get('stripe-signature');
   if (!signature) throw new ApiError('invalid_request', 'Missing Stripe-Signature header.');
   const payload = await readText(ctx.request, 512 * 1024);
-  let event: Stripe.Event;
-  try {
-    event = Stripe.webhooks.constructEvent(payload, signature, secret);
-  } catch {
-    throw new ApiError('invalid_request', "The webhook signature doesn't match.");
+  const event = verifiedEvent(payload, signature, secrets);
+  if (!event) throw new ApiError('invalid_request', "The webhook signature doesn't match.");
+  // Only events of the key's mode count: a live Connect endpoint also gets the connected accounts'
+  // test-mode events (a test payment in the shop's Dashboard, or `stripe trigger`), which must
+  // never mark a real booking's fee charged or a real payment paid.
+  const live = keyLivemode(config);
+  if (live !== null && typeof event.livemode === 'boolean' && event.livemode !== live) return json({ received: true });
+  // Set on events from a connected account (the Connect endpoint).
+  const account = typeof event.account === 'string' && event.account !== '' ? event.account : null;
+
+  if (event.type === 'account.application.deauthorized') {
+    // The shop took the platform's access to its account away (from its own Stripe Dashboard).
+    if (account) await accountDeauthorized(ctx.deps, account);
+    return json({ received: true });
   }
+
+  if (event.type === 'account.updated') {
+    const updated = event.data.object as { id?: unknown };
+    const accountId = account ?? (typeof updated.id === 'string' ? updated.id : null);
+    // Only the shop's connected account counts; its new status is read from Stripe and cached.
+    if (accountId) await accountUpdated(ctx.deps, accountId);
+    return json({ received: true });
+  }
+
   if (HANDLED_EVENTS.has(event.type)) {
     const object = event.data.object as {
       object?: string;
@@ -306,12 +367,14 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
     if (object.object === 'payment_intent' && typeof object.id === 'string' && typeof object.status === 'string') {
       const intent = { id: object.id, status: object.status as Stripe.PaymentIntent.Status };
       const now = ctx.deps.now();
+      // When it happened at Stripe: the event's own time, which stays the same when Stripe sends it again later.
+      const succeeded = succeededAt({}, now, event.created);
       await ctx.deps.db.transaction(async (tx) => {
-        const { rows } = await tx.query<{ kind: string; appointment_id: string | null }>(
-          'SELECT kind, appointment_id FROM payments WHERE id = $1',
-          [intent.id],
-        );
+        const { rows } = await tx.query<PaymentRecord>('SELECT kind, appointment_id, stripe_account_id FROM payments WHERE id = $1', [
+          intent.id,
+        ]);
         const known = rows[0];
+        if (account !== null && !(await shopsAccount(ctx.deps, tx, account, known, object.metadata))) return;
         // Fees charged to a card on file follow the appointment's fee; one this server never got to record is found by its metadata.
         if (isFeeKind(known?.kind) || (!known && isFeeKind(object.metadata?.kind))) {
           await syncNoShowFeeFromStripe(
@@ -326,10 +389,12 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
             ctx.deps,
             now,
             known?.kind ?? null,
+            known ? known.stripe_account_id : account,
+            succeeded,
           );
           return;
         }
-        await syncPayment(tx, intent, now);
+        await syncPayment(tx, intent, now, ctx.deps, succeeded);
       });
     }
   }

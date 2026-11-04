@@ -4,5 +4,10 @@
     "configured": true,
     "mode": "test",
     "locationId": null
+  },
+  "connection": {
+    "mode": "direct",
+    "status": "direct",
+    "businessName": null
   }
 }
