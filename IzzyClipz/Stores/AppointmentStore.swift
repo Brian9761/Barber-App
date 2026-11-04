@@ -448,7 +448,13 @@ final class AppointmentStore {
 
     /// Cancels an appointment booked in the app. Cancelling again after an answer was lost, when
     /// the first try went through, finds it cancelled and succeeds.
-    func cancel(_ id: String) async throws {
+    ///
+    /// Inside the late-cancellation window of a booking with a card on file, the server asks first
+    /// (by its own clock): this throws `.server(.lateCancelFee(message:))` and nothing changes. Show
+    /// that warning with "Cancel appointment" and "Keep appointment", and call again with
+    /// `acceptLateCancelFee: true` if the client goes ahead. Pass `true` straight away only when
+    /// the client already agreed to `snapshot.lateCancelWarning(at:)`.
+    func cancel(_ id: String, acceptLateCancelFee: Bool = false) async throws {
         guard let saved = appointment(withID: id), saved.origin == .app else { throw AppointmentActionError.cannotManage }
         let token: String
         switch self.token(for: id) {
@@ -461,7 +467,7 @@ final class AppointmentStore {
             throw AppointmentActionError.tokenUnreadable
         }
         do {
-            let cancelled = try await api.cancelAppointment(id: id, manageToken: token)
+            let cancelled = try await api.cancelAppointment(id: id, manageToken: token, acceptLateCancelFee: acceptLateCancelFee)
             update(id) { saved in
                 saved.snapshot = cancelled
                 saved.checkedAt = self.now()

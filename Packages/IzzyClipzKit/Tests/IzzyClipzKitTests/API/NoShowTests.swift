@@ -381,6 +381,15 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertEqual(notStarted, .server(code: IzzyAPI.ErrorCode.notStarted, message: "You can mark a no-show once the appointment has started.", status: 409))
         XCTAssertEqual(notStarted.userMessage, "You can mark a no-show once the appointment has started.")
         XCTAssertFalse(notStarted.isRetryable)
+
+        let warning = "Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price."
+        let lateFee = APIError.fromResponse(status: 409, body: Data(#"{"error":{"code":"late_cancel_fee","message":"\#(warning)"}}"#.utf8))
+        XCTAssertEqual(lateFee, .lateCancelFee(message: warning))
+        XCTAssertEqual(lateFee.code, "late_cancel_fee")
+        XCTAssertEqual(IzzyAPI.ErrorCode.lateCancelFee, "late_cancel_fee")
+        XCTAssertEqual(lateFee.userMessage, warning)
+        XCTAssertFalse(lateFee.isRetryable, "trying again only helps once the client agreed")
+        XCTAssertEqual(APIError.lateCancelFee(message: "").userMessage, "Cancelling now, this close to your appointment, may be charged a fee.")
     }
 }
 
@@ -688,6 +697,41 @@ final class NoShowClientTests: XCTestCase {
         } catch let error as APIError {
             XCTAssertEqual(error, .policyChanged(message: "The no-show policy for this booking just changed. Check it and book again."))
         }
+    }
+
+    func testCancellingInsideTheWindowAsksFirstThenSendsTheClientsYes() async throws {
+        let id = "5b8f2c1e-3d4a-4e6f-8a9b-0c1d2e3f4a5b"
+        let warning = "Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price."
+        StubURLProtocol.reply { _ in .json(409, #"{"error":{"code":"late_cancel_fee","message":"\#(warning)"}}"#) }
+        do {
+            _ = try await client.cancelAppointment(id: id, manageToken: "token-abc_123")
+            XCTFail("expected late_cancel_fee")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .lateCancelFee(message: warning))
+        }
+        var sent = try only()
+        XCTAssertEqual(sent.method, "POST")
+        XCTAssertEqual(sent.path, "/api/appointments/\(id)/cancel")
+        XCTAssertEqual(sent.json, .object([:]), "no yes until the client gave one")
+
+        // The client read it and cancels anyway.
+        StubURLProtocol.reply { _ in .fixture("appointment.json") }
+        let cancelled = try await client.cancelAppointment(id: id, manageToken: "token-abc_123", acceptLateCancelFee: true)
+        XCTAssertEqual(cancelled.status, .cancelled)
+        sent = try only()
+        XCTAssertEqual(sent.path, "/api/appointments/\(id)/cancel")
+        XCTAssertEqual(sent.header("X-Manage-Token"), "token-abc_123")
+        XCTAssertEqual(sent.header("Content-Type"), "application/json")
+        XCTAssertNil(sent.header("Authorization"))
+        XCTAssertEqual(sent.json, .object(["acceptLateCancelFee": .bool(true)]))
+
+        StubURLProtocol.reply { _ in .fixture("appointment.json") }
+        _ = try await client.cancelAppointment(id: id, manageToken: "token-abc_123", acceptLateCancelFee: false)
+        XCTAssertEqual(try only().json, .object([:]))
+        XCTAssertEqual(
+            IzzyAPI.Endpoints.cancelAppointment(id: id, manageToken: "t", acceptLateCancelFee: true).body,
+            Data(#"{"acceptLateCancelFee":true}"#.utf8)
+        )
     }
 
     func testChargingTheFeeAndTheSettingsCarryTheOwnerKey() async throws {

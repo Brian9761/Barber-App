@@ -209,7 +209,9 @@ extension IzzyAPI.Appointment {
     ///
     /// Like the server, the time that counts is the first time the client cancelled (or asked to),
     /// if there was one: a booking they cancelled early, which the shop then reopened, stays free.
-    /// Work it out again when the client taps the button, not only when the dialog opens.
+    /// Work it out again when the client taps the button, not only when the dialog opens. The
+    /// server decides by its own clock, though: when the phone's is off (or the minute turned while
+    /// the dialog was open), cancelling throws `APIError.lateCancelFee` with this same warning.
     public func lateCancelWarning(at now: Date) -> String? {
         guard isCancellable(at: now), card != nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
               IzzyAPI.NoShowRule.cancelledLate(

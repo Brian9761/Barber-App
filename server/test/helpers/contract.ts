@@ -117,6 +117,7 @@ export const ErrorBody = z.strictObject({
       'policy_changed',
       'not_chargeable',
       'not_started',
+      'late_cancel_fee',
       'stripe_not_configured',
       'owner_not_configured',
       'server_error',

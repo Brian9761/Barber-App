@@ -801,6 +801,9 @@ extension IzzyAPI {
         public static let notChargeable = "not_chargeable"
         /// 409: a booking with a card on file can be marked a no-show only once it has started.
         public static let notStarted = "not_started"
+        /// 409: cancelling now, inside the agreed late-cancellation window, may be charged the fee.
+        /// The message is the warning to show; cancel again with `acceptLateCancelFee` to go ahead.
+        public static let lateCancelFee = "late_cancel_fee"
         public static let stripeNotConfigured = "stripe_not_configured"
         public static let ownerNotConfigured = "owner_not_configured"
         public static let serverError = "server_error"

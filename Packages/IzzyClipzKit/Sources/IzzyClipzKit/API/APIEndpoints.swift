@@ -158,9 +158,15 @@ extension IzzyAPI {
             Endpoint(.get, "/api/appointments/" + segment(id), credential: .manageToken(manageToken))
         }
 
-        /// `POST /api/appointments/:id/cancel` with `X-Manage-Token` → `{ appointment }`.
-        public static func cancelAppointment(id: String, manageToken: String) -> Endpoint<AppointmentResponse> {
-            Endpoint(.post, "/api/appointments/" + segment(id) + "/cancel", credential: .manageToken(manageToken))
+        /// `POST /api/appointments/:id/cancel` with `X-Manage-Token` → `{ appointment }`. The body is
+        /// `{ "acceptLateCancelFee": true }` once the client agreed to the late-cancellation warning
+        /// (409 `late_cancel_fee` otherwise, inside the window), and `{}` before.
+        public static func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool = false) -> Endpoint<AppointmentResponse> {
+            Endpoint(
+                .post, "/api/appointments/" + segment(id) + "/cancel",
+                body: acceptLateCancelFee ? Data(#"{"acceptLateCancelFee":true}"#.utf8) : nil,
+                credential: .manageToken(manageToken)
+            )
         }
 
         /// `GET /api/reviews` → `{ google, yelp }`.
