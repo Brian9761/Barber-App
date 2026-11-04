@@ -18,7 +18,8 @@
       "note": null,
       "createdAt": "2026-11-02T17:58:02Z",
       "card": null,
-      "noShowFee": null
+      "noShowFee": null,
+      "sale": { "id": "6e7f8a9b-0c1d-4e2f-9a3b-4c5d6e7f8a9b", "totalCents": 8000, "method": "card" }
     },
     {
       "id": "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e",
@@ -47,7 +48,8 @@
         "customerCancelledAt": null,
         "lateCancelWindowMinutes": 60,
         "reason": "noShow"
-      }
+      },
+      "sale": null
     },
     {
       "id": "2c3d4e5f-6a7b-4c8d-ae9f-1a2b3c4d5e6f",
@@ -67,7 +69,8 @@
       "note": "First time with lightener.",
       "createdAt": "2026-10-29T15:03:44Z",
       "card": null,
-      "noShowFee": null
+      "noShowFee": null,
+      "sale": null
     },
     {
       "id": "3d4e5f6a-7b8c-4d9e-8fa0-2b3c4d5e6f7a",
@@ -96,7 +99,8 @@
         "customerCancelledAt": "2026-11-02T22:30:00Z",
         "lateCancelWindowMinutes": 60,
         "reason": "lateCancel"
-      }
+      },
+      "sale": null
     }
   ]
 }

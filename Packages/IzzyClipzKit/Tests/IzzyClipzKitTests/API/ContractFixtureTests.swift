@@ -37,6 +37,8 @@ final class ContractFixtureTests: XCTestCase {
         kind(IzzyAPI.AppointmentsResponse.self, "{ appointments }", has("appointments")),
         kind(IzzyAPI.AvailabilityResponse.self, "GET /api/availability", has("days")),
         kind(IzzyAPI.ReviewsResponse.self, "GET /api/reviews", has("google")),
+        // Before `{ products }`: the analytics have products too.
+        kind(IzzyAPI.Analytics.self, "GET /api/owner/analytics", has("leaderboard")),
         kind(IzzyAPI.ProductsResponse.self, "{ products }", has("products")),
         kind(IzzyAPI.ProductResponse.self, "{ product }", has("product")),
         kind(IzzyAPI.OwnerStatus.self, "GET /api/owner/me", has("stripe")),
@@ -51,6 +53,16 @@ final class ContractFixtureTests: XCTestCase {
         kind(IzzyAPI.CardCheckout.self, "POST /api/cards/checkout", has("sessionId")),
         kind(IzzyAPI.SavedCardResponse.self, "POST /api/cards", has("card")),
         kind(IzzyAPI.NoShowSettingsResponse.self, "{ noShowSettings }", has("noShowSettings")),
+        // The shop's own Stripe account and signing in on a computer
+        kind(IzzyAPI.StripeConnection.self, "GET /api/owner/stripe", has("dashboardUrl")),
+        kind(IzzyAPI.StripeConnectLink.self, "POST /api/owner/stripe/connect", { $0["url"] != nil && $0["expiresAt"] != nil }),
+        kind(IzzyAPI.ComputerCode.self, "POST /api/owner/computer-codes", has("expiresInSeconds")),
+        kind(IzzyAPI.ComputerSessionCreated.self, "POST /api/computer-sessions", has("session")),
+        kind(IzzyAPI.ComputerSessionsResponse.self, "GET /api/owner/computer-sessions", has("sessions")),
+        // Sales
+        kind(IzzyAPI.VoidedSale.self, "POST /api/owner/sales/:id/void", { $0["sale"] != nil && $0["message"] != nil }),
+        kind(IzzyAPI.SaleResponse.self, "POST /api/owner/sales", has("sale")),
+        kind(IzzyAPI.SalesDay.self, "GET /api/owner/sales", has("sales")),
     ]
 
     /// Checks every file in `folder`; returns the kinds it covered.
