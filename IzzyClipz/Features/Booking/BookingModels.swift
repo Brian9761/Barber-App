@@ -157,9 +157,15 @@ final class AvailabilityLoader {
 }
 
 extension BookingDraft {
-    /// What the server is sent to book it.
+    /// What the server is sent to book it, without a card.
     var request: IzzyAPI.NewAppointment {
-        IzzyAPI.NewAppointment(target: plan.choice.target, start: plan.start, customer: customer.newCustomer, note: note)
+        request(noShow: nil)
+    }
+
+    /// What the server is sent to book it, with the card and the policy the client agreed to when
+    /// no-show protection applies. The card isn't part of "the same booking" for a retry.
+    func request(noShow: IzzyAPI.NoShowAgreement?) -> IzzyAPI.NewAppointment {
+        IzzyAPI.NewAppointment(target: plan.choice.target, start: plan.start, customer: customer.newCustomer, note: note, noShow: noShow)
     }
 }
 
@@ -169,6 +175,12 @@ extension BookingDraft {
 /// Every try of the same booking is sent with the same manage token (kept by the appointment
 /// store until the booking is confirmed), so Try again after a lost answer gets the appointment
 /// that went through instead of booking twice or finding the client's own time taken.
+///
+/// With no-show protection, the booking goes with the card and the policy on screen (see
+/// `NoShowRequirement`). When the server needs a card after all (`card_required`), or the policy
+/// changed (`policy_changed`), the policy is loaded again so Review shows what's true now, and a
+/// card the server doesn't know is dropped from this iPhone. After booking with "Remember me" off,
+/// the card is forgotten too.
 @MainActor
 @Observable
 final class BookingSubmitter {
@@ -183,12 +195,17 @@ final class BookingSubmitter {
         case rateLimited(String)
         /// The server turned down the name or number: back to the details.
         case details(String)
+        /// No-show protection needs a card (or another one), in the server's words: add one, then book.
+        case cardNeeded(String)
+        /// The no-show policy for this booking just changed: Review shows the new one; check it and book.
+        case policyChanged(String)
         /// Anything else: try again, or call.
         case other(String)
 
         var message: String {
             switch self {
-            case .timeGone(let text), .offline(let text), .rateLimited(let text), .details(let text), .other(let text):
+            case .timeGone(let text), .offline(let text), .rateLimited(let text), .details(let text),
+                 .cardNeeded(let text), .policyChanged(let text), .other(let text):
                 return text
             }
         }
@@ -196,7 +213,7 @@ final class BookingSubmitter {
         var canRetry: Bool {
             switch self {
             case .offline, .other: return true
-            case .timeGone, .rateLimited, .details: return false
+            case .timeGone, .rateLimited, .details, .cardNeeded, .policyChanged: return false
             }
         }
 
@@ -220,22 +237,35 @@ final class BookingSubmitter {
     private let api: any ShopAPI
     private let appointments: AppointmentStore
     private let calendar: BookingCalendar
+    private let cards: SavedCardStore?
+    private let policies: NoShowPolicyStore?
 
-    init(api: any ShopAPI, appointments: AppointmentStore, calendar: BookingCalendar = AppData.bookingCalendar) {
+    init(
+        api: any ShopAPI,
+        appointments: AppointmentStore,
+        calendar: BookingCalendar = AppData.bookingCalendar,
+        cards: SavedCardStore? = nil,
+        policies: NoShowPolicyStore? = nil
+    ) {
         self.api = api
         self.appointments = appointments
         self.calendar = calendar
+        self.cards = cards
+        self.policies = policies
     }
 
     /// Books `draft` and saves it with its token and reminders. Returns the saved appointment, or
     /// `nil` with `failure` set. A second call while one is running does nothing, so a double tap
     /// can't book twice.
-    func book(_ draft: BookingDraft) async -> SavedAppointment? {
+    ///
+    /// - Parameter noShow: the card and the policy on screen when the client tapped Book, when
+    ///   no-show protection applies (`NoShowRequirement.agreement`); `nil` books without a card.
+    func book(_ draft: BookingDraft, noShow: IzzyAPI.NoShowAgreement? = nil) async -> SavedAppointment? {
         guard !isBooking else { return nil }
         isBooking = true
         failure = nil
         defer { isBooking = false }
-        let request = draft.request
+        let request = draft.request(noShow: noShow)
         let token = appointments.bookingToken(for: request)
         let confirmation: IzzyAPI.BookingConfirmation
         do {
@@ -243,11 +273,14 @@ final class BookingSubmitter {
         } catch where error.isCancellation {
             return nil
         } catch {
-            failure = Self.failure(for: error.asAPIError, start: draft.plan.start, calendar: calendar)
+            let apiError = error.asAPIError
+            await settleNoShow(after: apiError, target: draft.plan.choice.target, sent: noShow)
+            failure = Self.failure(for: apiError, start: draft.plan.start, calendar: calendar)
             return nil
         }
         let saved = appointments.add(confirmation, remind: true)
         appointments.finishedBooking(request)
+        keepOrForgetCard(after: draft)
         guard saved.status == .booked else {
             // A retry found the booking an earlier try made, but it has been cancelled since.
             failure = .timeGone(Self.noLongerBooked(saved, calendar: calendar))
@@ -269,6 +302,32 @@ final class BookingSubmitter {
         failure = nil
     }
 
+    /// After a booking no-show protection turned down: the policy as it is now (a card may be
+    /// needed after all, or the fee or window changed), and no more of a card the server doesn't
+    /// know (the app checks the expiry itself, so that's what `card_required` for a sent card means).
+    private func settleNoShow(after error: APIError, target: IzzyAPI.BookingTarget, sent: IzzyAPI.NoShowAgreement?) async {
+        switch error {
+        case .cardRequired:
+            if let sent { cards?.forget(sent.cardToken) }
+            await policies?.reload(target)
+        case .policyChanged:
+            await policies?.reload(target)
+        default:
+            break
+        }
+    }
+
+    /// Booked: with "Remember me" off the card is forgotten too, like the name and number; with it
+    /// on, the card is kept for next time.
+    private func keepOrForgetCard(after draft: BookingDraft) {
+        guard let cards else { return }
+        if draft.remember {
+            cards.setRemembered(true)
+        } else {
+            cards.forget()
+        }
+    }
+
     static func failure(for error: APIError, start: Date, calendar: BookingCalendar) -> Failure {
         let time = calendar.timeLabel(for: start)
         switch error {
@@ -288,6 +347,11 @@ final class BookingSubmitter {
         case .server(let code, let message, _) where code == IzzyAPI.ErrorCode.invalidRequest:
             let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
             return .details(text.isEmpty ? "Check your name and number, then try again." : text)
+        case .cardRequired:
+            // "Add a card to book this time. You won't be charged now.", or why the card can't be used.
+            return .cardNeeded(error.userMessage)
+        case .policyChanged:
+            return .policyChanged(error.userMessage)
         default:
             return .other(error.userMessage)
         }

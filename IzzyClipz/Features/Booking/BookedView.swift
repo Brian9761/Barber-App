@@ -71,6 +71,14 @@ struct BookedView: View {
                 SummaryRow(label: "Barber", value: saved.barberName)
                 SummaryDivider()
                 SummaryRow(label: "Where", value: AppData.shop.address.streetLine, detail: AppData.shop.address.cityLine)
+                if let card = saved.snapshot.card {
+                    SummaryDivider()
+                    SummaryRow(
+                        label: NoShowCopy.cardOnFileLabel(saved.snapshot.noShowFee),
+                        value: card.label,
+                        detail: NoShowCopy.bookedCardDetail(saved.snapshot)
+                    )
+                }
             }
             .card(padding: Theme.Space.xl)
             .accessibilityElement(children: .combine)

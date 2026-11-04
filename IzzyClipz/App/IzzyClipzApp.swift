@@ -19,7 +19,10 @@ struct IzzyClipzApp: App {
                 .environment(appDelegate.products)
                 .environment(appDelegate.reviews)
                 .environment(appDelegate.customerDetails)
+                .environment(appDelegate.savedCard)
+                .environment(appDelegate.noShowPolicies)
                 .environment(\.shopAPI, appDelegate.api)
+                .environment(\.cardSaver, appDelegate.cardSaver)
                 // Street Drip is dark only: the palette is the brand.
                 .preferredColorScheme(.dark)
                 .tint(Theme.dripRed)

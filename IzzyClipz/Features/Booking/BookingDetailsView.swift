@@ -9,6 +9,8 @@ struct BookingDetailsView: View {
 
     @Environment(AppRouter.self) private var router
     @Environment(CustomerDetailsStore.self) private var savedDetails
+    @Environment(SavedCardStore.self) private var cards
+    @Environment(NoShowPolicyStore.self) private var policies
     @State private var name = ""
     @State private var phone = ""
     @State private var note = ""
@@ -75,9 +77,10 @@ struct BookingDetailsView: View {
                         Text("Remember me on this iPhone")
                             .textRole(.callout)
                             .foregroundStyle(Theme.bone)
-                        Text("Your name and number fill in next time.")
+                        Text(NoShowCopy.rememberNote(cardNeeded: policies.policy(for: plan.choice.target)?.required == true))
                             .textRole(.caption)
                             .foregroundStyle(Theme.smoke)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .tint(Theme.electric)
@@ -231,10 +234,14 @@ struct BookingDetailsView: View {
         } else {
             savedDetails.forget()
         }
+        // The card for no-show protection goes with the same choice: kept for next time, or only
+        // for this booking.
+        cards.setRemembered(remember)
         let draft = BookingDraft(
             plan: plan,
             customer: CustomerDetails(name: details.trimmedName, phone: details.displayPhone),
-            note: note.trimmingCharacters(in: .whitespacesAndNewlines)
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            remember: remember
         )
         router.bookingPath.append(.review(draft))
     }

@@ -15,17 +15,22 @@ protocol SecretStore: AnyObject {
 }
 
 /// The Keychain, as generic passwords under one service name. Items are readable after the first
-/// unlock (so the app can check appointments when it opens) and move to a new iPhone with an
-/// encrypted backup, like the appointments themselves.
+/// unlock (so the app can check appointments when it opens) and, by default, move to a new iPhone
+/// with an encrypted backup, like the appointments themselves.
 final class KeychainSecretStore: SecretStore {
     struct Failure: Error, Equatable {
         let status: OSStatus
     }
 
     let service: String
+    /// When the items can be read, and whether they leave this iPhone (`kSecAttrAccessible…`).
+    let accessibility: CFString
 
-    init(service: String) {
+    /// - Parameter accessibility: `kSecAttrAccessibleAfterFirstUnlock` (the default) moves with an
+    ///   encrypted backup; `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` stays on this iPhone.
+    init(service: String, accessibility: CFString = kSecAttrAccessibleAfterFirstUnlock) {
         self.service = service
+        self.accessibility = accessibility
     }
 
     private func query(_ account: String) -> [String: Any] {
@@ -56,7 +61,7 @@ final class KeychainSecretStore: SecretStore {
     func setSecret(_ secret: String, for account: String) throws {
         let attributes: [String: Any] = [
             kSecValueData as String: Data(secret.utf8),
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlock,
+            kSecAttrAccessible as String: accessibility,
         ]
         var status = SecItemUpdate(query(account) as CFDictionary, attributes as CFDictionary)
         if status == errSecItemNotFound {
@@ -69,6 +74,14 @@ final class KeychainSecretStore: SecretStore {
     func removeSecret(for account: String) throws {
         let status = SecItemDelete(query(account) as CFDictionary)
         guard status == errSecSuccess || status == errSecItemNotFound else { throw Failure(status: status) }
+    }
+}
+
+extension KeychainSecretStore {
+    /// Where the card for no-show protection is kept (its token and how to show it): only on this
+    /// iPhone. It never moves to another one with a backup; there, the client adds their card again.
+    static func savedCard() -> KeychainSecretStore {
+        KeychainSecretStore(service: "com.izzyclipz.app.saved-card", accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly)
     }
 }
 

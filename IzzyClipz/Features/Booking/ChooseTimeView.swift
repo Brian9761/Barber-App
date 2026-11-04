@@ -8,6 +8,10 @@ import UIKit
 /// with openings is picked to start with. If someone else books the picked time first, the client
 /// lands back here with the list refreshed and a note saying so.
 ///
+/// When the shop's server says this booking needs a card (no-show protection), the "Full Service
+/// Cancellation & No-Show Fee" notice shows under what's being booked, before any time is picked,
+/// and a picked time less than the late-cancellation window away says cancelling it may be charged.
+///
 /// The screen's one red is the Continue bar; it stays `ink3` until a time is picked.
 struct ChooseTimeView: View {
     let choice: BookingChoice
@@ -37,6 +41,7 @@ private struct ChooseTimeScreen: View {
     let loader: AvailabilityLoader
 
     @Environment(AppRouter.self) private var router
+    @Environment(NoShowPolicyStore.self) private var policies
     @Environment(\.scenePhase) private var scenePhase
     /// The month on screen, as `MonthPage.id` ("2026-10").
     @State private var displayedMonthID: String
@@ -67,6 +72,9 @@ private struct ChooseTimeScreen: View {
                     BookingStepHeader(step: 3, title: "Pick a day and time")
                     ChooseTimeChoiceSummary(choice: choice)
                 }
+                if let warning = NoShowWarningContent(policy: policy, start: nil, now: Date()) {
+                    NoShowWarningCard(content: warning)
+                }
                 if let notice {
                     ChooseTimeNotice(text: notice)
                 }
@@ -84,6 +92,14 @@ private struct ChooseTimeScreen: View {
                     )
                 }
                 times
+                if let start = selectedStart, policy?.lateCancelWindowMinutes != nil {
+                    // Worked out again every minute: the picked time can come inside the window.
+                    TimelineView(.everyMinute) { context in
+                        if let lateNotice = policy?.lateCancelNotice(start: start, now: context.date) {
+                            ChooseTimeLateCancelNotice(text: lateNotice)
+                        }
+                    }
+                }
                 if let zone = BookingFlowCopy.timeZoneNote(at: selectedStart ?? Date()) {
                     Text(zone)
                         .textRole(.caption)
@@ -98,7 +114,9 @@ private struct ChooseTimeScreen: View {
         }
         .screenBackground()
         .refreshable {
+            async let policyReload: Void = policies.reload(choice.target)
             await reload(saying: nil)
+            await policyReload
         }
         .stickyBottomBar {
             ChooseTimeContinueBar(
@@ -119,17 +137,29 @@ private struct ChooseTimeScreen: View {
             }
             await reload(saying: sent.message)
         }
+        .task {
+            // Whether this booking needs a card, and the notice about the fee.
+            await policies.load(choice.target)
+        }
         .onAppear {
             if loader.isStale(maxAge: Self.maxAge), loader.loadedAt != nil {
                 Task { await reload(saying: nil) }
             }
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                Task { await policies.load(choice.target) }
+            }
             if phase == .active, loader.isStale(maxAge: Self.maxAge) {
                 Task { await reload(saying: nil) }
             }
         }
         .sensoryFeedback(.selection, trigger: selectedStart) { _, newValue in newValue != nil }
+    }
+
+    /// The shop's no-show policy for this choice, once the server has said.
+    private var policy: IzzyAPI.NoShowPolicy? {
+        policies.policy(for: choice.target)
     }
 
     // MARK: Times
@@ -342,6 +372,19 @@ private struct ChooseTimeNotice: View {
         .card(padding: Theme.Space.cardPadding)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("timeNotice")
+    }
+}
+
+/// Under the times: "This time is less than 1 hour away, so cancelling it may be charged $40."
+private struct ChooseTimeLateCancelNotice: View {
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: Symbol.clock)
+            .textRole(.callout)
+            .foregroundStyle(Theme.caution)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("lateCancelNotice")
     }
 }
 
