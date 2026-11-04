@@ -83,7 +83,7 @@ function HowToGetIt({ platform }: { platform: Platform }) {
           {canInstall ? <InstallNow onInstall={() => void onInstall()} /> : null}
           {declined && !canInstall ? <p className="secondary get-app__declined">No problem. You can install it any time with the steps below.</p> : null}
           {device === 'iphone' ? <IPhoneSteps browser={platform.device === 'iphone' ? platform.browser : 'safari'} url={url} /> : null}
-          {device === 'android' ? <AndroidSteps orMenu={canInstall} /> : null}
+          {device === 'android' ? <AndroidSteps orMenu={canInstall} browser={platform.device === 'android' ? platform.browser : 'chrome'} url={url} /> : null}
           {device === 'computer' ? <ComputerSteps orAddressBar={canInstall} browser={platform.device === 'computer' ? platform.browser : 'chrome'} /> : null}
         </div>
         {platform.device === 'computer' ? <PhoneCode url={url} /> : null}
@@ -171,7 +171,7 @@ function IPhoneSteps({ browser, url }: { browser: Browser; url: string }) {
     before = (
       <Notice tone="info" title="Open this page in Safari first" testId="open-in-safari">
         <p>You're in another app's browser, which can't add it to your Home Screen. Tap ⋯ or the menu, then Open in browser or Open in Safari.</p>
-        <CopyLink url={url} />
+        <CopyLink url={url} paste="Copied. Open Safari and paste it in the address bar." />
       </Notice>
     );
   } else if (browser === 'chrome' || browser === 'edge' || browser === 'firefox') {
@@ -204,11 +204,19 @@ function IPhoneSteps({ browser, url }: { browser: Browser; url: string }) {
   );
 }
 
-function AndroidSteps({ orMenu }: { orMenu: boolean }) {
+function AndroidSteps({ orMenu, browser, url }: { orMenu: boolean; browser: Browser; url: string }) {
   return (
     <Steps
       id="android"
       title={orMenu ? 'Or use Chrome’s menu' : 'On an Android phone'}
+      before={
+        browser === 'inApp' ? (
+          <Notice tone="info" title="Open this page in Chrome first" testId="open-in-chrome">
+            <p>You're in another app's browser, which can't add it to your Home Screen. Tap ⋮ or the menu, then Open in Chrome or Open in browser.</p>
+            <CopyLink url={url} paste="Copied. Open Chrome and paste it in the address bar." />
+          </Notice>
+        ) : null
+      }
       steps={[
         { text: <>Open this page in <strong>Chrome</strong>.</> },
         { text: <>Tap the menu <span className="nowrap">⋮</span> at the top right.</>, picture: <AndroidMenuDrawing /> },
@@ -258,8 +266,8 @@ function ComputerSteps({ orAddressBar, browser }: { orAddressBar: boolean; brows
   );
 }
 
-/** For a link opened inside Instagram or Facebook: copy it, to paste in Safari. */
-function CopyLink({ url }: { url: string }) {
+/** For a link opened inside Instagram or Facebook: copy it, to paste in the phone's own browser. */
+function CopyLink({ url, paste }: { url: string; paste: string }) {
   const [copied, setCopied] = useState<boolean | null>(null);
   const copy = async () => {
     try {
@@ -275,7 +283,7 @@ function CopyLink({ url }: { url: string }) {
         Copy the link
       </button>
       <p aria-live="polite" className="copy-link__result">
-        {copied === true ? 'Copied. Open Safari and paste it in the address bar.' : copied === false ? `The address is ${url}` : ''}
+        {copied === true ? paste : copied === false ? `The address is ${url}` : ''}
       </p>
     </div>
   );

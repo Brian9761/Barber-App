@@ -67,6 +67,14 @@ describe('Get the app', () => {
     expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/app`);
   });
 
+  it('asks to open the page in Chrome first from inside another app on Android', () => {
+    on('Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36 Instagram 380.0.0.29.88 Android');
+    renderApp('/app');
+    expect(screen.getByRole('radio', { name: 'Android' })).toHaveProperty('checked', true);
+    expect(screen.getByTestId('open-in-chrome').textContent).toContain('Open this page in Chrome first');
+    expect(within(screen.getByTestId('open-in-chrome')).getByRole('button', { name: 'Copy the link' })).toBeTruthy();
+  });
+
   it('on Android, installs with the browser’s own question when it offers one, with Chrome’s menu as the other way', async () => {
     on(USER_AGENTS.androidChrome);
     const stop = listenForInstallPrompt();
