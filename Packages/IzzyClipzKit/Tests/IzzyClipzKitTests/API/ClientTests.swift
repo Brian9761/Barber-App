@@ -370,6 +370,66 @@ final class ClientTests: XCTestCase {
                 let payments = try await $0.payments(on: day)
                 XCTAssertEqual(payments.count, 3)
             },
+            // The shop's own Stripe account
+            OwnerCall(name: "stripe", reply: .fixture("stripe-connection.json"), method: "GET", path: "/api/owner/stripe") {
+                let connection = try await $0.stripeConnection()
+                XCTAssertEqual(connection.status, .needsInfo)
+            },
+            OwnerCall(name: "connect stripe", reply: .fixture("stripe-connect-link.json", status: 201), method: "POST", path: "/api/owner/stripe/connect",
+                      body: .object(["returnTo": .string("app")])) {
+                let link = try await $0.connectStripe()
+                XCTAssertEqual(link.url.host, "connect.stripe.com")
+            },
+            OwnerCall(name: "disconnect stripe", reply: .fixture("stripe-connection.json"), method: "DELETE", path: "/api/owner/stripe/connect") {
+                _ = try await $0.disconnectStripe()
+            },
+            // Computers
+            OwnerCall(name: "computer code", reply: .fixture("computer-code.json", status: 201), method: "POST", path: "/api/owner/computer-codes",
+                      body: .object([:])) {
+                let code = try await $0.createComputerCode()
+                XCTAssertEqual(code.grouped, "483 920")
+            },
+            OwnerCall(name: "computers", reply: .fixture("computer-sessions.json"), method: "GET", path: "/api/owner/computer-sessions") {
+                let sessions = try await $0.computerSessions()
+                XCTAssertEqual(sessions.count, 2)
+            },
+            OwnerCall(name: "sign out a computer", reply: Reply(status: 204, headers: [:]), method: "DELETE", path: "/api/owner/computer-sessions/c1") {
+                try await $0.signOutComputer(id: "c1")
+            },
+            OwnerCall(name: "sign out every computer", reply: Reply(status: 204, headers: [:]), method: "DELETE", path: "/api/owner/computer-sessions") {
+                try await $0.signOutAllComputers()
+            },
+            // Sales and analytics
+            OwnerCall(name: "sale", reply: .fixture("sale.json", status: 201), method: "POST", path: "/api/owner/sales",
+                      body: .object(["method": .string("other"), "barberId": .string("carlos-rafael"),
+                                     "items": .array([.object(["kind": .string("custom"), "name": .string("Gift card"), "unitCents": .number(2500), "quantity": .number(1)])])])) {
+                let sale = try await $0.recordSale(IzzyAPI.NewSale(
+                    method: .other, barberId: "carlos-rafael", items: [.custom(name: "Gift card", unitCents: 2500)]
+                ), idempotencyKey: .generate())
+                XCTAssertEqual(sale.barberName, "Carlos")
+            },
+            OwnerCall(name: "sales", reply: .fixture("sales-day.json"), method: "GET", path: "/api/owner/sales", query: "date=2026-11-02") {
+                let sales = try await $0.sales(on: day)
+                XCTAssertEqual(sales.sales.count, 4)
+            },
+            OwnerCall(name: "void", reply: .fixture("sale-voided.json"), method: "POST", path: "/api/owner/sales/s1/void",
+                      body: .object(["reason": .string("Charged twice")])) {
+                let voided = try await $0.voidSale(id: "s1", reason: "Charged twice")
+                XCTAssertTrue(voided.sale.isVoided)
+            },
+            OwnerCall(name: "analytics", reply: .fixture("analytics.json"), method: "GET", path: "/api/owner/analytics",
+                      query: "from=2026-11-02&to=2026-11-08&barberId=flowxbori") {
+                let analytics = try await $0.analytics(IzzyAPI.AnalyticsQuery(from: day, to: day.adding(days: 6), barberId: "flowxbori"))
+                XCTAssertEqual(analytics.leaderboard.count, 5)
+            },
+            OwnerCall(name: "card checkout", reply: .fixture("payment-intent.json", status: 201), method: "POST", path: "/api/owner/payments",
+                      body: .object(["amountCents": .number(4500), "sale": .object([
+                          "items": .array([.object(["kind": .string("service"), "serviceId": .string("haircut"), "unitCents": .number(4500), "quantity": .number(1)])]),
+                      ])])) {
+                _ = try await $0.createPayment(IzzyAPI.NewPayment(
+                    amountCents: 4500, sale: IzzyAPI.NewSale(method: .card, items: [.service("haircut", unitCents: 4500)])
+                ))
+            },
         ]
         for call in calls {
             StubURLProtocol.reply { _ in call.reply }

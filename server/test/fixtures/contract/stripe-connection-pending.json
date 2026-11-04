@@ -1,0 +1,14 @@
+{
+  "mode": "connect",
+  "status": "pending",
+  "accountId": "acct_TestFixture000001",
+  "businessName": "Izzy Clipz Barbershop",
+  "livemode": false,
+  "chargesEnabled": false,
+  "payoutsEnabled": false,
+  "detailsSubmitted": true,
+  "requirementsDue": 0,
+  "message": "Stripe is checking your details. This usually takes a few minutes.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": "2026-11-02T17:05:00Z"
+}

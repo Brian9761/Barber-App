@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { hashManageToken, isNewManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
+import { appMadeKey, hashManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
 import { availability } from './availability.js';
 import { checkStart, createAppointment, resolveTarget, targetOfferings, type Target } from './booking.js';
 import { cardTokenFrom, noShowTermsForBooking } from './cards.js';
@@ -8,7 +8,7 @@ import { cancellingIsLate, isFullPrice, lateCancelWarning } from './feecase.js';
 import { ApiError, json, readJsonObject, readOptionalJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
-import { appointmentJSON, STATUS_IN, type AppointmentRow, type AppointmentStatus } from './serialize.js';
+import { appointmentJSON, customerAppointmentJSON, STATUS_IN, type AppointmentRow, type AppointmentStatus } from './serialize.js';
 import { dayBounds, daysBetween, floorToMinute, localDate, wholeSecond } from './time.js';
 import { calendarDate, email, instant, normalizeUSPhone, note, parse, personName, shortId, usPhone, UUID_RE } from './validation.js';
 
@@ -43,7 +43,7 @@ export async function getAvailability(ctx: Context): Promise<Response> {
 // for the next slot that hasn't started yet.
 
 export async function getOwnerAvailability(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   return availabilityResponse(ctx, { leadTimeMinutes: 0 });
 }
 
@@ -89,21 +89,6 @@ const tokenUsed = () => new ApiError('invalid_request', 'That booking token was 
 
 /** The unique index on `appointments.manage_token_hash` (migrations/002). */
 const MANAGE_TOKEN_INDEX = 'appointments_manage_token_hash_key';
-
-/**
- * A key the app made itself and sent in `header`, if it sent one. It must be
- * exactly what the server makes for a manage token (32 random bytes,
- * base64url); anything else, an empty header included, is a 400.
- */
-function appMadeKey(request: Request, header: 'X-Manage-Token' | 'Idempotency-Key'): string | undefined {
-  const value = request.headers.get(header);
-  if (value === null) return undefined;
-  const key = value.trim();
-  if (!isNewManageToken(key)) {
-    throw new ApiError('invalid_request', `${header} must be 32 random bytes in base64url (43 characters).`);
-  }
-  return key;
-}
 
 /** The app's own manage token from `X-Manage-Token`, if it sent one. */
 function clientManageToken(request: Request): string | undefined {
@@ -155,7 +140,7 @@ async function replay(db: Queryable, token: string, body: CustomerBooking): Prom
   const row = rows[0];
   if (!row) return null;
   if (!sameBooking(row, body)) throw tokenUsed();
-  return json({ appointment: appointmentJSON(row), manageToken: token });
+  return json({ appointment: customerAppointmentJSON(row), manageToken: token });
 }
 
 export async function postAppointment(ctx: Context): Promise<Response> {
@@ -198,7 +183,7 @@ export async function postAppointment(ctx: Context): Promise<Response> {
       manageToken: token,
       noShow,
     });
-    return json({ appointment: appointmentJSON(row), manageToken }, 201);
+    return json({ appointment: customerAppointmentJSON(row), manageToken }, 201);
   } catch (error) {
     // Another copy of this request with the same token may have booked it
     // meanwhile (its own slot then looks taken, or the token's unique index
@@ -227,7 +212,7 @@ async function loadWithToken(ctx: Context): Promise<AppointmentRow> {
 }
 
 export async function getAppointment(ctx: Context): Promise<Response> {
-  return json({ appointment: appointmentJSON(await loadWithToken(ctx)) });
+  return json({ appointment: customerAppointmentJSON(await loadWithToken(ctx)) });
 }
 
 const cancelRequest = z.object({
@@ -280,7 +265,7 @@ export async function cancelAppointment(ctx: Context): Promise<Response> {
     }
     return { result: 'refused', row: current };
   });
-  if (outcome.result === 'cancelled') return json({ appointment: appointmentJSON(outcome.row) });
+  if (outcome.result === 'cancelled') return json({ appointment: customerAppointmentJSON(outcome.row) });
   if (outcome.result === 'confirm') {
     // A late cancellation needs a card and a fee, which `cancellingIsLate` checked.
     const terms = outcome.row;
@@ -332,7 +317,7 @@ export function dayRange(ctx: Context, maxDays = MAX_OWNER_RANGE_DAYS): { from: 
 }
 
 export async function listOwnerAppointments(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const { from, to } = dayRange(ctx);
   const zone = ctx.deps.catalog.timeZone;
   const { rows } = await ctx.deps.db.query<AppointmentRow>(
@@ -401,7 +386,7 @@ async function ownerReplay(db: Queryable, key: string, body: OwnerBooking, start
 }
 
 export async function postOwnerAppointment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   // The owner app's key for this booking, so Book again after a lost answer can't book twice.
   const key = appMadeKey(ctx.request, 'Idempotency-Key');
   const body = parse(ownerBooking, await readJsonObject(ctx.request));
@@ -444,7 +429,7 @@ const statusPatch = z.object({
 });
 
 export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const id = ctx.params.id ?? '';
   if (!UUID_RE.test(id)) throw notFound();
   const { status } = parse(statusPatch, await readJsonObject(ctx.request));
@@ -453,6 +438,7 @@ export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
   try {
     // A booking with a card on file can be marked a no-show only once it has started: until
     // then the client may still cancel it in the app for free (and a no-show is what can be charged).
+    // A checked-out appointment stays completed until its sale is voided (sales.ts).
     const { rows } = await ctx.deps.db.query<AppointmentRow>(
       `UPDATE appointments
           SET status = $2,
@@ -460,13 +446,17 @@ export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
               updated_at = CASE WHEN status = $2 THEN updated_at ELSE $3 END
         WHERE id = $1
           AND NOT ($2 = 'no_show' AND saved_card_id IS NOT NULL AND start_at > $3)
+          AND (sale_id IS NULL OR $2 = 'completed')
         RETURNING *`,
       [id, dbStatus, now],
     );
     const row = rows[0];
     if (!row) {
-      const known = ((await ctx.deps.db.query('SELECT 1 FROM appointments WHERE id = $1', [id])).rowCount ?? 0) > 0;
-      if (!known) throw notFound();
+      const { rows: found } = await ctx.deps.db.query<{ sale_id: string | null }>('SELECT sale_id FROM appointments WHERE id = $1', [id]);
+      if (!found[0]) throw notFound();
+      if (found[0].sale_id !== null) {
+        throw new ApiError('already_checked_out', 'This appointment was checked out. Void its sale first, then change it.');
+      }
       throw new ApiError('not_started', 'You can mark a no-show once the appointment has started.');
     }
     return json({ appointment: appointmentJSON(row) });

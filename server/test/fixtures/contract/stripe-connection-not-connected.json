@@ -1,0 +1,14 @@
+{
+  "mode": "connect",
+  "status": "notConnected",
+  "accountId": null,
+  "businessName": null,
+  "livemode": null,
+  "chargesEnabled": false,
+  "payoutsEnabled": false,
+  "detailsSubmitted": false,
+  "requirementsDue": 0,
+  "message": "Connect your Stripe account to take card payments in the app.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": null
+}

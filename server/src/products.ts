@@ -22,7 +22,7 @@ export async function listPublicProducts({ deps }: Context): Promise<Response> {
 // Owner product endpoints.
 
 export async function listOwnerProducts(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const { rows } = await ctx.deps.db.query<ProductRow>(`SELECT ${COLUMNS} FROM products ORDER BY sort, created_at, id`);
   return json({ products: rows.map(productJSON) });
 }
@@ -55,7 +55,7 @@ const visible = z.boolean({ error: 'visible must be true or false.' });
 const createBody = z.object({ name, description: description.optional(), priceCents, visible: visible.optional() });
 
 export async function createProduct(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const body = parse(createBody, await readJsonObject(ctx.request));
   const now = ctx.deps.now();
   const { rows } = await ctx.deps.db.query<ProductRow>(
@@ -77,7 +77,7 @@ const patchBody = z.object({
 });
 
 export async function updateProduct(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const id = productId(ctx);
   const raw = await readJsonObject(ctx.request);
   const body = parse(patchBody, raw);
@@ -104,7 +104,7 @@ export async function updateProduct(ctx: Context): Promise<Response> {
 }
 
 export async function deleteProduct(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const id = productId(ctx);
   const { rows } = await ctx.deps.db.query<{ image_url: string | null }>(
     'DELETE FROM products WHERE id = $1 RETURNING image_url',
@@ -119,7 +119,7 @@ export async function deleteProduct(ctx: Context): Promise<Response> {
 // POST /api/owner/products/:id/photo, body = JPEG bytes (≤ 4 MB).
 
 export async function uploadProductPhoto(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const id = productId(ctx);
   if (mediaType(ctx.request) !== 'image/jpeg') {
     throw new ApiError('invalid_request', 'Send the photo as a JPEG (Content-Type: image/jpeg).', { status: 415 });

@@ -293,27 +293,38 @@ extension IzzyAPI {
         }
     }
 
-    /// `POST /api/owner/payments` body `{ amountCents, description?, appointmentId?, receiptEmail? }`.
+    /// `POST /api/owner/payments` body `{ amountCents, description?, appointmentId?, receiptEmail?, sale? }`.
     public struct NewPayment: Encodable, Hashable, Sendable {
-        /// 50 to 100,000 (`IzzyAPI.paymentAmountRange`).
+        /// 50 to 100,000 (`IzzyAPI.paymentAmountRange`). With a `sale`, exactly its total.
         public var amountCents: Int
         public var description: String?
+        /// With a `sale`, the same as its own (or leave this out).
         public var appointmentId: String?
         /// Stripe emails the receipt here.
         public var receiptEmail: String?
+        /// The checkout's ticket, recorded as a card sale once the payment goes through (sent without
+        /// its `method`). The server checks it like a cash sale first (400, 409 `not_checkoutable` or
+        /// `already_checked_out`), and `amountCents` must be its total (400 `amount_mismatch`).
+        public var sale: NewSale?
 
-        public init(amountCents: Int, description: String? = nil, appointmentId: String? = nil, receiptEmail: String? = nil) {
+        public init(amountCents: Int, description: String? = nil, appointmentId: String? = nil, receiptEmail: String? = nil, sale: NewSale? = nil) {
             self.amountCents = amountCents
             self.description = description
             self.appointmentId = appointmentId
             self.receiptEmail = receiptEmail
+            self.sale = sale
         }
 
-        /// Whether the server will take the amount.
-        public var isAmountAllowed: Bool { IzzyAPI.paymentAmountRange.contains(amountCents) }
+        /// Whether the server will take the amount (and, with a ticket, whether it's the ticket's total
+        /// when the Kit can tell).
+        public var isAmountAllowed: Bool {
+            guard IzzyAPI.paymentAmountRange.contains(amountCents) else { return false }
+            guard let total = sale?.totalCents else { return true }
+            return total == amountCents
+        }
 
         private enum CodingKeys: String, CodingKey {
-            case amountCents, description, appointmentId, receiptEmail
+            case amountCents, description, appointmentId, receiptEmail, sale
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -322,6 +333,7 @@ extension IzzyAPI {
             try container.encodeIfPresent(description?.trimmed.nonEmpty, forKey: .description)
             try container.encodeIfPresent(appointmentId?.trimmed.nonEmpty, forKey: .appointmentId)
             try container.encodeIfPresent(receiptEmail?.trimmed.nonEmpty, forKey: .receiptEmail)
+            try container.encodeIfPresent(sale?.ticket, forKey: .sale)
         }
     }
 }

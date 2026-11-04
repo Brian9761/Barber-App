@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "already_checked_out",
+    "message": "This appointment was already checked out."
+  }
+}

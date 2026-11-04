@@ -110,6 +110,13 @@ extension IzzyAPI {
         /// The fee agreed at booking (for a no-show or a late cancellation) and what happened to it,
         /// or `nil` without a card on file. See `chargeableFee(at:)` and `lateCancelWarning(at:)`.
         public var noShowFee: NoShowFee?
+        /// The shop's checkout of it (owner calls only): its live sale, or `nil` before it's checked
+        /// out (or after its sale was voided). Always `nil` in the client's own view, which doesn't
+        /// have it.
+        public var sale: AppointmentSale?
+        /// Whether the server's answer had `sale` at all (the shop's view does, the client's doesn't),
+        /// so it's written back exactly as it was read. Not part of the value.
+        var saleField = FieldPresence(false)
 
         public init(
             id: String,
@@ -129,7 +136,8 @@ extension IzzyAPI {
             note: String? = nil,
             createdAt: Date,
             card: CardOnFile? = nil,
-            noShowFee: NoShowFee? = nil
+            noShowFee: NoShowFee? = nil,
+            sale: AppointmentSale? = nil
         ) {
             self.id = id
             self.offeringId = offeringId
@@ -149,6 +157,7 @@ extension IzzyAPI {
             self.createdAt = createdAt
             self.card = card
             self.noShowFee = noShowFee
+            self.sale = sale
         }
 
         /// Hasn't finished yet: it's later, or happening right now.
@@ -170,6 +179,7 @@ extension IzzyAPI {
             case id, offeringId, serviceId, serviceName, barberId, barberName, start, end, durationMinutes, priceLabel
             case status, cancelledBy, payment, customer, note, createdAt
             case card, noShowFee
+            case sale
         }
 
         public init(from decoder: Decoder) throws {
@@ -198,8 +208,11 @@ extension IzzyAPI {
                 createdAt: try container.decode(Date.self, forKey: .createdAt),
                 // Missing on a server from before no-show protection: no card, no fee.
                 card: try container.decodeIfPresent(CardOnFile.self, forKey: .card),
-                noShowFee: try container.decodeIfPresent(NoShowFee.self, forKey: .noShowFee)
+                noShowFee: try container.decodeIfPresent(NoShowFee.self, forKey: .noShowFee),
+                // Only in the shop's view, from a server with sales.
+                sale: try container.decodeIfPresent(AppointmentSale.self, forKey: .sale)
             )
+            saleField = FieldPresence(container.contains(.sale))
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -222,6 +235,10 @@ extension IzzyAPI {
             try container.encode(createdAt, forKey: .createdAt)
             try container.encode(card, forKey: .card)
             try container.encode(noShowFee, forKey: .noShowFee)
+            // `null` only where the server writes it: the shop's view.
+            if sale != nil || saleField.isPresent {
+                try container.encode(sale, forKey: .sale)
+            }
         }
     }
 
@@ -589,14 +606,31 @@ extension IzzyAPI {
         }
     }
 
-    /// `GET /api/owner/me` → `{ ok: true, stripe }`.
+    /// `GET /api/owner/me` → `{ ok: true, stripe, connection }`.
     public struct OwnerStatus: Codable, Hashable, Sendable {
         public var ok: Bool
+        /// Whether Tap to Pay can be used now, as older apps know it (with Stripe Connect,
+        /// `configured` once the shop's account can take card payments).
         public var stripe: StripeStatus
+        /// The shop's own Stripe account at a glance, from the server's cache; `nil` from a server
+        /// from before Stripe Connect. `stripeConnection()` has the rest.
+        public var connection: StripeConnectionSummary?
 
-        public init(ok: Bool = true, stripe: StripeStatus) {
+        public init(ok: Bool = true, stripe: StripeStatus, connection: StripeConnectionSummary? = nil) {
             self.ok = ok
             self.stripe = stripe
+            self.connection = connection
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case ok, stripe, connection
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(ok, forKey: .ok)
+            try container.encode(stripe, forKey: .stripe)
+            try container.encode(connection, forKey: .connection)
         }
     }
 
@@ -674,6 +708,9 @@ extension IzzyAPI {
         public var createdAt: Date
         /// Taken in the shop, or a no-show fee charged to the card on file.
         public var kind: PaymentKind
+        /// The card sale (checkout) this payment recorded when it went through, voided or not; `nil`
+        /// for a payment without a ticket, and until it succeeds.
+        public var saleId: String?
 
         public init(
             id: String,
@@ -682,7 +719,8 @@ extension IzzyAPI {
             appointmentId: String? = nil,
             status: String,
             createdAt: Date,
-            kind: PaymentKind = .inPerson
+            kind: PaymentKind = .inPerson,
+            saleId: String? = nil
         ) {
             self.id = id
             self.amountCents = amountCents
@@ -691,6 +729,7 @@ extension IzzyAPI {
             self.status = status
             self.createdAt = createdAt
             self.kind = kind
+            self.saleId = saleId
         }
 
         public var isSucceeded: Bool { status == "succeeded" }
@@ -699,7 +738,7 @@ extension IzzyAPI {
         public var amountLabel: String { Price.currencyString(cents: amountCents) }
 
         private enum CodingKeys: String, CodingKey {
-            case id, amountCents, description, appointmentId, status, createdAt, kind
+            case id, amountCents, description, appointmentId, status, createdAt, kind, saleId
         }
 
         public init(from decoder: Decoder) throws {
@@ -712,6 +751,8 @@ extension IzzyAPI {
             createdAt = try container.decode(Date.self, forKey: .createdAt)
             // Missing on a server from before no-show protection: every payment was in person.
             kind = try container.decodeIfPresent(PaymentKind.self, forKey: .kind) ?? .inPerson
+            // Missing on a server from before sales.
+            saleId = try container.decodeIfPresent(String.self, forKey: .saleId)
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -723,6 +764,7 @@ extension IzzyAPI {
             try container.encode(status, forKey: .status)
             try container.encode(createdAt, forKey: .createdAt)
             try container.encode(kind, forKey: .kind)
+            try container.encode(saleId, forKey: .saleId)
         }
     }
 
@@ -807,6 +849,20 @@ extension IzzyAPI {
         public static let stripeNotConfigured = "stripe_not_configured"
         public static let ownerNotConfigured = "owner_not_configured"
         public static let serverError = "server_error"
+        /// 409: the server uses its own Stripe key (or none), so there's no Stripe account to connect
+        /// or disconnect.
+        public static let stripeConnectOff = "stripe_connect_off"
+        /// 400: the computer sign-in code isn't right or has run out (the website's sign-in).
+        public static let wrongCode = "wrong_code"
+        /// 403: only the Business app on the owner's iPhone may do this (a computer signed in with a
+        /// code can't).
+        public static let forbidden = "forbidden"
+        /// 409: only a booked or completed appointment can be checked out.
+        public static let notCheckoutable = "not_checkoutable"
+        /// 409: the appointment was already checked out (it has a live sale): void that sale first.
+        public static let alreadyCheckedOut = "already_checked_out"
+        /// 400: a card payment's amount isn't its ticket's total.
+        public static let amountMismatch = "amount_mismatch"
     }
 
     /// `{ "error": { "code": "slot_taken", "message": "…" } }`.
@@ -840,6 +896,21 @@ extension IzzyAPI {
 }
 
 // MARK: - Decoding helpers
+
+/// Whether a response had a field at all, kept so a model is written back exactly as it was read
+/// (the server leaves some fields out of some views). It isn't part of the model's value: two
+/// values that differ only in it are equal, and hash the same.
+struct FieldPresence: Hashable, Sendable {
+    let isPresent: Bool
+
+    init(_ isPresent: Bool) {
+        self.isPresent = isPresent
+    }
+
+    static func == (lhs: FieldPresence, rhs: FieldPresence) -> Bool { true }
+
+    func hash(into hasher: inout Hasher) {}
+}
 
 extension KeyedDecodingContainer {
     /// An http(s) link, or `nil` if it's missing, `null` or anything else.

@@ -221,6 +221,51 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.payments(on: date)).payments
     }
 
+    public func stripeConnection() async throws -> IzzyAPI.StripeConnection {
+        try await send(IzzyAPI.Endpoints.stripeConnection())
+    }
+
+    public func connectStripe() async throws -> IzzyAPI.StripeConnectLink {
+        try await send(try encoded { try IzzyAPI.Endpoints.connectStripe() })
+    }
+
+    public func disconnectStripe() async throws -> IzzyAPI.StripeConnection {
+        try await send(IzzyAPI.Endpoints.disconnectStripe())
+    }
+
+    public func createComputerCode() async throws -> IzzyAPI.ComputerCode {
+        try await send(IzzyAPI.Endpoints.createComputerCode())
+    }
+
+    public func computerSessions() async throws -> [IzzyAPI.ComputerSession] {
+        try await send(IzzyAPI.Endpoints.computerSessions()).sessions
+    }
+
+    public func signOutComputer(id: String) async throws {
+        _ = try await send(IzzyAPI.Endpoints.signOutComputer(id: id))
+    }
+
+    public func signOutAllComputers() async throws {
+        _ = try await send(IzzyAPI.Endpoints.signOutAllComputers())
+    }
+
+    /// Answers 201 for a new sale and 200 for one this key already recorded; both decode the same way.
+    public func recordSale(_ sale: IzzyAPI.NewSale, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Sale {
+        try await send(try encoded { try IzzyAPI.Endpoints.recordSale(sale, idempotencyKey: idempotencyKey) }).sale
+    }
+
+    public func sales(on date: LocalDate) async throws -> IzzyAPI.SalesDay {
+        try await send(IzzyAPI.Endpoints.sales(on: date))
+    }
+
+    public func voidSale(id: String, reason: String?) async throws -> IzzyAPI.VoidedSale {
+        try await send(try encoded { try IzzyAPI.Endpoints.voidSale(id: id, reason: reason) })
+    }
+
+    public func analytics(_ query: IzzyAPI.AnalyticsQuery) async throws -> IzzyAPI.Analytics {
+        try await send(IzzyAPI.Endpoints.analytics(query))
+    }
+
     /// Builds an endpoint whose body is encoded JSON; an encoding failure
     /// (which the request types never produce) is reported as `APIError`.
     private func encoded<Response>(_ build: () throws -> IzzyAPI.Endpoint<Response>) throws -> IzzyAPI.Endpoint<Response> {

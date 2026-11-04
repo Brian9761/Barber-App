@@ -1,0 +1,14 @@
+{
+  "mode": "connect",
+  "status": "restricted",
+  "accountId": "acct_TestFixture000001",
+  "businessName": "Izzy Clipz Barbershop",
+  "livemode": false,
+  "chargesEnabled": false,
+  "payoutsEnabled": false,
+  "detailsSubmitted": true,
+  "requirementsDue": 0,
+  "message": "Stripe paused card payments: open Stripe to fix it.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": "2026-11-02T18:10:00Z"
+}

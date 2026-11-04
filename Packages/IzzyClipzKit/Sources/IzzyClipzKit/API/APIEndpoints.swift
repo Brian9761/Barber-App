@@ -199,7 +199,7 @@ extension IzzyAPI {
 
         // MARK: Owner
 
-        /// `GET /api/owner/me` → `{ ok, stripe }`.
+        /// `GET /api/owner/me` → `{ ok, stripe, connection }`.
         public static func ownerStatus() -> Endpoint<OwnerStatus> {
             Endpoint(.get, "/api/owner/me", credential: .ownerKey)
         }
@@ -309,7 +309,8 @@ extension IzzyAPI {
             Endpoint(.post, "/api/owner/terminal/connection-token", credential: .ownerKey)
         }
 
-        /// `POST /api/owner/payments` → 201 `{ paymentIntentId, clientSecret }`.
+        /// `POST /api/owner/payments` (with a checkout's ticket as `sale`, if any) → 201 `{ paymentIntentId,
+        /// clientSecret }`. The owner key only: Tap to Pay is iPhone-only.
         public static func createPayment(_ payment: NewPayment) throws -> Endpoint<PaymentIntentCreated> {
             Endpoint(.post, "/api/owner/payments", body: try json(payment), credential: .ownerKey)
         }
@@ -322,6 +323,77 @@ extension IzzyAPI {
         /// `GET /api/owner/payments?date=YYYY-MM-DD` → `{ payments }`.
         public static func payments(on date: LocalDate) -> Endpoint<PaymentsResponse> {
             Endpoint(.get, "/api/owner/payments", query: [QueryItem("date", date.description)], credential: .ownerKey)
+        }
+
+        // MARK: The shop's Stripe account
+
+        /// `GET /api/owner/stripe` → the connection, read live from Stripe.
+        public static func stripeConnection() -> Endpoint<StripeConnection> {
+            Endpoint(.get, "/api/owner/stripe", credential: .ownerKey)
+        }
+
+        /// `POST /api/owner/stripe/connect` `{ returnTo: "app" }` → 201 `{ url, expiresAt }`; 409
+        /// `stripe_connect_off` when the server uses its own key.
+        public static func connectStripe() throws -> Endpoint<StripeConnectLink> {
+            Endpoint(.post, "/api/owner/stripe/connect", body: try json(StripeConnectBody()), credential: .ownerKey)
+        }
+
+        /// `DELETE /api/owner/stripe/connect` → the connection, `notConnected` (the owner key only).
+        public static func disconnectStripe() -> Endpoint<StripeConnection> {
+            Endpoint(.delete, "/api/owner/stripe/connect", credential: .ownerKey)
+        }
+
+        // MARK: Computers
+
+        /// `POST /api/owner/computer-codes` → 201 `{ code, expiresAt, expiresInSeconds }` (the owner key only).
+        public static func createComputerCode() -> Endpoint<ComputerCode> {
+            Endpoint(.post, "/api/owner/computer-codes", credential: .ownerKey)
+        }
+
+        /// `GET /api/owner/computer-sessions` → `{ sessions }`.
+        public static func computerSessions() -> Endpoint<ComputerSessionsResponse> {
+            Endpoint(.get, "/api/owner/computer-sessions", credential: .ownerKey)
+        }
+
+        /// `DELETE /api/owner/computer-sessions/:id` → 204.
+        public static func signOutComputer(id: String) -> Endpoint<NoContent> {
+            Endpoint(.delete, "/api/owner/computer-sessions/" + segment(id), credential: .ownerKey)
+        }
+
+        /// `DELETE /api/owner/computer-sessions` → 204: every computer.
+        public static func signOutAllComputers() -> Endpoint<NoContent> {
+            Endpoint(.delete, "/api/owner/computer-sessions", credential: .ownerKey)
+        }
+
+        /// `POST /api/computer-sessions` `{ code, name }` → 201 `{ token, session }`: the website's
+        /// sign-in with a code (public). 400 `wrong_code`; 429 after 10 tries from one network.
+        public static func signInComputer(code: String, name: String?) throws -> Endpoint<ComputerSessionCreated> {
+            Endpoint(.post, "/api/computer-sessions", body: try json(ComputerSignInBody(code: code, name: name)))
+        }
+
+        // MARK: Sales and analytics
+
+        /// `POST /api/owner/sales` with `Idempotency-Key` → 201 `{ sale }`, or 200 with the same when
+        /// this key already recorded this sale (Save again after a lost answer).
+        public static func recordSale(_ sale: NewSale, idempotencyKey: IdempotencyKey) throws -> Endpoint<SaleResponse> {
+            Endpoint(.post, "/api/owner/sales", body: try json(sale), credential: .ownerKey, idempotencyKey: idempotencyKey)
+        }
+
+        /// `GET /api/owner/sales?date=YYYY-MM-DD` → `{ date, sales, totals }`.
+        public static func sales(on date: LocalDate) -> Endpoint<SalesDay> {
+            Endpoint(.get, "/api/owner/sales", query: [QueryItem("date", date.description)], credential: .ownerKey)
+        }
+
+        /// `POST /api/owner/sales/:id/void` `{ reason? }` → `{ sale, message }`.
+        public static func voidSale(id: String, reason: String?) throws -> Endpoint<VoidedSale> {
+            Endpoint(.post, "/api/owner/sales/" + segment(id) + "/void", body: try json(VoidSaleBody(reason: reason)), credential: .ownerKey)
+        }
+
+        /// `GET /api/owner/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD[&barberId=…]` → the analytics.
+        public static func analytics(_ query: AnalyticsQuery) -> Endpoint<Analytics> {
+            var items = [QueryItem("from", query.from.description), QueryItem("to", query.to.description)]
+            if let barberId = query.barberId?.trimmed.nonEmpty { items.append(QueryItem("barberId", barberId)) }
+            return Endpoint(.get, "/api/owner/analytics", query: items, credential: .ownerKey)
         }
 
         // MARK: Encoding

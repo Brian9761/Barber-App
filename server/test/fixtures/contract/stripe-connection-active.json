@@ -1,0 +1,14 @@
+{
+  "mode": "connect",
+  "status": "active",
+  "accountId": "acct_TestFixture000001",
+  "businessName": "Izzy Clipz Barbershop",
+  "livemode": false,
+  "chargesEnabled": true,
+  "payoutsEnabled": true,
+  "detailsSubmitted": true,
+  "requirementsDue": 0,
+  "message": "Connected. Card payments are on. Payouts to your bank are on.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": "2026-11-02T17:10:00Z"
+}

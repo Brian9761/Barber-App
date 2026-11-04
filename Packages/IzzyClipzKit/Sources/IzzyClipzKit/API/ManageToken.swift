@@ -87,14 +87,16 @@ extension IzzyAPI {
 
 extension IzzyAPI {
     /// The owner app's key for one walk-in or phone booking, sent as `Idempotency-Key` with
-    /// `POST /api/owner/appointments`: 32 random bytes in base64url, the same form as a manage
-    /// token.
+    /// `POST /api/owner/appointments`, or for one cash or other sale, with `POST /api/owner/sales`:
+    /// 32 random bytes in base64url, the same form as a manage token.
     ///
     /// Make one for each booking and send the same one when the owner books it again after an
     /// answer that never arrived (offline, a dropped connection): if the first try went through,
     /// the server answers with that appointment (200) instead of booking a second barber or
     /// saying the shop's own time was taken. A booking that changed, and the next booking, get a
-    /// new key. The server keeps only its SHA-256.
+    /// new key. Sales work the same way (`NewSale.retryKey` says what "the same sale" is): a retry
+    /// gets the sale already recorded instead of recording it twice. The server keeps only its
+    /// SHA-256.
     public struct IdempotencyKey: RawRepresentable, Hashable, Sendable {
         public let rawValue: String
 
