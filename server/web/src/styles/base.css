@@ -10,7 +10,7 @@ html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
   /* Room for the sticky nav when the page jumps to an anchor. */
-  scroll-padding-top: calc(var(--nav-height) + var(--space-4));
+  scroll-padding-top: calc(var(--nav-total) + var(--space-4));
 }
 
 body {
@@ -180,8 +180,8 @@ li a.inline-link,
 
 .skip-link {
   position: absolute;
-  top: var(--space-2);
-  left: var(--space-2);
+  top: calc(var(--space-2) + var(--safe-top));
+  left: calc(var(--space-2) + var(--safe-left));
   z-index: 1000;
   padding: var(--space-3) var(--space-5);
   border-radius: var(--radius-pill);
@@ -202,7 +202,8 @@ li a.inline-link,
   width: 100%;
   max-width: calc(var(--content-width) + 2 * var(--gutter));
   margin: 0 auto;
-  padding: 0 var(--gutter);
+  /* Turned sideways, a notched iPhone's notch takes a side: the content stays clear of it. */
+  padding: 0 max(var(--gutter), var(--safe-right)) 0 max(var(--gutter), var(--safe-left));
 }
 
 .container--wide {

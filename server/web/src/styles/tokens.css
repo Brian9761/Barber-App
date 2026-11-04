@@ -50,6 +50,17 @@
 
   /* The global nav, like apple.com's */
   --nav-height: 44px;
+
+  /*
+   * The screen's safe area: opened from the Home Screen (standalone, under viewport-fit=cover),
+   * nothing goes under the notch, the status bar or the home bar. Zero in a browser tab.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* The nav with the status bar's room above it. */
+  --nav-total: calc(var(--nav-height) + var(--safe-top));
   --nav-bg: rgba(22, 22, 23, 0.8);
   --nav-text: rgba(245, 245, 247, 0.88);
 

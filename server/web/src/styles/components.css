@@ -27,7 +27,9 @@
   position: sticky;
   top: 0;
   z-index: 100;
-  height: var(--nav-height);
+  /* Opened from the Home Screen, the bar reaches up behind the status bar, its links below it. */
+  height: var(--nav-total);
+  padding-top: var(--safe-top);
   color: var(--nav-text);
   --color-focus: var(--color-link-on-dark);
 }
@@ -142,10 +144,11 @@
 
 .globalnav__menu-panel {
   position: fixed;
-  top: var(--nav-height);
+  top: var(--nav-total);
   left: 0;
   right: 0;
   bottom: 0;
+  padding-bottom: var(--safe-bottom);
   z-index: 99;
   overflow-y: auto;
   background: #161617;
@@ -223,7 +226,8 @@
   font-size: var(--text-fine);
   line-height: 1.43;
   letter-spacing: -0.016em;
-  padding: var(--space-10) 0 var(--space-8);
+  /* Above the home bar when it's opened from the Home Screen. */
+  padding: var(--space-10) 0 calc(var(--space-8) + var(--safe-bottom));
 }
 
 .globalfooter a {
@@ -1309,7 +1313,7 @@ textarea.field__input {
 @media (min-width: 960px) {
   .summary-card {
     position: sticky;
-    top: calc(var(--nav-height) + var(--space-6));
+    top: calc(var(--nav-total) + var(--space-6));
   }
 }
 
