@@ -72,7 +72,7 @@ IzzyClipzTests/            App unit tests
 IzzyClipzUITests/          End-to-end UI tests that also capture screenshots, and the recorded demo tour
 server/                    The shop's server (Vercel and Postgres), with its own README
 project.yml                XcodeGen spec the Xcode project is generated from
-scripts/generate_assets.py Builds the icon, launch logo, logo cut-outs and photo sets
+scripts/generate_assets.py Builds the photo sets and color sets
 ```
 
 ## Updating shop information
@@ -146,7 +146,7 @@ xcodegen generate
 
 New Swift files and resources under `IzzyClipz/` are picked up automatically when you regenerate. The `Info.plist` properties in `project.yml` (including `IzzyAPIBaseURL` and the dark `UIUserInterfaceStyle`) overwrite `IzzyClipz/Info.plist`, so change them in `project.yml` and keep the two the same. If you'd rather work only in Xcode, you can stop using `project.yml` and edit the project directly.
 
-To rebuild the icon, logo cut-outs and photos: `python3 scripts/generate_assets.py --help` (needs `pip install Pillow numpy`). `python3 scripts/generate_assets.py --launch-only` rebuilds just the launch screen's logo sticker and the color sets from the catalog's own `Logo.png`, with no source artwork needed.
+To rebuild the photos and the color sets: `python3 scripts/generate_assets.py --help` (needs `pip install Pillow`). The logo images are files of their own: `Logo` and `LaunchLogo` (and the owner app's `Logo`) are the shop's white logo on a transparent background at 1x, 2x and 3x, and each app's `AppIcon` is that logo on black, all rendered from a vector tracing of the logo the shop sent. When the logo changes, replace them.
 
 ## Where the data came from
 
@@ -160,7 +160,7 @@ Collected October 16, 28 and 30, 2026 from the shop's website ([izzyclipzbarbers
 
 Please confirm these with the shop before publishing.
 
-The logo and photos are the shop's own, from its website; the logo file there has a faint stock-art watermark on the mascot, so ask the shop for a clean copy before publishing. The team has no headshots online, so barbers appear as monograms.
+The logo is the official one the shop sent, and the photos are the shop's own, from its website. The team has no headshots online, so barbers appear as monograms.
 
 ## Publishing to the App Store
 
