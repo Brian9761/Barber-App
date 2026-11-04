@@ -193,6 +193,8 @@ Settings asks `GET /api/owner/stripe`, which reads the account live from Stripe 
 
 Until the status is `active`, everything about cards behaves as if Stripe were off: Tap to Pay and new payments answer 503 `stripe_not_configured` with the status message for the owner ("Connect Stripe in Settings to take card payments." before connecting), the clients' card routes answer exactly as when Stripe is off, no booking needs a card, and the no-show policy says `required: false`. `dashboardUrl` (`https://dashboard.stripe.com/`) is where the owner signs in to his Dashboard.
 
+Once it's `active`, Tap to Pay takes payments into his own account. The first time the Business app connects Tap to Pay with that account, Apple asks him once more to accept its Tap to Pay terms with the shop's Apple ID: Apple asks every Stripe account that takes its own payments (direct charges) to accept them for itself, and never asks again for that account, on any iPhone.
+
 **Disconnecting** (`DELETE /api/owner/stripe/connect`, the owner key only) forgets the account; it stays open at Stripe, with its payments and payouts, and the answer says so. Connecting again sets up a new account. If the shop takes the platform's access away from its own Stripe Dashboard (`account.application.deauthorized`, or Stripe answering that the platform has no access to the account), the account is forgotten the same way, and Settings asks to connect again. Cards saved on the old account can't book any more (`card_required`: "Add your card again: the shop changed its payment account.") and their fees can't be charged (`not_chargeable`: "This card was saved with the shop's old Stripe account."); payments and fees made on it are still looked up there.
 
 ### How it works

@@ -107,6 +107,11 @@ pays Stripe's fees and sees everything in his own Stripe Dashboard).
   no-show protection stay off ("Connect Stripe in Settings to take card
   payments."). Disconnecting only forgets the account in the app; it stays
   open at Stripe.
+- **Tap to Pay after connecting**: the first time the app connects Tap to
+  Pay with his own account, Apple asks him to accept its Tap to Pay terms
+  again (with the shop's Apple ID), because each Stripe account that takes
+  its own payments accepts them for itself. It's once per account, on any
+  iPhone.
 
 ## Using the Business area on a computer
 
