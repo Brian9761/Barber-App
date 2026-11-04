@@ -475,6 +475,8 @@ final class CardSetupTests: XCTestCase {
         saver.error = APIError.offline
         _ = await setup.addCard(for: carlos, remember: true)
         XCTAssertEqual(setup.failure, "The card wasn't added. Try again.")
+        setup.clearFailure()
+        XCTAssertNil(setup.failure)
     }
 
     /// Stripe has the card but the shop's server didn't answer: Try again finishes saving that same
