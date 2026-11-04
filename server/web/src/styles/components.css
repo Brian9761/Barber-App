@@ -495,6 +495,11 @@
   margin: var(--space-4) auto 0;
 }
 
+.page-header__call {
+  margin-top: var(--space-3);
+  color: var(--color-text);
+}
+
 .tile-grid {
   display: grid;
   grid-template-columns: 1fr;
@@ -916,6 +921,24 @@ textarea.field__input {
   color: var(--color-text-secondary);
 }
 
+.step-header__call {
+  color: var(--color-text);
+}
+
+/* Beside the summary card on wide screens, its own "Prefer to call?" line is enough. */
+@media (min-width: 960px) {
+  .booking--with-summary .step-header__call {
+    display: none;
+  }
+}
+
+/* Review lists everything itself: one centered column, no summary beside it. */
+.booking--single .booking__layout {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 760px;
+  margin: 0 auto;
+}
+
 .back-button svg {
   width: 18px;
   height: 18px;
@@ -1155,6 +1178,34 @@ textarea.field__input {
   cursor: default;
 }
 
+/*
+ * Windows High Contrast (forced colors) drops backgrounds and shadows, which is how the
+ * picked day, today and the open days show. There, they use the system's own colors.
+ */
+@media (forced-colors: active) {
+  .calendar__day.is-today:not(:focus-visible) {
+    box-shadow: none;
+    outline: 2px solid CanvasText;
+    outline-offset: -2px;
+  }
+
+  .calendar__day.is-open::after,
+  .calendar__legend-dot {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+
+  .calendar__day[aria-pressed='true'] {
+    forced-color-adjust: none;
+    background: Highlight;
+    color: HighlightText;
+  }
+
+  .calendar__day[aria-pressed='true']::after {
+    background: HighlightText;
+  }
+}
+
 .calendar__legend {
   display: flex;
   flex-wrap: wrap;
@@ -1228,6 +1279,15 @@ textarea.field__input {
   background: var(--color-action);
   color: #fff;
   font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .time-chip[aria-pressed='true'] {
+    forced-color-adjust: none;
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
 }
 
 /* The sticky "Your appointment" */
@@ -1309,8 +1369,8 @@ textarea.field__input {
 }
 
 .summary-card__call {
-  font-size: var(--text-small);
-  color: var(--color-text-secondary);
+  font-size: var(--text-body);
+  color: var(--color-text);
 }
 
 /* The card on file */

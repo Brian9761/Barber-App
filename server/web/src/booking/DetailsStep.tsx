@@ -1,32 +1,36 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Catalog } from '../api/types';
 import { Icon } from '../components/Icon';
-import { displayPhone, emailProblem, MAX_NOTE_LENGTH, charLength, nameProblem, noteProblem, phoneProblem } from '../lib/phone';
-import { forgetDetails, loadCard, loadRememberedDetails, rememberDetails, storeCard } from '../lib/storage';
+import { displayPhone, emailProblem, MAX_NOTE_LENGTH, charLength, nameProblem, noteProblem, parseUSPhone, phoneProblem, toE164 } from '../lib/phone';
+import { forgetClient, forgetDetails, keepCardFor, loadRememberedDetails, rememberDetails } from '../lib/storage';
 import { useBooking, useStepNavigation } from './BookingContext';
 import type { Details } from './flow';
 import { BookingLayout, StepHeader } from './StepChrome';
 
 type FieldName = 'name' | 'phone' | 'email' | 'note';
 
+const EMPTY_DETAILS: Details = { name: '', phone: '', email: '', note: '', remember: false };
+
 /**
  * Step 4: who it's for. A name and a US mobile number (so the shop knows who's
  * coming and can reach them), an optional email and note, and "Remember me on
  * this computer". Problems show once the client tries to continue.
+ *
+ * A computer can be shared, so "Remember me" starts off, unless this computer
+ * already remembers the client (they ticked it last time); then "Not you? Forget
+ * me on this computer" clears it for whoever is booking now.
  */
 export function DetailsStep({ catalog }: { catalog: Catalog }) {
   const { draft, dispatch } = useBooking();
   const { goTo } = useStepNavigation('details');
-  const remembered = loadRememberedDetails();
-  const initial: Details = draft.details ?? {
-    name: remembered?.name ?? '',
-    phone: remembered?.phone ?? '',
-    email: remembered?.email ?? '',
-    note: '',
-    remember: true,
-  };
-  const [values, setValues] = useState<Details>(initial);
+  const [remembered, setRemembered] = useState(() => loadRememberedDetails());
+  const [values, setValues] = useState<Details>(
+    () =>
+      draft.details ??
+      (remembered ? { name: remembered.name, phone: remembered.phone, email: remembered.email, note: '', remember: true } : EMPTY_DETAILS),
+  );
   const [showProblems, setShowProblems] = useState(false);
+  const [forgotten, setForgotten] = useState(false);
   const refs = { name: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null), email: useRef<HTMLInputElement>(null), note: useRef<HTMLTextAreaElement>(null) };
   const ids = { name: useId(), phone: useId(), email: useId(), note: useId(), remember: useId() };
 
@@ -57,13 +61,24 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
     if (details.remember) {
       rememberDetails({ name: details.name, phone: details.phone, email: details.email });
     } else {
-      // Not remembered: forget the details, and keep a saved card for this visit only.
       forgetDetails();
-      const card = loadCard();
-      if (card) storeCard(card, false);
     }
+    // A card saved on this computer goes with the same choice (kept for next time, or for
+    // this visit only), and only for the client who added it: anyone else's is forgotten.
+    keepCardFor(toE164(parseUSPhone(details.phone)!), details.remember);
     dispatch({ type: 'saveDetails', details });
     goTo('review');
+  };
+
+  /** Someone else is booking: this computer forgets the remembered client, and the form starts empty. */
+  const forgetMe = () => {
+    forgetClient();
+    dispatch({ type: 'forgetDetails' });
+    setRemembered(null);
+    setValues(EMPTY_DETAILS);
+    setShowProblems(false);
+    setForgotten(true);
+    refs.name.current?.focus();
   };
 
   const problem = (field: FieldName) => (showProblems ? problems[field] : null);
@@ -71,6 +86,19 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
   return (
     <BookingLayout catalog={catalog}>
       <StepHeader step="details" title="Your details" subtitle="So the shop knows who's coming and can reach you if anything changes." />
+      {remembered ? (
+        <p className="remembered-note" data-testid="remembered-note">
+          <span>Welcome back, {firstName(remembered.name)}. Your details are filled in from this computer.</span>{' '}
+          <button type="button" className="text-button" onClick={forgetMe}>
+            Not you? Forget me on this computer
+          </button>
+        </p>
+      ) : null}
+      {forgotten ? (
+        <p className="remembered-note" role="status">
+          Done. This computer no longer keeps those details or a saved card.
+        </p>
+      ) : null}
       <form className="form details-form" noValidate onSubmit={submit}>
         <Field id={ids.name} label="Name" problem={problem('name')}>
           <input
@@ -145,7 +173,8 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
               Remember me on this computer
             </label>
             <span id={`${ids.remember}-hint`} className="secondary">
-              Your name and number fill in next time you book here.
+              Your name and number fill in next time you book here, and a card you add stays saved. Leave it off on a shared
+              computer.
             </span>
           </span>
         </div>
@@ -158,6 +187,11 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
       </form>
     </BookingLayout>
   );
+}
+
+/** "Ana" from "Ana Flores". */
+function firstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
 }
 
 function Field({

@@ -6,7 +6,7 @@ import { usePageMeta } from '../components/usePageMeta';
 import { cardLabel, durationLabel, list } from '../lib/format';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { longDateTimeLabel } from '../lib/shopTime';
-import { loadAppointments } from '../lib/storage';
+import { loadAppointments, type ListedAppointment } from '../lib/storage';
 import { lastBookedId } from './lastBooked';
 
 interface ConfirmationState {
@@ -26,7 +26,7 @@ export function ConfirmationPage({ catalog }: { catalog: Catalog }) {
   const location = useLocation();
   const state = (location.state as ConfirmationState | null) ?? {};
   const fromStorage = loadAppointments().find((s) => s.id === lastBookedId())?.appointment;
-  const appointment = state.appointment ?? fromStorage;
+  const appointment: ListedAppointment | undefined = state.appointment ?? fromStorage;
   if (!appointment) return <Navigate to="/appointments" replace />;
   const saved = state.saved ?? true;
   const shop = catalog.shop;

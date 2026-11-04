@@ -1,6 +1,6 @@
 import type { Review, ReviewSource } from '../api/types';
 import { Icon } from '../components/Icon';
-import { ErrorState, Loading, Stars } from '../components/ui';
+import { ErrorState, Loading, PreferToCall, Stars } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { useCatalog } from '../data/catalog';
 import { FALLBACK_SHOP } from '../data/fallback';
@@ -26,6 +26,7 @@ export function ReviewsPage() {
       <header className="page-header container">
         <h1>Reviews</h1>
         <p className="lead secondary">What clients say about Izzy Clipz on Google and Yelp, as they wrote it.</p>
+        <PreferToCall className="page-header__call" />
       </header>
       <div className="container container--narrow reviews">
         {reviews.status === 'loading' ? <Loading text="Loading reviews from Google…" /> : null}

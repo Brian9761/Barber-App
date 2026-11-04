@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import type { Catalog } from '../api/types';
 import { CatalogGate } from '../components/CatalogGate';
 import { Icon } from '../components/Icon';
-import { Monogram } from '../components/ui';
+import { Monogram, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { monogramTone, offeringsForBarber, serviceById } from '../lib/catalog';
 import { durationLabel } from '../lib/format';
@@ -14,6 +14,7 @@ export function BarbersPage() {
       <header className="page-header container">
         <h1>Meet the barbers</h1>
         <p className="lead secondary">Five barbers, each with their own menu and prices. Book with the one you like, or with whoever is free first.</p>
+        <PreferToCall className="page-header__call" />
       </header>
       <CatalogGate>{(catalog) => <BarberList catalog={catalog} />}</CatalogGate>
     </>

@@ -100,7 +100,7 @@ function VisitDetails({ catalog }: { catalog: Catalog }) {
           </div>
           <div className="know-list__row">
             <dt>Payment</dt>
-            <dd>{shop.paymentMethods.join(' · ')}. You pay at the shop, never online.</dd>
+            <dd>{shop.paymentMethods.join(' · ')}. You pay at the shop.</dd>
           </div>
           <div className="know-list__row">
             <dt>Accessibility</dt>

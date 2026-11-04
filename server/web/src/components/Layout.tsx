@@ -11,7 +11,7 @@ const NAV_LINKS = [
   { to: '/barbers', label: 'Barbers' },
   { to: '/reviews', label: 'Reviews' },
   { to: '/visit', label: 'Visit' },
-  { to: '/appointments', label: 'My appointment' },
+  { to: '/appointments', label: 'My appointments' },
 ];
 
 /** Every page: the global nav, the page, and the footer. */
@@ -54,26 +54,34 @@ function Wordmark() {
 }
 
 export function GlobalNav() {
-  const [menuOpen, setMenuOpen] = useState(false);
   const { pathname } = useLocation();
+  // The page the menu was opened on: going to another page closes it in that same render, so the
+  // page under it is reachable again (not inert) by the time Layout moves focus to the new page.
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const menuOpen = openOn === pathname;
+  const setMenuOpen = (open: boolean) => setOpenOn(open ? pathname : null);
   const buttonRef = useRef<HTMLButtonElement>(null);
-
-  useEffect(() => setMenuOpen(false), [pathname]);
 
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setMenuOpen(false);
+        setOpenOn(null);
         buttonRef.current?.focus();
       }
     };
     document.addEventListener('keydown', onKey);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // The page under the open menu can't be reached (Tab, a screen reader's cursor) while it's covered.
+    const covered = [document.getElementById('main'), document.querySelector('.globalfooter'), document.querySelector('.skip-link')].filter(
+      (element): element is HTMLElement => element instanceof HTMLElement,
+    );
+    for (const element of covered) element.setAttribute('inert', '');
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = overflow;
+      for (const element of covered) element.removeAttribute('inert');
     };
   }, [menuOpen]);
 
@@ -106,7 +114,7 @@ export function GlobalNav() {
           className="globalnav__menu-button"
           aria-expanded={menuOpen}
           aria-controls="globalnav-menu"
-          onClick={() => setMenuOpen((open) => !open)}
+          onClick={() => setMenuOpen(!menuOpen)}
         >
           <Icon name={menuOpen ? 'close' : 'menu'} />
           <span>{menuOpen ? 'Close' : 'Menu'}</span>

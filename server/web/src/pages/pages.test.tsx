@@ -1,7 +1,9 @@
 import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { forgetReviews } from '../data/reviews';
 import { catalog, mockApi, renderApp, reviews, reviewsUnavailable } from '../test/api';
+import { times } from '../test/text';
 
 beforeEach(() => {
   forgetReviews();
@@ -42,7 +44,7 @@ describe('every page', () => {
       ['Barbers', '/barbers'],
       ['Reviews', '/reviews'],
       ['Visit', '/visit'],
-      ['My appointment', '/appointments'],
+      ['My appointments', '/appointments'],
       ['Book an appointment', '/book'],
     ];
     expect(within(nav).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(links.map(([, href]) => href));
@@ -56,7 +58,7 @@ describe('Home', () => {
   it('says whether the shop is open now, on the shop’s clock', () => {
     mockApi([['GET /api/reviews', { body: reviews }]]);
     renderApp('/');
-    expect(screen.getByTestId('open-today').textContent).toBe('Open today until 7 PM');
+    expect(screen.getByTestId('open-today').textContent).toBe(times('Open today until 7 PM'));
     expect(main().getAllByRole('link', { name: /Book an appointment/ })[0]!.getAttribute('href')).toBe('/book');
   });
 
@@ -129,7 +131,78 @@ describe('Visit', () => {
     expect(main().getByRole('link', { name: /Google Maps/ }).getAttribute('href')).toBe(catalog.shop.googleMapsDirectionsUrl);
     const today = screen.getByRole('row', { current: 'date' });
     expect(today.textContent).toContain('Tuesday');
-    expect(today.textContent).toContain('10 AM – 7 PM');
+    expect(today.textContent).toContain(times('10 AM – 7 PM'));
     expect(main().getAllByRole('link', { name: /\(442\) 341-3053/ })[0]!.getAttribute('href')).toBe('tel:+14423413053');
+    // Paid at the shop; a card the shop may hold isn't "never online", so it doesn't say so.
+    expect(main().getByText('Credit card · Gift card. You pay at the shop.')).toBeTruthy();
+    expect(document.body.textContent).not.toContain('never online');
+  });
+});
+
+describe('the phone number', () => {
+  it.each(['/services', '/barbers', '/reviews', '/appointments'])('is right under the heading on %s', (path) => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp(path);
+    const header = screen.getByRole('heading', { level: 1 }).closest('header') as HTMLElement;
+    expect(header.textContent).toContain('Prefer to call?');
+    expect(within(header).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
+  });
+
+  it('is in the hero on Home', () => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp('/');
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    expect(within(hero).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
+  });
+});
+
+describe('Home’s photos', () => {
+  it('open with a cut the gallery doesn’t start with, and no other shop’s name', () => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp('/');
+    const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
+    expect(within(hero).getByRole('img', { name: 'Blue color with a fade, cut at Izzy Clipz' })).toBeTruthy();
+  });
+
+  it('say each gallery cut once to screen readers: by its caption', () => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp('/');
+    const gallery = screen.getByRole('heading', { name: 'Fresh from the chair.' }).closest('section') as HTMLElement;
+    const figures = within(gallery).getAllByRole('figure');
+    expect(figures).toHaveLength(6);
+    expect(figures[0]!.textContent).toBe('Textured crop with a fade');
+    for (const figure of figures) {
+      expect(figure.querySelector('img')!.getAttribute('alt')).toBe('');
+      expect(figure.querySelector('figcaption')!.textContent).not.toBe('');
+    }
+  });
+});
+
+describe('the phone menu', () => {
+  it('keeps the page under it out of reach while it’s open, and gives it back on the next page', async () => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp('/services');
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    const menu = document.getElementById('globalnav-menu') as HTMLElement;
+    expect(menu).toBeTruthy();
+    expect(screen.getByRole('main').hasAttribute('inert')).toBe(true);
+    expect(document.querySelector('.globalfooter')!.hasAttribute('inert')).toBe(true);
+
+    await userEvent.click(within(menu).getByRole('link', { name: 'Barbers' }));
+    expect(h1()).toBe('Meet the barbers');
+    expect(document.getElementById('globalnav-menu')).toBeNull();
+    expect(screen.getByRole('main').hasAttribute('inert')).toBe(false);
+    expect(document.querySelector('.globalfooter')!.hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('main'));
+  });
+
+  it('closes with Escape, back on the Menu button', async () => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp('/services');
+    await userEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    await userEvent.keyboard('{Escape}');
+    expect(document.getElementById('globalnav-menu')).toBeNull();
+    expect(screen.getByRole('main').hasAttribute('inert')).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Menu' }));
   });
 });

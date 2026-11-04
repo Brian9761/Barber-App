@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ErrorCode, errorMessage, isApiError } from '../api/client';
-import type { Appointment, Catalog } from '../api/types';
+import type { Catalog } from '../api/types';
+import { clearDraft } from '../booking/flow';
+import { forgetLastBooked } from '../booking/lastBooked';
 import { CatalogGate } from '../components/CatalogGate';
 import { Dialog } from '../components/Dialog';
 import { useNow } from '../components/hooks';
@@ -12,7 +14,17 @@ import { cardLabel, durationLabel } from '../lib/format';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { isCancellable, lateCancelWarning } from '../lib/lateCancel';
 import { dateTimeLabel, longDateTimeLabel } from '../lib/shopTime';
-import { loadAppointments, removeAppointment, updateAppointment, type SavedAppointment } from '../lib/storage';
+import {
+  forgetAppointments,
+  forgetClient,
+  loadAppointments,
+  loadCard,
+  loadRememberedDetails,
+  removeAppointment,
+  updateAppointment,
+  type ListedAppointment,
+  type SavedAppointment,
+} from '../lib/storage';
 
 export function AppointmentsPage() {
   usePageMeta('My appointments', 'The appointments you booked on this computer at Izzy Clipz Barbershop: check them, add them to your calendar, or cancel.');
@@ -21,6 +33,7 @@ export function AppointmentsPage() {
       <header className="page-header container">
         <h1>My appointments</h1>
         <p className="lead secondary">The appointments booked on this computer. Check them, add them to your calendar, or cancel.</p>
+        <PreferToCall className="page-header__call" />
       </header>
       <CatalogGate>{(catalog) => <AppointmentList catalog={catalog} />}</CatalogGate>
     </>
@@ -30,11 +43,38 @@ export function AppointmentsPage() {
 /** Up to a day after it ended, an appointment is still checked with the shop (it may be marked done). */
 const CHECK_AFTER_END_MS = 24 * 60 * 60_000;
 
+/** Whether this computer keeps anything of the client's: appointments, their details or a card. */
+function remembersAnything(saved: SavedAppointment[]): boolean {
+  return saved.length > 0 || loadRememberedDetails() !== null || loadCard() !== null;
+}
+
+/**
+ * "Forget me on this computer": the name, number and email, the card, the booking in
+ * progress and the appointments listed here. The appointments stay booked with the shop.
+ */
+function forgetThisComputer(): void {
+  forgetClient();
+  forgetAppointments();
+  clearDraft();
+  forgetLastBooked();
+}
+
 function AppointmentList({ catalog }: { catalog: Catalog }) {
   const now = useNow();
   const [saved, setSaved] = useState<SavedAppointment[]>(() => loadAppointments());
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [forgotten, setForgotten] = useState(false);
   const reload = useCallback(() => setSaved(loadAppointments()), []);
+  const forget = () => {
+    forgetThisComputer();
+    setForgotten(true);
+    reload();
+  };
+  const forgottenNotice = forgotten ? (
+    <Notice tone="success" role="status" testId="forgotten-notice">
+      <p>Done. This computer no longer keeps your details, card or appointments. Your appointments are still booked with the shop.</p>
+    </Notice>
+  ) : null;
 
   // Check each one with the shop: it may have been cancelled by the shop, or completed.
   useEffect(() => {
@@ -73,6 +113,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
   if (saved.length === 0) {
     return (
       <div className="container container--narrow appointments">
+        {forgottenNotice}
         <div className="status-message card card--gray">
           <h2>No appointments booked on this computer yet.</h2>
           <p className="lead secondary">When you book here, your appointment shows up on this page, so you can check it or cancel it.</p>
@@ -83,6 +124,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
             Booked in the Izzy Clipz app or by phone? Check it in the app, or call the shop at <CallLink className="inline-link nowrap" />.
           </p>
         </div>
+        {remembersAnything(saved) ? <ForgetComputer catalog={catalog} onForget={forget} /> : null}
       </div>
     );
   }
@@ -127,12 +169,62 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
         </Link>
         <PreferToCall />
       </div>
+      <ForgetComputer catalog={catalog} onForget={forget} />
     </div>
   );
 }
 
+/** For a shared computer: forget the client here, after asking (and saying the appointments stay booked). */
+function ForgetComputer({ catalog, onForget }: { catalog: Catalog; onForget: () => void }) {
+  const [asking, setAsking] = useState(false);
+  return (
+    <section className="forget-computer" aria-labelledby="forget-title" data-testid="forget-computer">
+      <h2 id="forget-title" className="forget-computer__title">
+        Not you, or on a shared computer?
+      </h2>
+      <p className="secondary">
+        This computer can forget your name, number, saved card and the appointments listed here. They stay booked with the shop.
+      </p>
+      <div>
+        <button type="button" className="button button--secondary" onClick={() => setAsking(true)}>
+          Forget me on this computer
+        </button>
+      </div>
+      <Dialog
+        open={asking}
+        title="Forget me on this computer?"
+        onClose={() => setAsking(false)}
+        testId="forget-dialog"
+        actions={
+          <>
+            <button type="button" className="button button--secondary" onClick={() => setAsking(false)} autoFocus>
+              Keep everything
+            </button>
+            <button
+              type="button"
+              className="button button--primary"
+              data-testid="confirm-forget"
+              onClick={() => {
+                setAsking(false);
+                onForget();
+              }}
+            >
+              Forget me
+            </button>
+          </>
+        }
+      >
+        <p>This computer will forget your name and number, your saved card, and the appointments listed here.</p>
+        <p>
+          Your appointments stay booked. To change one later, call the shop at <span className="nowrap">{catalog.shop.phone.display}</span>.
+        </p>
+      </Dialog>
+    </section>
+  );
+}
+
 /** "Next appointment", "Booked", "Cancelled by the shop", "Completed", "Missed"… in words, with a dot. */
-function statusText(a: Appointment, isNext: boolean, now: Date): { text: string; tone: 'go' | 'stop' | 'done' | 'muted' } {
+function statusText(a: ListedAppointment, isNext: boolean, now: Date): { text: string; tone: 'go' | 'stop' | 'done' | 'muted' } {
   const ended = new Date(a.end) <= now;
   switch (a.status) {
     case 'booked':

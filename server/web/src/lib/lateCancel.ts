@@ -29,7 +29,10 @@ export function lateCancelWarningText(windowMinutes: number, feeCents: number, f
 }
 
 /** Whether the agreed fee is the whole price: the server says so; an older server is judged by the label. */
-function isFullPrice(appointment: Appointment): boolean {
+/** What these rules read: never the client's own details. */
+type Booked = Omit<Appointment, 'customer' | 'note'>;
+
+function isFullPrice(appointment: Booked): boolean {
   const fee = appointment.noShowFee;
   if (!fee) return false;
   return fee.fullPrice ?? money(fee.amountCents) === appointment.priceLabel;
@@ -40,7 +43,7 @@ function isFullPrice(appointment: Appointment): boolean {
  * under the policy the client agreed to; null when it's free. Like the server, the
  * first time the client cancelled (or asked to) counts, if there was one.
  */
-export function lateCancelWarning(appointment: Appointment, now: Date): string | null {
+export function lateCancelWarning(appointment: Booked, now: Date): string | null {
   const fee = appointment.noShowFee;
   if (!isCancellable(appointment, now) || !appointment.card || !fee || fee.lateCancelWindowMinutes === null) return null;
   const firstAsked = fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : now;

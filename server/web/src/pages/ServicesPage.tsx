@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { Catalog } from '../api/types';
 import { CatalogGate } from '../components/CatalogGate';
-import { CallLink } from '../components/ui';
+import { CallLink, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { barbersForService, categories, serviceDuration, servicePrice } from '../lib/catalog';
 import { list, plural } from '../lib/format';
@@ -16,6 +16,7 @@ export function ServicesPage() {
       <header className="page-header container">
         <h1>Services and prices</h1>
         <p className="lead secondary">Every service on the menu, with its price and how long it takes. Each barber sets their own prices.</p>
+        <PreferToCall className="page-header__call" />
       </header>
       <CatalogGate>{(catalog) => <ServicesMenu catalog={catalog} />}</CatalogGate>
     </>

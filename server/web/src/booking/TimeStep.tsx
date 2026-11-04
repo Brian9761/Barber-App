@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { BookingTarget, Catalog, NoShowPolicy, Slot } from '../api/types';
 import { useNow } from '../components/hooks';
 import { CallLink, Loading, Notice } from '../components/ui';
+import { plural } from '../lib/format';
 import { lateCancelNotice } from '../lib/lateCancel';
 import { dateTimeLabel, dayPart, localDate, longDateLabel, monthsBetween, timeLabel, wallClock, WEEKDAY_NAMES, weekdayOf, zoneOffsetMinutes } from '../lib/shopTime';
 import { useBooking, useStepNavigation } from './BookingContext';
@@ -133,7 +134,11 @@ function TimePicker({ catalog, target }: { catalog: Catalog; target: BookingTarg
         onSelect={selectDay}
       />
 
-      <section className="times" aria-labelledby="times-title" aria-live="polite">
+      {/* One short line for screen readers when the day changes, not every time read out. */}
+      <p className="visually-hidden" role="status" data-testid="times-status">
+        {selectedDay && availability.statusOf(selectedDay) === 'open' ? `${plural(slots.length, 'open time')} on ${longDateLabel(selectedDay)}.` : ''}
+      </p>
+      <section className="times" aria-labelledby="times-title">
         {selectedDay && availability.statusOf(selectedDay) === 'open' ? (
           <>
             <h2 id="times-title" className="times__day">
@@ -201,6 +206,8 @@ export function FeeWarning({ policy, start, now }: { policy: NoShowPolicy; start
   return (
     <Notice tone="warning" title={policy.warning.title} testId="fee-warning">
       <p>{policy.warning.message}</p>
+      {/* The shop's words are written for the app too; the website's own cancelling is the same thing. */}
+      <p>Cancelling on this website, under My appointments, works the same as cancelling in the app.</p>
       {inside ? <p className="notice__strong">{inside}</p> : null}
     </Notice>
   );

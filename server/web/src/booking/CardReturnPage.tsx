@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { api, errorMessage } from '../api/client';
+import { api, ErrorCode, errorMessage, isApiError } from '../api/client';
 import { Loading, Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { clearPendingCheckout, loadPendingCheckout, storeCard } from '../lib/storage';
@@ -10,18 +10,34 @@ import type { ReviewLocationState } from './ReviewStep';
 
 const SESSION_ID_RE = /^cs_(test|live)_[A-Za-z0-9]{1,200}$/;
 
+/** Whether saving the card again can work: the shop wasn't reached, had a problem, or asked to wait. */
+export function canTryAgain(error: unknown): boolean {
+  if (!isApiError(error)) return true;
+  return error.isOffline || error.status >= 500 || error.code === ErrorCode.rateLimited;
+}
+
+interface Problem {
+  message: string;
+  /** "Try again" can save it (the shop wasn't reached, say); otherwise only "Back to your booking". */
+  retry: boolean;
+}
+
 /**
  * Where Stripe's card page sends the client back to (through the server):
  * /book/card-return?status=saved&session_id=cs_… or ?status=cancelled. A saved card
  * is kept with the card token made before leaving (POST /api/cards), then the
  * booking picks up where it was, from this tab's sessionStorage.
+ *
+ * Only the card page this tab opened last can be saved: its token is the one kept
+ * here, and the server checks that the two belong together. An older card page
+ * (left open, or reached through the browser's history) says so instead.
  */
 export function CardReturnPage() {
   usePageMeta('Adding your card', 'Saving the card for your Izzy Clipz appointment.');
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { draft } = useBooking();
-  const [problem, setProblem] = useState<string | null>(null);
+  const [problem, setProblem] = useState<Problem | null>(null);
   const [attempt, setAttempt] = useState(0);
   const started = useRef(-1);
 
@@ -39,22 +55,32 @@ export function CardReturnPage() {
       return;
     }
     if (status !== 'saved' || !SESSION_ID_RE.test(sessionId)) {
-      setProblem('Something went wrong on the way back from the card page. Go back to your booking and add your card again.');
+      setProblem({ message: 'Something went wrong on the way back from the card page. Go back to your booking and add your card again.', retry: false });
       return;
     }
     if (!pending) {
-      setProblem("This browser lost track of the card you were adding. Go back to your booking and add it again.");
+      setProblem({ message: 'This browser lost track of the card you were adding. Go back to your booking and add it again.', retry: false });
+      return;
+    }
+    if (pending.sessionId !== sessionId) {
+      // A card page from before the one this tab opened last: its card can't be matched any more.
+      setProblem({ message: 'That was an older card page. Go back to your booking and add your card again.', retry: false });
       return;
     }
     setProblem(null);
     api
-      .saveCard(sessionId, pending.token)
+      .saveCard(pending.sessionId, pending.token)
       .then((card) => {
-        storeCard({ token: pending.token, card }, pending.remember);
+        storeCard({ token: pending.token, card, phone: pending.phone }, pending.remember);
         clearPendingCheckout();
         navigate(backTo, { replace: true });
       })
-      .catch((error: unknown) => setProblem(errorMessage(error)));
+      .catch((error: unknown) => {
+        const retry = canTryAgain(error);
+        // Nothing more can come of this card page: the next try starts with a new one.
+        if (!retry) clearPendingCheckout();
+        setProblem({ message: errorMessage(error), retry });
+      });
   }, [attempt, backTo, navigate, sessionId, status]);
 
   return (
@@ -68,18 +94,22 @@ export function CardReturnPage() {
           role="alert"
           actions={
             <>
-              {status === 'saved' && loadPendingCheckout() ? (
+              {problem.retry ? (
                 <button type="button" className="button button--primary" onClick={() => setAttempt((n) => n + 1)}>
                   Try again
                 </button>
               ) : null}
-              <button type="button" className="button button--secondary" onClick={() => navigate(backTo, { replace: true })}>
+              <button
+                type="button"
+                className={`button ${problem.retry ? 'button--secondary' : 'button--primary'}`}
+                onClick={() => navigate(backTo, { replace: true })}
+              >
                 Back to your booking
               </button>
             </>
           }
         >
-          <p>{problem}</p>
+          <p>{problem.message}</p>
         </Notice>
       ) : (
         <Loading text="One moment while we save your card with the shop…" />

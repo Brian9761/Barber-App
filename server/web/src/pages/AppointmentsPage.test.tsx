@@ -6,8 +6,11 @@ import cancelledFixture from '../../../test/fixtures/contract/appointment-cancel
 import lateCancelFee from '../../../test/fixtures/contract/errors/late_cancel_fee.json';
 import notCancellable from '../../../test/fixtures/contract/errors/not_cancellable.json';
 import type { Appointment } from '../api/types';
-import { loadAppointments, saveAppointment } from '../lib/storage';
+import cardSaved from '../../../test/fixtures/contract/card-saved.json';
+import { APPOINTMENTS_KEY, loadAppointments, loadCard, loadRememberedDetails, rememberDetails, saveAppointment, storeCard } from '../lib/storage';
+import { newToken } from '../lib/tokens';
 import { apiError, fixtureAppointment, mockApi, renderApp } from '../test/api';
+import { times } from '../test/text';
 
 // Flowxbori's haircut at 10 AM on Tuesday, November 3, 2026 ($35, Visa on file, 1-hour window).
 const MANAGE = 'fixture-manage-token-0001xxxxxxxxxxxxxxxxxx';
@@ -42,7 +45,7 @@ describe('My appointments', () => {
 
     const card = await screen.findByTestId('appointment-card');
     expect(within(card).getByTestId('appointment-status').textContent).toBe('Next appointment');
-    expect(within(card).getByRole('heading', { level: 3 }).textContent).toBe('Tue, Nov 3 at 10 AM');
+    expect(within(card).getByRole('heading', { level: 3 }).textContent).toBe(times('Tue, Nov 3 at 10 AM'));
     expect(card.textContent).toContain('Haircut with Flowxbori');
     expect(card.textContent).toContain('$35 · 45 min · Pay at the shop');
     expect(card.textContent).toContain('Card on file: Visa •••• 4242');
@@ -85,7 +88,7 @@ describe('cancelling', () => {
     const dialog = await openCancel();
     expect(within(dialog).getByRole('heading').textContent).toBe('Cancel this appointment?');
     expect(within(dialog).queryByTestId('late-cancel-warning')).toBeNull();
-    expect(dialog.textContent).toContain('Haircut with Flowxbori, Tuesday, November 3 at 10 AM. The shop sees it right away.');
+    expect(dialog.textContent).toContain(times('Haircut with Flowxbori, Tuesday, November 3 at 10 AM. The shop sees it right away.'));
     // The safe answer comes first.
     expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Keep appointment', 'Cancel appointment']);
 
@@ -162,5 +165,49 @@ describe('cancelling', () => {
     await userEvent.click(within(await openCancel()).getByTestId('confirm-cancel'));
     expect((await screen.findByRole('alert')).textContent).toContain(notCancellable.error.message);
     expect(screen.getByTestId('appointment-status').textContent).toBe('Cancelled by the shop');
+  });
+});
+
+describe('on a shared computer', () => {
+  it('keeps no name, number, email or note with the appointments', () => {
+    const booked: Appointment = { ...fixtureAppointment, note: 'Low fade, keep the top long' };
+    saveAppointment(booked, MANAGE);
+    const [stored] = JSON.parse(localStorage.getItem(APPOINTMENTS_KEY)!) as { appointment: Record<string, unknown> }[];
+    expect(stored!.appointment).not.toHaveProperty('customer');
+    expect(stored!.appointment).not.toHaveProperty('note');
+    expect(stored!.appointment).toMatchObject({ id: fixtureAppointment.id, serviceName: 'Haircut', barberName: 'Flowxbori' });
+  });
+
+  it('forgets the client here when asked, after saying the appointments stay booked', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
+    storeCard({ token: newToken(), card: cardSaved.card, phone: '+14425550123' }, true);
+    const api = mockApi([['GET /api/appointments/*', { body: { appointment: fixtureAppointment } }]]);
+    renderApp('/appointments');
+    await screen.findByTestId('appointment-card');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    const dialog = screen.getByTestId('forget-dialog');
+    expect(dialog.textContent).toContain('Your appointments stay booked. To change one later, call the shop at (442) 341-3053.');
+    // The safe answer comes first.
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Keep everything' }));
+    expect(loadAppointments()).toHaveLength(1);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toContain('Your appointments are still booked with the shop.');
+    expect(screen.getByText('No appointments booked on this computer yet.')).toBeTruthy();
+    expect(loadAppointments()).toEqual([]);
+    expect(loadRememberedDetails()).toBeNull();
+    expect(loadCard()).toBeNull();
+    // Nothing was cancelled.
+    expect(api.calls.filter((c) => c.method === 'POST')).toEqual([]);
+  });
+
+  it('doesn’t offer to forget anything when nothing is kept', () => {
+    renderApp('/appointments');
+    expect(screen.getByText('No appointments booked on this computer yet.')).toBeTruthy();
+    expect(screen.queryByTestId('forget-computer')).toBeNull();
   });
 });

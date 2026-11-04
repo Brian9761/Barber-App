@@ -105,9 +105,20 @@ describe('the five steps', () => {
     expect(picked.notice).toBeNull();
   });
 
-  it('start fresh after booking, and for a new booking, keeping the details typed', () => {
-    expect(bookingReducer(complete(), { type: 'booked' })).toEqual({ ...EMPTY_DRAFT, details });
-    expect(bookingReducer(complete(), { type: 'begin', serviceId: 'vip' })).toEqual({ ...EMPTY_DRAFT, details, serviceId: 'vip' });
+  it('start fresh after booking, and for a new booking, without the last client’s details or note', () => {
+    // On a shared computer the next booking mustn't show them: the details step fills in only
+    // what "Remember me" kept on this computer (never a note).
+    expect(bookingReducer(complete(), { type: 'booked' })).toEqual(EMPTY_DRAFT);
+    expect(bookingReducer(complete(), { type: 'begin', serviceId: 'vip' })).toEqual({ ...EMPTY_DRAFT, serviceId: 'vip' });
+    expect(bookingReducer({ ...complete(), details: { ...details, remember: false } }, { type: 'booked' }).details).toBeNull();
+  });
+
+  it('drop the details typed when the client says it isn’t them, keeping the rest', () => {
+    const forgotten = bookingReducer(complete(), { type: 'forgetDetails' });
+    expect(forgotten).toEqual({ ...complete(), details: null });
+    expect(firstOpenStep(forgotten)).toBe('details');
+    const nothingTyped = bookingReducer(EMPTY_DRAFT, { type: 'forgetDetails' });
+    expect(nothingTyped).toBe(EMPTY_DRAFT);
   });
 });
 

@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { times } from '../test/text';
 import { availability, catalog, mockApi, policy35, policyNotRequired, renderApp } from '../test/api';
 import { loadDraft } from './flow';
 
@@ -40,9 +41,13 @@ describe('booking, one question at a time', () => {
     expect(await screen.findByRole('heading', { level: 2, name: 'Tuesday, November 3' })).toBeTruthy();
     const continueButton = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
     expect(continueButton.disabled).toBe(true);
+    // Screen readers hear one short line for the day, not every time read out.
+    await waitFor(() => expect(screen.getByTestId('times-status').textContent).toMatch(/^\d+ open times? on Tuesday, November 3\.$/));
+    expect(screen.getByTestId('times-status').getAttribute('role')).toBe('status');
+    expect(document.querySelector('.times')!.hasAttribute('aria-live')).toBe(false);
     await userEvent.click(screen.getByTestId('time-2026-11-03T19:00:00Z'));
     expect(screen.getByTestId('time-2026-11-03T19:00:00Z').getAttribute('aria-pressed')).toBe('true');
-    expect(summaryText()).toContain('Tue, Nov 3 at 11 AM');
+    expect(summaryText()).toContain(times('Tue, Nov 3 at 11 AM'));
     await userEvent.click(continueButton);
 
     const [request] = api.calls.filter((c) => c.path === '/api/availability');
@@ -165,6 +170,8 @@ describe('booking, one question at a time', () => {
     const warning = await screen.findByTestId('fee-warning');
     expect(warning.textContent).toContain(policy35.warning!.title);
     expect(warning.textContent).toContain(policy35.warning!.message);
+    // The shop's words say "in the app": the website says its own cancelling counts the same.
+    expect(warning.textContent).toContain('Cancelling on this website, under My appointments, works the same as cancelling in the app.');
     // 10:30 is more than an hour away: nothing more to say. 10 AM is inside the hour: it says so.
     await userEvent.click(await screen.findByTestId('time-2026-11-03T18:30:00Z'));
     expect(warning.textContent).not.toContain('less than 1 hour away');

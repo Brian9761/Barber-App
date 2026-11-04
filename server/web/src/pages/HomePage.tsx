@@ -11,6 +11,9 @@ import { useReviews } from '../data/reviews';
 import { monogramTone, servicePrice } from '../lib/catalog';
 import { hoursSummary, openStatus } from '../lib/shopTime';
 
+/** The hero's cut: the blue color (not the gallery's first photo, so the two don't repeat side by side). */
+const HERO_CUT = GALLERY.find((photo) => photo.caption === 'Blue color with a fade') ?? GALLERY[0]!;
+
 export function HomePage() {
   usePageMeta(
     'Izzy Clipz Barbershop in Oceanside',
@@ -22,7 +25,8 @@ export function HomePage() {
     <>
       <section className="hero on-dark" aria-labelledby="hero-title">
         <div className="container hero__inner">
-          {catalog ? <OpenToday catalog={catalog} /> : <p className="hero__status">&nbsp;</p>}
+          {/* While the hours load (or if they can't), the line keeps its place without showing an empty pill. */}
+          {catalog ? <OpenToday catalog={catalog} /> : <p className="hero__status hero__status--waiting" aria-hidden="true">&nbsp;</p>}
           <h1 id="hero-title" className="hero__title">
             <span className="hero__line">Fresh cuts.</span> <span className="hero__line">Booked in seconds.</span>
           </h1>
@@ -37,6 +41,9 @@ export function HomePage() {
               See services
             </MoreLink>
           </div>
+          <p className="hero__call">
+            Prefer to call? <CallLink className="inline-link nowrap" />
+          </p>
         </div>
         <div className="container container--wide hero__media">
           <div className="photo hero__photo hero__photo--wide">
@@ -51,8 +58,8 @@ export function HomePage() {
           </div>
           <div className="photo hero__photo hero__photo--tall">
             <Photo
-              sources={GALLERY[0]!.sources}
-              alt={`${GALLERY[0]!.caption}, cut at Izzy Clipz`}
+              sources={HERO_CUT.sources}
+              alt={`${HERO_CUT.caption}, cut at Izzy Clipz`}
               width={750}
               height={1000}
               sizes="(min-width: 834px) 33vw, 1px"
@@ -76,9 +83,10 @@ export function HomePage() {
               <li key={photo.caption} className="gallery__item">
                 <figure>
                   <div className="photo gallery__photo">
+                    {/* The caption under it says what it is; alt text too would read it twice. */}
                     <Photo
                       sources={photo.sources}
-                      alt={photo.caption}
+                      alt=""
                       width={photo.width}
                       height={photo.height}
                       sizes="(min-width: 834px) 33vw, 50vw"

@@ -136,6 +136,8 @@ export type BookingAction =
   | { type: 'clearBarber' }
   /** The token for this booking, made the first time it's sent. */
   | { type: 'pending'; key: string; token: string }
+  /** "Not you? Forget me on this computer": no details typed for this booking any more. */
+  | { type: 'forgetDetails' }
   /** The draft kept in this tab, after a reload or the trip to Stripe's card page. */
   | { type: 'restore'; draft: BookingDraft }
   /** Booked: the next booking starts fresh. */
@@ -144,8 +146,10 @@ export type BookingAction =
 export function bookingReducer(draft: BookingDraft, action: BookingAction): BookingDraft {
   switch (action.type) {
     case 'begin':
-      // The client's details stay: "Book another" doesn't make them type them again.
-      return { ...EMPTY_DRAFT, details: draft.details, serviceId: action.serviceId ?? null, barberId: action.barberId ?? null };
+      // A new booking starts with nothing typed, like the app: the details step fills in the
+      // name and number this computer remembers (when the client asked), never a note, and
+      // nothing at all from someone who didn't ask to be remembered.
+      return { ...EMPTY_DRAFT, serviceId: action.serviceId ?? null, barberId: action.barberId ?? null };
     case 'chooseService': {
       const changed = action.serviceId !== draft.serviceId;
       const choice = action.choice ?? (changed ? null : draft.choice);
@@ -175,10 +179,13 @@ export function bookingReducer(draft: BookingDraft, action: BookingAction): Book
       return { ...draft, barberId: null };
     case 'pending':
       return { ...draft, pending: { key: action.key, token: action.token } };
+    case 'forgetDetails':
+      return draft.details === null ? draft : { ...draft, details: null };
     case 'restore':
       return action.draft;
     case 'booked':
-      return { ...EMPTY_DRAFT, details: draft.details };
+      // The details go too: "Book another" fills in only what "Remember me" kept.
+      return EMPTY_DRAFT;
   }
 }
 
@@ -239,8 +246,9 @@ export function loadDraft(): BookingDraft | null {
   return parseDraft(readJSON('session', DRAFT_KEY));
 }
 
-export function saveDraft(draft: BookingDraft): void {
-  writeJSON('session', DRAFT_KEY, draft);
+/** False when this browser can't keep it (storage off or full). */
+export function saveDraft(draft: BookingDraft): boolean {
+  return writeJSON('session', DRAFT_KEY, draft);
 }
 
 export function clearDraft(): void {

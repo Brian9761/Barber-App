@@ -117,11 +117,14 @@ export function clockMinutes(clock: string): number {
   return h * 60 + m;
 }
 
-/** "10 AM", "7 PM", "10:30 AM", "12 PM" (the Kit's `TimeOfDay.label`). */
+/** Between a time and "AM" or "PM": a space that never breaks, so "AM" doesn't end up alone on a line. */
+export const TIME_SPACE = '\u00a0';
+
+/** "10 AM", "7 PM", "10:30 AM", "12 PM" (the Kit's `TimeOfDay.label`), with a non-breaking space. */
 export function timeOfDayLabel(hour: number, minute: number): string {
   const suffix = hour < 12 ? 'AM' : 'PM';
   const twelve = hour % 12 === 0 ? 12 : hour % 12;
-  return minute === 0 ? `${twelve} ${suffix}` : `${twelve}:${String(minute).padStart(2, '0')} ${suffix}`;
+  return minute === 0 ? `${twelve}${TIME_SPACE}${suffix}` : `${twelve}:${String(minute).padStart(2, '0')}${TIME_SPACE}${suffix}`;
 }
 
 /** "19:00" → "7 PM". */

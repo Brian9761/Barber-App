@@ -151,11 +151,19 @@
   color: var(--color-text-secondary);
 }
 
+/*
+ * The five barbers: all in one row where they fit, otherwise three over two (never four
+ * and one left alone). The row is capped at three items' width wherever five don't fit.
+ */
 .crew-row {
+  --crew-item: 84px;
+  --crew-gap: var(--space-3);
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--space-5);
+  gap: var(--space-5) var(--crew-gap);
+  max-width: calc(3 * var(--crew-item) + 2 * var(--crew-gap));
+  margin: 0 auto;
   list-style: none;
 }
 
@@ -163,7 +171,36 @@
   display: grid;
   justify-items: center;
   gap: var(--space-2);
-  width: 84px;
+  width: var(--crew-item);
+}
+
+/* One tile across: room for all five. */
+@media (min-width: 600px) and (max-width: 833px) {
+  .crew-row {
+    max-width: none;
+  }
+}
+
+/* Two tiles across, wide enough again for all five. */
+@media (min-width: 1200px) {
+  .crew-row {
+    max-width: none;
+  }
+}
+
+/* Narrow phones: smaller tiles, still three over two. */
+@media (max-width: 389px) {
+  .crew-row {
+    --crew-item: 68px;
+    --crew-gap: var(--space-2);
+  }
+
+  .crew-row .monogram--medium {
+    width: 64px;
+    height: 64px;
+    border-radius: 18px;
+    font-size: 27px;
+  }
 }
 
 .crew-row__name {
@@ -383,6 +420,19 @@
   grid-row: 1 / span 2;
   grid-column: 2;
   min-width: 96px;
+}
+
+/* Under the description (phones): the price and length lined up at the left, Book at the right. */
+@media (max-width: 639px) {
+  .service-card__side {
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .service-card__price,
+  .service-card__duration {
+    text-align: left;
+  }
 }
 
 .services__footnote {
@@ -1071,4 +1121,27 @@
   justify-items: center;
   gap: var(--space-1);
   list-style: none;
+}
+
+/* "Not you, or on a shared computer?" under My appointments */
+.forget-computer {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-12);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--color-line);
+}
+
+.forget-computer__title {
+  font-family: var(--font-text);
+  font-size: var(--text-h4);
+}
+
+/* The hero's "Open today" line before the hours have loaded: its place is kept, nothing shows. */
+.hero__status--waiting {
+  visibility: hidden;
+}
+
+.hero__call {
+  color: var(--color-bone);
 }

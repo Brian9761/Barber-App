@@ -75,7 +75,7 @@ export function icsFile(event: CalendarEvent, now: Date = new Date()): string {
 }
 
 /** The event for an appointment at the shop, as the app's Add to Calendar words it. */
-export function appointmentEvent(appointment: Appointment, shop: Shop, siteOrigin: string): CalendarEvent {
+export function appointmentEvent(appointment: Omit<Appointment, 'customer' | 'note'>, shop: Shop, siteOrigin: string): CalendarEvent {
   const barber = appointment.barberName;
   return {
     uid: `${appointment.id}@izzyclipz`,

@@ -32,17 +32,24 @@ export function StepHeader({ step, title, subtitle }: { step: Step; title: strin
       </div>
       <h1 className="step-header__title">{title}</h1>
       {subtitle ? <p className="step-header__subtitle">{subtitle}</p> : null}
+      {/* Near the top wherever the summary (with the number) isn't beside the step: phones, and Review. */}
+      <p className="step-header__call">
+        Prefer to call? <CallLink className="inline-link nowrap" />
+      </p>
     </div>
   );
 }
 
-/** The step on the left, "Your appointment" on the right (under it on phones). */
-export function BookingLayout({ catalog, children }: { catalog: Catalog; children: ReactNode }) {
+/**
+ * The step on the left, "Your appointment" on the right (under it on phones). Review
+ * already lists everything, so it goes without the summary, in one centered column.
+ */
+export function BookingLayout({ catalog, summary = true, children }: { catalog: Catalog; summary?: boolean; children: ReactNode }) {
   return (
-    <div className="booking container">
+    <div className={`booking container${summary ? ' booking--with-summary' : ' booking--single'}`}>
       <div className="booking__layout">
         <div className="booking__step">{children}</div>
-        <SummaryCard catalog={catalog} />
+        {summary ? <SummaryCard catalog={catalog} /> : null}
       </div>
     </div>
   );
@@ -84,7 +91,7 @@ function SummaryCard({ catalog }: { catalog: Catalog }) {
           </dd>
         </div>
       </dl>
-      <p className="summary-card__pay">No payment now. You pay at the shop.</p>
+      <p className="summary-card__pay">No payment now. You'll pay at the shop.</p>
       <p className="summary-card__call">
         Prefer to call? <CallLink className="inline-link nowrap" />
       </p>

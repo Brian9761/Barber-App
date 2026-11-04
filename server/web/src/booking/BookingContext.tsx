@@ -12,7 +12,9 @@ const BookingContext = createContext<BookingContextValue | null>(null);
 /** The booking in progress, kept in this tab so a reload or Stripe's card page doesn't lose it. */
 export function BookingProvider({ children, initial }: { children: ReactNode; initial?: BookingDraft }) {
   const [draft, dispatch] = useReducer(bookingReducer, initial, (given) => given ?? loadDraft() ?? EMPTY_DRAFT);
-  useEffect(() => saveDraft(draft), [draft]);
+  useEffect(() => {
+    saveDraft(draft);
+  }, [draft]);
   return <BookingContext.Provider value={{ draft, dispatch }}>{children}</BookingContext.Provider>;
 }
 

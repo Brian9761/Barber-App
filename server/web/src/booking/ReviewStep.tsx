@@ -5,15 +5,16 @@ import type { BookingTarget, Catalog, NoShowPolicy } from '../api/types';
 import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
 import { CallLink, Loading, Notice } from '../components/ui';
-import { cardLabel, list } from '../lib/format';
+import { cardLabel, list, windowLabel } from '../lib/format';
+import { cancelledLate, feeLabel } from '../lib/lateCancel';
 import { leaveTo } from '../lib/leave';
 import { parseUSPhone, toE164 } from '../lib/phone';
-import { dateTimeLabel, localDate } from '../lib/shopTime';
+import { dateTimeLabel, localDate, timeLabel } from '../lib/shopTime';
 import {
   cardValidOn,
   forgetCard,
   loadAppointments,
-  loadCard,
+  loadCardFor,
   saveAppointment,
   savePendingCheckout,
   type StoredCard,
@@ -34,6 +35,12 @@ export interface ReviewLocationState {
   cardNotice?: string;
 }
 
+const BAD_NUMBER = 'Enter a 10-digit US number, like (442) 341-3053.';
+
+/** Without this tab's storage the booking would be lost on Stripe's page, so the client doesn't go. */
+export const CANT_KEEP_BOOKING =
+  "This browser won't keep your booking while you add a card (it may be blocking this site's data), so it would be lost on the way back. Try another browser, or call the shop to book.";
+
 /**
  * Step 5: everything on one card (each part with "Change"), the fee notice when the
  * shop's policy needs a card, "No payment now", the card on file, and "Book
@@ -41,6 +48,9 @@ export interface ReviewLocationState {
  * forward, like the app: a taken time goes back to the times, a problem with the
  * details goes back to them, a lost answer offers "Try again" (which can't book
  * twice), and a limit says which one.
+ *
+ * The card on file is only ever the one this client (this number) added: on a
+ * shared computer nobody books with someone else's card.
  */
 export function ReviewStep({ catalog }: { catalog: Catalog }) {
   const { draft } = useBooking();
@@ -49,16 +59,23 @@ export function ReviewStep({ catalog }: { catalog: Catalog }) {
   return <Review catalog={catalog} draft={draft} target={target} start={draft.start} />;
 }
 
+/** "+14425550123" for the number on the details step, or null when it isn't a US number. */
+function phoneOf(display: string): string | null {
+  const digits = parseUSPhone(display);
+  return digits ? toE164(digits) : null;
+}
+
 function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: BookingDraft; target: BookingTarget; start: string }) {
   const { dispatch } = useBooking();
   const navigate = useNavigate();
   const location = useLocation();
   const details = draft.details!;
+  const phone = phoneOf(details.phone);
   const zone = catalog.timeZone;
   const now = useNow();
   const summary = summarize(catalog, draft);
   const { state: policyState, reload: reloadPolicy } = useNoShowPolicy(target);
-  const [card, setCard] = useState<StoredCard | null>(() => loadCard());
+  const [card, setCard] = useState<StoredCard | null>(() => (phone ? loadCardFor(phone) : null));
   const [booking, setBooking] = useState(false);
   const [failure, setFailure] = useState<BookingFailure | null>(null);
   const [cardMessage, setCardMessage] = useState<string | null>((location.state as ReviewLocationState | null)?.cardNotice ?? null);
@@ -75,36 +92,44 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
   const change = (step: Step) => navigate(STEP_PATHS[step], { state: { from: STEP_PATHS.review } });
 
   async function addCard() {
+    if (!phone) {
+      setFailure({ kind: 'details', message: BAD_NUMBER });
+      return;
+    }
     setAddingCard(true);
     setCardMessage(null);
     const token = newToken();
     try {
       const checkout = await api.startCardCheckout(target, token);
-      savePendingCheckout({ token, remember: details.remember, sessionId: checkout.sessionId });
-      saveDraft(draft);
+      // What the way back from Stripe's page needs: without it the card couldn't be saved.
+      const kept = savePendingCheckout({ token, remember: details.remember, sessionId: checkout.sessionId, phone }) && saveDraft(draft);
+      if (!kept) {
+        setAddingCard(false);
+        setCardMessage(CANT_KEEP_BOOKING);
+        return;
+      }
       leaveTo(checkout.url);
     } catch (error) {
       setAddingCard(false);
-      if (isApiError(error) && error.code === ErrorCode.invalidRequest) reloadPolicy();
+      const code = isApiError(error) ? error.code : null;
+      // No card needed any more (a 400), or Stripe isn't set up: the policy says what's true now, like the app.
+      if (code === ErrorCode.invalidRequest || code === ErrorCode.stripeNotConfigured) reloadPolicy();
       setCardMessage(
-        isApiError(error) && error.code === ErrorCode.stripeNotConfigured
-          ? "The shop can't take cards online right now. Call the shop to book this time."
-          : errorMessage(error),
+        code === ErrorCode.stripeNotConfigured ? "The shop can't take cards online right now. Call the shop to book this time." : errorMessage(error),
       );
     }
   }
 
   async function book() {
     if (!policy || booking) return;
-    const digits = parseUSPhone(details.phone);
-    if (!digits) {
-      setFailure({ kind: 'details', message: 'Enter a 10-digit US number, like (442) 341-3053.' });
+    if (!phone) {
+      setFailure({ kind: 'details', message: BAD_NUMBER });
       return;
     }
     setBooking(true);
     setFailure(null);
     setPolicyNote(null);
-    const phone = toE164(digits);
+    setCardMessage(null);
     // The same booking tried again (after a lost answer) goes with the same token, so it can't book twice.
     const key = retryKey(target, start, phone);
     let token = draft.pending?.key === key ? draft.pending.token : null;
@@ -113,6 +138,7 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
       dispatch({ type: 'pending', key, token });
       saveDraft({ ...draft, pending: { key, token } });
     }
+    const sentCard = needsCard ? usableCard : null;
     try {
       const confirmation = await api.book(
         {
@@ -123,7 +149,7 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
           ...(needsCard && policy.policyText ? { noShowPolicy: policy.policyText } : {}),
         },
         token,
-        needsCard ? usableCard?.token : undefined,
+        sentCard?.token,
       );
       const saved = saveAppointment(confirmation.appointment, confirmation.manageToken);
       if (confirmation.appointment.status !== 'booked') {
@@ -132,6 +158,8 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         navigate(STEP_PATHS.time, { state: { from: STEP_PATHS.review } });
         return;
       }
+      // Booked. With "Remember me" off the card goes too, like the name and number (the app does the same).
+      if (!details.remember) forgetCard();
       rememberLastBooked(confirmation.appointment.id);
       dispatch({ type: 'booked' });
       navigate('/book/confirmed', { replace: true, state: { appointment: confirmation.appointment, saved } });
@@ -145,9 +173,14 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
           navigate(STEP_PATHS.time, { state: { from: STEP_PATHS.review } });
           return;
         case 'card':
-          // The card can't hold this booking (unknown, or it expires too soon): add one.
-          forgetCard();
-          setCard(null);
+          // Like the app: a card that was sent can't hold this booking (the server doesn't know
+          // it, or it expires too soon), so only that one is forgotten; and the policy is checked
+          // again, since a card may be needed now when it wasn't a moment ago.
+          if (sentCard) {
+            forgetCard(sentCard.token);
+            setCard(null);
+          }
+          reloadPolicy();
           setCardMessage(found.message);
           return;
         case 'policy':
@@ -162,7 +195,7 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
   }
 
   return (
-    <BookingLayout catalog={catalog}>
+    <BookingLayout catalog={catalog} summary={false}>
       <StepHeader step="review" title="Review and book" />
 
       <dl className="review-summary card">
@@ -216,6 +249,12 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
           onAdd={() => void addCard()}
         />
       ) : null}
+      {policy && !needsCard && cardMessage ? (
+        // Why the card couldn't be added, or the server asking for one this page didn't know was needed.
+        <Notice tone="error" role="alert" title="Not booked yet" testId="card-message">
+          <p>{cardMessage}</p>
+        </Notice>
+      ) : null}
 
       {failure ? <FailureNotice failure={failure} retrying={booking} onRetry={() => void book()} onEditDetails={() => change('details')} /> : null}
 
@@ -223,12 +262,31 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         <button type="button" className="button button--primary button--large step-actions__continue" disabled={!canBook} onClick={() => void book()} data-testid="book-button">
           {booking ? 'Booking…' : 'Book appointment'}
         </button>
-        <p className="step-actions__note" aria-live="polite">
-          {needsCard && !usableCard ? 'Add a card first to book this time.' : 'No payment now. You can cancel online any time before your appointment starts.'}
+        <p className="step-actions__note" aria-live="polite" data-testid="book-note">
+          {policy ? bookNote(policy, usableCard, start, now, zone) : null}
         </p>
       </div>
     </BookingLayout>
   );
+}
+
+/**
+ * The line under "Book appointment": what booking now means for cancelling. With a card
+ * on file and a late-cancellation window it says until when cancelling is free, so it
+ * never says "any time" when it isn't.
+ */
+export function bookNote(policy: NoShowPolicy, card: StoredCard | null, start: string, now: Date, zone: string): string {
+  if (!policy.required) return 'You can cancel online any time before your appointment starts.';
+  if (!card) return 'Add a card first to book this time.';
+  const window = policy.lateCancelWindowMinutes;
+  if (window === null) return 'Nothing is charged now. You can cancel online any time before your appointment starts.';
+  const startsAt = new Date(start);
+  if (cancelledLate(startsAt, now, window)) {
+    return `Nothing is charged now. This time is less than ${windowLabel(window)} away, so cancelling it may be charged ${feeLabel(policy) ?? 'a fee'}.`;
+  }
+  const freeUntil = new Date(startsAt.getTime() - window * 60_000);
+  const when = localDate(freeUntil, zone) === localDate(startsAt, zone) ? timeLabel(freeUntil, zone) : dateTimeLabel(freeUntil, zone);
+  return `Nothing is charged now. Cancelling online is free until ${when} (${windowLabel(window)} before).`;
 }
 
 function ReviewRow({
