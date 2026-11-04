@@ -167,7 +167,6 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
         <Link className="button button--secondary" to="/book">
           Book another appointment
         </Link>
-        <PreferToCall />
       </div>
       <ForgetComputer catalog={catalog} onForget={forget} />
     </div>

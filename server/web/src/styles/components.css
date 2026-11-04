@@ -1190,7 +1190,7 @@ textarea.field__input {
   }
 
   .calendar__day.is-open::after,
-  .calendar__legend-dot {
+  .calendar__legend .calendar__legend-dot {
     forced-color-adjust: none;
     background: CanvasText;
   }

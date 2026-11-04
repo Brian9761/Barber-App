@@ -1145,3 +1145,10 @@
 .hero__call {
   color: var(--color-bone);
 }
+
+/* "Closed now. Opens tomorrow at 10 AM": two even lines on a phone, not one long and one short. */
+.hero__status,
+.visit-tile__status,
+.visit__status {
+  text-wrap: balance;
+}
