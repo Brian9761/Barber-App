@@ -3,9 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { openMinutes, previousPeriod, rankLeaderboard, ratio, roundedRatio, seriesPeriods } from '../src/analytics.js';
 import { Catalog, loadCatalog } from '../src/catalog.js';
 import type { Db, Queryable } from '../src/db.js';
+import { newManageToken } from '../src/auth.js';
 import { RESPONSES } from './helpers/contract.js';
-import { useHarness } from './helpers/harness.js';
-import { seedWeek } from './helpers/week.js';
+import { protectionOn, useHarness } from './helpers/harness.js';
+import { OFFERING, seedWeek, sendWebhook, WEBHOOK_SECRET } from './helpers/week.js';
 
 // GET /api/owner/analytics against the week in test/helpers/week.ts, with every expected
 // number worked out by hand below. Times are the shop's (Pacific). "Now" is Saturday Nov 7,
@@ -570,5 +571,45 @@ describe('GET /api/owner/analytics for a week at the shop', () => {
       // appointment counts, late cancellations and time off.
       expect(queries).toHaveLength(9);
     }
+  });
+});
+
+describe('fees in the analytics', () => {
+  it('a fee Stripe finished days after it was tried counts on the day it went through, like its chargedAt', async () => {
+    await protectionOn(h);
+    h.config.stripeWebhookSecret = WEBHOOK_SECRET;
+    // Fay books Flowxbori's Tuesday 10 AM online, with her card on file.
+    const token = newManageToken();
+    const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': token }, body: { offeringId: OFFERING.flowHaircut45 } });
+    h.stripe.completeSession(checkout.body.sessionId);
+    expect((await h.call('POST', '/api/cards', { headers: { 'x-card-token': token }, body: { sessionId: checkout.body.sessionId } })).status).toBe(201);
+    const policy = (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(OFFERING.flowHaircut45)}`)).body.policyText;
+    const booked = await h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': token },
+      body: { offeringId: OFFERING.flowHaircut45, start: '2026-11-03T18:00:00Z', customer: { name: 'Fay', phone: '4425550101' }, noShowPolicy: policy },
+    });
+    expect(booked.status, booked.text).toBe(201);
+    const id = booked.body.appointment.id as string;
+    // Tuesday 10:20 AM: a no-show. Charging the fee, her bank wants her to approve it first.
+    h.setNow('2026-11-03T18:20:00Z');
+    expect((await h.call('PATCH', `/api/owner/appointments/${id}`, { ...owner, body: { status: 'noShow' } })).status).toBe(200);
+    h.stripe.nextCharge = 'requires_action';
+    const tried = await h.call('POST', `/api/owner/appointments/${id}/no-show-fee`, owner);
+    expect(tried.body.appointment.noShowFee.status).toBe('needsAction');
+    const intent = [...h.stripe.intents.values()].find((pi) => pi.metadata.appointment_id === id)!;
+    // Thursday 4 PM: Stripe says it went through.
+    h.setNow('2026-11-06T00:00:00Z');
+    expect((await sendWebhook(h, 'payment_intent.succeeded', { object: 'payment_intent', id: intent.id, status: 'succeeded', amount: 3500 })).status).toBe(200);
+    const day = await h.call('GET', '/api/owner/appointments?date=2026-11-03', owner);
+    expect(day.body.appointments.find((a: { id: string }) => a.id === id).noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-06T00:00:00Z' });
+
+    const week = (await analytics('?from=2026-11-03&to=2026-11-05')).body;
+    expect(week.series.map((d: { date: string; feesCents: number }) => [d.date, d.feesCents])).toEqual([
+      ['2026-11-03', 0],
+      ['2026-11-04', 0],
+      ['2026-11-05', 3500],
+    ]);
+    expect(week.totals.feesCents).toBe(3500);
+    expect((await analytics('?from=2026-11-03&to=2026-11-03')).body.totals.feesCents).toBe(0);
   });
 });

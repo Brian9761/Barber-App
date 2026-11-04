@@ -2,9 +2,11 @@ import { readdirSync, readFileSync } from 'node:fs';
 import type Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
+import { UNCHECKABLE_FEE_MESSAGE } from '../src/noshowfee.js';
+import { SERVER_KEY_OBJECT_MESSAGE } from '../src/stripeaccount.js';
 import { SHOP_ADDRESS } from '../src/stripeconnect.js';
 import { RESPONSES } from './helpers/contract.js';
-import { connectedShop, connectMode, FakeStripe, PLATFORM_KEY, stripeError, useHarness } from './helpers/harness.js';
+import { connectedShop, connectMode, FakeStripe, PLATFORM_KEY, PUBLIC_BASE_URL, stripeError, useHarness } from './helpers/harness.js';
 
 // With Stripe Connect every Stripe call for the shop goes to its connected account (the
 // Stripe-Account header): Tap to Pay and its Terminal location, payments, saved cards and
@@ -26,15 +28,23 @@ async function callsDuring(fn: () => Promise<unknown>) {
 const methods = (calls: { method: string }[]) => calls.map((c) => c.method);
 const protectionOn = () => h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { enabled: true } });
 
-async function saveCard(ip = '192.0.2.50'): Promise<string> {
+async function saveCard(ip = '192.0.2.50', stripe: FakeStripe = h.stripe, livemode = false): Promise<string> {
   const token = newManageToken();
   const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': token }, body: { offeringId: FLOW45 }, ip });
   expect(checkout.status, checkout.text).toBe(201);
-  h.stripe.completeSession(checkout.body.sessionId);
+  Object.assign(stripe.completeSession(checkout.body.sessionId), { livemode });
   const saved = await h.call('POST', '/api/cards', { headers: { 'x-card-token': token }, body: { sessionId: checkout.body.sessionId }, ip });
   expect(saved.status, saved.text).toBe(201);
   return token;
 }
+
+/** Each key its own Stripe account, as in real life (the shared fake stands for one): `own` for `key`, `others` for any other. */
+function separateAccounts(key: string, own: FakeStripe, others: FakeStripe): void {
+  h.deps.stripe = (k: string) => (k === key ? own : others);
+}
+
+const feeOf = async (id: string, date = '2026-11-03') =>
+  (await h.call('GET', `/api/owner/appointments?date=${date}`, owner)).body.appointments.find((a: { id: string }) => a.id === id).noShowFee;
 
 async function book(cardToken: string, start = TUE10, phone = '4425550150') {
   const policy = (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText;
@@ -376,5 +386,106 @@ describe('saved cards and fees with a connected account', () => {
     const res = await book(directCard);
     expect(res.status).toBe(400);
     expect(res.body.error.message).toBe('Add your card again: the shop changed its payment account.');
+  });
+});
+
+describe('switching the server’s key between test and live', () => {
+  it('a Connect tap while the key is briefly in test mode keeps the live account aside; with the live key back it’s the shop’s again, cards and all', async () => {
+    // Live: the shop's account is connected and takes card payments, and a client saved a card on it.
+    h.config.stripeSecretKey = 'sk_live_fake';
+    h.config.stripeConnect = true;
+    h.config.publicBaseUrl = PUBLIC_BASE_URL;
+    const connect = () => h.call('POST', '/api/owner/stripe/connect', { ...owner, body: {} });
+    const settings = async () => (await h.call('GET', '/api/owner/stripe', owner)).body;
+    const lastLinked = () => (h.stripe.calls.filter((c) => c.method === 'accountLinks.create').at(-1)!.params as Stripe.AccountLinkCreateParams).account;
+    expect((await connect()).status).toBe(201);
+    const live = lastLinked();
+    h.stripe.activateAccount(live);
+    expect(await settings()).toMatchObject({ status: 'active', accountId: live, livemode: true });
+    expect((await protectionOn()).status).toBe(200);
+    const card = await saveCard('192.0.2.50', h.stripe, true);
+
+    // The developer puts the platform's test key on for a while, and the owner taps Connect Stripe.
+    h.config.stripeSecretKey = 'sk_test_fake';
+    expect((await connect()).status).toBe(201);
+    const test = lastLinked();
+    expect(test).not.toBe(live);
+    expect(await settings()).toMatchObject({ status: 'needsInfo', accountId: test, livemode: false });
+
+    // The live key is back: the live account is the shop's again. No new account, no new onboarding.
+    h.config.stripeSecretKey = 'sk_live_fake';
+    expect(await settings()).toMatchObject({ status: 'active', accountId: live, livemode: true });
+    expect((await h.call('GET', '/api/owner/me', owner)).body.connection).toEqual({ mode: 'connect', status: 'active', businessName: 'Izzy Clipz Barbershop' });
+    expect((await connect()).status).toBe(201);
+    expect(lastLinked()).toBe(live);
+    expect(h.stripe.connectedAccounts.size).toBe(2);
+    // Cards saved on it book as before.
+    const booked = await book(card);
+    expect(booked.status, booked.text).toBe(201);
+    expect(booked.body.appointment.card).toEqual({ brand: 'visa', last4: '4242' });
+
+    // Disconnecting with the live key forgets only the live account; the test key still finds its own.
+    expect((await h.call('DELETE', '/api/owner/stripe/connect', owner)).body.status).toBe('notConnected');
+    expect((await settings()).status).toBe('notConnected');
+    h.config.stripeSecretKey = 'sk_test_fake';
+    expect(await settings()).toMatchObject({ accountId: test, livemode: false });
+  });
+});
+
+describe('payments and cards made with the shop’s own key, after the switch to connect mode', () => {
+  const SHOP_OWN_KEY = 'sk_test_shopown';
+
+  it('a fee whose answer was lost is never settled as "nothing was charged" from the platform’s account, which can’t see it', async () => {
+    // Direct mode: the shop's own key, which is a Stripe account of its own.
+    const shopOwn = h.stripe;
+    const platform = new FakeStripe(() => h.now);
+    separateAccounts(SHOP_OWN_KEY, shopOwn, platform);
+    h.config.stripeSecretKey = SHOP_OWN_KEY;
+    await protectionOn();
+    const id = await noShow(await saveCard());
+    // The charge goes through on the shop's own account, but its answer is lost.
+    shopOwn.loseNextChargeAnswer = true;
+    expect((await charge(id)).status).toBe(500);
+    expect([...shopOwn.intents.values()].filter((pi) => pi.metadata.appointment_id === id).map((pi) => pi.status)).toEqual(['succeeded']);
+    // And a Tap to Pay payment the app never got to confirm.
+    const tapped = (await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 3500 } })).body.paymentIntentId;
+
+    // The developer moves the server to connect mode, and the owner connects his account.
+    h.config.stripeSecretKey = PLATFORM_KEY;
+    h.config.stripeConnect = true;
+    h.config.publicBaseUrl = PUBLIC_BASE_URL;
+    expect((await h.call('POST', '/api/owner/stripe/connect', { ...owner, body: {} })).status).toBe(201);
+    platform.activateAccount([...platform.connectedAccounts.keys()][0]!);
+    expect((await h.call('GET', '/api/owner/stripe', owner)).body.status).toBe('active');
+
+    // Charging again: the fee can't be checked from here, so it stays pending, and the owner is told where to look.
+    const again = await charge(id);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toEqual({ code: 'not_chargeable', message: UNCHECKABLE_FEE_MESSAGE });
+    expect(await feeOf(id)).toMatchObject({ status: 'pending', chargedAt: null });
+    // The Tap to Pay payment: a 404 saying where to look.
+    const complete = await h.call('POST', `/api/owner/payments/${tapped}/complete`, owner);
+    expect(complete.status).toBe(404);
+    expect(complete.body.error).toEqual({ code: 'not_found', message: SERVER_KEY_OBJECT_MESSAGE });
+    // Neither was looked for on the platform's own account, where "not found" would mean nothing.
+    expect(platform.calls.filter((c) => c.method.startsWith('paymentIntents'))).toEqual([]);
+  });
+
+  it('nor from another account in direct mode, after the shop went back to a key of its own', async () => {
+    // Connect mode: a fee charged on the shop's connected account, whose answer was lost.
+    await connectedShop(h);
+    await protectionOn();
+    const id = await noShow(await saveCard());
+    h.stripe.loseNextChargeAnswer = true;
+    expect((await charge(id)).status).toBe(500);
+    // Direct mode again, with a key of another Stripe account.
+    const other = new FakeStripe(() => h.now);
+    separateAccounts(SHOP_OWN_KEY, other, h.stripe);
+    h.config.stripeConnect = false;
+    h.config.stripeSecretKey = SHOP_OWN_KEY;
+    const again = await charge(id);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toEqual({ code: 'not_chargeable', message: UNCHECKABLE_FEE_MESSAGE });
+    expect(await feeOf(id)).toMatchObject({ status: 'pending' });
   });
 });

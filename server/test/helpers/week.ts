@@ -39,13 +39,18 @@ function ok<T = any>(res: CallResult<T>, status = 200): T {
   return res.body;
 }
 
-/** A signed Stripe webhook delivery. */
-export async function sendWebhook(h: Harness, type: string, object: Record<string, unknown>): Promise<CallResult> {
+/** A signed Stripe webhook delivery: an event Stripe made at `created` (Unix seconds; now by default). */
+export async function sendWebhook(
+  h: Harness,
+  type: string,
+  object: Record<string, unknown>,
+  created = Math.floor(h.now.getTime() / 1000),
+): Promise<CallResult> {
   const payload = JSON.stringify({
     id: `evt_fixture_${Math.random().toString(36).slice(2, 10)}`,
     object: 'event',
     api_version: '2026-10-28.endive',
-    created: Math.floor(h.now.getTime() / 1000),
+    created,
     type,
     livemode: false,
     pending_webhooks: 1,

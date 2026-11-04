@@ -267,14 +267,21 @@ async function insertSale(
   tx: Queryable,
   deps: Pick<Deps, 'uuid'>,
   draft: SaleDraft,
-  options: { method: SaleMethod; paymentIntentId: string | null; soldAt: Date; idempotencyKey: string | undefined; appointment: AppointmentRow | null },
+  options: {
+    method: SaleMethod;
+    paymentIntentId: string | null;
+    soldAt: Date;
+    now: Date;
+    idempotencyKey: string | undefined;
+    appointment: AppointmentRow | null;
+  },
 ): Promise<string> {
   const id = deps.uuid();
   const appointmentId = options.appointment?.id ?? null;
   await tx.query(
     `INSERT INTO sales (id, barber_id, appointment_id, customer_name, method, payment_intent_id, total_cents, sold_at,
                         idempotency_key_hash, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $8, $8)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $10)`,
     [
       id,
       draft.barberId,
@@ -285,6 +292,7 @@ async function insertSale(
       draft.totalCents,
       options.soldAt,
       options.idempotencyKey ? hashManageToken(options.idempotencyKey) : null,
+      options.now,
     ],
   );
   const items = draft.items.map((item, position) => ({
@@ -314,11 +322,11 @@ async function insertSale(
               payment_status = CASE WHEN card.paid THEN a.payment_status ELSE 'paid' END,
               paid_cents = CASE WHEN card.paid THEN a.paid_cents ELSE $3 END,
               paid_at = CASE WHEN card.paid THEN a.paid_at ELSE $5 END,
-              updated_at = $5
+              updated_at = $6
          FROM (SELECT EXISTS (SELECT 1 FROM payments
                                WHERE appointment_id = $1 AND status = 'succeeded' AND kind = 'in_person') AS paid) card
         WHERE a.id = $1`,
-      [appointmentId, id, draft.totalCents, options.method, options.soldAt],
+      [appointmentId, id, draft.totalCents, options.method, options.soldAt, options.now],
     );
   }
   return id;
@@ -464,7 +472,7 @@ export async function postSale(ctx: Context): Promise<Response> {
     const id = await ctx.deps.db.transaction(async (tx) => {
       // The appointment's row stays locked until the sale is in, so two checkouts can't both take it.
       const { draft, appointment } = await draftTicket(tx, ctx.deps.catalog, body, true);
-      return insertSale(tx, ctx.deps, draft, { method, paymentIntentId: null, soldAt: now, idempotencyKey: key, appointment });
+      return insertSale(tx, ctx.deps, draft, { method, paymentIntentId: null, soldAt: now, now, idempotencyKey: key, appointment });
     });
     const sale = await loadSale(ctx.deps.db, id);
     if (!sale) throw new Error('A sale just recorded is missing');
@@ -508,11 +516,51 @@ const voidBody = z.object({ reason: optionalText(200, 'Keep the reason to 200 ch
 
 const VOIDED_MESSAGE = 'The sale was voided, so it no longer counts in your sales.';
 const VOIDED_CARD_MESSAGE = `${VOIDED_MESSAGE} Voiding doesn't refund the card: refunds are made in the Stripe Dashboard.`;
+const CARD_TOOK_OVER_MESSAGE = `${VOIDED_MESSAGE} The card payment taken for this appointment is its checkout now.`;
+
+/**
+ * A card sale meant for `appointmentId` but recorded without it, because the appointment had been
+ * checked out another way while the card went through (recordCardSale), takes the appointment back
+ * once that other sale is voided: the card paid for this visit, so it's the appointment's sale, and
+ * its payment marks the appointment paid. Otherwise the visit would count twice (as an appointment
+ * marked done without a sale, and as the card sale) and look unpaid. The earliest such sale, if
+ * there's more than one. Whether one took the appointment back.
+ */
+async function linkWaitingCardSale(tx: Queryable, appointmentId: string, now: Date): Promise<boolean> {
+  const { rows } = await tx.query<{ id: string; payment_intent_id: string; total_cents: number; sold_at: Date }>(
+    `SELECT s.id, s.payment_intent_id, s.total_cents, s.sold_at
+       FROM sales s JOIN payments p ON p.id = s.payment_intent_id
+      WHERE s.method = 'card' AND s.voided_at IS NULL AND s.appointment_id IS NULL
+        AND p.status = 'succeeded' AND p.kind = 'in_person' AND p.sale_draft->>'appointmentId' = $1::text
+        AND EXISTS (SELECT 1 FROM appointments a WHERE a.id = $1::uuid AND a.status = 'completed' AND a.sale_id IS NULL)
+      ORDER BY s.sold_at, s.id
+      LIMIT 1
+      FOR UPDATE OF s, p`,
+    [appointmentId],
+  );
+  const card = rows[0];
+  if (!card) return false;
+  await tx.query('UPDATE sales SET appointment_id = $2, updated_at = $3 WHERE id = $1', [card.id, appointmentId, now]);
+  await tx.query('UPDATE payments SET appointment_id = $2, updated_at = $3 WHERE id = $1', [card.payment_intent_id, appointmentId, now]);
+  // Paid by the card, as syncPayment marks it: the appointment's succeeded in-person payments, now with this one.
+  await tx.query(
+    `UPDATE appointments a
+        SET sale_id = $2, sale_total_cents = $3, sale_method = 'card',
+            payment_status = 'paid', paid_cents = s.total, paid_at = COALESCE(a.paid_at, $4), payment_intent_id = $5, updated_at = $6
+       FROM (SELECT COALESCE(sum(amount_cents), 0)::int AS total FROM payments
+              WHERE appointment_id = $1 AND status = 'succeeded' AND kind = 'in_person') s
+      WHERE a.id = $1`,
+    [appointmentId, card.id, card.total_cents, card.sold_at, card.payment_intent_id, now],
+  );
+  return true;
+}
 
 /**
  * Voids a sale: it stops counting, and its appointment (which stays completed) can be checked
  * out again. A cash or other sale's appointment is unpaid again, unless succeeded card payments
- * paid it. Voiding a card sale doesn't refund the card; refunds are made in the Stripe Dashboard.
+ * paid it; a card sale for that appointment that had to be recorded without it takes it back
+ * (`linkWaitingCardSale`). Voiding a card sale doesn't refund the card; refunds are made in the
+ * Stripe Dashboard.
  */
 export async function voidSale(ctx: Context): Promise<Response> {
   await requireOwner(ctx);
@@ -521,33 +569,34 @@ export async function voidSale(ctx: Context): Promise<Response> {
   if (!UUID_RE.test(id)) throw notFound();
   const { reason } = parse(voidBody, await readOptionalJsonObject(ctx.request));
   const now = ctx.deps.now();
-  await ctx.deps.db.transaction(async (tx) => {
+  const cardTookOver = await ctx.deps.db.transaction(async (tx) => {
     const { rows } = await tx.query<{ appointment_id: string | null; voided_at: Date | null }>(
       'SELECT appointment_id, voided_at FROM sales WHERE id = $1 FOR UPDATE',
       [id],
     );
     const sale = rows[0];
     if (!sale) throw notFound();
-    if (sale.voided_at !== null) return;
+    if (sale.voided_at !== null) return false;
     await tx.query('UPDATE sales SET voided_at = $2, void_reason = $3, updated_at = $2 WHERE id = $1', [id, now, reason]);
-    if (sale.appointment_id !== null) {
-      await tx.query(
-        `UPDATE appointments a
-            SET sale_id = NULL, sale_total_cents = NULL, sale_method = NULL,
-                payment_status = CASE WHEN card.paid THEN a.payment_status ELSE 'unpaid' END,
-                paid_cents = CASE WHEN card.paid THEN a.paid_cents ELSE NULL END,
-                paid_at = CASE WHEN card.paid THEN a.paid_at ELSE NULL END,
-                updated_at = $3
-           FROM (SELECT EXISTS (SELECT 1 FROM payments
-                                 WHERE appointment_id = $1 AND status = 'succeeded' AND kind = 'in_person') AS paid) card
-          WHERE a.id = $1 AND a.sale_id = $2`,
-        [sale.appointment_id, id, now],
-      );
-    }
+    if (sale.appointment_id === null) return false;
+    await tx.query(
+      `UPDATE appointments a
+          SET sale_id = NULL, sale_total_cents = NULL, sale_method = NULL,
+              payment_status = CASE WHEN card.paid THEN a.payment_status ELSE 'unpaid' END,
+              paid_cents = CASE WHEN card.paid THEN a.paid_cents ELSE NULL END,
+              paid_at = CASE WHEN card.paid THEN a.paid_at ELSE NULL END,
+              updated_at = $3
+         FROM (SELECT EXISTS (SELECT 1 FROM payments
+                               WHERE appointment_id = $1 AND status = 'succeeded' AND kind = 'in_person') AS paid) card
+        WHERE a.id = $1 AND a.sale_id = $2`,
+      [sale.appointment_id, id, now],
+    );
+    return linkWaitingCardSale(tx, sale.appointment_id, now);
   });
   const sale = await loadSale(ctx.deps.db, id);
   if (!sale) throw notFound();
-  return json({ sale: saleJSON(sale), message: sale.row.method === 'card' ? VOIDED_CARD_MESSAGE : VOIDED_MESSAGE });
+  const message = sale.row.method === 'card' ? VOIDED_CARD_MESSAGE : cardTookOver ? CARD_TOOK_OVER_MESSAGE : VOIDED_MESSAGE;
+  return json({ sale: saleJSON(sale), message });
 }
 
 // Card sales: the ticket travels with the payment (payments.ts) and is recorded when it succeeds.
@@ -607,17 +656,20 @@ const storedDraft = z.object({
  * Records a card checkout's sale once its payment succeeded. syncPayment calls it in the
  * transaction that marks the payment succeeded (the …/complete call or Stripe's webhook,
  * whichever comes first): the payment row is locked and a payment has at most one sale, so it
- * happens exactly once. The sale is sold at `now`. If its appointment can't take it any more
- * (another sale checked it out meanwhile, or it was cancelled or marked a no-show), the sale is
- * recorded without the appointment, so the money still counts, the payment lets go of the
- * appointment too, and that's logged. Returns the sale's id, or null when the payment has no
- * ticket (or isn't a succeeded in-person payment).
+ * happens exactly once. The sale is sold when Stripe says the payment went through
+ * (payments.succeeded_at), so a webhook that comes late, or an app that confirms the next
+ * morning, still puts it on the right day; `now` without one. If its appointment can't take it
+ * any more (another sale checked it out meanwhile, or it was cancelled or marked a no-show), the
+ * sale is recorded without the appointment, so the money still counts, the payment lets go of the
+ * appointment too, and that's logged (voiding the other sale gives the appointment back to this
+ * one: see `voidSale`). Returns the sale's id, or null when the payment has no ticket (or isn't a
+ * succeeded in-person payment).
  */
 export async function recordCardSale(tx: Queryable, deps: Pick<Deps, 'uuid' | 'log'>, paymentId: string, now: Date): Promise<string | null> {
   // Locked, then checked again: a …/complete and a webhook for the same payment take turns here,
   // and the second finds the first one's sale.
-  const { rows } = await tx.query<{ status: string; kind: string; sale_draft: unknown }>(
-    'SELECT status, kind, sale_draft FROM payments WHERE id = $1 FOR UPDATE',
+  const { rows } = await tx.query<{ status: string; kind: string; sale_draft: unknown; succeeded_at: Date | null }>(
+    'SELECT status, kind, sale_draft, succeeded_at FROM payments WHERE id = $1 FOR UPDATE',
     [paymentId],
   );
   const payment = rows[0];
@@ -653,6 +705,6 @@ export async function recordCardSale(tx: Queryable, deps: Pick<Deps, 'uuid' | 'l
     tx,
     deps,
     { ...draft, appointmentId: appointment?.id ?? null },
-    { method: 'card', paymentIntentId: paymentId, soldAt: now, idempotencyKey: undefined, appointment },
+    { method: 'card', paymentIntentId: paymentId, soldAt: payment.succeeded_at ?? now, now, idempotencyKey: undefined, appointment },
   );
 }

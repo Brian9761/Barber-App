@@ -127,14 +127,15 @@ describe('with Stripe configured', () => {
         saleId: null,
       },
     });
+    // Paid when the card went through (Stripe's charge), not when the app confirmed it three minutes later.
     const paid = await h.call('GET', '/api/owner/appointments?date=2026-11-02', { owner: true });
-    expect(paid.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:13:00Z' });
+    expect(paid.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:10:00Z' });
 
     // Calling again changes nothing.
     h.advance(10);
     await complete();
     const again = await h.call('GET', '/api/owner/appointments?date=2026-11-02', { owner: true });
-    expect(again.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:13:00Z' });
+    expect(again.body.appointments[0].payment).toEqual({ status: 'paid', amountCents: 3500, paidAt: '2026-11-02T19:10:00Z' });
   });
 
   it('adds up two payments for one appointment', async () => {

@@ -31,7 +31,7 @@ This page explains every number in plain words. The names in parentheses
 | **Services** (`servicesCents`, `servicesCount`) | Services on sales, plus appointments marked Done without a checkout (each counts once, at its booked price). A sale counts on the day it was rung up; an appointment without one counts on its day. |
 | **Products** (`productsCents`, `productsCount`) | Products on sales: the money, and how many were sold. |
 | **Other** (`otherCents`) | Custom items, like gift cards. |
-| **Fees** (`feesCents`) | No-show and late-cancellation fees Stripe charged. They count on the day they were charged, for the barber of that appointment. |
+| **Fees** (`feesCents`) | No-show and late-cancellation fees Stripe charged. They count on the day they were charged (when Stripe says the charge went through, even if that was days after you tried it), for the barber of that appointment. |
 | **Checkouts** (`checkouts`) | Sales, plus appointments marked Done without a checkout. |
 | **Clients served** (`clientsServed`) | Appointments marked Done, plus sales to walk-ins (sales without an appointment). |
 | **Average ticket** (`averageTicketCents`) | (Services + products + other) divided by checkouts. Fees aren't part of it. |
@@ -94,10 +94,15 @@ The leaderboard and the top barber stay the whole shop's.
   Done and can be checked out again. If it isn't checked out again, it
   counts like any appointment marked Done without a checkout, at its booked
   price; mark it cancelled if it shouldn't count at all.
+- **Rung up twice by mistake** (say, in cash while the client's card was
+  going through): both sales count until you void one. If you void the cash
+  one, the card payment becomes the appointment's checkout, so the visit
+  still counts once, as paid by card.
 - **Voiding a card sale doesn't refund the card.** Refunds are made in the
   Stripe Dashboard.
 - **A card sale counts when the payment goes through**, normally a few
-  seconds after the tap.
+  seconds after the tap. If the app only confirms it later (say, the next
+  morning), it still counts on the day the card went through.
 - **A barber who leaves the team** still counts in the shop's numbers for
   the time he worked, but he's no longer on the leaderboard and his open
   hours stop counting.

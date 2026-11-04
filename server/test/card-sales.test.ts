@@ -85,6 +85,7 @@ describe('a card checkout', () => {
     expect(await salesFor(id)).toEqual([]);
     expect((await ownerAppointment(appointment)).sale).toBeNull();
 
+    // The card goes through at 11:10; the app confirms it two minutes later.
     h.stripe.succeed(id);
     h.advance(2);
     const done = await complete(id);
@@ -107,7 +108,8 @@ describe('a card checkout', () => {
           { kind: 'service', serviceId: 'haircut', productId: null, name: 'Haircut', quantity: 1, unitCents: 3500, totalCents: 3500 },
           { kind: 'product', serviceId: null, productId: product, name: 'Matte pomade', quantity: 1, unitCents: 1800, totalCents: 1800 },
         ],
-        soldAt: '2026-11-02T19:12:00Z',
+        // When the card went through (Stripe's charge), not when the app confirmed it.
+        soldAt: '2026-11-02T19:10:00Z',
         voidedAt: null,
         voidReason: null,
       },
@@ -115,7 +117,7 @@ describe('a card checkout', () => {
     // The appointment is completed and paid by the card, with its sale.
     expect(await ownerAppointment(appointment)).toMatchObject({
       status: 'completed',
-      payment: { status: 'paid', amountCents: 5300, paidAt: '2026-11-02T19:12:00Z' },
+      payment: { status: 'paid', amountCents: 5300, paidAt: '2026-11-02T19:10:00Z' },
       sale: { id: saleId, totalCents: 5300, method: 'card' },
     });
     // Asking again, and Stripe's webhook later, record nothing more.
@@ -228,10 +230,64 @@ describe('a card checkout', () => {
       sale: { id: cash.body.sale.id, method: 'cash', totalCents: 3500 },
       payment: { status: 'paid', amountCents: 3500 },
     });
-    // Both count in the day's sales, and voiding the cash one leaves the appointment unpaid.
+    // Both count in the day's sales until the owner sorts it out.
     expect((await h.call('GET', '/api/owner/sales?date=2026-11-02', owner)).body.totals).toEqual({ totalCents: 3500 + 5300, count: 2 });
-    await h.call('POST', `/api/owner/sales/${cash.body.sale.id}/void`, { ...owner, body: {} });
-    expect((await ownerAppointment(appointment)).payment).toEqual({ status: 'unpaid', amountCents: null, paidAt: null });
+  });
+
+  it('…and when the client really paid by card, voiding the cash sale gives the appointment to the card sale: paid by the card, counted once', async () => {
+    configureStripe();
+    const { appointment, sale } = await ticket();
+    const id = (await pay({ amountCents: 5300, sale })).body.paymentIntentId;
+    const cash = await h.call('POST', '/api/owner/sales', { ...owner, body: { method: 'cash', appointmentId: appointment, items: [{ kind: 'service', serviceId: 'haircut' }] } });
+    h.stripe.succeed(id);
+    const cardSale = (await complete(id)).body.payment.saleId;
+    h.advance(5);
+
+    const voided = await h.call('POST', `/api/owner/sales/${cash.body.sale.id}/void`, { ...owner, body: { reason: 'Paid by card' } });
+    expect(voided.status).toBe(200);
+    expect(voided.body.message).toBe('The sale was voided, so it no longer counts in your sales. The card payment taken for this appointment is its checkout now.');
+    expect(await ownerAppointment(appointment)).toMatchObject({
+      status: 'completed',
+      sale: { id: cardSale, method: 'card', totalCents: 5300 },
+      payment: { status: 'paid', amountCents: 5300, paidAt: '2026-11-02T19:10:00Z' },
+    });
+    expect(await salesFor(id)).toEqual([expect.objectContaining({ id: cardSale, appointment_id: appointment })]);
+    expect((await complete(id)).body.payment).toMatchObject({ appointmentId: appointment, saleId: cardSale });
+    // One haircut and one pomade, counted once.
+    const day = await h.call('GET', '/api/owner/analytics?from=2026-11-02&to=2026-11-02', owner);
+    expect(day.body.totals).toMatchObject({ salesCents: 5300, servicesCount: 1, productsCount: 1, checkouts: 1, clientsServed: 1 });
+    // Voiding the card sale too frees the appointment again; the card still paid it.
+    await h.call('POST', `/api/owner/sales/${cardSale}/void`, { ...owner, body: {} });
+    expect(await ownerAppointment(appointment)).toMatchObject({ sale: null, payment: { status: 'paid', amountCents: 5300 } });
+  });
+
+  it('is sold when the card went through, even when Stripe’s webhook, or the app’s confirmation, comes after midnight', async () => {
+    configureStripe();
+    // Monday Nov 2, 11:50 PM: two walk-ins pay by card.
+    h.setNow('2026-11-03T07:50:00Z');
+    const walkInSale = { barberId: 'flowxbori', items: [{ kind: 'service', serviceId: 'haircut', unitCents: 3500 }] };
+    const viaWebhook = (await pay({ amountCents: 3500, sale: walkInSale })).body.paymentIntentId;
+    const viaApp = (await pay({ amountCents: 3500, sale: walkInSale })).body.paymentIntentId;
+    h.setNow('2026-11-03T07:50:05Z');
+    h.stripe.succeed(viaWebhook);
+    h.stripe.succeed(viaApp);
+    // The app was closed: Stripe's event, made at 11:50 PM, arrives on a retry at 12:20 AM Tuesday.
+    h.setNow('2026-11-03T08:20:00Z');
+    const late = await sendWebhook(h, 'payment_intent.succeeded', { object: 'payment_intent', id: viaWebhook, status: 'succeeded' }, Date.parse('2026-11-03T07:50:05Z') / 1000);
+    expect(late.status).toBe(200);
+    // The other one is confirmed by the app on Tuesday morning.
+    h.setNow('2026-11-03T16:00:00Z');
+    expect((await complete(viaApp)).body.payment.status).toBe('succeeded');
+
+    const monday = (await h.call('GET', '/api/owner/sales?date=2026-11-02', owner)).body;
+    expect(monday.totals).toEqual({ totalCents: 7000, count: 2 });
+    expect(monday.sales.map((s: { soldAt: string }) => s.soldAt)).toEqual(['2026-11-03T07:50:05Z', '2026-11-03T07:50:05Z']);
+    expect((await h.call('GET', '/api/owner/sales?date=2026-11-03', owner)).body.totals).toEqual({ totalCents: 0, count: 0 });
+    const analytics = (await h.call('GET', '/api/owner/analytics?from=2026-11-02&to=2026-11-03', owner)).body;
+    expect(analytics.series.map((d: { date: string; salesCents: number }) => [d.date, d.salesCents])).toEqual([
+      ['2026-11-02', 7000],
+      ['2026-11-03', 0],
+    ]);
   });
 
   it('an appointment cancelled meanwhile: recorded without it too', async () => {

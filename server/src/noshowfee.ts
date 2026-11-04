@@ -6,7 +6,16 @@ import type { Deps } from './deps.js';
 import { FEE_KIND, feeCase, isFeeKind, nothingCharged, reasonOfKind, type FeeKind, type FeeReason } from './feecase.js';
 import { ApiError, json } from './http.js';
 import type { Context } from './router.js';
-import { accountMatch, requestOptions, shopStripe, stripeFailure, type ShopStripe, type StripeErrorLike } from './stripeaccount.js';
+import {
+  accountMatch,
+  requestOptions,
+  shopStripe,
+  stripeFailure,
+  stripeSetup,
+  succeededAt,
+  type ShopStripe,
+  type StripeErrorLike,
+} from './stripeaccount.js';
 import { appointmentJSON, type AppointmentRow, type NoShowFeeRowStatus } from './serialize.js';
 import { UUID_RE } from './validation.js';
 
@@ -38,6 +47,9 @@ import { UUID_RE } from './validation.js';
 const notFound = () => new ApiError('not_found', "We couldn't find that appointment.");
 const notChargeable = (message: string) => new ApiError('not_chargeable', message);
 export const OLD_ACCOUNT_MESSAGE = "This card was saved with the shop's old Stripe account.";
+/** A fee whose answer was lost, on a card Stripe can't be asked about from here (see `chargeNoShowFee`). */
+export const UNCHECKABLE_FEE_MESSAGE =
+  "This card was saved with the shop's old Stripe account, so the app can't check whether its fee went through. Look for it in that Stripe account's Dashboard.";
 /** A card saved while the shop's Stripe was in the other mode (test or live) is only there, in that mode. */
 const otherModeMessage = (savedLive: boolean) =>
   savedLive
@@ -198,6 +210,11 @@ export async function findAttemptIntent(
  * moved, so it must never look chargeable again). Anything else only counts
  * for the current attempt, and "pending" never undoes a decline of the same
  * PaymentIntent (Stripe's events can arrive out of order).
+ *
+ * A fee that succeeded is charged at `succeeded` (when Stripe says it went through,
+ * `succeededAt`; by default, when Stripe made it, since an off-session charge goes
+ * through or not right away): the appointment's chargedAt, and the day it counts in the
+ * analytics (payments.succeeded_at), even when Stripe finished it days after it was tried.
  */
 export async function recordFeeIntent(
   tx: Queryable,
@@ -205,15 +222,19 @@ export async function recordFeeIntent(
   intent: FeeIntent,
   attempt: number | null,
   now: Date,
-  override?: { status: NoShowFeeRowStatus; message: string | null },
+  options: { override?: { status: NoShowFeeRowStatus; message: string | null }; succeeded?: Date } = {},
 ): Promise<AppointmentRow | null> {
-  const { status, message } = override ?? outcomeOf(intent);
+  const { status, message } = options.override ?? outcomeOf(intent);
+  // Dated when Stripe made it, so a charge found after a lost answer lands on the day the money moved.
+  const made = typeof intent.created === 'number' ? new Date(intent.created * 1000) : null;
+  const createdAt = made && made < now ? made : now;
+  const succeeded = options.succeeded ?? createdAt;
   const { rows } = await tx.query<AppointmentRow>(
     `UPDATE appointments
         SET no_show_fee_status = $3,
             no_show_fee_payment_intent_id = $2,
             no_show_fee_message = $4,
-            no_show_fee_charged_at = CASE WHEN $3 = 'charged' THEN $5::timestamptz ELSE NULL END,
+            no_show_fee_charged_at = CASE WHEN $3 = 'charged' THEN $7::timestamptz ELSE NULL END,
             updated_at = $5
       WHERE id = $1
         AND saved_card_id IS NOT NULL
@@ -221,19 +242,16 @@ export async function recordFeeIntent(
         AND ($3 = 'charged' OR no_show_fee_attempt = $6 OR no_show_fee_payment_intent_id = $2)
         AND NOT ($3 = 'pending' AND no_show_fee_status IN ('declined', 'needs_action') AND no_show_fee_payment_intent_id = $2)
       RETURNING *`,
-    [row.id, intent.id, status, message, now, attempt],
+    [row.id, intent.id, status, message, now, attempt, succeeded],
   );
   if (row.no_show_fee_cents !== null && /^pi_[A-Za-z0-9_]+$/.test(intent.id)) {
-    // Dated when Stripe made it, so a charge found after a lost answer lands on the day the money moved.
-    const made = typeof intent.created === 'number' ? new Date(intent.created * 1000) : null;
-    const createdAt = made && made < now ? made : now;
     // succeeded and canceled are final in Stripe, so a late or replayed event can't undo them.
     await tx.query(
-      `INSERT INTO payments (id, amount_cents, description, appointment_id, status, receipt_email, created_at, updated_at, kind, stripe_account_id)
-       VALUES ($1, $2, $3, $4, $5, NULL, $8, $6, $7, $9)
-       ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at
+      `INSERT INTO payments (id, amount_cents, description, appointment_id, status, receipt_email, created_at, updated_at, kind, stripe_account_id, succeeded_at)
+       VALUES ($1, $2, $3, $4, $5, NULL, $8, $6, $7, $9, CASE WHEN $5 = 'succeeded' THEN $10::timestamptz END)
+       ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status, updated_at = EXCLUDED.updated_at, succeeded_at = EXCLUDED.succeeded_at
          WHERE payments.status <> EXCLUDED.status AND payments.status NOT IN ('succeeded', 'canceled')`,
-      [intent.id, row.no_show_fee_cents, row.description, row.id, intent.status, now, row.kind, createdAt, row.stripeAccountId],
+      [intent.id, row.no_show_fee_cents, row.description, row.id, intent.status, now, row.kind, createdAt, row.stripeAccountId, succeeded],
     );
   }
   if (rows[0]) return rows[0];
@@ -366,19 +384,28 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
   // A pending PaymentIntent (retrieve) belongs to the attempt already on the row.
   const reason: FeeReason = claim.kind === 'create' ? claim.reason : (claim.row.no_show_fee_reason ?? 'no_show');
   const description = feeDescription(claim.row, deps.catalog.timeZone, reason);
-  // Every call about this fee goes to the account the card is saved on.
+  // Every call about this fee goes to the account the card is saved on. Only there can Stripe say
+  // whether it went through: the connected account (connect mode), or the server key's own (a card
+  // saved in direct mode). A card from the other setup can't be asked about from here, and its fee
+  // is never taken for "nothing was charged".
   const cardAccount = claim.row.card_stripe_account_id ?? null;
+  const checkable = (cardAccount !== null) === (stripeSetup(deps.config) === 'connect');
+  if (!checkable && cardAccount === null) throw notChargeable(UNCHECKABLE_FEE_MESSAGE);
   const onCard = await shopStripe(deps, { account: cardAccount });
   const recordRow = { id, no_show_fee_cents: claim.row.no_show_fee_cents, description, kind: FEE_KIND[reason], stripeAccountId: cardAccount };
 
   if (claim.kind === 'retrieve') {
     let intent: Stripe.PaymentIntent;
     try {
-      intent = await onCard.stripe.paymentIntents.retrieve(claim.paymentIntentId, undefined, requestOptions(onCard));
+      // With its charge, whose time is when the fee went through (it may have taken Stripe a while).
+      intent = await onCard.stripe.paymentIntents.retrieve(claim.paymentIntentId, { expand: ['latest_charge'] }, requestOptions(onCard));
     } catch (error) {
       throw stripeFailure(deps, error, 'retrieve no-show fee');
     }
-    const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, intent, claim.row.no_show_fee_attempt, deps.now()));
+    const now = deps.now();
+    const updated = await deps.db.transaction((tx) =>
+      recordFeeIntent(tx, recordRow, intent, claim.row.no_show_fee_attempt, now, { succeeded: succeededAt(intent, now, intent.created) }),
+    );
     return json({ appointment: appointmentJSON(updated ?? claim.row) });
   }
 
@@ -397,8 +424,12 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
       return json({ appointment: appointmentJSON(updated ?? row) });
     }
     // Nothing reached Stripe: send it again (same key), unless it can't be charged any more. Then
-    // nothing was charged, so the try is settled as that instead of staying pending for good.
-    if (claim.refusal) return settleUnsent(deps, id, attempt, claim.refusal);
+    // nothing was charged, so the try is settled as that instead of staying pending for good; but
+    // only when Stripe was asked on the card's own account, where "none" really means none.
+    if (claim.refusal) {
+      if (!checkable) throw notChargeable(UNCHECKABLE_FEE_MESSAGE);
+      return settleUnsent(deps, id, attempt, claim.refusal);
+    }
   }
   let intent: Stripe.PaymentIntent;
   try {
@@ -437,7 +468,7 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
       requestId: (error as StripeErrorLike).requestId,
     });
     const updated = await deps.db.transaction(async (tx) => {
-      if (no.intent) return recordFeeIntent(tx, recordRow, no.intent, attempt, deps.now(), { status: no.status, message: no.message });
+      if (no.intent) return recordFeeIntent(tx, recordRow, no.intent, attempt, deps.now(), { override: { status: no.status, message: no.message } });
       const { rows } = await tx.query<AppointmentRow>(
         `UPDATE appointments SET no_show_fee_status = $2, no_show_fee_message = $3, updated_at = $4
           WHERE id = $1 AND no_show_fee_status = 'pending' AND no_show_fee_attempt = $5
@@ -457,7 +488,8 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
  * (no-show or late cancellation) Stripe tells us about, found by our payments row
  * or, if the server stopped before writing it, by the PaymentIntent's metadata.
  * `paymentKind` is our payments row's kind, when there is one; `stripeAccountId`
- * the account the PaymentIntent is on (null: the server's own key).
+ * the account the PaymentIntent is on (null: the server's own key); `succeeded`
+ * when Stripe says it went through (the event's time, or its charge's).
  */
 export async function syncNoShowFeeFromStripe(
   tx: Queryable,
@@ -467,6 +499,7 @@ export async function syncNoShowFeeFromStripe(
   now: Date,
   paymentKind: string | null,
   stripeAccountId: string | null,
+  succeeded?: Date,
 ): Promise<void> {
   const appointmentId = paymentAppointmentId ?? intent.metadata?.appointment_id ?? '';
   if (!UUID_RE.test(appointmentId)) return;
@@ -489,5 +522,6 @@ export async function syncNoShowFeeFromStripe(
     intent,
     attempt,
     now,
+    { succeeded },
   );
 }

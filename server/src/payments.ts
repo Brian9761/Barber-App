@@ -12,12 +12,14 @@ import { cardSaleBody, cardSaleDraft, recordCardSale } from './sales.js';
 import { PAYMENT_COLUMNS, paymentJSON, type PaymentRow } from './serialize.js';
 import {
   currentConnection,
+  keyLivemode,
   requestOptions,
   shopStripe,
   stripeFailure,
   stripeMode,
   stripeOff,
   stripeSetup,
+  succeededAt,
   type StripeErrorLike,
 } from './stripeaccount.js';
 import { accountDeauthorized, accountUpdated, connectionSummary, forgetTerminalLocation, terminalLocation } from './stripeconnect.js';
@@ -164,19 +166,22 @@ export async function createPayment(ctx: Context): Promise<Response> {
 /**
  * Records Stripe's view of a PaymentIntent and, once it succeeded, records its
  * checkout's card sale (if it has a ticket) and marks its appointment paid
- * (paid amount = all succeeded payments for it). Idempotent.
+ * (paid amount = all succeeded payments for it). Idempotent. `succeeded` is when
+ * Stripe says it went through (`succeededAt`), kept with the payment the first
+ * time it's seen as succeeded: its card sale is sold, and its appointment paid, then.
  */
 export async function syncPayment(
   db: Queryable,
   intent: Pick<Stripe.PaymentIntent, 'id' | 'status'>,
   now: Date,
   deps: Pick<Deps, 'uuid' | 'log'>,
+  succeeded: Date = now,
 ): Promise<PaymentRow | null> {
   // succeeded and canceled are final in Stripe, so a late or replayed event can't undo them.
   await db.query(
-    `UPDATE payments SET status = $2, updated_at = $3
+    `UPDATE payments SET status = $2, updated_at = $3, succeeded_at = CASE WHEN $2 = 'succeeded' THEN $4::timestamptz END
       WHERE id = $1 AND status <> $2 AND status NOT IN ('succeeded', 'canceled')`,
-    [intent.id, intent.status, now],
+    [intent.id, intent.status, now, succeeded],
   );
   const { rows } = await db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [intent.id]);
   let row = rows[0];
@@ -194,10 +199,12 @@ export async function syncPayment(
       `UPDATE appointments a
           SET payment_status = 'paid',
               paid_cents = s.total,
-              paid_at = COALESCE(a.paid_at, $3),
+              paid_at = COALESCE(a.paid_at, s.succeeded_at, $3),
               payment_intent_id = $2,
               updated_at = $3
-         FROM (SELECT COALESCE(sum(amount_cents), 0)::int AS total FROM payments
+         FROM (SELECT COALESCE(sum(amount_cents), 0)::int AS total,
+                      (SELECT succeeded_at FROM payments WHERE id = $2) AS succeeded_at
+                 FROM payments
                 WHERE appointment_id = $1 AND status = 'succeeded' AND kind = 'in_person') s
         WHERE a.id = $1`,
       [row.appointment_id, row.id, now],
@@ -225,20 +232,22 @@ export async function completePayment(ctx: Context): Promise<Response> {
 
   let intent: Stripe.PaymentIntent;
   try {
-    intent = await shop.stripe.paymentIntents.retrieve(id, undefined, requestOptions(shop));
+    // With its charge, whose time is when the card went through (the app may confirm much later).
+    intent = await shop.stripe.paymentIntents.retrieve(id, { expand: ['latest_charge'] }, requestOptions(shop));
   } catch (error) {
     throw stripeFailure(ctx.deps, error, 'retrieve payment');
   }
   if (intent.id !== id) throw notFound();
   const now = ctx.deps.now();
+  const succeeded = succeededAt(intent, now);
   const row = await ctx.deps.db.transaction(async (tx) => {
     // A fee (no-show or late cancellation) checked this way keeps its appointment's fee right too (and never marks it paid).
     if (isFeeKind(payment.kind)) {
-      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now, payment.kind, payment.stripe_account_id);
+      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now, payment.kind, payment.stripe_account_id, succeeded);
       const { rows } = await tx.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [id]);
       return rows[0] ?? null;
     }
-    return syncPayment(tx, intent, now, ctx.deps);
+    return syncPayment(tx, intent, now, ctx.deps, succeeded);
   });
   if (!row) throw notFound();
   // `status` is Stripe's: "succeeded" means the money is in. Anything else is not paid (yet).
@@ -324,6 +333,11 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
   const payload = await readText(ctx.request, 512 * 1024);
   const event = verifiedEvent(payload, signature, secrets);
   if (!event) throw new ApiError('invalid_request', "The webhook signature doesn't match.");
+  // Only events of the key's mode count: a live Connect endpoint also gets the connected accounts'
+  // test-mode events (a test payment in the shop's Dashboard, or `stripe trigger`), which must
+  // never mark a real booking's fee charged or a real payment paid.
+  const live = keyLivemode(config);
+  if (live !== null && typeof event.livemode === 'boolean' && event.livemode !== live) return json({ received: true });
   // Set on events from a connected account (the Connect endpoint).
   const account = typeof event.account === 'string' && event.account !== '' ? event.account : null;
 
@@ -353,6 +367,8 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
     if (object.object === 'payment_intent' && typeof object.id === 'string' && typeof object.status === 'string') {
       const intent = { id: object.id, status: object.status as Stripe.PaymentIntent.Status };
       const now = ctx.deps.now();
+      // When it happened at Stripe: the event's own time, which stays the same when Stripe sends it again later.
+      const succeeded = succeededAt({}, now, event.created);
       await ctx.deps.db.transaction(async (tx) => {
         const { rows } = await tx.query<PaymentRecord>('SELECT kind, appointment_id, stripe_account_id FROM payments WHERE id = $1', [
           intent.id,
@@ -374,10 +390,11 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
             now,
             known?.kind ?? null,
             known ? known.stripe_account_id : account,
+            succeeded,
           );
           return;
         }
-        await syncPayment(tx, intent, now, ctx.deps);
+        await syncPayment(tx, intent, now, ctx.deps, succeeded);
       });
     }
   }

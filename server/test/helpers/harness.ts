@@ -74,6 +74,8 @@ export class FakeStripe implements StripeClient {
   private readonly accountKeys = new Map<string, { params: string; id: string }>();
   /** Idempotency keys Stripe has seen, with what it answered (like Stripe, a repeat gets the same answer). */
   private readonly idempotent = new Map<string, { params: string; intent?: Stripe.PaymentIntent; error?: unknown }>();
+  /** When each charge was made (Unix seconds), by id: a PaymentIntent's `latest_charge`, once its card went through. */
+  private readonly charges = new Map<string, number>();
   private counter = 0;
 
   /** Stripe's clock (the test's), for each PaymentIntent's `created`. */
@@ -275,7 +277,7 @@ export class FakeStripe implements StripeClient {
       const limit = params.limit ?? 10;
       return { object: 'list', url: '/v1/payment_intents', data: all.slice(0, limit), has_more: all.length > limit } as Stripe.ApiList<Stripe.PaymentIntent>;
     },
-    retrieve: async (id: string, _params?: Stripe.PaymentIntentRetrieveParams, options?: Stripe.RequestOptions) => {
+    retrieve: async (id: string, params?: Stripe.PaymentIntentRetrieveParams, options?: Stripe.RequestOptions) => {
       this.calls.push({ method: 'paymentIntents.retrieve', params: id, options });
       this.maybeFail();
       const intent = this.intents.get(id);
@@ -286,9 +288,21 @@ export class FakeStripe implements StripeClient {
           statusCode: 404,
         });
       }
+      // Like Stripe, `expand: ['latest_charge']` answers with the charge (and when it was made) instead of its id.
+      const charge = typeof intent.latest_charge === 'string' ? intent.latest_charge : null;
+      if (charge && params?.expand?.includes('latest_charge')) {
+        return { ...intent, latest_charge: { id: charge, object: 'charge', created: this.charges.get(charge) } } as unknown as Stripe.PaymentIntent;
+      }
       return intent;
     },
   };
+
+  /** The card went through now: the PaymentIntent's charge, made at Stripe's clock (the test's). */
+  private charge(intent: Stripe.PaymentIntent): void {
+    const id = `ch_${intent.id.replace(/^pi_/, '')}`;
+    this.charges.set(id, Math.floor(this.clock().getTime() / 1000));
+    Object.assign(intent, { status: 'succeeded', amount_received: intent.amount, latest_charge: id });
+  }
 
   private makeIntent(params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions): Stripe.PaymentIntent {
     {
@@ -334,7 +348,7 @@ export class FakeStripe implements StripeClient {
         );
       }
       if (outcome === 'succeed') {
-        Object.assign(intent, { status: 'succeeded', amount_received: intent.amount });
+        this.charge(intent);
         return intent;
       }
       if (outcome === 'processing' || outcome === 'requires_action') {
@@ -414,11 +428,11 @@ export class FakeStripe implements StripeClient {
     return session;
   }
 
-  /** What happens when the card is tapped and approved. */
+  /** What happens when the card is tapped and approved (now, by the test's clock). */
   succeed(id: string): Stripe.PaymentIntent {
     const intent = this.intents.get(id);
     if (!intent) throw new Error(`unknown ${id}`);
-    Object.assign(intent, { status: 'succeeded', amount_received: intent.amount });
+    this.charge(intent);
     return intent;
   }
 

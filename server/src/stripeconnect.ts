@@ -17,8 +17,10 @@ import {
   connectionMessage,
   connectionStatus,
   currentConnection,
+  keyFingerprint,
   keyLivemode,
-  loadConnection,
+  loadConnections,
+  OTHER_MODE_SETTINGS_KEY,
   parseConnection,
   platformStripe,
   requestOptions,
@@ -43,9 +45,10 @@ import { parse } from './validation.js';
 //    needs), stores its id, and answers with a link to Stripe's own onboarding, where the owner
 //    signs in or signs up and finishes setting up.
 // 2. Stripe sends the browser back to GET /api/stripe/connect/return?state=… (or, when the link
-//    has expired, …/refresh?state=…, which makes a new link). The state is 32 random bytes, kept
-//    as a SHA-256 for an hour. The return page reads the account's status from Stripe and sends
-//    the owner on to the app (izzyclipzbusiness://stripe-connected?status=…) or to the
+//    has expired, …/refresh?state=…, which makes a new link). Each way back has a state of its
+//    own, 32 random bytes kept as a SHA-256 for an hour: the return page's can be loaded again,
+//    the refresh page's works once. The return page reads the account's status from Stripe and
+//    sends the owner on to the app (izzyclipzbusiness://stripe-connected?status=…) or to the
 //    website's Business settings.
 // 3. GET /api/owner/stripe is what Settings shows, read live from Stripe; the account.updated
 //    webhook keeps the cache fresh too.
@@ -150,8 +153,19 @@ async function lockConnect(tx: Queryable): Promise<void> {
   await tx.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [CONNECT_LOCK]);
 }
 
-async function saveConnection(db: Queryable, connection: StripeConnection, now: Date): Promise<void> {
-  await db.query(
+/**
+ * Stores a new connection (made with the key's mode; the caller holds the lock). One of the other
+ * mode (test or live) stored before is kept aside rather than replaced, so a tap on Connect Stripe
+ * while the server briefly has a test key can never take the place of the live account.
+ */
+async function saveConnection(tx: Queryable, connection: StripeConnection, now: Date): Promise<void> {
+  await tx.query(
+    `INSERT INTO settings (key, value, updated_at)
+     SELECT $2, value, $3 FROM settings WHERE key = $1 AND (value->>'livemode')::boolean IS DISTINCT FROM $4
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+    [CONNECT_SETTINGS_KEY, OTHER_MODE_SETTINGS_KEY, now, connection.livemode],
+  );
+  await tx.query(
     `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2::jsonb, $3)
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
     [CONNECT_SETTINGS_KEY, JSON.stringify(connection), now],
@@ -159,30 +173,28 @@ async function saveConnection(db: Queryable, connection: StripeConnection, now: 
 }
 
 /**
- * Merges `fields` into the stored connection, only while it's still the one for `accountId`
- * (a disconnect, or a new account, that happened meanwhile wins). Null when it isn't.
+ * Merges `fields` into the stored connection for `accountId`, only while it's still stored (a
+ * disconnect, or a new account, that happened meanwhile wins). Null when it isn't.
  */
 async function updateConnection(db: Queryable, accountId: string, fields: Partial<StripeConnection>, now: Date): Promise<StripeConnection | null> {
   const { rows } = await db.query<{ value: unknown }>(
     `UPDATE settings SET value = value || $3::jsonb, updated_at = $4
-      WHERE key = $1 AND value->>'accountId' = $2
+      WHERE key = ANY($1::text[]) AND value->>'accountId' = $2
       RETURNING value`,
-    [CONNECT_SETTINGS_KEY, accountId, JSON.stringify(fields), now],
+    [[CONNECT_SETTINGS_KEY, OTHER_MODE_SETTINGS_KEY], accountId, JSON.stringify(fields), now],
   );
   return parseConnection(rows[0]?.value);
 }
 
 /**
- * Forgets the shop's account (only if it's still `accountId`, when given), and counts it, so the
- * next connection makes a new account. The account itself stays at Stripe.
+ * Forgets the shop's account `accountId` (if it's still stored), and counts it, so the next
+ * connection makes a new account. The account itself stays at Stripe.
  */
-async function forgetConnection(tx: Queryable, now: Date, accountId?: string): Promise<boolean> {
-  const { rowCount } = await tx.query(
-    accountId === undefined
-      ? 'DELETE FROM settings WHERE key = $1'
-      : `DELETE FROM settings WHERE key = $1 AND value->>'accountId' = $2`,
-    accountId === undefined ? [CONNECT_SETTINGS_KEY] : [CONNECT_SETTINGS_KEY, accountId],
-  );
+async function forgetConnection(tx: Queryable, now: Date, accountId: string): Promise<boolean> {
+  const { rowCount } = await tx.query(`DELETE FROM settings WHERE key = ANY($1::text[]) AND value->>'accountId' = $2`, [
+    [CONNECT_SETTINGS_KEY, OTHER_MODE_SETTINGS_KEY],
+    accountId,
+  ]);
   if (!rowCount) return false;
   await tx.query(
     `INSERT INTO settings (key, value, updated_at) VALUES ($1, '{"disconnects": 1}'::jsonb, $2)
@@ -196,11 +208,16 @@ async function forgetConnection(tx: Queryable, now: Date, accountId?: string): P
 }
 
 /**
- * Reads the connected account's status from Stripe and caches it; once it can take card
- * payments, its Terminal location is made too (so Tap to Pay finds it in GET /api/owner/me).
- * Null when the shop disconnected it meanwhile, or when Stripe says the platform can't use it
- * any more (the shop took the access away): then it's forgotten, and Settings asks to connect
- * again. Any other Stripe failure is logged and thrown (stripeFailure).
+ * Reads the connected account's status from Stripe and caches it (with the key that read it);
+ * once it can take card payments, its Terminal location is made too (so Tap to Pay finds it in
+ * GET /api/owner/me). Null when the shop disconnected it meanwhile, or when Stripe says the
+ * platform can't use it any more (the shop took the access away): then it's forgotten, and
+ * Settings asks to connect again. Any other Stripe failure is logged and thrown (stripeFailure).
+ *
+ * Stripe gives a key of some other Stripe account (pasted by mistake, say) the same "no access"
+ * answer as a platform that lost its access, so that answer only counts from the key that made
+ * the account or last read it. With any other key the account is kept: once the right key is
+ * back, it works again, with every card saved on it.
  */
 export async function refreshConnection(deps: Deps, connection: StripeConnection): Promise<StripeConnection | null> {
   let account: Stripe.Account;
@@ -209,12 +226,21 @@ export async function refreshConnection(deps: Deps, connection: StripeConnection
   } catch (error) {
     if (!accessRevoked(error)) throw stripeFailure(deps, error, 'retrieve account');
     stripeFailure(deps, error, 'retrieve account');
+    if (connection.keyFingerprint === null || connection.keyFingerprint !== keyFingerprint(deps.config)) {
+      deps.log.warn("Stripe didn't let a different key read the shop's account; kept it", { accountId: connection.accountId });
+      throw new ApiError('server_error', "Stripe didn't let this server's key use the shop's Stripe account. Check STRIPE_SECRET_KEY on the server.");
+    }
     await accessLost(deps, connection.accountId);
     return null;
   }
   if (account.id !== connection.accountId) throw stripeFailure(deps, new Error('Stripe answered with another account'), 'retrieve account');
   const now = deps.now();
-  const updated = await updateConnection(deps.db, connection.accountId, { ...accountStatus(account), checkedAt: formatInstant(now) }, now);
+  const updated = await updateConnection(
+    deps.db,
+    connection.accountId,
+    { ...accountStatus(account), keyFingerprint: keyFingerprint(deps.config), checkedAt: formatInstant(now) },
+    now,
+  );
   if (updated?.chargesEnabled && !updated.locationId) {
     try {
       updated.locationId = await terminalLocation(deps, await shopStripe(deps));
@@ -258,8 +284,7 @@ export async function accountUpdated(deps: Deps, accountId: string): Promise<voi
 
 /** The account.application.deauthorized webhook: the shop took the platform's access away. Forget the account. */
 export async function accountDeauthorized(deps: Deps, accountId: string): Promise<void> {
-  const connection = await loadConnection(deps.db);
-  if (connection?.accountId === accountId) await accessLost(deps, accountId);
+  if ((await loadConnections(deps.db)).some((connection) => connection.accountId === accountId)) await accessLost(deps, accountId);
 }
 
 /**
@@ -276,12 +301,13 @@ async function accountIdempotencyKey(tx: Queryable, livemode: boolean): Promise<
 /**
  * The shop's account in connect mode, made the first time and never twice: two taps (or the
  * app and the website) at once wait for each other, and the id is stored before any link is
- * made. An account kept from a key of the other mode (test or live) is replaced.
+ * made. A key of the other mode (test or live) gets an account of its own; the one connected
+ * with the first mode is kept aside for when its key is back (saveConnection).
  */
 async function shopAccountForOnboarding(deps: Deps, base: string): Promise<StripeConnection> {
   return deps.db.transaction(async (tx) => {
     await lockConnect(tx);
-    const existing = connectionForKey(await loadConnection(tx), deps.config);
+    const existing = connectionForKey(await loadConnections(tx), deps.config);
     if (existing) return existing;
     const params: Stripe.AccountCreateParams = {
       controller: {
@@ -321,6 +347,7 @@ async function shopAccountForOnboarding(deps: Deps, base: string): Promise<Strip
     const connection: StripeConnection = {
       accountId: account.id,
       livemode: keyLivemode(deps.config) === true,
+      keyFingerprint: keyFingerprint(deps.config),
       connectedAt: formatInstant(now),
       locationId: null,
       ...accountStatus(account),
@@ -342,48 +369,65 @@ export function connectBase(config: Config): string | null {
 }
 
 type ReturnTo = 'app' | 'web';
+/** Which of Stripe's two ways back a state is for (return_url or refresh_url). */
+type StatePage = 'return' | 'refresh';
 
-/** A new one-time state for Stripe's way back; expired ones are cleared out first. */
-async function newState(deps: Deps, returnTo: ReturnTo): Promise<string> {
+/**
+ * A state's SHA-256, which also says which page it's for: the return page's state, which stays in
+ * the browser's history after onboarding, never works on the refresh page (which makes links).
+ */
+const stateHash = (state: string, page: StatePage) => sha256Hex(page === 'return' ? state : `refresh:${state}`);
+
+/**
+ * New states for one onboarding link's two ways back, with the same `returnTo`; expired ones are
+ * cleared out first. The return page's can be loaded again until it expires; the refresh page's
+ * works once (it makes a new link to Stripe's onboarding).
+ */
+async function newStates(deps: Deps, returnTo: ReturnTo): Promise<Record<StatePage, string>> {
   const now = deps.now();
-  const state = randomBytes(32).toString('base64url');
+  const expires = new Date(now.getTime() + CONNECT_STATE_MINUTES * 60_000);
+  const states = { return: randomBytes(32).toString('base64url'), refresh: randomBytes(32).toString('base64url') };
   await deps.db.query('DELETE FROM stripe_connect_states WHERE expires_at <= $1', [now]);
-  await deps.db.query('INSERT INTO stripe_connect_states (state_hash, return_to, created_at, expires_at) VALUES ($1, $2, $3, $4)', [
-    sha256Hex(state),
-    returnTo,
-    now,
-    new Date(now.getTime() + CONNECT_STATE_MINUTES * 60_000),
-  ]);
-  return state;
+  await deps.db.query(
+    `INSERT INTO stripe_connect_states (state_hash, return_to, created_at, expires_at)
+     VALUES ($1, $3, $4, $5), ($2, $3, $4, $5)`,
+    [stateHash(states.return, 'return'), stateHash(states.refresh, 'refresh'), returnTo, now, expires],
+  );
+  return states;
 }
 
-/** Where a state sends the owner back to, while it hasn't expired (it can be used more than once until then). */
-async function stateReturnTo(deps: Deps, state: string | null): Promise<ReturnTo | null> {
+/**
+ * Where a state for `page` sends the owner back to, while it hasn't expired. The return page's
+ * state can be used more than once until then; the refresh page's is used up here.
+ */
+async function stateReturnTo(deps: Deps, state: string | null, page: StatePage): Promise<ReturnTo | null> {
   if (!state || !STATE_RE.test(state)) return null;
   const { rows } = await deps.db.query<{ return_to: ReturnTo }>(
-    'SELECT return_to FROM stripe_connect_states WHERE state_hash = $1 AND expires_at > $2',
-    [sha256Hex(state), deps.now()],
+    page === 'return'
+      ? 'SELECT return_to FROM stripe_connect_states WHERE state_hash = $1 AND expires_at > $2'
+      : 'DELETE FROM stripe_connect_states WHERE state_hash = $1 AND expires_at > $2 RETURNING return_to',
+    [stateHash(state, page), deps.now()],
   );
   return rows[0]?.return_to ?? null;
 }
 
 /**
  * A link to Stripe's onboarding for the shop's account (made first when `create` is set), with
- * a new state in the addresses Stripe sends the browser back to.
+ * new states in the addresses Stripe sends the browser back to.
  */
 async function onboardingLink(deps: Deps, returnTo: ReturnTo, create: boolean): Promise<{ url: string; expiresAt: string }> {
   const base = connectBase(deps.config);
   if (!base) throw new ApiError('stripe_not_configured', NO_BASE_URL_MESSAGE);
   const connection = create ? await shopAccountForOnboarding(deps, base) : await currentConnection(deps);
   if (!connection) throw new ApiError('not_found', EXPIRED_MESSAGE);
-  const state = await newState(deps, returnTo);
+  const states = await newStates(deps, returnTo);
   let link: Stripe.AccountLink;
   try {
     link = await platformStripe(deps).accountLinks.create({
       account: connection.accountId,
       type: 'account_onboarding',
-      refresh_url: `${base}/api/stripe/connect/refresh?state=${state}`,
-      return_url: `${base}/api/stripe/connect/return?state=${state}`,
+      refresh_url: `${base}/api/stripe/connect/refresh?state=${states.refresh}`,
+      return_url: `${base}/api/stripe/connect/return?state=${states.return}`,
       collection_options: { fields: 'eventually_due' },
     });
   } catch (error) {
@@ -410,12 +454,13 @@ function connectOff(setup: StripeSetup, what: 'connect' | 'disconnect'): ApiErro
 export async function terminalLocation(deps: Deps, shop: ShopStripe): Promise<string | null> {
   const account = shop.stripeAccount;
   if (!account) return deps.config.stripeTerminalLocationId ?? null;
-  const cached = await loadConnection(deps.db);
-  if (cached?.accountId === account && cached.locationId) return cached.locationId;
+  const stored = async (db: Queryable) => (await loadConnections(db)).find((connection) => connection.accountId === account);
+  const cached = await stored(deps.db);
+  if (cached?.locationId) return cached.locationId;
   return deps.db.transaction(async (tx) => {
     await lockConnect(tx);
-    const connection = await loadConnection(tx);
-    if (connection?.accountId !== account) throw new ApiError('stripe_not_configured', CONNECT_STRIPE_MESSAGE);
+    const connection = await stored(tx);
+    if (!connection) throw new ApiError('stripe_not_configured', CONNECT_STRIPE_MESSAGE);
     if (connection.locationId) return connection.locationId;
     let location: Stripe.Terminal.Location;
     try {
@@ -432,8 +477,8 @@ export async function terminalLocation(deps: Deps, shop: ShopStripe): Promise<st
 export async function forgetTerminalLocation(deps: Deps, account: string, locationId: string): Promise<void> {
   await deps.db.query(
     `UPDATE settings SET value = value || '{"locationId": null}'::jsonb, updated_at = $3
-      WHERE key = $1 AND value->>'accountId' = $2 AND value->>'locationId' = $4`,
-    [CONNECT_SETTINGS_KEY, account, deps.now(), locationId],
+      WHERE key = ANY($1::text[]) AND value->>'accountId' = $2 AND value->>'locationId' = $4`,
+    [[CONNECT_SETTINGS_KEY, OTHER_MODE_SETTINGS_KEY], account, deps.now(), locationId],
   );
 }
 
@@ -462,6 +507,8 @@ export async function postStripeConnect(ctx: Context): Promise<Response> {
 }
 
 // DELETE /api/owner/stripe/connect (the owner key only): forget the account. It stays open at Stripe.
+// Only the account that works with the server's key now: one of the other mode (test or live), kept
+// aside, stays for when its key is back.
 
 export async function deleteStripeConnect(ctx: Context): Promise<Response> {
   await requireOwner(ctx, { keyOnly: true });
@@ -470,7 +517,8 @@ export async function deleteStripeConnect(ctx: Context): Promise<Response> {
   if (setup !== 'connect') throw connectOff(setup, 'disconnect');
   await deps.db.transaction(async (tx) => {
     await lockConnect(tx);
-    await forgetConnection(tx, deps.now());
+    const connection = connectionForKey(await loadConnections(tx), deps.config);
+    if (connection) await forgetConnection(tx, deps.now(), connection.accountId);
   });
   return json({ ...connectionJSON(setup, null, deps.config), message: DISCONNECTED_MESSAGE });
 }
@@ -498,7 +546,7 @@ export async function stripeConnectReturn(ctx: Context): Promise<Response> {
   const limited = await pageLimit(ctx);
   if (limited) return limited;
   const { deps } = ctx;
-  const returnTo = await stateReturnTo(deps, ctx.url.searchParams.get('state'));
+  const returnTo = await stateReturnTo(deps, ctx.url.searchParams.get('state'), 'return');
   if (!returnTo) return expiredPage();
   const setup = stripeSetup(deps.config);
   const status: ConnectionStatus = setup === 'connect' ? connectionStatus(await freshConnection(deps)) : setup;
@@ -506,12 +554,18 @@ export async function stripeConnectReturn(ctx: Context): Promise<Response> {
   return redirect(`${connectBase(deps.config) ?? ctx.url.origin}/business/settings?stripe=${status}`);
 }
 
+/**
+ * Stripe sends the browser here when an onboarding link expired or was already used: a new link
+ * (with new states) and on to Stripe. Its state works once, and never the return page's, so an
+ * address left in a browser's history can't hand anyone a way into the shop's Stripe account.
+ */
 export async function stripeConnectRefresh(ctx: Context): Promise<Response> {
   const limited = await pageLimit(ctx);
   if (limited) return limited;
   const { deps } = ctx;
-  const returnTo = await stateReturnTo(deps, ctx.url.searchParams.get('state'));
-  if (!returnTo || stripeSetup(deps.config) !== 'connect') return expiredPage();
+  if (stripeSetup(deps.config) !== 'connect') return expiredPage();
+  const returnTo = await stateReturnTo(deps, ctx.url.searchParams.get('state'), 'refresh');
+  if (!returnTo) return expiredPage();
   try {
     return redirect((await onboardingLink(deps, returnTo, false)).url);
   } catch (error) {

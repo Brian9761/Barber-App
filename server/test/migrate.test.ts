@@ -26,6 +26,7 @@ describe('npm run migrate', () => {
       '004_no_show_protection.sql',
       '005_stripe_connect_and_computers.sql',
       '006_sales.sql',
+      '007_payment_succeeded_at.sql',
     ]);
   });
 
@@ -397,6 +398,43 @@ describe('npm run migrate', () => {
     } finally {
       await client.query('SET search_path TO public').catch(() => undefined);
       await client.query('DROP SCHEMA IF EXISTS before_006 CASCADE').catch(() => undefined);
+      client.release();
+    }
+  });
+
+  it('007 adds when each payment went through, with the analytics’ index for fees, and keeps every row before it valid', async () => {
+    // 001–006 into a schema of its own, a succeeded fee and payment the way the server wrote them, then 007 on top.
+    const dir = mkdtempSync(join(tmpdir(), 'izzy-migrations-before-007-'));
+    const all = migrationFiles();
+    for (const f of all.filter((f) => f.name < '007')) writeFileSync(join(dir, f.name), f.sql);
+    const client = await db.pool.connect();
+    try {
+      await client.query('CREATE SCHEMA before_007');
+      await client.query('SET search_path TO before_007, public');
+      await migrate(client, pathToFileURL(`${dir}/`));
+      await client.query(
+        `INSERT INTO payments (id, amount_cents, status, kind, created_at, updated_at)
+         VALUES ('pi_before007fee', 3500, 'succeeded', 'no_show_fee', '2026-11-03T18:20:00Z', '2026-11-03T18:20:00Z'),
+                ('pi_before007tap', 4000, 'succeeded', 'in_person', '2026-11-03T19:00:00Z', '2026-11-03T19:01:00Z')`,
+      );
+      const file = all.find((f) => f.name === '007_payment_succeeded_at.sql');
+      if (!file) throw new Error('007_payment_succeeded_at.sql is missing');
+      writeFileSync(join(dir, file.name), file.sql);
+      expect((await migrate(client, pathToFileURL(`${dir}/`))).applied).toEqual(['007_payment_succeeded_at.sql']);
+      // Rows from before it: nothing changed, and no time is made up for them.
+      const { rows } = await client.query('SELECT id, status, succeeded_at FROM payments ORDER BY id');
+      expect(rows).toEqual([
+        { id: 'pi_before007fee', status: 'succeeded', succeeded_at: null },
+        { id: 'pi_before007tap', status: 'succeeded', succeeded_at: null },
+      ]);
+      // The code already live still writes payments without it.
+      await client.query(`INSERT INTO payments (id, amount_cents, status, created_at, updated_at) VALUES ('pi_after007', 500, 'succeeded', now(), now())`);
+      const index = await client.query(`SELECT indexdef FROM pg_indexes WHERE schemaname = 'before_007' AND indexname = 'payments_fee_succeeded_idx'`);
+      expect(index.rows[0].indexdef).toContain('COALESCE(succeeded_at, created_at)');
+      expect(index.rows[0].indexdef).toContain("'no_show_fee'::text, 'late_cancel_fee'::text");
+    } finally {
+      await client.query('SET search_path TO public').catch(() => undefined);
+      await client.query('DROP SCHEMA IF EXISTS before_007 CASCADE').catch(() => undefined);
       client.release();
     }
   });

@@ -21,8 +21,12 @@ const connect = (body: unknown = { returnTo: 'app' }, auth: { owner?: boolean; h
   h.call('POST', '/api/owner/stripe/connect', { ...auth, body });
 const accountCreates = () => h.stripe.calls.filter((c) => c.method === 'accounts.create');
 const links = () => h.stripe.calls.filter((c) => c.method === 'accountLinks.create').map((c) => c.params as Stripe.AccountLinkCreateParams);
-/** The state in the last onboarding link's addresses. */
+/** The state in the last onboarding link's return address. */
 const lastState = () => new URL(links().at(-1)!.return_url!).searchParams.get('state')!;
+/** The state in the last onboarding link's refresh address (a state of its own, which works once). */
+const lastRefreshState = () => new URL(links().at(-1)!.refresh_url!).searchParams.get('state')!;
+/** How the server stores a refresh page's state: its SHA-256, told apart from the return page's. */
+const refreshHash = (state: string) => sha256(`refresh:${state}`);
 const back = (page: 'return' | 'refresh', state: string | null, ip?: string) =>
   h.call('GET', `/api/stripe/connect/${page}${state === null ? '' : `?state=${encodeURIComponent(state)}`}`, ip ? { ip } : {});
 /** The shop's account, made by the first POST /api/owner/stripe/connect. */
@@ -172,24 +176,33 @@ describe('POST /api/owner/stripe/connect', () => {
     const call = h.stripe.calls.find((c) => c.method === 'accountLinks.create')!;
     expect(call.options).toBeUndefined();
     const state = lastState();
+    const refreshState = lastRefreshState();
     expect(state).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(refreshState).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(refreshState).not.toBe(state);
     expect(call.params).toEqual({
       account,
       type: 'account_onboarding',
-      refresh_url: `${PUBLIC_BASE_URL}/api/stripe/connect/refresh?state=${state}`,
+      refresh_url: `${PUBLIC_BASE_URL}/api/stripe/connect/refresh?state=${refreshState}`,
       return_url: `${PUBLIC_BASE_URL}/api/stripe/connect/return?state=${state}`,
       collection_options: { fields: 'eventually_due' },
     });
-    // Only the state's SHA-256 is kept, for an hour.
-    const { rows } = await h.database.pool.query('SELECT * FROM stripe_connect_states');
-    expect(rows).toEqual([
-      { state_hash: sha256(state), return_to: 'app', created_at: new Date('2026-11-02T17:00:00Z'), expires_at: new Date('2026-11-02T18:00:00Z') },
-    ]);
+    // Only each state's SHA-256 is kept, for an hour.
+    const { rows } = await h.database.pool.query('SELECT * FROM stripe_connect_states ORDER BY state_hash');
+    const kept = { return_to: 'app', created_at: new Date('2026-11-02T17:00:00Z'), expires_at: new Date('2026-11-02T18:00:00Z') };
+    expect(rows).toEqual(
+      [
+        { state_hash: sha256(state), ...kept },
+        { state_hash: refreshHash(refreshState), ...kept },
+      ].sort((a, b) => a.state_hash.localeCompare(b.state_hash)),
+    );
     expect(JSON.stringify(rows)).not.toContain(state);
-    // The id is stored with what the new account says.
+    expect(JSON.stringify(rows)).not.toContain(refreshState);
+    // The id is stored with what the new account says, and which key made it (a fingerprint, never the key).
     expect(await stored()).toEqual({
       accountId: account,
       livemode: false,
+      keyFingerprint: sha256(PLATFORM_KEY).slice(0, 16),
       connectedAt: '2026-11-02T17:00:00Z',
       locationId: null,
       chargesEnabled: false,
@@ -211,9 +224,9 @@ describe('POST /api/owner/stripe/connect', () => {
     expect(again.status).toBe(201);
     expect(accountCreates()).toHaveLength(1);
     expect(links().map((l) => l.account)).toEqual([account, account]);
-    // Each link has a state of its own, with its own way back.
-    const states = (await h.database.pool.query('SELECT return_to FROM stripe_connect_states ORDER BY created_at')).rows;
-    expect(states).toEqual([{ return_to: 'app' }, { return_to: 'web' }]);
+    // Each link has states of its own (return and refresh), with its own way back.
+    const states = (await h.database.pool.query('SELECT return_to FROM stripe_connect_states ORDER BY created_at, return_to')).rows;
+    expect(states).toEqual([{ return_to: 'app' }, { return_to: 'app' }, { return_to: 'web' }, { return_to: 'web' }]);
 
     // A fresh start, with several taps landing together.
     await h.database.pool.query(`DELETE FROM settings WHERE key = 'stripe_connect'`);
@@ -267,7 +280,7 @@ describe('POST /api/owner/stripe/connect', () => {
     expect((await connect({})).status).toBe(201);
     expect((await h.call('POST', '/api/owner/stripe/connect', owner)).status).toBe(201);
     const ways = (await h.database.pool.query('SELECT return_to FROM stripe_connect_states')).rows.map((r) => r.return_to);
-    expect(ways).toEqual(['app', 'app', 'app']);
+    expect(ways).toEqual(['app', 'app', 'app', 'app', 'app', 'app']);
   });
 
   it('a Stripe failure is a plain 500, nothing is stored, and the next try makes the account', async () => {
@@ -400,6 +413,7 @@ describe('the status Settings shows (GET /api/owner/stripe)', () => {
     const base: StripeConnection = {
       accountId: 'acct_x',
       livemode: false,
+      keyFingerprint: null,
       connectedAt: '',
       locationId: null,
       chargesEnabled: false,
@@ -486,32 +500,60 @@ describe('GET /api/stripe/connect/return and /refresh (Stripe sends the browser 
     expect(h.stripe.calls.filter((c) => c.method !== 'accounts.create' && c.method !== 'accountLinks.create')).toEqual([]);
   });
 
-  it('refresh: a new link and a new state with the same way back, then on to Stripe', async () => {
+  it('refresh: a new link and new states with the same way back, then on to Stripe; its state works once', async () => {
     connectMode(h);
     await connect({ returnTo: 'web' });
-    const first = lastState();
+    const firstReturn = lastState();
+    const first = lastRefreshState();
     h.advance(6);
     const res = await back('refresh', first);
     expect(res.status).toBe(302);
-    const second = lastState();
+    const second = lastRefreshState();
     expect(second).not.toBe(first);
     expect(res.headers.get('location')).toBe(`https://connect.stripe.com/setup/s/${onlyAccount()}/fixture000003`);
-    const rows = (await h.database.pool.query('SELECT state_hash, return_to FROM stripe_connect_states ORDER BY created_at')).rows;
-    expect(rows).toEqual([
-      { state_hash: sha256(first), return_to: 'web' },
-      { state_hash: sha256(second), return_to: 'web' },
-    ]);
+    // The refresh state is used up; the new link has states of its own, with the same way back.
+    const rows = (await h.database.pool.query('SELECT state_hash, return_to FROM stripe_connect_states')).rows;
+    expect(rows.map((r) => r.state_hash).sort()).toEqual([sha256(firstReturn), sha256(lastState()), refreshHash(second)].sort());
+    expect(rows.every((r) => r.return_to === 'web')).toBe(true);
+    expect((await back('refresh', first)).status).toBe(400);
     expect(accountCreates()).toHaveLength(1);
     // Disconnected meanwhile: nothing to link to.
     await h.call('DELETE', '/api/owner/stripe/connect', owner);
     expect((await back('refresh', second)).status).toBe(400);
   });
 
+  it('the return page’s state, left in the browser’s history, never makes a link; each refresh state makes one, once', async () => {
+    connectMode(h);
+    await connect({ returnTo: 'web' });
+    const returnState = lastState();
+    let refreshState = lastRefreshState();
+    // The owner finishes onboarding on the shop's computer: the return address stays in its history.
+    expect((await back('return', returnState)).status).toBe(302);
+    h.advance(50);
+    // Anyone at that computer, swapping "return" for "refresh": nothing, however often.
+    for (let i = 0; i < 3; i++) {
+      const res = await back('refresh', returnState, '198.51.100.9');
+      expect(res.status).toBe(400);
+      expect(res.text).toContain('This link has expired.');
+    }
+    // The return page still works until the state expires.
+    expect((await back('return', returnState, '198.51.100.9')).status).toBe(302);
+    // Stripe's refresh address: one new link per state, and each new link's own refresh state works once too.
+    const made = links().length;
+    for (let i = 0; i < 2; i++) {
+      expect((await back('refresh', refreshState)).status).toBe(302);
+      expect((await back('refresh', refreshState)).status).toBe(400);
+      refreshState = lastRefreshState();
+    }
+    expect(links()).toHaveLength(made + 2);
+    expect(accountCreates()).toHaveLength(1);
+  });
+
   it('refresh when Stripe can’t make the link: a friendly page saying to try again', async () => {
     connectMode(h);
     await connect();
     h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
-    const res = await back('refresh', lastState());
+    const res = await back('refresh', lastRefreshState());
     expect(res.status).toBe(500);
     expect(res.text).toContain("We couldn't reach Stripe. Go back to Izzy Clipz Business and tap Connect Stripe again.");
   });
@@ -520,8 +562,10 @@ describe('GET /api/stripe/connect/return and /refresh (Stripe sends the browser 
     connectMode(h);
     await connect();
     const state = lastState();
+    // Every visit counts, whichever page and however it ends (the return state doesn't work on the refresh page).
     for (let i = 0; i < CONNECT_PAGES_PER_IP; i++) {
-      expect((await back(i % 2 === 0 ? 'return' : 'refresh', state)).status, `visit ${i + 1}`).toBe(302);
+      const page = i % 2 === 0 ? 'return' : 'refresh';
+      expect((await back(page, state)).status, `visit ${i + 1}`).toBe(page === 'return' ? 302 : 400);
     }
     const limited = await back('return', state);
     expect(limited.status).toBe(429);
@@ -564,14 +608,14 @@ describe('DELETE /api/owner/stripe/connect', () => {
 describe('POST /api/stripe/webhook with Stripe Connect', () => {
   const WEBHOOK_SECRET = 'whsec_fixture_account';
   const CONNECT_SECRET = 'whsec_fixture_connect';
-  function event(type: string, object: Record<string, unknown>, account?: string) {
+  function event(type: string, object: Record<string, unknown>, account?: string, livemode = false) {
     return JSON.stringify({
       id: 'evt_fixture_connect',
       object: 'event',
       api_version: '2026-10-28.endive',
       created: Math.floor(Date.now() / 1000),
       type,
-      livemode: false,
+      livemode,
       pending_webhooks: 1,
       request: { id: null, idempotency_key: null },
       data: { object },
@@ -681,6 +725,67 @@ describe('POST /api/stripe/webhook with Stripe Connect', () => {
     const res = await send(event('account.updated', { object: 'account', id: account }, account), CONNECT_SECRET);
     expect(res.status).toBe(200);
     expect(await stored()).toBeUndefined();
+  });
+
+  it('a "no access" answer to a different key (another Stripe account’s, pasted by mistake) keeps the account; with the right key back it works, and no second account is made', async () => {
+    const account = await connectedShop(h);
+    const returnState = lastState();
+    h.config.stripeConnectWebhookSecret = CONNECT_SECRET;
+    const noAccess = () =>
+      stripeError(
+        'StripePermissionError',
+        { statusCode: 403 },
+        `The provided key 'sk_test_***' does not have access to account '${account}' (or that account does not exist). Application access may have been revoked.`,
+      );
+    // For a few minutes the server has another Stripe account's key: Stripe answers exactly as if access were taken away.
+    h.config.stripeSecretKey = 'sk_test_otherplatform';
+    h.stripe.nextError = noAccess();
+    const settings = await status();
+    expect(settings.status).toBe(200);
+    expect(settings.body).toMatchObject({ status: 'active', accountId: account });
+    expect(h.logs).toContainEqual({ level: 'warn', message: "Stripe didn't let a different key read the shop's account; kept it", details: { accountId: account } });
+    h.stripe.nextError = noAccess();
+    expect((await back('return', returnState)).headers.get('location')).toBe('izzyclipzbusiness://stripe-connected?status=active');
+    // Stripe's account.updated: a 500 (Stripe sends it again later), and the account stays.
+    h.stripe.nextError = noAccess();
+    const hook = await send(event('account.updated', { object: 'account', id: account }, account), CONNECT_SECRET);
+    expect(hook.status).toBe(500);
+    expect(hook.body.error.message).toBe("Stripe didn't let this server's key use the shop's Stripe account. Check STRIPE_SECRET_KEY on the server.");
+    expect(await stored()).toMatchObject({ accountId: account, chargesEnabled: true });
+
+    // The right key is back: the same account, still active, and Connect Stripe makes no second one.
+    h.config.stripeSecretKey = PLATFORM_KEY;
+    expect((await status()).body).toMatchObject({ status: 'active', accountId: account });
+    expect((await connect()).status).toBe(201);
+    expect(h.stripe.connectedAccounts.size).toBe(1);
+    expect(links().at(-1)!.account).toBe(account);
+    // The key that reads the account is the one whose "no access" counts.
+    h.stripe.nextError = noAccess();
+    expect((await status()).body.status).toBe('notConnected');
+  });
+
+  it('ignores events of the other mode than the key: a live server never takes a connected account’s test-mode event as real money', async () => {
+    h.config.stripeSecretKey = 'sk_live_fake';
+    h.config.stripeConnect = true;
+    h.config.publicBaseUrl = PUBLIC_BASE_URL;
+    expect((await connect()).status).toBe(201);
+    const account = onlyAccount();
+    h.stripe.activateAccount(account);
+    expect((await status()).body).toMatchObject({ status: 'active', livemode: true });
+    const { paymentIntentId } = await walkInPayment();
+    h.config.stripeConnectWebhookSecret = CONNECT_SECRET;
+    h.stripe.succeed(paymentIntentId);
+    const succeeded = (livemode: boolean) =>
+      event('payment_intent.succeeded', { object: 'payment_intent', id: paymentIntentId, status: 'succeeded' }, account, livemode);
+    // A live Connect endpoint gets the shop's test-mode events too (a test payment in its Dashboard, `stripe trigger`…).
+    const testMode = await send(succeeded(false), CONNECT_SECRET);
+    expect(testMode.status).toBe(200);
+    expect(testMode.body).toEqual({ received: true });
+    expect(await paymentOf()).toMatchObject({ status: 'unpaid' });
+    expect((await h.call('GET', '/api/owner/payments?date=2026-11-02', owner)).body.payments[0].status).toBe('requires_payment_method');
+    // The live event counts.
+    expect((await send(succeeded(true), CONNECT_SECRET)).status).toBe(200);
+    expect(await paymentOf()).toMatchObject({ status: 'paid', amountCents: 3500 });
   });
 
   it('account.updated when Stripe can’t be reached: 500, so Stripe sends it again', async () => {

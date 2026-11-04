@@ -480,16 +480,17 @@ async function loadMoney(db: Queryable, range: Range): Promise<MoneyFact[]> {
       GROUP BY 1, 2, 3`,
     values,
   );
-  // A fee counts the day Stripe charged it: off-session charges succeed or fail as they're made,
-  // and payments.created_at is when Stripe made the charge (the day Payments lists it), even when
-  // the server only found out later.
+  // A fee counts the day Stripe charged it: payments.succeeded_at, when Stripe says it went
+  // through (the appointment's chargedAt), even when that was days after it was tried or the
+  // server only found out later. A fee recorded before that column existed counts the day
+  // Stripe made the charge, as off-session charges succeed or fail as they're made.
   const fees = await db.query<MoneyRow>(
-    `SELECT width_bucket(p.created_at, $1::timestamptz[]) AS bucket, a.barber_id, NULL AS item_id, NULL AS name,
+    `SELECT width_bucket(COALESCE(p.succeeded_at, p.created_at), $1::timestamptz[]) AS bucket, a.barber_id, NULL AS item_id, NULL AS name,
             count(*)::int AS count, sum(p.amount_cents)::int AS cents
        FROM payments p
        LEFT JOIN appointments a ON a.id = p.appointment_id
       WHERE p.kind IN ('no_show_fee', 'late_cancel_fee') AND p.status = 'succeeded'
-        AND p.created_at >= $2 AND p.created_at < $3
+        AND COALESCE(p.succeeded_at, p.created_at) >= $2 AND COALESCE(p.succeeded_at, p.created_at) < $3
       GROUP BY 1, 2`,
     values,
   );

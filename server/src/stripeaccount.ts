@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type Stripe from 'stripe';
 import type { Config } from './config.js';
 import type { Queryable } from './db.js';
@@ -40,16 +41,36 @@ export function keyLivemode(config: Config): boolean | null {
   return mode === null ? null : mode === 'live';
 }
 
+/**
+ * A short fingerprint of the server's Stripe key (the start of its SHA-256), never the key: which
+ * key last read the shop's account (`StripeConnection.keyFingerprint`). Null without a key.
+ */
+export function keyFingerprint(config: Config): string | null {
+  const key = config.stripeSecretKey;
+  return key ? createHash('sha256').update(key).digest('hex').slice(0, 16) : null;
+}
+
 // The connected account, cached in settings under 'stripe_connect' (stripeconnect.ts keeps it fresh).
 
 export const CONNECT_SETTINGS_KEY = 'stripe_connect';
+/**
+ * The connection made with a key of the other mode (test or live) than the one under
+ * 'stripe_connect', kept aside when the shop connected while the server had a key of the other
+ * mode. When that mode's key comes back, its connection is the shop's again: switching the key
+ * between test and live never loses (or replaces) an account.
+ */
+export const OTHER_MODE_SETTINGS_KEY = 'stripe_connect_other_mode';
+const CONNECTION_KEYS = [CONNECT_SETTINGS_KEY, OTHER_MODE_SETTINGS_KEY];
 export const ACCOUNT_ID_RE = /^acct_[A-Za-z0-9]+$/;
 const LOCATION_ID_RE = /^tml_[A-Za-z0-9]+$/;
+const FINGERPRINT_RE = /^[0-9a-f]{16}$/;
 
 export interface StripeConnection {
   accountId: string;
   /** Made with a live key (true) or a test key (false): it only works with a key of the same mode. */
   livemode: boolean;
+  /** `keyFingerprint` of the key that made the account or last read it from Stripe (null when unknown). */
+  keyFingerprint: string | null;
   connectedAt: string;
   /** The shop's Terminal location on this account, made the first time Tap to Pay needs it. */
   locationId: string | null;
@@ -75,10 +96,12 @@ export function parseConnection(value: unknown): StripeConnection | null {
   const accountId = text(v.accountId, 255);
   if (!accountId || !ACCOUNT_ID_RE.test(accountId) || typeof v.livemode !== 'boolean') return null;
   const locationId = text(v.locationId, 255);
+  const fingerprint = text(v.keyFingerprint);
   const due = v.requirementsDue;
   return {
     accountId,
     livemode: v.livemode,
+    keyFingerprint: fingerprint && FINGERPRINT_RE.test(fingerprint) ? fingerprint : null,
     connectedAt: text(v.connectedAt) ?? '',
     locationId: locationId && LOCATION_ID_RE.test(locationId) ? locationId : null,
     chargesEnabled: flag(v.chargesEnabled),
@@ -91,26 +114,31 @@ export function parseConnection(value: unknown): StripeConnection | null {
   };
 }
 
-export async function loadConnection(db: Queryable): Promise<StripeConnection | null> {
-  const { rows } = await db.query<{ value: unknown }>('SELECT value FROM settings WHERE key = $1', [CONNECT_SETTINGS_KEY]);
-  return parseConnection(rows[0]?.value);
+/** The stored connections: the latest one first, then the other mode's kept aside (if any). At most one per mode. */
+export async function loadConnections(db: Queryable): Promise<StripeConnection[]> {
+  const { rows } = await db.query<{ key: string; value: unknown }>('SELECT key, value FROM settings WHERE key = ANY($1::text[])', [
+    CONNECTION_KEYS,
+  ]);
+  return CONNECTION_KEYS.flatMap((key) => {
+    const connection = parseConnection(rows.find((row) => row.key === key)?.value);
+    return connection ? [connection] : [];
+  });
 }
 
 /**
- * The stored connection, if it works with this key: an account connected while the platform
- * used a test key can't take live payments (and the other way round), so after the key's mode
- * changes the shop connects again.
+ * The stored connection that works with this key: an account connected while the platform used
+ * a test key can't take live payments (and the other way round), so a key of the other mode
+ * needs an account of its own (and the first one works again once its mode's key is back).
  */
-export function connectionForKey(stored: StripeConnection | null, config: Config): StripeConnection | null {
-  if (!stored) return null;
+export function connectionForKey(stored: readonly StripeConnection[], config: Config): StripeConnection | null {
   const live = keyLivemode(config);
-  return live === null || stored.livemode === live ? stored : null;
+  return stored.find((connection) => live === null || connection.livemode === live) ?? null;
 }
 
 /** The shop's connected account in connect mode, if it works with this key (null in the other modes). */
 export async function currentConnection(deps: Pick<Deps, 'config' | 'db'>, db: Queryable = deps.db): Promise<StripeConnection | null> {
   if (stripeSetup(deps.config) !== 'connect') return null;
-  return connectionForKey(await loadConnection(db), deps.config);
+  return connectionForKey(await loadConnections(db), deps.config);
 }
 
 export type ConnectionStatus = 'notConnected' | 'needsInfo' | 'pending' | 'active' | 'restricted' | 'direct' | 'off';
@@ -168,6 +196,9 @@ export interface ShopStripe extends ShopAccount {
 
 const STRIPE_OFF_MESSAGE = "Card payments aren't set up yet. Add the shop's Stripe key on the server.";
 export const CONNECT_STRIPE_MESSAGE = 'Connect Stripe in Settings to take card payments.';
+/** Something made with the shop's own Stripe key before Stripe was connected, which connect mode can't look up. */
+export const SERVER_KEY_OBJECT_MESSAGE =
+  "This was made with the shop's own Stripe key, before Stripe was connected in Settings, so the app can't look it up. Check it in that Stripe account's Dashboard.";
 
 /** 503 stripe_not_configured: no Stripe key at all (always checked first, as before connect mode). */
 export function stripeOff(): ApiError {
@@ -203,7 +234,10 @@ export async function shopAccount(deps: Pick<Deps, 'config' | 'db'>, db: Queryab
  * - With `account`: an object stored with the account it lives on (a payment's or a saved
  *   card's `stripe_account_id`; null for one made with a server key). That's where Stripe has
  *   it, even after the shop connected another account, so it can still be looked up. Only the
- *   key is needed (in direct mode no Stripe-Account header is ever sent).
+ *   key is needed (in direct mode no Stripe-Account header is ever sent). In connect mode, one
+ *   made with the server's own key in direct mode (null) is on the shop's own Stripe account,
+ *   which the platform's key can't see: it's a 404 saying so, never a lookup on the platform's
+ *   account, where "not found" would mean nothing.
  */
 export async function shopStripe(
   deps: Pick<Deps, 'config' | 'db' | 'stripe'>,
@@ -215,8 +249,8 @@ export async function shopStripe(
   const livemode = keyLivemode(deps.config);
   if (setup === 'direct') return { stripe: deps.stripe(key), livemode };
   if (options.account !== undefined) {
-    const stored = options.account;
-    return stored ? { stripe: deps.stripe(key), stripeAccount: stored, livemode } : { stripe: deps.stripe(key), livemode };
+    if (!options.account) throw new ApiError('not_found', SERVER_KEY_OBJECT_MESSAGE);
+    return { stripe: deps.stripe(key), stripeAccount: options.account, livemode };
   }
   const connection = await currentConnection(deps, options.db ?? deps.db);
   if (!connection?.chargesEnabled) throw options.forClients ? stripeOff() : notConnected(connection);
@@ -248,6 +282,24 @@ export function accountMatch(saved: { stripe_account_id: string | null; livemode
   if ((saved.stripe_account_id ?? null) !== (shop.stripeAccount ?? null)) return 'otherAccount';
   if (shop.livemode !== null && saved.livemode !== shop.livemode) return 'otherMode';
   return 'same';
+}
+
+/**
+ * When Stripe says a PaymentIntent went through, as near as the server can tell, never after
+ * `now`: its latest charge's time when it was read with `latest_charge` expanded, else
+ * `fallbackSeconds` (a webhook event's time, or when Stripe made the PaymentIntent), else `now`.
+ * It can be well before the server hears of it: a webhook Stripe sent again later, or an app
+ * that confirms a payment the next morning.
+ */
+export function succeededAt(
+  intent: { latest_charge?: string | { created?: number } | null },
+  now: Date,
+  fallbackSeconds?: number | null,
+): Date {
+  const charge = intent.latest_charge;
+  const seconds = typeof charge === 'object' && charge !== null && typeof charge.created === 'number' ? charge.created : fallbackSeconds;
+  const at = typeof seconds === 'number' && Number.isFinite(seconds) ? new Date(seconds * 1000) : null;
+  return at && at < now ? at : now;
 }
 
 // Stripe's errors.

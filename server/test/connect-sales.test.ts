@@ -220,7 +220,8 @@ describe('card sales on the shop’s own Stripe account (Connect)', () => {
     expect(saleId).toMatch(/^[0-9a-f-]{36}$/);
     const day = await h.call('GET', '/api/owner/sales?date=2026-11-02', owner);
     expect(day.body.sales).toEqual([
-      expect.objectContaining({ id: saleId, method: 'card', paymentIntentId: id, appointmentId: appointment, totalCents: 3500, soldAt: '2026-11-02T19:12:00Z' }),
+      // Sold when the card went through, two minutes before the app confirmed it.
+      expect.objectContaining({ id: saleId, method: 'card', paymentIntentId: id, appointmentId: appointment, totalCents: 3500, soldAt: '2026-11-02T19:10:00Z' }),
     ]);
     // The earlier account's webhook arrives late: nothing more is recorded.
     expect((await succeededOn(first, id)).status).toBe(200);

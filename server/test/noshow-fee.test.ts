@@ -709,7 +709,8 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     h.stripe.succeed(piId);
     h.advance(2);
     const done = await charge(id);
-    expect(done.body.appointment.noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-03T18:22:00Z' });
+    // Charged when Stripe's charge went through, not when the owner checked two minutes later.
+    expect(done.body.appointment.noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-03T18:20:00Z' });
     expect(creates()).toHaveLength(1);
     expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.retrieve')).toHaveLength(2);
   });
@@ -741,7 +742,8 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
 
     h.advance(3);
     const retry = await charge(id);
-    expect(retry.body.appointment.noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-03T18:23:00Z' });
+    // Charged when the money moved (the lost try), not when the server found out.
+    expect(retry.body.appointment.noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-03T18:20:00Z' });
     // Asked Stripe for this attempt's PaymentIntent: the card's own Customer, since the attempt began.
     const card = await h.database.pool.query('SELECT stripe_customer_id FROM saved_cards');
     const lists = h.stripe.calls.filter((c) => c.method === 'paymentIntents.list');
