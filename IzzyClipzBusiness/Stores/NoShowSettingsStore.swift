@@ -102,15 +102,17 @@ final class NoShowSettingsStore {
         }
         isSaving = true
         defer { isSaving = false }
+        // A load that started before this can't bring the old settings back...
         generation += 1
-        let requested = generation
         do {
             let result = try await api.updateNoShowSettings(update)
+            // ...nor one that started while saving: the server may have answered it before the change.
+            generation += 1
             self.saved = result
             // What's on screen becomes what the server has now, unless the owner changed it meanwhile.
             if draft == sent { draft = NoShowSettingsDraft(result) }
             lastSaved = NoShowSettingsDraft(result)
-            if requested == generation { refreshError = nil }
+            refreshError = nil
             loadState = .loaded
             return true
         } catch is CancellationError {

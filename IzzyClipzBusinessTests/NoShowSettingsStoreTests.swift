@@ -99,6 +99,36 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertTrue(store.draft.enabled)
     }
 
+    func testALoadThatStartedWhileSavingNeverReplacesWhatTheSaveStored() async throws {
+        let store = await loadedStore()
+        let saveGate = AsyncGate()
+        let loadGate = AsyncGate()
+        api.updateNoShowSettingsHandler = { [base = api.base] update in
+            await saveGate.wait()
+            return try await base.updateNoShowSettings(update)
+        }
+        store.draft.enabled = true
+        let saving = Task { await store.save() }
+        try await Task.sleep(for: .milliseconds(50))
+        // A pull to refresh while saving, which the server answers before it takes the change.
+        let before = try await api.base.noShowSettings()
+        api.noShowSettingsHandler = {
+            await loadGate.wait()
+            return before
+        }
+        let loading = Task { await store.refresh() }
+        try await Task.sleep(for: .milliseconds(50))
+        await saveGate.open()
+        let saved = await saving.value
+        XCTAssertTrue(saved)
+        await loadGate.open()
+        await loading.value
+        XCTAssertEqual(store.saved?.enabled, true, "the older answer was dropped")
+        XCTAssertTrue(store.draft.enabled)
+        XCTAssertFalse(store.hasChanges, "nothing left to save")
+        XCTAssertTrue(store.justSaved)
+    }
+
     // MARK: Editing
 
     func testChangesAreChangesOnlyWhenTheyDifferFromTheServers() async {
