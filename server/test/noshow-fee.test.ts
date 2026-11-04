@@ -421,6 +421,40 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect(creates()).toHaveLength(1);
   });
 
+  it('the cancel time is kept to the second, as the apps read it: 400 ms inside the window is still exactly 1 hour before', async () => {
+    // 9:00:00.400 AM for the 10 AM booking, 59 min 59.6 s before. The JSON says 9:00:00, so the
+    // owner app reads exactly 1 hour before (free), and the server decides the same: no warning, no fee.
+    const booking = await protectedBooking();
+    h.setNow('2026-11-03T17:00:00.400Z');
+    const free = await cancelInApp(booking);
+    expect(free.status, free.text).toBe(200);
+    expect(free.body.appointment.noShowFee).toMatchObject({ customerCancelledAt: '2026-11-03T17:00:00Z', reason: null });
+    expect((await feeRow(booking.id)).customer_cancelled_at.toISOString()).toBe('2026-11-03T17:00:00.000Z');
+    const refused = await charge(booking.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toEqual({ code: 'not_chargeable', message: "The client cancelled at least 1 hour before, so there's no fee." });
+
+    // One whole second inside is late, for the server and as the apps read it.
+    h.setNow('2026-11-02T17:00:00Z');
+    const later = await protectedBooking({ start: '2026-11-03T19:00:00Z' });
+    h.setNow('2026-11-03T18:00:01.400Z');
+    expect((await cancelInApp(later)).body.error.code).toBe('late_cancel_fee');
+    const late = await cancelInApp(later, ACCEPT);
+    expect(late.status, late.text).toBe(200);
+    expect(late.body.appointment.noShowFee).toMatchObject({ customerCancelledAt: '2026-11-03T18:00:01Z', reason: 'lateCancel' });
+    expect((await feeRow(later.id)).customer_cancelled_at.toISOString()).toBe('2026-11-03T18:00:01.000Z');
+    expect((await charge(later.id)).body.appointment.noShowFee.status).toBe('charged');
+
+    // A request the status turned down keeps its time the same way.
+    h.setNow('2026-11-02T17:00:00Z');
+    const marked = await protectedBooking({ start: '2026-11-03T20:00:00Z' });
+    expect((await setStatus(marked.id, 'completed')).status).toBe(200);
+    h.setNow('2026-11-03T19:00:00.700Z');
+    expect((await cancelInApp(marked)).status).toBe(409);
+    expect((await feeRow(marked.id)).customer_cancelled_at.toISOString()).toBe('2026-11-03T19:00:00.000Z');
+    expect(creates()).toHaveLength(1);
+  });
+
   it('the window the client agreed to counts, not the one in Settings today', async () => {
     // Booked with the 1-hour window; the owner then makes it 3 hours.
     const booking = await protectedBooking();

@@ -89,6 +89,28 @@
       "cancelledLate": false
     },
     {
+      "name": "cancelled 400 ms inside the window, kept to the second: exactly 1 hour before",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:00:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled at least 1 hour before, so there's no fee.",
+      "cancelledLate": false
+    },
+    {
+      "name": "cancelled 1 second inside the window",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:00:01Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": "lateCancel",
+      "refusal": null,
+      "cancelledLate": true
+    },
+    {
       "name": "cancelled 2 hours before",
       "status": "cancelled",
       "cancelledBy": "customer",
