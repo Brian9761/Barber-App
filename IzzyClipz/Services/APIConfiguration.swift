@@ -25,12 +25,15 @@ enum APIConfiguration {
         return nil
     }
 
-    /// The server the app talks to: an in-memory fake while UI testing (never the network),
-    /// otherwise the shop's server from Info.plist.
+    /// The server the app talks to: an in-memory fake while UI testing and in the demo version
+    /// (never the network), otherwise the shop's server from Info.plist.
     @MainActor
-    static func makeAPI() -> any ShopAPI {
-        if LaunchOptions.isUITesting {
+    static func makeAPI(demo: Bool = DemoMode.isOn, uiTesting: Bool = LaunchOptions.isUITesting) -> any ShopAPI {
+        if uiTesting {
             return FakeShopAPI(options: FakeShopAPI.Options(arguments: ProcessInfo.processInfo.arguments))
+        }
+        if demo {
+            return DemoMode.makeShopAPI()
         }
         guard let baseURL else { return UnconfiguredShopAPI() }
         return IzzyAPIClient(baseURL: baseURL)

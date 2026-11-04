@@ -64,6 +64,9 @@ private struct HomeContent: View {
             VStack(alignment: .leading, spacing: Theme.Space.cardGap) {
                 HomeHero(height: heroHeight)
                 HomeBookSection()
+                if DemoMode.isOn {
+                    DemoNotice()
+                }
                 QuickActions()
             }
             .padding(.horizontal, Theme.gutter)

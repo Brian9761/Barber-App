@@ -24,6 +24,8 @@
 	<false/>
 	<key>IzzyAPIBaseURL</key>
 	<string>https://izzy-clipz-api.vercel.app</string>
+	<key>IzzyDemoMode</key>
+	<string>$(IZZY_DEMO_MODE)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>

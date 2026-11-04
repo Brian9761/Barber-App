@@ -106,6 +106,16 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertNil(APIConfiguration.baseURL(from: 42))
     }
 
+    /// Only the demo version (built with IZZY_DEMO_MODE=YES) talks to the in-memory server; every
+    /// other build talks to the shop's.
+    func testOnlyTheDemoVersionUsesTheInMemoryServer() {
+        let flag = Bundle.main.object(forInfoDictionaryKey: DemoMode.infoKey) as? String
+        XCTAssertEqual(flag, "NO", "Info.plist's IzzyDemoMode is $(IZZY_DEMO_MODE), NO outside the test builds")
+        XCTAssertFalse(DemoMode.isOn)
+        XCTAssertTrue(APIConfiguration.makeAPI(demo: false, uiTesting: false) is IzzyAPIClient)
+        XCTAssertTrue(APIConfiguration.makeAPI(demo: true, uiTesting: false) is FakeShopAPI, "The demo never uses the network")
+    }
+
     func testContactLinks() {
         let shop = AppData.shop
         XCTAssertEqual(shop.phone.callURL.scheme, "tel")

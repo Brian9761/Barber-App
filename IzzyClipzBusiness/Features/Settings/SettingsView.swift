@@ -12,6 +12,12 @@ struct SettingsView: View {
     var body: some View {
         NavigationStack {
             List {
+                if DemoMode.isOn {
+                    Section {
+                        InlineMessage(text: DemoMode.notice, systemImage: "info.circle.fill", color: .blue)
+                            .accessibilityIdentifier("demoNotice")
+                    }
+                }
                 serverSection
                 stripeSection
                 tapToPaySection

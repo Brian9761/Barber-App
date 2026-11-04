@@ -123,6 +123,9 @@ final class AppEnvironment {
         if arguments.contains(LaunchArgument.uiTesting) || runningUnitTests {
             return sample(arguments: arguments, fixedClock: true, stepDelay: runningUnitTests ? .zero : .milliseconds(300))
         }
+        if DemoMode.isEnabled(in: bundle) {
+            return DemoMode.environment()
+        }
         let shopTime = ShopTime()
         let terminal: any PaymentTerminal
         #if canImport(StripeTerminal)
@@ -144,7 +147,7 @@ final class AppEnvironment {
     }
 
     /// The sample server with options from launch arguments: UI tests,
-    /// previews and the unit tests' host app.
+    /// previews, the unit tests' host app and the demo version (`DemoMode`).
     static func sample(arguments: Set<String> = [], fixedClock: Bool = true, stepDelay: Duration = .milliseconds(300)) -> AppEnvironment {
         let shopTime = ShopTime()
         let fixedNow = uiTestNow(shopTime: shopTime)

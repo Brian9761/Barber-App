@@ -23,9 +23,10 @@ enum LaunchOptions {
         ProcessInfo.processInfo.arguments.contains(uiTestingArgument)
     }
 
-    /// Settings storage. UI tests get a throwaway store that starts empty on every launch.
+    /// Settings storage. UI tests get a throwaway store that starts empty on every launch, and so
+    /// does the demo version.
     static let defaults: UserDefaults = {
-        guard isUITesting else { return .standard }
+        guard isUITesting else { return DemoMode.isOn ? DemoMode.startFresh() : .standard }
         let suite = "com.izzyclipz.app.ui-testing"
         let defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)

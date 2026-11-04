@@ -198,6 +198,7 @@ struct BookingPayAtShopNote: View {
         .card(padding: Theme.Space.xl)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("payAtShopNote")
+        .withDemoNotice()
     }
 }
 

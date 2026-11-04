@@ -37,6 +37,20 @@ struct SignInView: View {
                     }
                 }
 
+                // Signed out of the demo: its sample owner key, one tap away.
+                if DemoMode.isOn {
+                    Section {
+                        InlineMessage(text: DemoMode.notice, systemImage: "info.circle.fill", color: .blue)
+                        Button("Sign in with the sample owner key") {
+                            keyFocused = false
+                            Task { await model.signIn(key: FakeServer.ownerKey) }
+                        }
+                        .frame(minHeight: BusinessTheme.minimumTapSize)
+                        .disabled(model.isSigningIn)
+                        .accessibilityIdentifier("demoSignInButton")
+                    }
+                }
+
                 Section {
                     SecureField("Owner key", text: $key)
                         .textInputAutocapitalization(.never)

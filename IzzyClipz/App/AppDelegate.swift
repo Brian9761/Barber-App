@@ -9,7 +9,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     let favorites = Favorites(defaults: LaunchOptions.defaults)
     let reminders = ReminderStore(scheduler: AppDelegate.makeScheduler(), defaults: LaunchOptions.defaults)
     let customerDetails = CustomerDetailsStore(defaults: LaunchOptions.defaults)
-    /// The shop's server, or an in-memory fake while UI testing.
+    /// The shop's server, or an in-memory fake while UI testing and in the demo version.
     let api: any ShopAPI = APIConfiguration.makeAPI()
     private(set) lazy var appointments: AppointmentStore = makeAppointments()
     private(set) lazy var products = ProductsStore { [api] in try await api.products() }
@@ -20,10 +20,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         LaunchOptions.isUITesting ? AlwaysAllowedNotificationScheduler() : SystemNotificationScheduler()
     }
 
-    /// Manage tokens live in the Keychain. UI tests keep them in memory, so every run starts
-    /// empty and nothing is left in the simulator's Keychain.
+    /// Manage tokens live in the Keychain. UI tests and the demo version keep them in memory, so
+    /// every run starts empty and nothing is left in the simulator's Keychain.
     private static func makeTokenStore() -> SecretStore {
-        LaunchOptions.isUITesting ? InMemorySecretStore() : KeychainSecretStore(service: "com.izzyclipz.app.manage-tokens")
+        (LaunchOptions.isUITesting || DemoMode.isOn) ? InMemorySecretStore() : KeychainSecretStore(service: "com.izzyclipz.app.manage-tokens")
     }
 
     private func makeAppointments() -> AppointmentStore {

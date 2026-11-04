@@ -55,6 +55,8 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         # The shop's server (see server/README.md). A placeholder until it's deployed.
         IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
+        # YES only in the demo version (IZZY_DEMO_MODE below).
+        IzzyDemoMode: $(IZZY_DEMO_MODE)
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIApplicationSupportsIndirectInputEvents: true
@@ -76,6 +78,9 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SUPPORTS_MACCATALYST: NO
         ENABLE_PREVIEWS: YES
+        # The demo version, on its in-memory sample server (IzzyClipz/App/DemoMode.swift). Only
+        # the test builds set YES (.github/workflows/test-builds.yml).
+        IZZY_DEMO_MODE: NO
 
   IzzyClipzTests:
     type: bundle.unit-test
@@ -126,6 +131,8 @@ targets:
         LSRequiresIPhoneOS: true
         ITSAppUsesNonExemptEncryption: false
         IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
+        # YES only in the demo version (IZZY_DEMO_MODE below).
+        IzzyDemoMode: $(IZZY_DEMO_MODE)
         NSBluetoothAlwaysUsageDescription: Stripe's card payment software can also work with Bluetooth card readers, so iOS asks every app that includes it to explain Bluetooth. Izzy Clipz Business takes cards with Tap to Pay on iPhone and doesn't connect to Bluetooth devices.
         NSCameraUsageDescription: Take photos of the shop's products to show them in the Izzy Clipz app.
         NSLocationWhenInUseUsageDescription: Card networks require the location of every card payment, so Stripe checks this iPhone's location while you take a payment with Tap to Pay on iPhone.
@@ -157,6 +164,9 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         SUPPORTS_MACCATALYST: NO
         ENABLE_PREVIEWS: YES
+        # The demo version, signed in on the sample server (IzzyClipzBusiness/App/DemoMode.swift).
+        # Only the test builds set YES (.github/workflows/test-builds.yml).
+        IZZY_DEMO_MODE: NO
 
   IzzyClipzBusinessTests:
     type: bundle.unit-test
