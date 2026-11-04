@@ -1,6 +1,11 @@
 {
   "required": true,
-  "minFeeCents": 2750,
-  "maxFeeCents": 3000,
-  "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $27.50–$30 (50% of the service) to this card. Cancelling in the app before your appointment is free."
+  "minFeeCents": 5500,
+  "maxFeeCents": 6000,
+  "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $55–$60 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+  "lateCancelWindowMinutes": 60,
+  "warning": {
+    "title": "Full Service Cancellation & No-Show Fee",
+    "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free."
+  }
 }

@@ -58,11 +58,13 @@
         "last4": "4242"
       },
       "noShowFee": {
-        "amountCents": 1750,
+        "amountCents": 3500,
         "status": "none",
         "chargedAt": null,
         "message": null,
-        "customerCancelledAt": null
+        "customerCancelledAt": null,
+        "lateCancelWindowMinutes": 60,
+        "reason": null
       }
     },
     {
@@ -95,11 +97,13 @@
         "last4": "4242"
       },
       "noShowFee": {
-        "amountCents": 1750,
+        "amountCents": 3500,
         "status": "none",
         "chargedAt": null,
         "message": null,
-        "customerCancelledAt": "2026-11-02T17:00:00Z"
+        "customerCancelledAt": "2026-11-02T17:00:00Z",
+        "lateCancelWindowMinutes": 60,
+        "reason": null
       }
     },
     {

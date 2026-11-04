@@ -34,6 +34,8 @@ export const Appointment = z.strictObject({
       chargedAt: instant.nullable(),
       message: z.string().min(1).nullable(),
       customerCancelledAt: instant.nullable(),
+      lateCancelWindowMinutes: int.min(30).max(2880).nullable(),
+      reason: z.enum(['noShow', 'lateCancel']).nullable(),
     })
     .nullable(),
 });
@@ -74,7 +76,7 @@ export const Payment = z.strictObject({
   appointmentId: id.nullable(),
   status: z.string(),
   createdAt: instant,
-  kind: z.enum(['inPerson', 'noShowFee']),
+  kind: z.enum(['inPerson', 'noShowFee', 'lateCancelFee']),
 });
 export const SavedCard = z.strictObject({
   brand: z.string().regex(/^[a-z0-9_]+$/),
@@ -87,12 +89,16 @@ export const NoShowSettings = z.strictObject({
   feeMode: z.enum(['percent', 'flat']),
   percent: int.min(1).max(100),
   flatCents: int.min(50).max(50_000),
+  lateCancelEnabled: z.boolean(),
+  lateCancelWindowMinutes: int.min(30).max(2880),
 });
 export const NoShowPolicy = z.strictObject({
   required: z.boolean(),
   minFeeCents: int.min(50).nullable(),
   maxFeeCents: int.min(50).nullable(),
   policyText: z.string().min(1).nullable(),
+  lateCancelWindowMinutes: int.min(30).max(2880).nullable(),
+  warning: z.strictObject({ title: z.string().min(1), message: z.string().min(1) }).nullable(),
 });
 export const ErrorBody = z.strictObject({
   error: z.strictObject({
@@ -152,9 +158,11 @@ export const RESPONSES = {
   'card-saved': z.strictObject({ card: SavedCard }),
   'no-show-settings': z.strictObject({ noShowSettings: NoShowSettings }),
   'no-show-settings-updated': z.strictObject({ noShowSettings: NoShowSettings }),
-  'payments-with-no-show-fee': z.strictObject({ payments: z.array(Payment) }),
+  'payments-with-fees': z.strictObject({ payments: z.array(Payment) }),
   'no-show-fee-charged': z.strictObject({ appointment: Appointment }),
   'no-show-fee-declined': z.strictObject({ appointment: Appointment }),
+  'appointment-cancelled-late': z.strictObject({ appointment: Appointment }),
+  'late-cancel-fee-charged': z.strictObject({ appointment: Appointment }),
 } as const;
 
 export type ResponseName = keyof typeof RESPONSES;

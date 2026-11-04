@@ -1,8 +1,11 @@
 -- No-show protection: a card saved before booking (Stripe Checkout in setup
--- mode), the owner's no-show fee settings, and on each protected appointment the
--- fee agreed at booking, the policy the client agreed to, and what happened when
--- the shop charged it. Nothing is charged at booking. Card numbers never reach
--- this database: only the brand, last 4 digits, expiry and Stripe's ids.
+-- mode), the owner's fee settings, and on each protected appointment the fee
+-- agreed at booking, the policy the client agreed to (with the late-cancellation
+-- window, if it had one), and what happened when the shop charged it. The same
+-- fee covers a no-show and a late cancellation (the client cancelled less than
+-- the window before the start); the "no_show_fee_*" columns are for either.
+-- Nothing is charged at booking. Card numbers never reach this database: only
+-- the brand, last 4 digits, expiry and Stripe's ids.
 
 -- Small shop-wide settings, one JSON value per key (e.g. 'no_show').
 CREATE TABLE settings (
@@ -41,6 +44,9 @@ ALTER TABLE appointments
   -- The exact policy text the client saw and agreed to, and when (the booking time).
   ADD COLUMN no_show_policy text NULL CHECK (char_length(no_show_policy) BETWEEN 1 AND 1200),
   ADD COLUMN no_show_consent_at timestamptz NULL,
+  -- The late-cancellation window in the agreed policy (minutes before the start), or NULL when
+  -- it had none (late cancellations were off): then cancelling in the app before the start is free.
+  ADD COLUMN late_cancel_window_minutes integer NULL CHECK (late_cancel_window_minutes BETWEEN 30 AND 2880),
   -- Charging it: none → pending (asked Stripe, no final answer yet) → charged | declined | needs_action.
   ADD COLUMN no_show_fee_status text NOT NULL DEFAULT 'none'
     CHECK (no_show_fee_status IN ('none', 'pending', 'charged', 'declined', 'needs_action')),
@@ -50,25 +56,31 @@ ALTER TABLE appointments
   -- When the current attempt started: a retry looks for that attempt's PaymentIntent at Stripe
   -- from then on, since Stripe may forget an idempotency key after 24 hours.
   ADD COLUMN no_show_fee_attempt_at timestamptz NULL,
+  -- What the current attempt charges for: a no-show, or a late cancellation by the client.
+  ADD COLUMN no_show_fee_reason text NULL CHECK (no_show_fee_reason IN ('no_show', 'late_cancel')),
   ADD COLUMN no_show_fee_payment_intent_id text NULL CHECK (no_show_fee_payment_intent_id ~ '^pi_[A-Za-z0-9_]+$'),
   -- Why it was declined or needs the client, in plain words for the owner.
   ADD COLUMN no_show_fee_message text NULL CHECK (char_length(no_show_fee_message) <= 300),
   ADD COLUMN no_show_fee_charged_at timestamptz NULL,
   -- When the client cancelled in the app, or asked to, before the start. Set once and never
-  -- cleared, not even when the shop reopens the booking: cancelling in the app before the start
-  -- is free, so such a booking is never charged a no-show fee.
+  -- cleared, not even when the shop reopens the booking: such a booking is never charged a
+  -- no-show fee. Less than late_cancel_window_minutes before the start, it's a late
+  -- cancellation, which can be charged the fee (only while it stays cancelled by the client).
   ADD COLUMN customer_cancelled_at timestamptz NULL,
   ADD CONSTRAINT appointments_no_show_fee_attempt_at CHECK ((no_show_fee_attempt = 0) = (no_show_fee_attempt_at IS NULL)),
+  ADD CONSTRAINT appointments_no_show_fee_reason CHECK ((no_show_fee_attempt = 0) = (no_show_fee_reason IS NULL)),
   ADD CONSTRAINT appointments_no_show_terms CHECK (
     (saved_card_id IS NULL) = (card_brand IS NULL)
     AND (saved_card_id IS NULL) = (card_last4 IS NULL)
     AND (saved_card_id IS NULL) = (no_show_fee_cents IS NULL)
     AND (saved_card_id IS NULL) = (no_show_policy IS NULL)
     AND (saved_card_id IS NULL) = (no_show_consent_at IS NULL)
+    AND (saved_card_id IS NOT NULL OR late_cancel_window_minutes IS NULL)
   ),
   ADD CONSTRAINT appointments_no_show_fee_needs_terms CHECK (no_show_fee_status = 'none' OR saved_card_id IS NOT NULL),
   ADD CONSTRAINT appointments_no_show_fee_charged CHECK ((no_show_fee_status = 'charged') = (no_show_fee_charged_at IS NOT NULL));
 
--- Card payments taken in the shop (Tap to Pay), and no-show fees charged to a card on file.
+-- Card payments taken in the shop (Tap to Pay), and fees charged to a card on file: for a
+-- no-show, or for a late cancellation.
 ALTER TABLE payments
-  ADD COLUMN kind text NOT NULL DEFAULT 'in_person' CHECK (kind IN ('in_person', 'no_show_fee'));
+  ADD COLUMN kind text NOT NULL DEFAULT 'in_person' CHECK (kind IN ('in_person', 'no_show_fee', 'late_cancel_fee'));

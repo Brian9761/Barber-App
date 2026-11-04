@@ -127,6 +127,10 @@ describe('npm run migrate', () => {
       'no_show_fee_payment_intent_id',
       'no_show_fee_message',
       'no_show_fee_charged_at',
+      'no_show_fee_attempt_at',
+      'no_show_fee_reason',
+      'late_cancel_window_minutes',
+      'customer_cancelled_at',
     ]) {
       expect(appointmentColumns, c).toContain(c);
     }
@@ -134,6 +138,12 @@ describe('npm run migrate', () => {
       `SELECT column_default, is_nullable FROM information_schema.columns WHERE table_name = 'payments' AND column_name = 'kind'`,
     );
     expect(kind.rows).toEqual([{ column_default: "'in_person'::text", is_nullable: 'NO' }]);
+    // The payment kinds: in person, and the two fees charged to a card on file.
+    const kindCheck = await db.pool.query(
+      `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conrelid = 'payments'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%kind%'`,
+    );
+    expect(kindCheck.rows).toHaveLength(1);
+    for (const k of ['in_person', 'no_show_fee', 'late_cancel_fee']) expect(kindCheck.rows[0].def).toContain(`'${k}'`);
     const unique = await db.pool.query(
       `SELECT conname FROM pg_constraint WHERE conrelid = 'saved_cards'::regclass AND contype = 'u' ORDER BY conname`,
     );

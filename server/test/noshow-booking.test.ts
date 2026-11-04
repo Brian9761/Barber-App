@@ -143,10 +143,21 @@ describe('booking when a card is needed', () => {
     const res = await book({ noShowPolicy: policy }, { 'x-card-token': token });
     expect(res.status).toBe(201);
     expect(res.body.appointment.card).toEqual({ brand: 'amex', last4: '8431' });
-    expect(res.body.appointment.noShowFee).toEqual({ amountCents: 1750, status: 'none', chargedAt: null, message: null, customerCancelledAt: null });
+    // The starting settings: the full service price ($35), and cancelling less than 1 hour before may be charged.
+    expect(res.body.appointment.noShowFee).toEqual({
+      amountCents: 3500,
+      status: 'none',
+      chargedAt: null,
+      message: null,
+      customerCancelledAt: null,
+      lateCancelWindowMinutes: 60,
+      reason: null,
+    });
     expect(res.body.appointment.payment).toEqual({ status: 'unpaid', amountCents: null, paidAt: null });
     const stored = await row(res.body.appointment.id);
     expect(stored.no_show_policy).toBe(policy);
+    expect(policy).toContain('If you cancel less than 1 hour before your appointment');
+    expect(stored.late_cancel_window_minutes).toBe(60);
     expect(stored.no_show_consent_at.toISOString()).toBe('2026-11-02T17:03:00.000Z');
     expect(stored.saved_card_id).toMatch(/^[0-9a-f-]{36}$/);
     // And the client sees it with their manage token.
@@ -168,11 +179,38 @@ describe('booking when a card is needed', () => {
       );
       expect(res.status, res.text).toBe(201);
       const fee = res.body.appointment.noShowFee.amountCents;
-      expect(fee).toBe(Math.floor((prices[res.body.appointment.barberId]! * 50 + 50) / 100));
+      expect(fee).toBe(prices[res.body.appointment.barberId]);
       fees.add(fee);
       expect((await row(res.body.appointment.id)).no_show_policy).toBe(policy);
     }
-    expect([...fees].sort()).toEqual([2750, 3000]);
+    expect([...fees].sort()).toEqual([5500, 6000]);
+  });
+
+  it('keeps the late-cancellation window the client agreed to; with late cancellations off, none', async () => {
+    await protectionOn(h);
+    const token = await savedCard();
+    const headers = { 'x-card-token': token };
+    // The owner moves the window while the client is on Review: the policy they saw is stale.
+    const seen = await flowPolicy();
+    await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { lateCancelWindowMinutes: 120 } });
+    const stale = await book({ noShowPolicy: seen }, headers);
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('policy_changed');
+    const twoHours = await book({ noShowPolicy: await flowPolicy() }, headers);
+    expect(twoHours.status).toBe(201);
+    expect(twoHours.body.appointment.noShowFee).toMatchObject({ lateCancelWindowMinutes: 120, reason: null });
+    // Changing it again later doesn't change what this booking agreed to.
+    await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { lateCancelWindowMinutes: 30 } });
+    expect((await row(twoHours.body.appointment.id)).late_cancel_window_minutes).toBe(120);
+
+    // Late cancellations off: only a no-show may be charged, so no window is kept.
+    await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { lateCancelEnabled: false } });
+    const policy = await flowPolicy();
+    expect(policy).toContain("If you don't come and haven't cancelled");
+    const noShowOnly = await book({ start: '2026-11-03T19:00:00Z', noShowPolicy: policy }, headers, '203.0.113.62');
+    expect(noShowOnly.status).toBe(201);
+    expect(noShowOnly.body.appointment.noShowFee).toMatchObject({ amountCents: 3500, lateCancelWindowMinutes: null });
+    expect((await row(noShowOnly.body.appointment.id)).no_show_policy).toBe(policy);
   });
 
   it('one card books more than once; a retry with the manage token doesn’t look at the card again', async () => {
@@ -201,5 +239,13 @@ describe('booking when a card is needed', () => {
     await expect(pool.query(`UPDATE appointments SET no_show_fee_status = 'pending' WHERE id = $1`, [id])).rejects.toThrow(
       /appointments_no_show_fee_needs_terms/,
     );
+    // A late-cancellation window is part of a card's terms; the fee's reason belongs to an attempt.
+    await expect(pool.query('UPDATE appointments SET late_cancel_window_minutes = 60 WHERE id = $1', [id])).rejects.toThrow(/appointments_no_show_terms/);
+    await expect(pool.query(`UPDATE appointments SET no_show_fee_reason = 'no_show' WHERE id = $1`, [id])).rejects.toThrow(
+      /appointments_no_show_fee_reason/,
+    );
+    // Only the two reasons, and only a 30-minute to 48-hour window (here other rules fail too, so any check will do).
+    await expect(pool.query(`UPDATE appointments SET no_show_fee_reason = 'late' WHERE id = $1`, [id])).rejects.toThrow(/check constraint/);
+    await expect(pool.query(`UPDATE appointments SET late_cancel_window_minutes = 29 WHERE id = $1`, [id])).rejects.toThrow(/check constraint/);
   });
 });

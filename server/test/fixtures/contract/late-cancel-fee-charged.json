@@ -1,0 +1,41 @@
+{
+  "appointment": {
+    "id": "00000000-0000-4000-8000-000000000012",
+    "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+    "serviceId": "haircut",
+    "serviceName": "Haircut",
+    "barberId": "flowxbori",
+    "barberName": "Flowxbori",
+    "start": "2026-11-03T21:00:00Z",
+    "end": "2026-11-03T21:45:00Z",
+    "durationMinutes": 45,
+    "priceLabel": "$35",
+    "status": "cancelled",
+    "cancelledBy": "customer",
+    "payment": {
+      "status": "unpaid",
+      "amountCents": null,
+      "paidAt": null
+    },
+    "customer": {
+      "name": "Fourth Client",
+      "phone": "+14425550127",
+      "email": null
+    },
+    "note": null,
+    "createdAt": "2026-11-03T19:25:00Z",
+    "card": {
+      "brand": "visa",
+      "last4": "4242"
+    },
+    "noShowFee": {
+      "amountCents": 2500,
+      "status": "charged",
+      "chargedAt": "2026-11-03T20:32:00Z",
+      "message": null,
+      "customerCancelledAt": "2026-11-03T20:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": "lateCancel"
+    }
+  }
+}

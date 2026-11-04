@@ -29,11 +29,13 @@
       "last4": "4242"
     },
     "noShowFee": {
-      "amountCents": 1750,
+      "amountCents": 3500,
       "status": "none",
       "chargedAt": null,
       "message": null,
-      "customerCancelledAt": null
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": null
     }
   },
   "manageToken": "fixture-manage-token-0001xxxxxxxxxxxxxxxxxx"

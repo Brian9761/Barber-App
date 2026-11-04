@@ -12,9 +12,11 @@
 // cancels it straight away.
 //
 // No-show protection: when the usual item needs a card on file (Stripe set up,
-// protection on), it checks that booking it without a card is turned down
+// protection on), it checks the warning clients see ("Full Service Cancellation
+// & No-Show Fee") and that booking it without a card is turned down
 // (card_required), then books an item with no fee instead (an add-on that's
 // included with a cut), since a card can only be saved on Stripe's own page.
+// With SMOKE_OWNER_KEY it also prints the no-show settings.
 
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -59,12 +61,20 @@ try {
   if (owner) {
     const me = await call('GET', '/api/owner/me', { headers: owner });
     check(me.status === 200, `owner key accepted (stripe: ${JSON.stringify(me.body?.stripe)})`);
+    const settings = await call('GET', '/api/owner/no-show-settings', { headers: owner });
+    check(settings.status === 200 && typeof settings.body?.noShowSettings?.enabled === 'boolean', `no-show settings ${JSON.stringify(settings.body?.noShowSettings)}`);
   }
 
   // The latest days of the booking window, last slot first.
   const policyOf = async (offeringId: string) => {
     const res = await call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(offeringId)}`);
     check(res.status === 200, `no-show policy for ${offeringId} answers (card needed: ${res.body?.required})`);
+    if (res.body?.required) {
+      const { policyText, warning, lateCancelWindowMinutes } = res.body;
+      check(typeof policyText === 'string' && policyText.length > 0, `the policy to agree to: ${policyText}`);
+      check(typeof warning?.title === 'string' && typeof warning?.message === 'string', `the warning: ${warning?.title}: ${warning?.message}`);
+      check(lateCancelWindowMinutes === null || Number.isInteger(lateCancelWindowMinutes), `late cancellations: ${lateCancelWindowMinutes === null ? 'free' : `${lateCancelWindowMinutes} minutes`}`);
+    }
     return res.body as { required: boolean };
   };
   const lastSlot = async (offeringId: string) => {

@@ -1,3 +1,4 @@
+import { feeCase, type FeeKind, type FeeReason } from './feecase.js';
 import { formatInstant } from './time.js';
 
 // Database rows → the API contract's JSON types (test/helpers/contract.ts has them as schemas).
@@ -39,10 +40,14 @@ export interface AppointmentRow {
   no_show_fee_cents: number | null;
   no_show_policy: string | null;
   no_show_consent_at: Date | null;
+  /** The late-cancellation window in the agreed policy, in minutes; null when it had none. */
+  late_cancel_window_minutes: number | null;
   no_show_fee_status: NoShowFeeRowStatus;
   no_show_fee_attempt: number;
   /** When the current attempt started (null before the first). */
   no_show_fee_attempt_at: Date | null;
+  /** What the current attempt charges for (null before the first). */
+  no_show_fee_reason: FeeReason | null;
   no_show_fee_payment_intent_id: string | null;
   no_show_fee_message: string | null;
   no_show_fee_charged_at: Date | null;
@@ -52,6 +57,9 @@ export interface AppointmentRow {
 
 export type NoShowFeeRowStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needs_action';
 export type NoShowFeeStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needsAction';
+export type NoShowFeeReason = 'noShow' | 'lateCancel';
+
+const FEE_REASON_OUT: Record<FeeReason, NoShowFeeReason> = { no_show: 'noShow', late_cancel: 'lateCancel' };
 
 const FEE_STATUS_OUT: Record<NoShowFeeRowStatus, NoShowFeeStatus> = {
   none: 'none',
@@ -82,14 +90,28 @@ export interface Appointment {
   createdAt: string;
   /** The card on file for no-shows, or null when the booking has none. */
   card: { brand: string; last4: string } | null;
-  /** The no-show fee agreed at booking and what happened to it, or null without a card on file. */
+  /**
+   * The fee agreed at booking (for a no-show or a late cancellation) and what happened to it,
+   * or null without a card on file.
+   */
   noShowFee: {
     amountCents: number;
     status: NoShowFeeStatus;
     chargedAt: string | null;
     message: string | null;
-    /** When the client cancelled in the app (or asked to) before the start: then there's no fee to charge. */
+    /**
+     * When the client cancelled in the app (or asked to) before the start. Then there's no
+     * no-show fee; less than `lateCancelWindowMinutes` before the start, it's a late cancellation.
+     */
     customerCancelledAt: string | null;
+    /** The agreed policy's late-cancellation window in minutes, or null when it had none (cancelling was free). */
+    lateCancelWindowMinutes: number | null;
+    /**
+     * What the fee is for: once the shop tried to charge it, what that charge was for;
+     * before, the case that applies now (a late cancellation by the client, or a no-show),
+     * or null when neither does.
+     */
+    reason: NoShowFeeReason | null;
   } | null;
 }
 
@@ -139,9 +161,18 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
             chargedAt: row.no_show_fee_charged_at ? formatInstant(row.no_show_fee_charged_at) : null,
             message: row.no_show_fee_message,
             customerCancelledAt: row.customer_cancelled_at ? formatInstant(row.customer_cancelled_at) : null,
+            lateCancelWindowMinutes: row.late_cancel_window_minutes,
+            reason: feeReasonOf(row),
           }
         : null,
   };
+}
+
+/** The fee's `reason` in the JSON (see `Appointment.noShowFee`). */
+function feeReasonOf(row: AppointmentRow): NoShowFeeReason | null {
+  if (row.no_show_fee_reason) return FEE_REASON_OUT[row.no_show_fee_reason];
+  const now = feeCase(row);
+  return now.reason ? FEE_REASON_OUT[now.reason] : null;
 }
 
 export interface TimeOffRow {
@@ -191,8 +222,14 @@ export interface PaymentRow {
   status: string;
   receipt_email: string | null;
   created_at: Date;
-  kind: 'in_person' | 'no_show_fee';
+  kind: 'in_person' | FeeKind;
 }
+
+const PAYMENT_KIND_OUT: Record<PaymentRow['kind'], 'inPerson' | 'noShowFee' | 'lateCancelFee'> = {
+  in_person: 'inPerson',
+  no_show_fee: 'noShowFee',
+  late_cancel_fee: 'lateCancelFee',
+};
 
 export const PAYMENT_COLUMNS = 'id, amount_cents, description, appointment_id, status, receipt_email, created_at, kind';
 
@@ -204,7 +241,7 @@ export function paymentJSON(row: PaymentRow) {
     appointmentId: row.appointment_id,
     status: row.status,
     createdAt: formatInstant(row.created_at),
-    /** "inPerson" (Tap to Pay in the shop) or "noShowFee" (charged to the card on file). */
-    kind: row.kind === 'no_show_fee' ? ('noShowFee' as const) : ('inPerson' as const),
+    /** "inPerson" (Tap to Pay in the shop), or a fee charged to the card on file: "noShowFee" or "lateCancelFee". */
+    kind: PAYMENT_KIND_OUT[row.kind] ?? ('inPerson' as const),
   };
 }

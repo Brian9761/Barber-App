@@ -288,6 +288,8 @@ function normalizedBrand(brand: string | null | undefined): string {
 export interface NoShowTerms {
   card: SavedCardRow;
   policyText: string;
+  /** The late-cancellation window that policy states, or null when it has none. */
+  lateCancelWindowMinutes: number | null;
   fees: Map<string, number | null>;
 }
 
@@ -321,5 +323,5 @@ export async function noShowTermsForBooking(
   if (agreedPolicy !== policy.policyText) {
     throw new ApiError('policy_changed', 'The no-show policy for this booking just changed. Check it and book again.');
   }
-  return { card, policyText: policy.policyText, fees };
+  return { card, policyText: policy.policyText, lateCancelWindowMinutes: policy.lateCancelWindowMinutes, fees };
 }

@@ -29,11 +29,13 @@
       "last4": "4242"
     },
     "noShowFee": {
-      "amountCents": 1750,
+      "amountCents": 3500,
       "status": "charged",
       "chargedAt": "2026-11-03T18:20:00Z",
       "message": null,
-      "customerCancelledAt": null
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": "noShow"
     }
   }
 }

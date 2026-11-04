@@ -77,6 +77,11 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
    location is still the test-mode one (or has a typo), Tap to Pay says
    "Stripe didn't accept the Terminal location set on the server" until
    it's fixed, and the server's logs show Stripe's own error.
+7. **No-show protection** (a card on file for online bookings) stays off
+   while you test, whatever Stripe key the server has: a test key would
+   send clients to a test-mode card page that turns real cards down. Turn
+   it on in Settings → No-show protection only with the live key, once the
+   customer app version with the card screen is in the App Store.
 
 ## Test mode
 

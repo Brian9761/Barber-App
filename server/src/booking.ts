@@ -101,7 +101,7 @@ export interface NewAppointment {
   manageToken?: string | undefined;
   /** The owner app's `Idempotency-Key` for this booking; only its hash is stored. Shop bookings only. */
   idempotencyKey?: string | undefined;
-  /** No-show protection: the card on file and the agreed policy. Stored only if the barber who gets it has a fee. */
+  /** No-show protection: the card on file and the agreed policy (with its late-cancellation window). Stored only if the barber who gets it has a fee. */
   noShow?: NoShowTerms | null | undefined;
 }
 
@@ -259,9 +259,9 @@ async function insertAppointment(
        id, offering_id, service_id, barber_id, service_name, barber_name, price_label, price_cents, price_kind,
        start_at, end_at, status, cancelled_by, booked_by, customer_name, customer_phone, customer_email, note,
        manage_token_hash, any_barber, idempotency_key_hash, payment_status, created_at, updated_at,
-       saved_card_id, card_brand, card_last4, no_show_fee_cents, no_show_policy, no_show_consent_at)
+       saved_card_id, card_brand, card_last4, no_show_fee_cents, no_show_policy, no_show_consent_at, late_cancel_window_minutes)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'booked', NULL, $12, $13, $14, $15, $16, $17, $19, $20, 'unpaid', $18, $18,
-             $21, $22, $23, $24, $25, CASE WHEN $21::uuid IS NULL THEN NULL ELSE $18::timestamptz END)
+             $21, $22, $23, $24, $25, CASE WHEN $21::uuid IS NULL THEN NULL ELSE $18::timestamptz END, $26)
      RETURNING *`,
     [
       id,
@@ -289,6 +289,7 @@ async function insertAppointment(
       terms?.card.last4 ?? null,
       terms ? fee : null,
       terms?.policyText ?? null,
+      terms?.lateCancelWindowMinutes ?? null,
     ],
   );
   const row = rows[0];

@@ -184,7 +184,6 @@ describe('contract fixtures (API v1)', () => {
     h.setNow('2026-11-03T18:20:00Z');
     await h.call('PATCH', `/api/owner/appointments/${created.appointment.id}`, { ...owner, body: { status: 'noShow' } });
     check('no-show-fee-charged', await h.call('POST', `/api/owner/appointments/${created.appointment.id}/no-show-fee`, owner));
-    check('payments-with-no-show-fee', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
     // Another one, whose card is declined.
     const later = await h.call('POST', '/api/appointments', {
       headers: cardHeaders,
@@ -199,6 +198,25 @@ describe('contract fixtures (API v1)', () => {
     await h.call('PATCH', `/api/owner/appointments/${later.body.appointment.id}`, { ...owner, body: { status: 'noShow' } });
     h.stripe.nextCharge = 'insufficient_funds';
     check('no-show-fee-declined', await h.call('POST', `/api/owner/appointments/${later.body.appointment.id}/no-show-fee`, owner));
+    // And one who cancels in the app 30 minutes before their 1 PM: a late cancellation the owner charges.
+    const lateBooking = await h.call('POST', '/api/appointments', {
+      headers: cardHeaders,
+      body: {
+        offeringId: FLOW45,
+        start: '2026-11-03T21:00:00Z',
+        customer: { name: 'Fourth Client', phone: '4425550127' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText,
+      },
+    });
+    expect(lateBooking.status, lateBooking.text).toBe(201);
+    h.setNow('2026-11-03T20:30:00Z');
+    check(
+      'appointment-cancelled-late',
+      await h.call('POST', `/api/appointments/${lateBooking.body.appointment.id}/cancel`, { headers: { 'x-manage-token': lateBooking.body.manageToken } }),
+    );
+    h.advance(2);
+    check('late-cancel-fee-charged', await h.call('POST', `/api/owner/appointments/${lateBooking.body.appointment.id}/no-show-fee`, owner));
+    check('payments-with-fees', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
   });
 
   it('one example error for every error code', async () => {

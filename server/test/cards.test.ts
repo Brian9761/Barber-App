@@ -58,7 +58,7 @@ describe('POST /api/cards/checkout', () => {
       custom_text: {
         submit: {
           message:
-            "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
+            "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
         },
       },
       setup_intent_data: {

@@ -4,14 +4,17 @@ import { resolveTarget, targetOfferings, type Target } from './booking.js';
 import type { Offering } from './catalog.js';
 import type { Queryable } from './db.js';
 import type { Config } from './config.js';
+import { MAX_LATE_CANCEL_WINDOW_MINUTES, MIN_LATE_CANCEL_WINDOW_MINUTES, windowLabel } from './feecase.js';
 import { json, readJsonObject } from './http.js';
 import type { Context } from './router.js';
 import { parse, shortId } from './validation.js';
 
-// No-show protection: the owner's settings, the fee rule and the policy clients
-// agree to. Everything about how much a no-show costs is decided here, in one
-// place; the Kit mirrors the rule only for the owner app's preview, and its tests
-// check it against test/fixtures/no-show-rule.json, which this server's tests write.
+// No-show protection: the owner's settings, the fee rule, the policy clients
+// agree to and the warning they see while booking. Everything about how much a
+// no-show or a late cancellation costs is decided here, in one place (which
+// booking can be charged is in feecase.ts); the Kit mirrors the rule only for the
+// owner app's preview, and its tests check it against
+// test/fixtures/no-show-rule.json, which this server's tests write.
 
 export type FeeMode = 'percent' | 'flat';
 
@@ -26,15 +29,30 @@ export interface NoShowSettings {
   percent: number;
   /** Used in flat mode: 50¢ to $500. */
   flatCents: number;
+  /**
+   * Whether a client who cancels less than `lateCancelWindowMinutes` before the start may be
+   * charged the same fee as a no-show. Off: cancelling in the app before the start is free.
+   */
+  lateCancelEnabled: boolean;
+  /** How long before the start cancelling stops being free: 30 minutes to 48 hours. */
+  lateCancelWindowMinutes: number;
 }
 
 /**
- * Before the owner saves anything: protection off, and 50% of the service ($20 ready for flat
- * mode) once it's on. Off by default because the shop may set a test key to try Tap to Pay
- * while real clients book: Stripe's test-mode card page turns real cards down, so they
- * couldn't book online at all. The owner turns it on when the app with the card screen is out.
+ * Before the owner saves anything: protection off; once it's on, the full service price (100%;
+ * $20 ready for flat mode) for a no-show or a cancellation less than 1 hour before the start.
+ * Off by default because the shop may set a test key to try Tap to Pay while real clients
+ * book: Stripe's test-mode card page turns real cards down, so they couldn't book online at
+ * all. The owner turns it on when the apps with the card screen are out.
  */
-export const DEFAULT_NO_SHOW_SETTINGS: NoShowSettings = { enabled: false, feeMode: 'percent', percent: 50, flatCents: 2000 };
+export const DEFAULT_NO_SHOW_SETTINGS: NoShowSettings = {
+  enabled: false,
+  feeMode: 'percent',
+  percent: 100,
+  flatCents: 2000,
+  lateCancelEnabled: true,
+  lateCancelWindowMinutes: 60,
+};
 
 /** Stripe's smallest US card charge. A fee below it means the booking isn't protected. */
 export const MIN_NO_SHOW_FEE_CENTS = 50;
@@ -69,13 +87,55 @@ export function feeRangeLabel(minCents: number, maxCents: number): string {
   return minCents === maxCents ? money(minCents) : `${money(minCents)}–${money(maxCents)}`;
 }
 
-/** The policy clients see before booking (and on Stripe's card page), with the fee for this booking. */
+/**
+ * The policy clients agree to before booking (also shown on Stripe's card page), with the fee
+ * for this booking. It's stored with the booking as the client's consent, so it says exactly
+ * when the card may be charged.
+ */
 export function policyText(minCents: number, maxCents: number, settings: NoShowSettings): string {
   const share = settings.feeMode === 'percent' ? ` (${settings.percent}% of the service)` : '';
-  return (
-    `No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge ${feeRangeLabel(minCents, maxCents)}${share} to this card. ` +
-    'Cancelling in the app before your appointment is free.'
-  );
+  const fee = `${feeRangeLabel(minCents, maxCents)}${share}`;
+  if (settings.lateCancelEnabled) {
+    const window = windowLabel(settings.lateCancelWindowMinutes);
+    return (
+      `No payment now. If you cancel less than ${window} before your appointment, or don't come, Izzy Clipz may charge ${fee} to this card. ` +
+      `Cancelling in the app more than ${window} before is free.`
+    );
+  }
+  return `No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge ${fee} to this card. Cancelling in the app before your appointment is free.`;
+}
+
+/** The notice clients see on "Pick a day and time" and on Review: a title and one or two sentences. */
+export interface FeeWarning {
+  title: string;
+  message: string;
+}
+
+/**
+ * "Full Service Cancellation & No-Show Fee": "Cancelling less than 1 hour before your
+ * appointment, or not showing up, is charged the full service price ($40). Cancelling in the
+ * app more than 1 hour before is free." The title says "Full Service" only when the fee is
+ * 100% of the service; with late cancellations off, it's only about no-shows.
+ */
+export function feeWarning(minCents: number, maxCents: number, settings: NoShowSettings): FeeWarning {
+  const fee = feeRangeLabel(minCents, maxCents);
+  const fullPrice = settings.feeMode === 'percent' && settings.percent === 100;
+  const amount = fullPrice
+    ? `the full service price (${fee})`
+    : settings.feeMode === 'percent'
+      ? `${fee} (${settings.percent}% of the service)`
+      : fee;
+  if (settings.lateCancelEnabled) {
+    const window = windowLabel(settings.lateCancelWindowMinutes);
+    return {
+      title: fullPrice ? 'Full Service Cancellation & No-Show Fee' : 'Late Cancellation & No-Show Fee',
+      message: `Cancelling less than ${window} before your appointment, or not showing up, is charged ${amount}. Cancelling in the app more than ${window} before is free.`,
+    };
+  }
+  return {
+    title: 'No-Show Fee',
+    message: `Not showing up is charged ${amount}. Cancelling in the app before your appointment is free.`,
+  };
 }
 
 export interface NoShowPolicy {
@@ -83,8 +143,22 @@ export interface NoShowPolicy {
   required: boolean;
   minFeeCents: number | null;
   maxFeeCents: number | null;
+  /** What the client agrees to; the booking sends it back exactly (field noShowPolicy). */
   policyText: string | null;
+  /** Cancelling less than this many minutes before the start may be charged; null: cancelling is free. */
+  lateCancelWindowMinutes: number | null;
+  /** The notice to show while picking a time and on Review. */
+  warning: FeeWarning | null;
 }
+
+const NOT_REQUIRED: NoShowPolicy = {
+  required: false,
+  minFeeCents: null,
+  maxFeeCents: null,
+  policyText: null,
+  lateCancelWindowMinutes: null,
+  warning: null,
+};
 
 export interface TargetProtection {
   policy: NoShowPolicy;
@@ -101,15 +175,25 @@ export function protectionFor(target: Target, settings: NoShowSettings, stripeCo
   const active = stripeConfigured && settings.enabled;
   for (const offering of targetOfferings(target)) fees.set(offering.id, active ? noShowFeeCents(offering, settings) : null);
   const charged = [...fees.values()].filter((fee): fee is number => fee !== null);
-  if (charged.length === 0) {
-    return { policy: { required: false, minFeeCents: null, maxFeeCents: null, policyText: null }, fees };
-  }
+  if (charged.length === 0) return { policy: { ...NOT_REQUIRED }, fees };
   const min = Math.min(...charged);
   const max = Math.max(...charged);
-  return { policy: { required: true, minFeeCents: min, maxFeeCents: max, policyText: policyText(min, max, settings) }, fees };
+  return {
+    policy: {
+      required: true,
+      minFeeCents: min,
+      maxFeeCents: max,
+      policyText: policyText(min, max, settings),
+      lateCancelWindowMinutes: settings.lateCancelEnabled ? settings.lateCancelWindowMinutes : null,
+      warning: feeWarning(min, max, settings),
+    },
+    fees,
+  };
 }
 
 // Settings storage: one JSON object under settings.key = 'no_show', merged over the defaults.
+
+const WINDOW_MESSAGE = `Pick a late-cancellation window from ${windowLabel(MIN_LATE_CANCEL_WINDOW_MINUTES)} to ${windowLabel(MAX_LATE_CANCEL_WINDOW_MINUTES)}.`;
 
 const settingsShape = z.object({
   enabled: z.boolean({ error: 'enabled must be true or false.' }),
@@ -124,6 +208,12 @@ const settingsShape = z.object({
     .int({ error: 'The flat fee must be a whole number of cents.' })
     .min(MIN_FLAT_CENTS, { error: `Pick a flat fee from ${money(MIN_FLAT_CENTS)} to ${money(MAX_FLAT_CENTS)}.` })
     .max(MAX_FLAT_CENTS, { error: `Pick a flat fee from ${money(MIN_FLAT_CENTS)} to ${money(MAX_FLAT_CENTS)}.` }),
+  lateCancelEnabled: z.boolean({ error: 'lateCancelEnabled must be true or false.' }),
+  lateCancelWindowMinutes: z
+    .number({ error: WINDOW_MESSAGE })
+    .int({ error: 'The late-cancellation window must be a whole number of minutes.' })
+    .min(MIN_LATE_CANCEL_WINDOW_MINUTES, { error: WINDOW_MESSAGE })
+    .max(MAX_LATE_CANCEL_WINDOW_MINUTES, { error: WINDOW_MESSAGE }),
 });
 
 export async function loadNoShowSettings(db: Queryable): Promise<NoShowSettings> {
@@ -154,7 +244,7 @@ const targetQuery = z.object({
 export async function getNoShowPolicy(ctx: Context): Promise<Response> {
   const query = parse(targetQuery, Object.fromEntries(ctx.url.searchParams));
   const target = resolveTarget(ctx.deps.catalog, query);
-  if (!stripeConfigured(ctx.deps.config)) return json(protectionFor(target, DEFAULT_NO_SHOW_SETTINGS, false).policy);
+  if (!stripeConfigured(ctx.deps.config)) return json(NOT_REQUIRED);
   const settings = await loadNoShowSettings(ctx.deps.db);
   return json(protectionFor(target, settings, true).policy);
 }

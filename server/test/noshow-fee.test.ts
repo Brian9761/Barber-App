@@ -5,8 +5,9 @@ import { AUTHENTICATION_MESSAGE, declineMessage, feeStatusFor, needsTheClient, n
 import { RESPONSES } from './helpers/contract.js';
 import { protectionOn, stripeError, useHarness } from './helpers/harness.js';
 
-// Charging a no-show fee to the card on file, and keeping it right from
-// Stripe's webhook. Only a PaymentIntent Stripe reports as succeeded is "charged".
+// Charging the fee to the card on file, for a no-show or a late cancellation, and
+// keeping it right from Stripe's webhook. Only a PaymentIntent Stripe reports as
+// succeeded is "charged".
 
 // Monday Nov 2 2026, 9:00 AM PST.
 const h = useHarness({ now: '2026-11-02T17:00:00Z' });
@@ -126,11 +127,14 @@ describe('cancelling in the app before the start is always free', () => {
     expect(cancelled.status).toBe(200);
     expect(cancelled.body.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'customer' });
     expect(cancelled.body.appointment.noShowFee).toEqual({
-      amountCents: 1750,
+      amountCents: 3500,
       status: 'none',
       chargedAt: null,
       message: null,
       customerCancelledAt: '2026-11-03T17:00:00Z',
+      lateCancelWindowMinutes: 60,
+      // Exactly 1 hour before is still free.
+      reason: null,
     });
     // The shop reopens it (say the client called), then they don't come.
     const reopened = await setStatus(booking.id, 'booked');
@@ -211,6 +215,189 @@ describe('cancelling in the app before the start is always free', () => {
   });
 });
 
+describe('late cancellations: the client cancels less than the agreed window before the start', () => {
+  /** A protected booking for `start`, cancelled in the app at `cancelAt`. */
+  async function cancelledAt(cancelAt: string, start = TUE10) {
+    const booking = await protectedBooking({ start });
+    h.setNow(cancelAt);
+    const res = await cancelInApp(booking);
+    expect(res.status, res.text).toBe(200);
+    return { ...booking, appointment: res.body.appointment };
+  }
+
+  it('can be charged the agreed fee right away, as a late cancellation fee', async () => {
+    // Tuesday 9:30 AM, half an hour before the 10 AM booking.
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    expect(late.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'customer' });
+    expect(late.appointment.noShowFee).toEqual({
+      amountCents: 3500,
+      status: 'none',
+      chargedAt: null,
+      message: null,
+      customerCancelledAt: '2026-11-03T17:30:00Z',
+      lateCancelWindowMinutes: 60,
+      reason: 'lateCancel',
+    });
+    // The owner doesn't have to wait for the start.
+    h.setNow('2026-11-03T17:31:00Z');
+    const res = await charge(late.id);
+    expect(res.status, res.text).toBe(200);
+    expect(RESPONSES['late-cancel-fee-charged'].safeParse(res.body).success).toBe(true);
+    expect(res.body.appointment).toMatchObject({ status: 'cancelled', payment: { status: 'unpaid', amountCents: null, paidAt: null } });
+    expect(res.body.appointment.noShowFee).toEqual({
+      amountCents: 3500,
+      status: 'charged',
+      chargedAt: '2026-11-03T17:31:00Z',
+      message: null,
+      customerCancelledAt: '2026-11-03T17:30:00Z',
+      lateCancelWindowMinutes: 60,
+      reason: 'lateCancel',
+    });
+    const [call] = creates();
+    expect(call!.params).toMatchObject({
+      amount: 3500,
+      currency: 'usd',
+      off_session: true,
+      confirm: true,
+      description: 'Late cancellation fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM',
+      metadata: { source: 'izzy-clipz-api', kind: 'late_cancel_fee', appointment_id: late.id, attempt: '1' },
+    });
+    expect(call!.options).toEqual({ idempotencyKey: noShowFeeIdempotencyKey(late.id, 1) });
+    // Payments today labels it.
+    expect((await h.call('GET', '/api/owner/payments?date=2026-11-03', owner)).body.payments).toEqual([
+      expect.objectContaining({
+        amountCents: 3500,
+        description: 'Late cancellation fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM',
+        appointmentId: late.id,
+        status: 'succeeded',
+        kind: 'lateCancelFee',
+      }),
+    ]);
+    // Once only, and the client sees it.
+    expect((await charge(late.id)).body.appointment.noShowFee.status).toBe('charged');
+    expect(creates()).toHaveLength(1);
+    const mine = await h.call('GET', `/api/appointments/${late.id}`, { headers: { 'x-manage-token': late.manageToken } });
+    expect(mine.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
+  it('the edge of the window: exactly 1 hour before is free, 59 minutes before is late', async () => {
+    const onTime = await cancelledAt('2026-11-03T17:00:00Z');
+    expect(onTime.appointment.noShowFee.reason).toBeNull();
+    const free = await charge(onTime.id);
+    expect(free.status).toBe(409);
+    expect(free.body.error).toEqual({ code: 'not_chargeable', message: "The client cancelled at least 1 hour before, so there's no fee." });
+
+    const late = await cancelledAt('2026-11-03T18:01:00Z', '2026-11-03T19:00:00Z');
+    expect(late.appointment.noShowFee.reason).toBe('lateCancel');
+    expect((await charge(late.id)).body.appointment.noShowFee.status).toBe('charged');
+    expect(creates()).toHaveLength(1);
+  });
+
+  it('the window the client agreed to counts, not the one in Settings today', async () => {
+    // Booked with the 1-hour window; the owner then makes it 3 hours.
+    const booking = await protectedBooking();
+    await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { lateCancelWindowMinutes: 180 } });
+    h.setNow('2026-11-03T16:30:00Z'); // 90 minutes before
+    expect((await cancelInApp(booking)).body.appointment.noShowFee).toMatchObject({ lateCancelWindowMinutes: 60, reason: null });
+    expect((await charge(booking.id)).body.error.message).toBe("The client cancelled at least 1 hour before, so there's no fee.");
+
+    // Booked under the 3-hour window: 90 minutes before is late.
+    h.setNow('2026-11-02T17:00:00Z');
+    const later = await cancelledAt('2026-11-03T17:30:00Z', '2026-11-03T19:00:00Z');
+    expect(later.appointment.noShowFee).toMatchObject({ lateCancelWindowMinutes: 180, reason: 'lateCancel' });
+    expect((await charge(later.id)).body.appointment.noShowFee.status).toBe('charged');
+    // And turning late cancellations off later doesn't undo what they agreed to (the owner still decides).
+    expect((await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { lateCancelEnabled: false } })).status).toBe(200);
+  });
+
+  it('booked while late cancellations were off: cancelling in the app is free, however late', async () => {
+    await protectionOn(h);
+    await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { lateCancelEnabled: false } });
+    const booking = await cancelledAt('2026-11-03T17:55:00Z');
+    expect(booking.appointment.noShowFee).toMatchObject({ lateCancelWindowMinutes: null, reason: null, customerCancelledAt: '2026-11-03T17:55:00Z' });
+    const res = await charge(booking.id);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toEqual({ code: 'not_chargeable', message: "The client cancelled this booking in the app, so there's no fee." });
+    expect(creates()).toHaveLength(0);
+  });
+
+  it('a cancellation by the shop is never charged, nor a late one the shop reopened', async () => {
+    const SHOP = { code: 'not_chargeable', message: "The shop cancelled this booking, so there's no fee." };
+    const shop = await protectedBooking();
+    h.setNow('2026-11-03T17:50:00Z');
+    const cancelled = await setStatus(shop.id, 'cancelled');
+    expect(cancelled.body.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'shop' });
+    expect(cancelled.body.appointment.noShowFee.reason).toBeNull();
+    expect((await charge(shop.id)).body.error).toEqual(SHOP);
+    // The client tries to cancel it too (refused: it's already cancelled), still the shop's cancellation.
+    expect((await cancelInApp(shop)).status).toBe(409);
+    expect((await charge(shop.id)).body.error).toEqual(SHOP);
+
+    // A late cancellation the shop reopens (say the client called back) can't be charged any more…
+    h.setNow('2026-11-02T17:00:00Z');
+    const late = await cancelledAt('2026-11-03T18:40:00Z', '2026-11-03T19:00:00Z');
+    expect(late.appointment.noShowFee.reason).toBe('lateCancel');
+    const reopened = await setStatus(late.id, 'booked');
+    expect(reopened.body.appointment.noShowFee).toMatchObject({ reason: null, customerCancelledAt: '2026-11-03T18:40:00Z' });
+    expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: "The client cancelled this booking in the app, so there's no fee." });
+    // …nor once the shop cancels it again, or marks it a no-show after the start.
+    expect((await setStatus(late.id, 'cancelled')).body.appointment.cancelledBy).toBe('shop');
+    expect((await charge(late.id)).body.error).toEqual(SHOP);
+    h.setNow('2026-11-03T19:10:00Z');
+    expect((await markNoShow(late.id)).status).toBe(200);
+    expect((await charge(late.id)).body.error.message).toBe("The client cancelled this booking in the app, so there's no fee.");
+    expect(creates()).toHaveLength(0);
+  });
+
+  it('a declined late-cancellation fee can be tried again, and stays a late cancellation', async () => {
+    const late = await cancelledAt('2026-11-03T17:45:00Z');
+    h.stripe.nextCharge = 'insufficient_funds';
+    const declined = await charge(late.id);
+    expect(declined.body.appointment.noShowFee).toMatchObject({
+      status: 'declined',
+      reason: 'lateCancel',
+      message: "The card was declined: there isn't enough money on it.",
+    });
+    expect((await h.call('GET', '/api/owner/payments?date=2026-11-03', owner)).body.payments[0]).toMatchObject({
+      kind: 'lateCancelFee',
+      status: 'requires_payment_method',
+    });
+    expect((await feeRow(late.id)).no_show_fee_reason).toBe('late_cancel');
+    h.advance(30);
+    const second = await charge(late.id);
+    expect(second.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    expect(creates().map((c) => (c.params as { metadata: { kind: string; attempt: string } }).metadata)).toEqual([
+      expect.objectContaining({ kind: 'late_cancel_fee', attempt: '1' }),
+      expect.objectContaining({ kind: 'late_cancel_fee', attempt: '2' }),
+    ]);
+  });
+
+  it('a lost answer for a late-cancellation fee is found at Stripe and recorded as one', async () => {
+    const late = await cancelledAt('2026-11-03T17:45:00Z');
+    h.stripe.loseNextChargeAnswer = true;
+    expect((await charge(late.id)).status).toBe(500);
+    h.advance(25 * 60);
+    h.stripe.forgetIdempotencyKeys();
+    const found = await charge(late.id);
+    expect(found.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    expect(creates()).toHaveLength(1);
+    // Listed on the day Stripe charged it, not the day the server found out.
+    expect((await h.call('GET', '/api/owner/payments?date=2026-11-03', owner)).body.payments).toEqual([
+      expect.objectContaining({ kind: 'lateCancelFee', status: 'succeeded', appointmentId: late.id, createdAt: '2026-11-03T17:45:00Z' }),
+    ]);
+    expect((await h.call('GET', '/api/owner/payments?date=2026-11-04', owner)).body.payments).toEqual([]);
+  });
+
+  it('a no-show reads as one on the shop’s list before anything is charged', async () => {
+    const id = await noShow();
+    const day = await h.call('GET', '/api/owner/appointments?date=2026-11-03', owner);
+    expect(day.body.appointments[0].noShowFee).toMatchObject({ status: 'none', reason: 'noShow' });
+    // A booking that's just booked, or completed, isn't either case.
+    expect((await setStatus(id, 'completed')).body.appointment.noShowFee.reason).toBeNull();
+    expect((await setStatus(id, 'booked')).body.appointment.noShowFee.reason).toBeNull();
+  });
+});
+
 describe('POST /api/owner/appointments/:id/no-show-fee', () => {
   it('charges the agreed fee off-session to the card on file, once, with an idempotency key', async () => {
     const id = await noShow({ email: 'andre@example.com' });
@@ -218,11 +405,13 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(res.status).toBe(200);
     expect(RESPONSES['no-show-fee-charged'].safeParse(res.body).success).toBe(true);
     expect(res.body.appointment.noShowFee).toEqual({
-      amountCents: 1750,
+      amountCents: 3500,
       status: 'charged',
       chargedAt: '2026-11-03T18:20:00Z',
       message: null,
       customerCancelledAt: null,
+      lateCancelWindowMinutes: 60,
+      reason: 'noShow',
     });
     // A no-show fee isn't a payment for the service.
     expect(res.body.appointment.payment).toEqual({ status: 'unpaid', amountCents: null, paidAt: null });
@@ -230,7 +419,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     const [call] = creates();
     const card = await h.database.pool.query('SELECT stripe_customer_id, stripe_payment_method_id FROM saved_cards');
     expect(call!.params).toEqual({
-      amount: 1750,
+      amount: 3500,
       currency: 'usd',
       customer: card.rows[0].stripe_customer_id,
       payment_method: card.rows[0].stripe_payment_method_id,
@@ -259,7 +448,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(list.body.payments).toEqual([
       {
         id: expect.stringMatching(/^pi_/),
-        amountCents: 1750,
+        amountCents: 3500,
         description: 'No-show fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM',
         appointmentId: id,
         status: 'succeeded',
@@ -291,11 +480,13 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     const declined = await charge(id);
     expect(declined.status).toBe(200);
     expect(declined.body.appointment.noShowFee).toEqual({
-      amountCents: 1750,
+      amountCents: 3500,
       status: 'declined',
       chargedAt: null,
       message: "The card was declined: there isn't enough money on it.",
       customerCancelledAt: null,
+      lateCancelWindowMinutes: 60,
+      reason: 'noShow',
     });
     const attempt1 = (await feeRow(id)).no_show_fee_payment_intent_id;
     expect(attempt1).toMatch(/^pi_/);
@@ -335,11 +526,13 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     const res = await charge(id);
     expect(res.status).toBe(200);
     expect(res.body.appointment.noShowFee).toEqual({
-      amountCents: 1750,
+      amountCents: 3500,
       status: 'needsAction',
       chargedAt: null,
       message: "The client's bank wants them to approve this charge, so it can't go through from here. Ask them to pay at the shop.",
       customerCancelledAt: null,
+      lateCancelWindowMinutes: 60,
+      reason: 'noShow',
     });
     // A PaymentIntent left needing action (never with off_session in practice) reads the same.
     const other = (await protectedBooking({ start: '2026-11-03T19:00:00Z' })).id;
@@ -653,7 +846,15 @@ describe('POST /api/stripe/webhook for no-show fees', () => {
         last_payment_error: { type: 'card_error', code: 'authentication_required', decline_code: 'authentication_required' },
       }),
     );
-    expect(await fee(id)).toEqual({ amountCents: 1750, status: 'needsAction', chargedAt: null, message: AUTHENTICATION_MESSAGE, customerCancelledAt: null });
+    expect(await fee(id)).toEqual({
+      amountCents: 3500,
+      status: 'needsAction',
+      chargedAt: null,
+      message: AUTHENTICATION_MESSAGE,
+      customerCancelledAt: null,
+      lateCancelWindowMinutes: 60,
+      reason: 'noShow',
+    });
   });
 
   it('a processing charge that then needs the client reads as needsAction, by webhook, by charging again and by …/complete', async () => {
@@ -695,10 +896,10 @@ describe('POST /api/stripe/webhook for no-show fees', () => {
     await charge(id);
     const [intent] = [...h.stripe.intents.values()].filter((pi) => pi.metadata.kind === 'no_show_fee');
     expect((await h.database.pool.query('SELECT count(*)::int AS n FROM payments')).rows[0].n).toBe(0);
-    await send(event('payment_intent.succeeded', { id: intent!.id, status: 'succeeded', amount: 1750, metadata: intent!.metadata }));
+    await send(event('payment_intent.succeeded', { id: intent!.id, status: 'succeeded', amount: 3500, metadata: intent!.metadata }));
     expect((await fee(id)).status).toBe('charged');
     const payments = (await h.call('GET', '/api/owner/payments?date=2026-11-03', owner)).body.payments;
-    expect(payments).toEqual([expect.objectContaining({ id: intent!.id, kind: 'noShowFee', status: 'succeeded', amountCents: 1750, appointmentId: id })]);
+    expect(payments).toEqual([expect.objectContaining({ id: intent!.id, kind: 'noShowFee', status: 'succeeded', amountCents: 3500, appointmentId: id })]);
     // And charging again now is just the same answer.
     expect((await charge(id)).body.appointment.noShowFee.status).toBe('charged');
   });
@@ -717,6 +918,29 @@ describe('POST /api/stripe/webhook for no-show fees', () => {
     expect((await fee(id)).status).toBe('pending');
     await send(event('payment_intent.succeeded', { id: second, status: 'succeeded', metadata: { kind: 'no_show_fee', appointment_id: id, attempt: '2' } }));
     expect((await fee(id)).status).toBe('charged');
+  });
+
+  it('a late-cancellation fee the server never got to record is found by its metadata, and listed as one', async () => {
+    const booking = await protectedBooking();
+    h.setNow('2026-11-03T17:40:00Z');
+    expect((await cancelInApp(booking)).body.appointment.noShowFee.reason).toBe('lateCancel');
+    h.stripe.loseNextChargeAnswer = true;
+    await charge(booking.id);
+    const [intent] = [...h.stripe.intents.values()].filter((pi) => pi.metadata.kind === 'late_cancel_fee');
+    expect(intent).toBeDefined();
+    await send(event('payment_intent.succeeded', { id: intent!.id, status: 'succeeded', amount: 3500, metadata: intent!.metadata }));
+    expect(await fee(booking.id)).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    const payments = (await h.call('GET', '/api/owner/payments?date=2026-11-03', owner)).body.payments;
+    expect(payments).toEqual([
+      expect.objectContaining({
+        id: intent!.id,
+        kind: 'lateCancelFee',
+        status: 'succeeded',
+        description: 'Late cancellation fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM',
+      }),
+    ]);
+    // …/complete on it keeps it a late-cancellation fee too.
+    expect((await h.call('POST', `/api/owner/payments/${intent!.id}/complete`, owner)).body.payment).toMatchObject({ kind: 'lateCancelFee', status: 'succeeded' });
   });
 
   it('ignores fee events for appointments it doesn’t know, and in-person payments work as before', async () => {

@@ -5,6 +5,7 @@ import { requireOwner } from './auth.js';
 import type { Config } from './config.js';
 import type { Queryable } from './db.js';
 import type { Deps, StripeClient } from './deps.js';
+import { isFeeKind } from './feecase.js';
 import { ApiError, json, readJsonObject, readText } from './http.js';
 import type { Context } from './router.js';
 import { syncNoShowFeeFromStripe } from './noshowfee.js';
@@ -201,7 +202,7 @@ export async function syncPayment(
   const { rows } = await db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [intent.id]);
   const row = rows[0];
   if (!row) return null;
-  // A no-show fee isn't a payment for the service: it never marks the appointment paid.
+  // A fee charged to the card on file isn't a payment for the service: it never marks the appointment paid.
   if (row.status === 'succeeded' && row.appointment_id && row.kind === 'in_person') {
     await db.query(
       `UPDATE appointments a
@@ -243,9 +244,9 @@ export async function completePayment(ctx: Context): Promise<Response> {
   if (intent.id !== id) throw notFound();
   const now = ctx.deps.now();
   const row = await ctx.deps.db.transaction(async (tx) => {
-    // A no-show fee checked this way keeps its appointment's fee right too (and never marks it paid).
-    if (payment.kind === 'no_show_fee') {
-      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now);
+    // A fee (no-show or late cancellation) checked this way keeps its appointment's fee right too (and never marks it paid).
+    if (isFeeKind(payment.kind)) {
+      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now, payment.kind);
       const { rows } = await tx.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [id]);
       return rows[0] ?? null;
     }
@@ -300,6 +301,7 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
       status?: string;
       metadata?: Record<string, string> | null;
       last_payment_error?: { code?: string | null; decline_code?: string | null } | null;
+      created?: number;
     };
     if (object.object === 'payment_intent' && typeof object.id === 'string' && typeof object.status === 'string') {
       const intent = { id: object.id, status: object.status as Stripe.PaymentIntent.Status };
@@ -310,14 +312,20 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
           [intent.id],
         );
         const known = rows[0];
-        // No-show fees follow the appointment's fee; one this server never got to record is found by its metadata.
-        if (known?.kind === 'no_show_fee' || (!known && object.metadata?.kind === 'no_show_fee')) {
+        // Fees charged to a card on file follow the appointment's fee; one this server never got to record is found by its metadata.
+        if (isFeeKind(known?.kind) || (!known && isFeeKind(object.metadata?.kind))) {
           await syncNoShowFeeFromStripe(
             tx,
-            { ...intent, metadata: object.metadata ?? null, last_payment_error: object.last_payment_error ?? null },
+            {
+              ...intent,
+              metadata: object.metadata ?? null,
+              last_payment_error: object.last_payment_error ?? null,
+              created: typeof object.created === 'number' ? object.created : null,
+            },
             known?.appointment_id ?? null,
             ctx.deps,
             now,
+            known?.kind ?? null,
           );
           return;
         }

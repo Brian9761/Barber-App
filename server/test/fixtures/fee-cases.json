@@ -1,0 +1,205 @@
+{
+  "cases": [
+    {
+      "name": "booked",
+      "status": "booked",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "Mark the appointment as a no-show first."
+    },
+    {
+      "name": "completed",
+      "status": "completed",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "Mark the appointment as a no-show first."
+    },
+    {
+      "name": "a no-show",
+      "status": "noShow",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": "noShow",
+      "refusal": null
+    },
+    {
+      "name": "a no-show, booked without late cancellations",
+      "status": "noShow",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": null,
+      "reason": "noShow",
+      "refusal": null
+    },
+    {
+      "name": "cancelled 30 minutes before",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": "lateCancel",
+      "refusal": null
+    },
+    {
+      "name": "cancelled 1 minute before",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:59:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": "lateCancel",
+      "refusal": null
+    },
+    {
+      "name": "cancelled 59 minutes before",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:01:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": "lateCancel",
+      "refusal": null
+    },
+    {
+      "name": "cancelled exactly 1 hour before",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:00:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled at least 1 hour before, so there's no fee."
+    },
+    {
+      "name": "cancelled 2 hours before",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T16:00:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled at least 1 hour before, so there's no fee."
+    },
+    {
+      "name": "cancelled 2 hours before, with a 3-hour window",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T16:00:00Z",
+      "lateCancelWindowMinutes": 180,
+      "reason": "lateCancel",
+      "refusal": null
+    },
+    {
+      "name": "cancelled 45 minutes before, with a 30-minute window",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:15:00Z",
+      "lateCancelWindowMinutes": 30,
+      "reason": null,
+      "refusal": "The client cancelled at least 30 minutes before, so there's no fee."
+    },
+    {
+      "name": "cancelled 90 minutes before, with a 90-minute window",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T16:30:00Z",
+      "lateCancelWindowMinutes": 90,
+      "reason": null,
+      "refusal": "The client cancelled at least 90 minutes before, so there's no fee."
+    },
+    {
+      "name": "cancelled 5 minutes before, booked without late cancellations",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:55:00Z",
+      "lateCancelWindowMinutes": null,
+      "reason": null,
+      "refusal": "The client cancelled this booking in the app, so there's no fee."
+    },
+    {
+      "name": "cancelled late, then reopened by the shop",
+      "status": "booked",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:50:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled this booking in the app, so there's no fee."
+    },
+    {
+      "name": "cancelled late, reopened, then marked a no-show",
+      "status": "noShow",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:50:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled this booking in the app, so there's no fee."
+    },
+    {
+      "name": "cancelled early, reopened, then marked a no-show",
+      "status": "noShow",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T08:00:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled this booking in the app, so there's no fee."
+    },
+    {
+      "name": "cancelled by the shop",
+      "status": "cancelled",
+      "cancelledBy": "shop",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee."
+    },
+    {
+      "name": "cancelled late by the client, then again by the shop",
+      "status": "cancelled",
+      "cancelledBy": "shop",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:50:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee."
+    },
+    {
+      "name": "cancelled by the client with no time kept",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled this booking in the app, so there's no fee."
+    },
+    {
+      "name": "completed after the client asked to cancel",
+      "status": "completed",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:55:00Z",
+      "lateCancelWindowMinutes": 60,
+      "reason": null,
+      "refusal": "The client cancelled this booking in the app, so there's no fee."
+    }
+  ],
+  "notStarted": "The appointment hasn't started yet, so it can't be a no-show."
+}
