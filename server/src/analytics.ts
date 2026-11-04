@@ -469,6 +469,8 @@ async function loadMoney(db: Queryable, range: Range): Promise<MoneyFact[]> {
       GROUP BY 1, 2, 3, 4, CASE WHEN i.kind = 'product' AND i.product_id IS NULL THEN i.name END`,
     values,
   );
+  // Whether an appointment has a live sale is read from `sales` itself (its unique index on live
+  // sales per appointment), not from the copy on the appointment row.
   const visits = await db.query<MoneyRow>(
     `SELECT width_bucket(a.start_at, $1::timestamptz[]) AS bucket, a.barber_id, a.service_id AS item_id,
             min(a.service_name) AS name, count(*)::int AS count, sum(a.price_cents)::int AS cents
@@ -478,6 +480,9 @@ async function loadMoney(db: Queryable, range: Range): Promise<MoneyFact[]> {
       GROUP BY 1, 2, 3`,
     values,
   );
+  // A fee counts the day Stripe charged it: off-session charges succeed or fail as they're made,
+  // and payments.created_at is when Stripe made the charge (the day Payments lists it), even when
+  // the server only found out later.
   const fees = await db.query<MoneyRow>(
     `SELECT width_bucket(p.created_at, $1::timestamptz[]) AS bucket, a.barber_id, NULL AS item_id, NULL AS name,
             count(*)::int AS count, sum(p.amount_cents)::int AS cents

@@ -154,7 +154,8 @@ export async function createPayment(ctx: Context): Promise<Response> {
   const body = parse(paymentBody, await readJsonObject(ctx.request));
   const draft = body.sale ? await cardSaleDraft(ctx.deps.db, ctx.deps.catalog, body.sale, body) : null;
   const appointmentId = draft ? draft.appointmentId : (body.appointmentId ?? null);
-  if (appointmentId !== null) {
+  // A checkout's ticket has already found its appointment.
+  if (appointmentId !== null && !draft) {
     const known =
       UUID_RE.test(appointmentId) &&
       ((await ctx.deps.db.query('SELECT 1 FROM appointments WHERE id = $1', [appointmentId])).rowCount ?? 0) > 0;
@@ -210,8 +211,10 @@ export async function syncPayment(
   if (!row) return null;
   if (row.status === 'succeeded' && row.kind === 'in_person' && row.sale_id === null) {
     // In this same transaction, so the money is in the sales exactly when the payment is.
-    const saleId = await recordCardSale(db, deps, row.id, now);
-    if (saleId) row = { ...row, sale_id: saleId };
+    if (await recordCardSale(db, deps, row.id, now)) {
+      const { rows: recorded } = await db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [intent.id]);
+      row = recorded[0] ?? row;
+    }
   }
   // A fee charged to the card on file isn't a payment for the service: it never marks the appointment paid.
   if (row.status === 'succeeded' && row.appointment_id && row.kind === 'in_person') {

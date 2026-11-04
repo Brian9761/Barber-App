@@ -220,9 +220,18 @@ describe('a card checkout', () => {
       message: 'A card sale was recorded without its appointment, which was already checked out, cancelled or a no-show',
       details: { paymentId: id, appointmentId: appointment, status: 'completed', liveSaleId: cash.body.sale.id },
     });
-    // The appointment keeps the cash sale; both count in the day's sales.
-    expect((await ownerAppointment(appointment)).sale).toMatchObject({ id: cash.body.sale.id, method: 'cash' });
+    // The appointment keeps its cash checkout and what it paid; the card payment lets go of it,
+    // now and when Stripe's webhook comes in.
+    expect(done.body.payment.appointmentId).toBeNull();
+    await succeeded(id);
+    expect(await ownerAppointment(appointment)).toMatchObject({
+      sale: { id: cash.body.sale.id, method: 'cash', totalCents: 3500 },
+      payment: { status: 'paid', amountCents: 3500 },
+    });
+    // Both count in the day's sales, and voiding the cash one leaves the appointment unpaid.
     expect((await h.call('GET', '/api/owner/sales?date=2026-11-02', owner)).body.totals).toEqual({ totalCents: 3500 + 5300, count: 2 });
+    await h.call('POST', `/api/owner/sales/${cash.body.sale.id}/void`, { ...owner, body: {} });
+    expect((await ownerAppointment(appointment)).payment).toEqual({ status: 'unpaid', amountCents: null, paidAt: null });
   });
 
   it('an appointment cancelled meanwhile: recorded without it too', async () => {
@@ -233,7 +242,20 @@ describe('a card checkout', () => {
     h.stripe.succeed(id);
     await complete(id);
     expect(await salesFor(id)).toEqual([expect.objectContaining({ appointment_id: null, total_cents: 5300 })]);
-    expect((await ownerAppointment(appointment)).status).toBe('cancelled');
+    expect(await ownerAppointment(appointment)).toMatchObject({ status: 'cancelled', payment: { status: 'unpaid' }, sale: null });
+  });
+
+  it('a client’s name counts in characters, as at checkout: 60 emoji are fine all the way through', async () => {
+    configureStripe();
+    const name = '💈'.repeat(60);
+    const { sale } = await ticket();
+    const created = await pay({ amountCents: 5300, sale: { ...sale, customerName: name } });
+    expect(created.status, created.text).toBe(201);
+    h.stripe.succeed(created.body.paymentIntentId);
+    expect((await complete(created.body.paymentIntentId)).body.payment.saleId).not.toBeNull();
+    const day = await h.call('GET', '/api/owner/sales?date=2026-11-02', owner);
+    expect(day.body.sales[0].customerName).toBe(name);
+    expect((await pay({ amountCents: 5300, sale: { ...sale, appointmentId: null, barberId: 'flowxbori', customerName: `${name}💈` } })).status).toBe(400);
   });
 
   it('voiding a card sale doesn’t refund it: the message says where refunds are made', async () => {

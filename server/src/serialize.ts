@@ -255,6 +255,7 @@ const PAYMENT_KIND_OUT: Record<PaymentRow['kind'], 'inPerson' | 'noShowFee' | 'l
   late_cancel_fee: 'lateCancelFee',
 };
 
+/** The columns of a PaymentRow, for `SELECT … FROM payments` (the sale's lookup names the table, so no alias). */
 export const PAYMENT_COLUMNS =
   'id, amount_cents, description, appointment_id, status, receipt_email, created_at, kind, ' +
   '(SELECT s.id FROM sales s WHERE s.payment_intent_id = payments.id) AS sale_id';

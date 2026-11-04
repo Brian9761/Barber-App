@@ -7,7 +7,7 @@ import { ApiError, json, readJsonObject } from './http.js';
 import type { Context } from './router.js';
 import type { AppointmentRow, SaleMethod } from './serialize.js';
 import { dayBounds, formatInstant, localDate } from './time.js';
-import { calendarDate, charLength, parse, personName, shortId, UUID_RE } from './validation.js';
+import { calendarDate, charLength, optionalText, parse, personName, shortId, UUID_RE } from './validation.js';
 
 // Sales: what the shop sells at checkout, for the barber who gets credit, with or
 // without an appointment. A sale has one or more items (a catalog service, one of
@@ -504,16 +504,7 @@ export async function listSales(ctx: Context): Promise<Response> {
 
 // POST /api/owner/sales/:id/void { reason? }: idempotent; voiding again answers the same.
 
-const voidBody = z.object({
-  reason: z
-    .string({ error: 'The reason must be text.' })
-    .nullish()
-    .transform((v) => {
-      const t = v?.trim() ?? '';
-      return t === '' ? null : t;
-    })
-    .refine((v) => v === null || charLength(v) <= 200, { error: 'Keep the reason to 200 characters or fewer.' }),
-});
+const voidBody = z.object({ reason: optionalText(200, 'Keep the reason to 200 characters or fewer.', 'reason') });
 
 const VOIDED_MESSAGE = 'The sale was voided, so it no longer counts in your sales.';
 const VOIDED_CARD_MESSAGE = `${VOIDED_MESSAGE} Voiding doesn't refund the card: refunds are made in the Stripe Dashboard.`;
@@ -583,11 +574,18 @@ export async function cardSaleDraft(
   return draft;
 }
 
-/** A ticket as stored in payments.sale_draft, read back defensively (it's JSON in the database). */
+/**
+ * A ticket as stored in payments.sale_draft, read back defensively (it's JSON in the database).
+ * It was checked when it was stored; this only makes sure it's still a ticket. Lengths count
+ * characters as people do (an emoji is one), like the checks it passed.
+ */
 const storedDraft = z.object({
   barberId: z.string().min(1),
   appointmentId: z.string().regex(UUID_RE).nullable(),
-  customerName: z.string().min(1).max(60).nullable(),
+  customerName: z
+    .string()
+    .refine((v) => charLength(v) >= 1 && charLength(v) <= 60)
+    .nullable(),
   items: z
     .array(
       z.object({
@@ -611,10 +609,13 @@ const storedDraft = z.object({
  * whichever comes first): the payment row is locked and a payment has at most one sale, so it
  * happens exactly once. The sale is sold at `now`. If its appointment can't take it any more
  * (another sale checked it out meanwhile, or it was cancelled or marked a no-show), the sale is
- * recorded without the appointment, so the money still counts, and that's logged. Returns the
- * sale's id, or null when the payment has no ticket (or isn't a succeeded in-person payment).
+ * recorded without the appointment, so the money still counts, the payment lets go of the
+ * appointment too, and that's logged. Returns the sale's id, or null when the payment has no
+ * ticket (or isn't a succeeded in-person payment).
  */
 export async function recordCardSale(tx: Queryable, deps: Pick<Deps, 'uuid' | 'log'>, paymentId: string, now: Date): Promise<string | null> {
+  // Locked, then checked again: a …/complete and a webhook for the same payment take turns here,
+  // and the second finds the first one's sale.
   const { rows } = await tx.query<{ status: string; kind: string; sale_draft: unknown }>(
     'SELECT status, kind, sale_draft FROM payments WHERE id = $1 FOR UPDATE',
     [paymentId],
@@ -637,6 +638,9 @@ export async function recordCardSale(tx: Queryable, deps: Pick<Deps, 'uuid' | 'l
     if (row && !checkoutProblem(row)) {
       appointment = row;
     } else {
+      // The payment no longer stands for that appointment either, so it doesn't mark it paid
+      // (it may have been paid another way): the money counts as a sale of its own.
+      await tx.query('UPDATE payments SET appointment_id = NULL, updated_at = $2 WHERE id = $1', [paymentId, now]);
       deps.log.warn('A card sale was recorded without its appointment, which was already checked out, cancelled or a no-show', {
         paymentId,
         appointmentId: draft.appointmentId,

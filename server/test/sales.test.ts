@@ -312,7 +312,8 @@ describe('POST /api/owner/sales/:id/void', () => {
     expect((await voidSale('00000000-0000-4000-8000-0000000000ee')).status).toBe(404);
     expect((await voidSale('nope')).body.error).toEqual({ code: 'not_found', message: "We couldn't find that sale." });
     expect((await voidSale(sale.id, { reason: 'r'.repeat(201) })).status).toBe(400);
-    expect((await voidSale(sale.id, { reason: 7 })).status).toBe(400);
+    expect((await voidSale(sale.id, { reason: 7 })).body.error.message).toBe('The reason must be text.');
+    expect((await voidSale(sale.id, { reason: 'Wrong\u0000client' })).body.error.message).toBe('The reason has characters we can’t use.');
     const empty = await h.call('POST', `/api/owner/sales/${sale.id}/void`, owner);
     expect(empty.status).toBe(415);
     const voided = await voidSale(sale.id, { reason: '' });
