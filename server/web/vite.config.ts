@@ -120,13 +120,13 @@ User-agent: *
 Allow: /
 `;
 
-/** The demo's hosting settings (vercel.demo.json) as dist-demo/vercel.json, and its own robots.txt. */
+/** The demo's hosting settings (this folder's vercel.json, which Vercel also reads when it builds the demo from Git) as dist-demo/vercel.json, and its own robots.txt. */
 function demoHosting(): Plugin {
   return {
     name: 'izzy-demo-hosting',
     apply: 'build',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'vercel.json', source: readFileSync(here('./vercel.demo.json'), 'utf8') });
+      this.emitFile({ type: 'asset', fileName: 'vercel.json', source: readFileSync(here('./vercel.json'), 'utf8') });
     },
     writeBundle(options) {
       // public/robots.txt is the shop's own site's; the demo's replaces it.
@@ -146,7 +146,7 @@ export default defineConfig(({ mode }) => {
       react(),
       absoluteSocialLinks(),
       ...(demo ? [demoBackend(), demoHosting()] : []),
-      serviceWorker({ api: !demo, hosting: here(demo ? './vercel.demo.json' : '../vercel.json') }),
+      serviceWorker({ api: !demo, hosting: here(demo ? './vercel.json' : '../vercel.json') }),
     ],
     build: {
       outDir: demo ? 'dist-demo' : '../public',
