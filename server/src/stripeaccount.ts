@@ -309,6 +309,10 @@ export function stripeFailure(deps: Pick<Deps, 'log'>, error: unknown, what: Str
       "Stripe didn't accept the Terminal location set on the server. Check STRIPE_TERMINAL_LOCATION_ID: it must be a location from the same Stripe account and mode (test or live) as the key.",
     );
   }
+  if (e.type === 'StripePermissionError' && /does not have access to account|access may have been revoked/i.test(e.message ?? '')) {
+    // Connect mode: the platform can't use the shop's connected account any more (access revoked, or the other mode).
+    return new ApiError('server_error', "Stripe didn't let the app use the shop's Stripe account. Connect Stripe again in Settings.");
+  }
   if (e.type === 'StripeAuthenticationError' || e.type === 'StripePermissionError') {
     return new ApiError('server_error', "Stripe didn't accept the server's Stripe key. Check STRIPE_SECRET_KEY on the server.");
   }

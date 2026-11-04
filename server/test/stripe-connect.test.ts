@@ -255,9 +255,11 @@ describe('POST /api/owner/stripe/connect', () => {
     expect((await connect([])).status).toBe(400);
     const noJson = await h.call('POST', '/api/owner/stripe/connect', { ...owner, rawBody: 'returnTo=app', headers: { 'content-type': 'application/x-www-form-urlencoded' } });
     expect(noJson.status).toBe(415);
-    // returnTo is optional: the app's way back.
+    // returnTo is optional, and so is the body: the app's way back.
     expect((await connect({})).status).toBe(201);
-    expect((await h.database.pool.query('SELECT return_to FROM stripe_connect_states ORDER BY created_at DESC LIMIT 1')).rows[0].return_to).toBe('app');
+    expect((await h.call('POST', '/api/owner/stripe/connect', owner)).status).toBe(201);
+    const ways = (await h.database.pool.query('SELECT return_to FROM stripe_connect_states')).rows.map((r) => r.return_to);
+    expect(ways).toEqual(['app', 'app', 'app']);
   });
 
   it('a Stripe failure is a plain 500, nothing is stored, and the next try makes the account', async () => {

@@ -5,7 +5,7 @@ import { requireOwner } from './auth.js';
 import type { Config } from './config.js';
 import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
-import { ApiError, htmlPage, json, readJsonObject, redirect } from './http.js';
+import { ApiError, htmlPage, json, readOptionalJsonObject, redirect } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
 import {
@@ -374,7 +374,7 @@ export async function getOwnerStripe(ctx: Context): Promise<Response> {
   return json(connectionJSON(setup, await freshConnection(ctx.deps), config));
 }
 
-// POST /api/owner/stripe/connect { returnTo: "app" | "web" }
+// POST /api/owner/stripe/connect { returnTo: "app" | "web" } (no body: the app)
 
 const connectBody = z.object({
   returnTo: z.enum(['app', 'web'], { error: 'returnTo must be "app" or "web".' }).optional(),
@@ -384,7 +384,7 @@ export async function postStripeConnect(ctx: Context): Promise<Response> {
   await requireOwner(ctx);
   const setup = stripeSetup(ctx.deps.config);
   if (setup !== 'connect') throw connectOff(setup, 'connect');
-  const body = parse(connectBody, await readJsonObject(ctx.request));
+  const body = parse(connectBody, await readOptionalJsonObject(ctx.request));
   return json(await onboardingLink(ctx.deps, body.returnTo ?? 'app', true), 201);
 }
 

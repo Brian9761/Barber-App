@@ -214,6 +214,22 @@ describe('Tap to Pay with a connected account', () => {
     expect(h.stripe.calls.at(-1)).toMatchObject({ method: 'paymentIntents.retrieve', options: { stripeAccount: first } });
   });
 
+  it('when the platform can’t use the shop’s account any more, the owner is told to connect again', async () => {
+    const account = await connectedShop(h);
+    h.stripe.nextError = stripeError(
+      'StripePermissionError',
+      { statusCode: 403, requestId: 'req_fixture_access' },
+      `The provided key 'sk_test_…' does not have access to account '${account}' (or that account does not exist). Application access may have been revoked.`,
+    );
+    const res = await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 3500 } });
+    expect(res.status).toBe(500);
+    expect(res.body.error).toEqual({ code: 'server_error', message: "Stripe didn't let the app use the shop's Stripe account. Connect Stripe again in Settings." });
+    // A key Stripe turns down is still about the key.
+    h.stripe.nextError = stripeError('StripeAuthenticationError', { statusCode: 401 }, 'Invalid API Key provided');
+    const badKey = await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 3500 } });
+    expect(badKey.body.error.message).toBe("Stripe didn't accept the server's Stripe key. Check STRIPE_SECRET_KEY on the server.");
+  });
+
   it('Tap to Pay is for the Business app on the iPhone: a computer can’t get a token or start a payment', async () => {
     await connectedShop(h);
     const code = (await h.call('POST', '/api/owner/computer-codes', owner)).body.code;
