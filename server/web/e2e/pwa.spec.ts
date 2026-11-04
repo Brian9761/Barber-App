@@ -340,6 +340,9 @@ test.describe('the Add to Home Screen bar on phones', () => {
 });
 
 test.describe('opened as the app', () => {
+  // A phone that says it's an iPhone, as an app on its Home Screen does; a computer as it is.
+  test.use({ userAgent: async ({ isMobile }, use) => use(isMobile ? USER_AGENTS.iphone : undefined) });
+
   test.beforeEach(async ({ context }) => {
     await emulateStandalone(context);
   });
@@ -373,6 +376,7 @@ test.describe('opened as the app', () => {
 
     await page.goto('/app');
     await expect(page.getByTestId('using-the-app')).toContainText("You're using the app.");
+    await expect(page.getByTestId('using-the-app')).toContainText(phone ? 'Izzy Clipz is on your Home Screen.' : 'Izzy Clipz is with your other apps.');
     await expect(page.getByRole('radio')).toHaveCount(0);
     await expectAccessible(page, 'Get the app, opened as the app');
     await screenshot(page, testInfo, '26-app-get-the-app');
