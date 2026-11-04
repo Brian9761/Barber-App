@@ -676,6 +676,149 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("customerDetailsRow")), "The details are still remembered")
     }
 
+    // MARK: No-show protection
+
+    /// The shop asks for a card (no-show protection on, its starting settings): the fee notice on
+    /// Pick a day and time and on Review, Book waiting for a card, a card added on the stand-in for
+    /// Stripe's page, the booking with it, the card on "You're booked" and on the appointment, and
+    /// the next booking using the same card straight away.
+    func testBookWithACardOnFile() {
+        launch(UITestArguments.noShowProtection, UITestArguments.savedDetails)
+        openReviewOfCarlosHaircut(checkingTheTimeStepWarning: true)
+
+        let warning = element("noShowWarning")
+        XCTAssertTrue(warning.waitForExistence(timeout: 10), "No fee notice on Review")
+        XCTAssertTrue(warning.label.contains("Full Service Cancellation & No-Show Fee"), warning.label)
+        let policy = element("noShowPolicyText")
+        XCTAssertTrue(policy.waitForExistence(timeout: 10), "No policy to agree to")
+        XCTAssertTrue(policy.label.contains("No payment now"), policy.label)
+        XCTAssertTrue(policy.label.contains("$45 (100% of the service)"), policy.label)
+        let book = element("bookAppointmentButton")
+        XCTAssertFalse(book.isEnabled, "Book should wait for a card")
+        XCTAssertEqual(book.value as? String, "Add a card first")
+        screenshot("51-Book-Review-Add-Card")
+
+        tap("addCardButton")
+        let saved = element("savedCard")
+        XCTAssertTrue(saved.waitForExistence(timeout: 15), "The card wasn't added")
+        XCTAssertTrue(saved.label.contains("Visa •••• 4242"), saved.label)
+        XCTAssertFalse(element("addCardButton").exists)
+        XCTAssertTrue(element("changeCardButton").exists, "The card can be changed before booking")
+        XCTAssertTrue(waitUntil(book, toMatch: NSPredicate(format: "isEnabled == true")), "Book didn't turn on once the card was added")
+        screenshot("52-Book-Review-Card-Added")
+
+        bookAppointment()
+        let summary = element("bookedSummary")
+        XCTAssertTrue(summary.label.contains("Visa •••• 4242"), summary.label)
+        XCTAssertTrue(summary.label.contains("Nothing is charged now"), summary.label)
+        screenshot("53-Booked-With-Card")
+
+        tapPinned("bookedDoneButton")
+        let onCard = element("appointmentCardOnFile")
+        XCTAssertTrue(onCard.waitForExistence(timeout: 10), "The appointment doesn't show its card on file")
+        XCTAssertTrue(onCard.label.contains("Card on file for no-shows and late cancellations: Visa •••• 4242"), onCard.label)
+
+        // The next booking: the same card, straight away.
+        openReviewOfCarlosHaircut()
+        XCTAssertTrue(element("savedCard").waitForExistence(timeout: 10), "The card isn't there for the next booking")
+        XCTAssertFalse(element("addCardButton").exists)
+        XCTAssertTrue(waitUntil(element("bookAppointmentButton"), toMatch: NSPredicate(format: "isEnabled == true")), "Book should be ready with the saved card")
+        bookAppointment()
+        XCTAssertTrue(element("bookedSummary").label.contains("Visa •••• 4242"))
+    }
+
+    /// Protection off (as the server starts): no notice, no card section, and Book works as before.
+    func testWithoutNoShowProtectionNoCardIsAsked() {
+        launch(UITestArguments.savedDetails)
+        openReviewOfCarlosHaircut()
+        let book = element("bookAppointmentButton")
+        // Once Book is on, the shop has said whether a card is needed.
+        XCTAssertTrue(waitUntil(book, toMatch: NSPredicate(format: "isEnabled == true")), "Book should be ready without a card")
+        XCTAssertFalse(element("cardSection").exists, "No card section when the shop doesn't ask for one")
+        XCTAssertFalse(element("addCardButton").exists)
+        XCTAssertFalse(element("noShowWarning").exists)
+        bookAppointment()
+        XCTAssertFalse(element("bookedSummary").label.contains("Card on file"), element("bookedSummary").label)
+        tapPinned("bookedDoneButton")
+        XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10))
+        XCTAssertFalse(element("appointmentCardOnFile").exists)
+    }
+
+    /// Closing Stripe's page adds nothing: Book still waits, and adding the card again works.
+    func testClosingTheCardPageKeepsBookOff() {
+        launch(UITestArguments.noShowProtection, UITestArguments.savedDetails, UITestArguments.cardCancel)
+        openReviewOfCarlosHaircut()
+        let add = element("addCardButton")
+        tap("addCardButton")
+        // Back to "Add a card", with nothing added and nothing wrong.
+        XCTAssertFalse(element("savedCard").waitForExistence(timeout: 3), "Closing the page added a card")
+        XCTAssertFalse(element("cardError").exists, "Closing the page isn't an error")
+        XCTAssertTrue(waitUntil(add, toMatch: NSPredicate(format: "isEnabled == true AND label == %@", "Add a card")), "The card page didn't close")
+        XCTAssertFalse(element("bookAppointmentButton").isEnabled, "Book should still wait for a card")
+        screenshot("55-Book-Review-Card-Page-Closed")
+
+        tap("addCardButton")
+        XCTAssertTrue(element("savedCard").waitForExistence(timeout: 15), "Adding the card again didn't work")
+        XCTAssertTrue(waitUntil(element("bookAppointmentButton"), toMatch: NSPredicate(format: "isEnabled == true")))
+    }
+
+    /// The way back from Stripe's page goes wrong: the app says so, and Try again adds the card.
+    func testACardPageThatFailsOffersTryAgain() {
+        launch(UITestArguments.noShowProtection, UITestArguments.savedDetails, UITestArguments.cardFail)
+        openReviewOfCarlosHaircut()
+        tap("addCardButton")
+        let error = element("cardError")
+        XCTAssertTrue(error.waitForExistence(timeout: 15), "No message when the card wasn't added")
+        XCTAssertTrue(error.label.contains("The card wasn't added"), error.label)
+        let retry = element("addCardButton")
+        XCTAssertTrue(waitUntil(retry, toMatch: NSPredicate(format: "isEnabled == true AND label == %@", "Try again")), "No Try again")
+        XCTAssertFalse(element("bookAppointmentButton").isEnabled)
+        screenshot("56-Book-Review-Card-Failed")
+        retry.tap()
+        XCTAssertTrue(element("savedCard").waitForExistence(timeout: 15), "Try again didn't add the card")
+        XCTAssertTrue(waitForDisappearance(of: element("cardError")))
+    }
+
+    /// Late cancellations off in the shop's settings: the notice is about no-shows only.
+    func testANoShowOnlyNotice() {
+        launch(UITestArguments.noShowProtection, UITestArguments.noLateCancel)
+        openTab("Book")
+        tap("bookService-haircut")
+        tap("choose-\(Self.carlosHaircut)")
+        waitForTimes()
+        let warning = element("noShowWarning")
+        XCTAssertTrue(warning.waitForExistence(timeout: 15), "No fee notice on Pick a day and time")
+        XCTAssertTrue(warning.label.contains("No-Show Fee"), warning.label)
+        XCTAssertFalse(warning.label.contains("Cancellation"), warning.label)
+        XCTAssertTrue(warning.label.contains("Cancelling in the app before your appointment is free"), warning.label)
+    }
+
+    /// An appointment with a card on file that starts in 45 minutes: cancelling it now warns first
+    /// that it may be charged, then cancels.
+    func testCancellingLateWarnsFirst() {
+        launch(UITestArguments.bookedSoonWithCard)
+        XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 15), "Home doesn't show the appointment")
+        XCTAssertTrue(element("appointmentCardOnFile").waitForExistence(timeout: 10), "Home doesn't show its card on file")
+        openTab("Book")
+        XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "Book doesn't show the appointment")
+        let onCard = element("appointmentCardOnFile")
+        XCTAssertTrue(onCard.waitForExistence(timeout: 10), "The appointment doesn't show its card on file")
+        XCTAssertTrue(onCard.label.contains("Visa •••• 4242"), onCard.label)
+
+        let cancel = element("cancelAppointmentButton")
+        scroll(toReveal: cancel)
+        cancel.tap()
+        let warning = containing("may be charged $45, the full service price")
+        XCTAssertTrue(warning.waitForExistence(timeout: 10), "No late-cancellation warning before cancelling")
+        XCTAssertTrue(containing("less than 1 hour before your appointment").exists)
+        screenshot("54-Late-Cancel-Warning")
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Cancel appointment", "cancelAppointmentButton")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "No Cancel appointment in the warning")
+        confirm.tap()
+        XCTAssertTrue(labeled("Cancelled").waitForExistence(timeout: 15), "The appointment doesn't say it's cancelled")
+        XCTAssertTrue(waitForDisappearance(of: element("cancelAppointmentButton")))
+    }
+
     // MARK: Shop
 
     func testShopWithProducts() {
@@ -831,6 +974,25 @@ final class IzzyClipzUITests: XCTestCase {
     }
 
     // MARK: Booking helpers
+
+    /// Book → Haircut → Carlos → the first open time → details (already remembered) → Review.
+    /// With `checkingTheTimeStepWarning`, checks the fee notice shows on Pick a day and time first.
+    private func openReviewOfCarlosHaircut(checkingTheTimeStepWarning: Bool = false, file: StaticString = #filePath, line: UInt = #line) {
+        openTab("Book", file: file, line: line)
+        tap("bookService-haircut", file: file, line: line)
+        tap("choose-\(Self.carlosHaircut)", file: file, line: line)
+        waitForTimes(file: file, line: line)
+        if checkingTheTimeStepWarning {
+            let warning = element("noShowWarning")
+            XCTAssertTrue(warning.waitForExistence(timeout: 15), "No fee notice on Pick a day and time", file: file, line: line)
+            XCTAssertTrue(warning.label.contains("Full Service Cancellation & No-Show Fee"), warning.label, file: file, line: line)
+            XCTAssertTrue(warning.label.contains("the full service price ($45)"), warning.label, file: file, line: line)
+            screenshot("50-Book-Time-Fee-Warning")
+        }
+        pickFirstTime(file: file, line: line)
+        continueToDetails(file: file, line: line)
+        continueToReview(file: file, line: line)
+    }
 
     /// Waits for the day-and-time step to show a picked day with times.
     private func waitForTimes(file: StaticString = #filePath, line: UInt = #line) {
@@ -1193,4 +1355,15 @@ enum UITestArguments {
     static let bookedAppointment = "-fakeBookedAppointment"
     static let squireAppointment = "-fakeSquireAppointment"
     static let savedDetails = "-fakeSavedDetails"
+    /// No-show protection on, with the server's starting settings: the full service price for a
+    /// no-show or a cancellation less than 1 hour before.
+    static let noShowProtection = "-fakeNoShowProtection"
+    /// With `noShowProtection`: late cancellations off, so only no-shows can be charged.
+    static let noLateCancel = "-fakeNoLateCancel"
+    /// The first time Stripe's page opens, the client closes it.
+    static let cardCancel = "-fakeCardCancel"
+    /// The first time Stripe's page opens, the way back to the app goes wrong.
+    static let cardFail = "-fakeCardFail"
+    /// An appointment with a card on file that starts in 45 minutes.
+    static let bookedSoonWithCard = "-fakeBookedSoonWithCard"
 }
