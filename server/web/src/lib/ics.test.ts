@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { catalog, fixtureAppointment } from '../test/api';
 import { appointmentEvent, escapeText, foldLine, icsFile, icsTime } from './ics';
 
@@ -28,7 +28,8 @@ describe('Add to calendar', () => {
   });
 
   it('in the demo, says the shop doesn’t have it, and sets no reminder', () => {
-    const lines = unfolded(icsFile(appointmentEvent(fixtureAppointment, catalog.shop, ORIGIN, { demo: true }), new Date('2026-11-02T17:00:05.123Z')));
+    vi.stubEnv('VITE_DEMO_MODE', '1');
+    const lines = unfolded(file());
     expect(lines).toContain('SUMMARY:DEMO\\, not booked: Haircut at Izzy Clipz');
     expect(lines).toContain(
       `DESCRIPTION:Demo version: this booking wasn't sent to the shop\\, and Izzy Clipz doesn't have it. To book for real\\, call ${catalog.shop.phone.display}.\\nHaircut with Flowxbori\\n$35 · 45 min · Pay at the shop`,

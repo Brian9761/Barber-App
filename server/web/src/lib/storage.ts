@@ -120,6 +120,11 @@ export function loadAppointments(now: Date = new Date()): SavedAppointment[] {
 }
 
 function storeAppointments(list: SavedAppointment[]): boolean {
+  // Nothing listed, nothing kept (a check with the shop that ends after "Forget me" leaves no trace).
+  if (list.length === 0) {
+    removeKey('local', appointmentsKey());
+    return true;
+  }
   return writeJSON(
     'local',
     appointmentsKey(),

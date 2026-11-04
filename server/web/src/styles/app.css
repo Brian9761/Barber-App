@@ -179,6 +179,11 @@ html.is-standalone body {
   padding-bottom: var(--space-16);
 }
 
+/* The demo's notice, between the title and the steps (the demo only). */
+.get-app-demo {
+  margin-bottom: var(--space-10);
+}
+
 /* "Show the steps for: iPhone · Android · Computer", one tap from each other. */
 .device-picker {
   margin: 0 0 var(--space-10);

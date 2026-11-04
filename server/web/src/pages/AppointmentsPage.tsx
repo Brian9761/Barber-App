@@ -440,9 +440,7 @@ function AppointmentCard({
             <button
               type="button"
               className="button button--secondary"
-              onClick={() =>
-                downloadIcs('izzy-clipz-appointment.ics', icsFile(appointmentEvent(a, catalog.shop, window.location.origin, { demo: isDemo() })))
-              }
+              onClick={() => downloadIcs('izzy-clipz-appointment.ics', icsFile(appointmentEvent(a, catalog.shop, window.location.origin)))}
             >
               <Icon name="calendar" className="button__icon" /> Add to calendar
             </button>

@@ -2,6 +2,7 @@
 // address, which every calendar app opens (Apple Calendar, Outlook, Google).
 
 import type { Appointment, Shop } from '../api/types';
+import { isDemo } from '../demo/mode';
 import { durationLabel } from './format';
 
 export interface CalendarEvent {
@@ -75,16 +76,13 @@ export function icsFile(event: CalendarEvent, now: Date = new Date()): string {
 }
 
 /**
- * The event for an appointment at the shop, as the app's Add to Calendar words it. A booking
- * made in the demo says so in its title and first line, and has no reminder: the shop doesn't
- * have it, and nobody should go to the shop for it.
+ * The event for an appointment at the shop, as the app's Add to Calendar words it. In the demo,
+ * a booking says so in its title and first line, and has no reminder: the shop doesn't have it,
+ * and nobody should go to the shop for it.
  */
-export function appointmentEvent(
-  appointment: Omit<Appointment, 'customer' | 'note'>,
-  shop: Shop,
-  siteOrigin: string,
-  { demo = false }: { demo?: boolean } = {},
-): CalendarEvent {
+export function appointmentEvent(appointment: Omit<Appointment, 'customer' | 'note'>, shop: Shop, siteOrigin: string): CalendarEvent {
+  // Decided here, when the site is built: the normal build has none of the demo's words.
+  const demo = isDemo();
   const barber = appointment.barberName;
   const what = `${appointment.serviceName} at ${shop.name}`;
   return {

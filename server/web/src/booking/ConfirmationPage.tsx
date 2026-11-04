@@ -46,7 +46,7 @@ export function ConfirmationPage({ catalog }: { catalog: Catalog }) {
   const shop = catalog.shop;
 
   const addToCalendar = () => {
-    downloadIcs('izzy-clipz-appointment.ics', icsFile(appointmentEvent(appointment, shop, window.location.origin, { demo })));
+    downloadIcs('izzy-clipz-appointment.ics', icsFile(appointmentEvent(appointment, shop, window.location.origin)));
   };
 
   return (
