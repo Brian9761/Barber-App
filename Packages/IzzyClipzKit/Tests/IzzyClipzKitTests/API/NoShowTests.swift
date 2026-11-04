@@ -205,6 +205,39 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertNil(appointment.lateCancelWarning(at: minutes(-5)))
     }
 
+    /// A time less than the window away can't be cancelled for free once it's booked: the booking
+    /// steps say so for the time the client picked.
+    func testATimeInsideTheWindowSaysCancellingItMayBeCharged() throws {
+        let policy = IzzyAPI.NoShowPolicy(required: true, minFeeCents: 3_500, maxFeeCents: 3_500, policyText: "…", lateCancelWindowMinutes: 60)
+        let now = utc(2026, 11, 3, 17, 15) // 9:15 AM
+        let start = { (minutes: Double) in now.addingTimeInterval(minutes * 60) }
+        let notice = "This time is less than 1 hour away, so cancelling it may be charged $35."
+        XCTAssertEqual(policy.lateCancelNotice(start: start(30), now: now), notice, "the first time a booking can take")
+        XCTAssertEqual(policy.lateCancelNotice(start: start(45), now: now), notice)
+        XCTAssertEqual(policy.lateCancelNotice(start: start(59), now: now), notice)
+        XCTAssertNil(policy.lateCancelNotice(start: start(60), now: now), "an hour away: cancelling right away is still free")
+        XCTAssertNil(policy.lateCancelNotice(start: start(120), now: now))
+        // Any barber: the range of their fees. A longer window: its own words.
+        var anyBarber = policy
+        anyBarber.minFeeCents = 5_500
+        anyBarber.maxFeeCents = 6_000
+        anyBarber.lateCancelWindowMinutes = 90
+        XCTAssertEqual(anyBarber.lateCancelNotice(start: start(75), now: now), "This time is less than 90 minutes away, so cancelling it may be charged $55–$60.")
+        // Late cancellations off, or no card needed: nothing to say.
+        var noLateFee = policy
+        noLateFee.lateCancelWindowMinutes = nil
+        XCTAssertNil(noLateFee.lateCancelNotice(start: start(30), now: now))
+        XCTAssertNil(IzzyAPI.NoShowPolicy.notRequired.lateCancelNotice(start: start(30), now: now))
+        // The rule itself is the server's late cancellation, with now as the cancel time.
+        XCTAssertTrue(IzzyAPI.NoShowRule.cancellingMayBeCharged(start: start(59), now: now, windowMinutes: 60))
+        XCTAssertFalse(IzzyAPI.NoShowRule.cancellingMayBeCharged(start: start(60), now: now, windowMinutes: 60))
+        XCTAssertFalse(IzzyAPI.NoShowRule.cancellingMayBeCharged(start: start(10), now: now, windowMinutes: nil))
+        XCTAssertEqual(IzzyAPI.NoShowRule.lateCancelNotice(windowMinutes: 2_880, feeLabel: "$80"), "This time is less than 48 hours away, so cancelling it may be charged $80.")
+        // From the server's policy fixture.
+        let served = try decoder.decode(IzzyAPI.NoShowPolicy.self, from: try kitFixture("no-show-policy.json"))
+        XCTAssertEqual(served.lateCancelNotice(start: start(40), now: now), "This time is less than 1 hour away, so cancelling it may be charged $55–$60.")
+    }
+
     func testCardBrandNames() {
         let names = ["visa", "mastercard", "amex", "discover", "diners", "jcb", "unionpay", "cartes_bancaires", "eftpos_au", "link", "unknown", "VISA"]
             .map(IzzyAPI.cardBrandName)
@@ -515,6 +548,14 @@ final class NoShowRuleTests: XCTestCase {
                 c.cancelledLate,
                 c.name
             )
+            // The booking steps' notice uses the same rule, with the time the client picks as the cancel time.
+            if let cancelledAt = c.customerCancelledAt {
+                XCTAssertEqual(
+                    IzzyAPI.NoShowRule.cancellingMayBeCharged(start: c.start, now: cancelledAt, windowMinutes: c.lateCancelWindowMinutes),
+                    c.cancelledLate,
+                    c.name
+                )
+            }
         }
         XCTAssertTrue(document.cases.contains { $0.cancelledLate } && document.cases.contains { !$0.cancelledLate })
 

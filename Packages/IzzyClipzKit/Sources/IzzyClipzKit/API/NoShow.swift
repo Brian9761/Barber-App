@@ -282,6 +282,19 @@ extension IzzyAPI {
             return NoShowRule.feeLabel(minCents: minFeeCents, maxCents: maxFeeCents)
         }
 
+        /// For the time the client picked, under `warning` on Pick a day and time and on Review:
+        /// "This time is less than 1 hour away, so cancelling it may be charged $35." when it starts
+        /// less than the late-cancellation window after `now`. The booking lead time is shorter than
+        /// the window, so such a time can't be cancelled for free once it's booked, and the policy's
+        /// "Cancelling in the app more than 1 hour before is free" can't apply to it. `nil` for a later
+        /// time, with late cancellations off, or when no card is needed.
+        public func lateCancelNotice(start: Date, now: Date) -> String? {
+            guard let window = lateCancelWindowMinutes, let fee = feeLabel,
+                  NoShowRule.cancellingMayBeCharged(start: start, now: now, windowMinutes: window)
+            else { return nil }
+            return NoShowRule.lateCancelNotice(windowMinutes: window, feeLabel: fee)
+        }
+
         private enum CodingKeys: String, CodingKey {
             case required, minFeeCents, maxFeeCents, policyText, lateCancelWindowMinutes, warning
         }
@@ -726,6 +739,19 @@ extension IzzyAPI {
         public static func cancelledLate(start: Date, customerCancelledAt: Date?, lateCancelWindowMinutes: Int?) -> Bool {
             guard let customerCancelledAt, let lateCancelWindowMinutes else { return false }
             return start.timeIntervalSince(customerCancelledAt) < Double(lateCancelWindowMinutes) * 60
+        }
+
+        /// Whether cancelling an appointment that starts at `start` would already be a late
+        /// cancellation at `now` (the server's `cancelledLate` with `now` as the cancel time): a time
+        /// less than the window away can't be cancelled for free once it's booked.
+        public static func cancellingMayBeCharged(start: Date, now: Date, windowMinutes: Int?) -> Bool {
+            cancelledLate(start: start, customerCancelledAt: now, lateCancelWindowMinutes: windowMinutes)
+        }
+
+        /// "This time is less than 1 hour away, so cancelling it may be charged $35." (or a range
+        /// for any barber, "$55–$60"): see `NoShowPolicy.lateCancelNotice(start:now:)`.
+        public static func lateCancelNotice(windowMinutes: Int, feeLabel: String) -> String {
+            "This time is less than \(windowLabel(minutes: windowMinutes)) away, so cancelling it may be charged \(feeLabel)."
         }
 
         /// What the client is told before cancelling inside the agreed window, as the server words
