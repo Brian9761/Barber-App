@@ -122,9 +122,9 @@ describe('Reviews', () => {
 describe('Visit', () => {
   it('has the address with directions, today’s hours marked, and the phone number', () => {
     renderApp('/visit');
-    // The street keeps its last two words together ("Ste\u00a0105").
-    const street = main().getByRole('heading', { level: 2, name: /^1919 Mission Ave/ });
-    expect(street.textContent?.replace(/\u00a0/g, ' ')).toBe(catalog.shop.address.lines[0]);
+    // The street on its own line, then the suite with the city.
+    expect(main().getByRole('heading', { level: 2, name: '1919 Mission Ave' })).toBeTruthy();
+    expect(main().getByText('Ste 105, Oceanside, CA 92058')).toBeTruthy();
     expect(main().getByRole('link', { name: /Apple Maps/ }).getAttribute('href')).toBe(catalog.shop.appleMapsDirectionsUrl);
     expect(main().getByRole('link', { name: /Google Maps/ }).getAttribute('href')).toBe(catalog.shop.googleMapsDirectionsUrl);
     const today = screen.getByRole('row', { current: 'date' });

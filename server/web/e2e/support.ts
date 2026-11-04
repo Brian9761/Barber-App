@@ -87,11 +87,13 @@ export async function expectAccessible(page: Page, what: string): Promise<void> 
 
 /** Loads every photo now (they're lazy below the fold) and waits for them and the fonts. */
 export async function settle(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    for (const image of Array.from(document.images)) image.loading = 'eager';
+  await page.evaluate(async () => {
+    const images = Array.from(document.images);
+    for (const image of images) image.loading = 'eager';
+    // decode() waits until each photo has loaded and can be painted.
+    await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
+    await document.fonts.ready;
   });
-  await page.waitForFunction(() => Array.from(document.images).every((image) => image.complete), undefined, { timeout: 15_000 });
-  await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
 /** Nothing sticks out sideways: the page never scrolls left and right. */
@@ -110,18 +112,35 @@ export async function expectFits(page: Page, what: string): Promise<void> {
       .filter((element) => !element.closest('.visually-hidden, .skip-link') && !clipped(element))
       .slice(0, 5)
       .map((element) => `${element.tagName.toLowerCase()}.${element.className}`);
-    return { scrollWidth: document.documentElement.scrollWidth, width, wider };
+    // On a phone, words never touch the screen's edges: the page keeps its side margins.
+    const margin = width < 600 ? 12 : 0;
+    const tight = Array.from(document.querySelectorAll('main *'))
+      .filter((element) => Array.from(element.childNodes).some((node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim()))
+      .filter((element) => !element.closest('.visually-hidden, [aria-hidden="true"]') && !clipped(element))
+      .filter((element) => {
+        const box = element.getBoundingClientRect();
+        return box.width > 0 && box.height > 0 && (box.left < margin || box.right > width - margin);
+      })
+      .slice(0, 5)
+      .map((element) => `${element.tagName.toLowerCase()}.${element.className}: ${element.textContent?.trim().slice(0, 40)}`);
+    return { scrollWidth: document.documentElement.scrollWidth, width, wider, tight };
   });
   expect(overflow.wider, `${what}: nothing wider than the screen`).toEqual([]);
   expect(overflow.scrollWidth, `${what}: no sideways scrolling`).toBeLessThanOrEqual(overflow.width);
+  expect(overflow.tight, `${what}: text keeps clear of the screen's edges`).toEqual([]);
 }
 
 /** A full-page screenshot, named for the screen size: "desktop-03-barbers.png". Checks the page fits, too. */
 export async function screenshot(page: Page, testInfo: TestInfo, name: string, options: { fullPage?: boolean } = {}): Promise<void> {
   mkdirSync(SHOTS_DIR, { recursive: true });
+  const fullPage = options.fullPage ?? true;
   await settle(page);
   await expectFits(page, name);
-  await page.screenshot({ path: join(SHOTS_DIR, `${testInfo.project.name}-${name}.png`), fullPage: options.fullPage ?? true, animations: 'disabled' });
+  // From the top, so the sticky nav and summary are where a visitor first sees them.
+  const scrolled = fullPage ? await page.evaluate(() => window.scrollY) : 0;
+  if (scrolled) await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: join(SHOTS_DIR, `${testInfo.project.name}-${name}.png`), fullPage, animations: 'disabled' });
+  if (scrolled) await page.evaluate((y) => window.scrollTo(0, y), scrolled);
 }
 
 export function isPhone(testInfo: TestInfo): boolean {

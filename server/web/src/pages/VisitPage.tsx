@@ -33,9 +33,9 @@ function VisitDetails({ catalog }: { catalog: Catalog }) {
         <section className="visit__address card card--gray" aria-labelledby="address-title">
           <p className="eyebrow">{shop.fullName}</p>
           <h2 id="address-title" className="visit__street">
-            {(shop.address.lines[0] ?? '').replace(/ (?=\S+$)/, '\u00a0')}
+            {shop.address.street}
           </h2>
-          <p className="visit__city">{shop.address.lines.slice(1).join(', ')}</p>
+          <p className="visit__city">{[shop.address.unit, ...shop.address.lines.slice(1)].filter(Boolean).join(', ')}</p>
           <p className="visit__status" data-testid="visit-status">
             <span className={`status-dot${status.isOpen ? ' status-dot--open' : ''}`} aria-hidden="true" />
             {status.text}

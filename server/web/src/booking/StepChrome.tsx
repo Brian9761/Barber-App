@@ -39,7 +39,7 @@ export function StepHeader({ step, title, subtitle }: { step: Step; title: strin
 /** The step on the left, "Your appointment" on the right (under it on phones). */
 export function BookingLayout({ catalog, children }: { catalog: Catalog; children: ReactNode }) {
   return (
-    <div className="booking container container--wide">
+    <div className="booking container">
       <div className="booking__layout">
         <div className="booking__step">{children}</div>
         <SummaryCard catalog={catalog} />

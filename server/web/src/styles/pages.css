@@ -3,7 +3,8 @@
 .page-loading {
   display: flex;
   justify-content: center;
-  padding: var(--space-16) 0;
+  padding-top: var(--space-16);
+  padding-bottom: var(--space-16);
 }
 
 .inline-icon {
@@ -173,7 +174,8 @@
 .rating-tile {
   display: grid;
   justify-items: center;
-  gap: var(--space-3);
+  align-content: center;
+  gap: var(--space-4);
   min-height: 120px;
 }
 
