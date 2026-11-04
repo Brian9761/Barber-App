@@ -9,8 +9,8 @@
 The logo images aren't made here. Logo (the sign-in screen's, at 1x, 2x and 3x) is the
 shop's official logo, the white art on a transparent background, and AppIcon is that logo
 on black above a red "Business" mark, so the owner can tell it apart from the customer app
-on the home screen. Both are rendered from a vector tracing of the artwork the shop sent,
-so replace them as files when the logo changes.
+on the home screen. design/render-logo.js renders both from design/izzy-logo-white.svg, a
+vector tracing of the artwork the shop sent.
 
 Requires Python 3 only.
 """

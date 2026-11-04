@@ -1,0 +1,8 @@
+{
+  "name": "izzy-clipz-design",
+  "private": true,
+  "description": "Renders the logo images and app icons in both apps from the logo's vector tracing.",
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}

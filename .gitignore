@@ -21,3 +21,6 @@ Packages/*/Package.resolved
 
 # Python
 __pycache__/
+
+# Node (design/)
+node_modules/

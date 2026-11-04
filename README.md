@@ -72,6 +72,7 @@ IzzyClipzTests/            App unit tests
 IzzyClipzUITests/          End-to-end UI tests that also capture screenshots, and the recorded demo tour
 server/                    The shop's server (Vercel and Postgres), with its own README
 project.yml                XcodeGen spec the Xcode project is generated from
+design/                    The logo's vector tracing, and render-logo.js, which draws the logo images and app icons from it
 scripts/generate_assets.py Builds the photo sets and color sets
 ```
 
@@ -146,7 +147,9 @@ xcodegen generate
 
 New Swift files and resources under `IzzyClipz/` are picked up automatically when you regenerate. The `Info.plist` properties in `project.yml` (including `IzzyAPIBaseURL` and the dark `UIUserInterfaceStyle`) overwrite `IzzyClipz/Info.plist`, so change them in `project.yml` and keep the two the same. If you'd rather work only in Xcode, you can stop using `project.yml` and edit the project directly.
 
-To rebuild the photos and the color sets: `python3 scripts/generate_assets.py --help` (needs `pip install Pillow`). The logo images are files of their own: `Logo` and `LaunchLogo` (and the owner app's `Logo`) are the shop's white logo on a transparent background at 1x, 2x and 3x, and each app's `AppIcon` is that logo on black, all rendered from a vector tracing of the logo the shop sent. When the logo changes, replace them.
+To rebuild the photos and the color sets: `python3 scripts/generate_assets.py --help` (needs `pip install Pillow`).
+
+`design/render-logo.js` draws the logo images from `design/izzy-logo-white.svg`, a vector tracing of the logo the shop sent: the white logo on a transparent background as `Logo` (160 pt wide) and `LaunchLogo` (132 pt), and the owner app's `Logo` (200 pt), at 1x, 2x and 3x, and each app's `AppIcon`, the logo on black (74% of the icon's height; the owner app's is 58%, above a red "Business" mark set in Inter, which must be installed). To run it, `npm install` and `npx playwright install chromium` in `design/`, then `node design/render-logo.js`; it writes straight into both asset catalogs, and on Linux it reproduces the committed images byte for byte. When the logo changes, replace the SVG and run it again; a new size is a new line in its `jobs`.
 
 ## Where the data came from
 

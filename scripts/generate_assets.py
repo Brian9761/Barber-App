@@ -16,8 +16,8 @@ The script never uses the network.
 
 The logo images aren't made here. Logo and LaunchLogo (and the owner app's Logo) are the
 shop's official logo, the white art on a transparent background at 1x, 2x and 3x, and both
-apps' AppIcon is that logo on black; all of them are rendered from a vector tracing of the
-artwork the shop sent, so replace them as files when the logo changes.
+apps' AppIcon is that logo on black; design/render-logo.js renders all of them from
+design/izzy-logo-white.svg, a vector tracing of the artwork the shop sent.
 
 Requires Pillow (`pip install Pillow`).
 """

@@ -96,6 +96,6 @@ and nothing is sent to Stripe or recorded.
   (see `LaunchArgument` in `AppEnvironment.swift`) make the sample server
   misbehave on purpose.
 - The app icon (the shop's white logo on black above a red "Business" mark)
-  and the sign-in screen's logo are rendered from a vector tracing of the
-  logo the shop sent, and replaced as files when it changes;
-  `scripts/generate_business_assets.py` writes the colors.
+  and the sign-in screen's logo are rendered by `design/render-logo.js` from
+  `design/izzy-logo-white.svg`, a vector tracing of the logo the shop sent
+  (see the README); `scripts/generate_business_assets.py` writes the colors.
