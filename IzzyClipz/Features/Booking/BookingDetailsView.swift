@@ -229,14 +229,9 @@ struct BookingDetailsView: View {
         // A second tap while the review slides in mustn't push it twice.
         if let last = router.bookingPath.last, case .review = last { return }
         focus = nil
-        if remember {
-            savedDetails.remember(details)
-        } else {
-            savedDetails.forget()
-        }
-        // The card for no-show protection goes with the same choice: kept for next time, or only
-        // for this booking.
-        cards.setRemembered(remember)
+        // The name and number, and the card for no-show protection with them: kept for next time,
+        // or only for this booking.
+        RememberedDetails.apply(remember: remember, details: details, to: savedDetails, cards: cards)
         let draft = BookingDraft(
             plan: plan,
             customer: CustomerDetails(name: details.trimmedName, phone: details.displayPhone),

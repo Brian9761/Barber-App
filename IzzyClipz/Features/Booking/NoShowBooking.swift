@@ -295,6 +295,29 @@ final class CardSetup {
     }
 }
 
+/// The card goes with the client's choices about their name and number: "Remember me on this
+/// iPhone" on the details step, and "Forget my details" in Your details.
+@MainActor
+enum RememberedDetails {
+    /// The client continues to Review: the name and number are kept for next time or forgotten, and
+    /// the card for no-show protection goes with the same choice (kept for next time, or only until
+    /// this booking is booked, out of the Keychain straight away).
+    static func apply(remember: Bool, details: CustomerDetails, to savedDetails: CustomerDetailsStore, cards: SavedCardStore) {
+        if remember {
+            savedDetails.remember(details)
+        } else {
+            savedDetails.forget()
+        }
+        cards.setRemembered(remember)
+    }
+
+    /// "Forget my details": the name and number, and the card with them.
+    static func forget(_ savedDetails: CustomerDetailsStore, cards: SavedCardStore) {
+        savedDetails.forget()
+        cards.forget()
+    }
+}
+
 /// What the app says about no-show protection: on Review, on the appointment cards and on "You're
 /// booked". The policy and the warning themselves are the server's words.
 enum NoShowCopy {
@@ -380,5 +403,19 @@ enum NoShowCopy {
     /// Under "Remember me on this iPhone" on the details step.
     static func rememberNote(cardNeeded: Bool) -> String {
         cardNeeded ? "Your name and number fill in next time, and your card stays saved." : "Your name and number fill in next time."
+    }
+
+    /// Your details: the card's section, under the name and number.
+    static let detailsCardHeader = "Card on file"
+    static let detailsCardNote = "Used when the shop asks for a card to book. Stripe keeps the card; this iPhone keeps only a key to it. Appointments already booked keep their card."
+    static let removeCardButton = "Remove card"
+
+    /// What "Forget my details" asks first: the card goes too, when there's one.
+    static func forgetDetailsTitle(hasCard: Bool) -> String {
+        hasCard ? "Forget your name, number and card?" : "Forget your name and number?"
+    }
+
+    static func forgetDetailsMessage(hasCard: Bool) -> String {
+        hasCard ? "You'll type them again, and add a card, next time you book." : "You'll type them again next time you book."
     }
 }

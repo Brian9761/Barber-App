@@ -858,6 +858,117 @@ final class NoShowBookingTests: XCTestCase {
     }
 }
 
+// MARK: - The card goes with the remembered details
+
+/// "Remember me on this iPhone" and "Forget my details" take the card along with the name and
+/// number (what the details step and Your details do).
+@MainActor
+final class RememberedDetailsTests: XCTestCase {
+    private let keychain = InMemorySecretStore()
+    private let defaults = TestData.defaults()
+    private lazy var details = CustomerDetailsStore(defaults: defaults)
+    private lazy var cards = SavedCardStore(secrets: keychain, now: { TestData.now })
+    private let alex = CustomerDetails(name: " Alex ", phone: "4425550123")
+    private let carlos = IzzyAPI.BookingTarget.offering(id: TestData.carlosHaircutID)
+
+    /// What the app finds when it opens next time.
+    private var cardsNextTime: SavedCardStore { SavedCardStore(secrets: keychain, now: { TestData.now }) }
+
+    /// Remember me on: the name and number for next time, and the card with them (one added while
+    /// it was off, too).
+    func testRememberMeOnKeepsTheDetailsAndTheCard() {
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: false)
+        RememberedDetails.apply(remember: true, details: alex, to: details, cards: cards)
+        XCTAssertEqual(details.saved, CustomerDetails(name: "Alex", phone: "(442) 555-0123"))
+        XCTAssertTrue(cards.isRemembered)
+        XCTAssertEqual(cardsNextTime.saved, card)
+    }
+
+    /// Remember me off: the name and number are forgotten, and the remembered card leaves the
+    /// Keychain at once, kept for this booking only, so it's gone next time even if this booking
+    /// never happens.
+    func testRememberMeOffKeepsTheCardForThisBookingOnly() {
+        details.remember(alex)
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: true)
+        RememberedDetails.apply(remember: false, details: alex, to: details, cards: cards)
+        XCTAssertNil(details.saved)
+        XCTAssertNil(CustomerDetailsStore(defaults: defaults).saved)
+        XCTAssertEqual(cards.saved, card, "Still there for this booking")
+        XCTAssertFalse(cards.isRemembered)
+        XCTAssertNil(keychain.secrets[SavedCardStore.account])
+        XCTAssertNil(cardsNextTime.saved)
+
+        // Turned back on before booking: the card is kept for next time again.
+        RememberedDetails.apply(remember: true, details: alex, to: details, cards: cards)
+        XCTAssertEqual(cardsNextTime.saved, card)
+    }
+
+    /// "Forget my details": the name and number, and the card, from this iPhone.
+    func testForgettingTheDetailsForgetsTheCard() {
+        details.remember(alex)
+        cards.save(NoShowTestData.stored(), remember: true)
+        RememberedDetails.forget(details, cards: cards)
+        XCTAssertNil(details.saved)
+        XCTAssertNil(cards.saved)
+        XCTAssertNil(keychain.secrets[SavedCardStore.account])
+        XCTAssertNil(cardsNextTime.saved)
+        XCTAssertNil(CustomerDetailsStore(defaults: defaults).saved)
+    }
+
+    /// The whole way on the in-memory server: a card kept from an earlier booking, Remember me
+    /// turned off for this one, booked with that card, and the next booking asks for a card again.
+    /// A card added on Review with Remember me off goes the same way.
+    func testACardBookedWithRememberMeOffIsGoneForTheNextBooking() async throws {
+        let fake = NoShowTestData.fake()
+        let policies = NoShowPolicyStore(api: fake, now: { TestData.now })
+        let appointments = AppointmentStore(api: fake, tokens: InMemorySecretStore(), scheduler: FakeNotificationScheduler(), defaults: defaults, calendar: AppData.bookingCalendar, now: { TestData.now })
+        let submitter = BookingSubmitter(api: fake, appointments: appointments, cards: cards, policies: policies)
+        let offering = try XCTUnwrap(AppData.catalog.offering(withID: TestData.carlosHaircutID))
+        let tomorrow = TestData.calendarDay(2026, 10, 29)
+        let open = try await fake.availability(IzzyAPI.AvailabilityQuery(target: carlos, from: tomorrow, days: 1)).slots(on: tomorrow)
+        XCTAssertGreaterThanOrEqual(open.count, 5)
+        // Far enough apart that the first booking doesn't take the others' times.
+        let (first, second, third) = (open[0].start, open[open.count / 2].start, open[open.count - 1].start)
+        await policies.load(carlos)
+        func draft(_ start: Date) -> BookingDraft {
+            BookingDraft(plan: BookingPlan(choice: .offering(offering), start: start), customer: alex, note: "", remember: false)
+        }
+
+        let keptResult = await CardSetup(api: fake, saver: FakeCardSaver(api: fake), cards: cards).addCard(for: carlos, remember: true)
+        let kept = try XCTUnwrap(keptResult)
+        RememberedDetails.apply(remember: false, details: alex, to: details, cards: cards)
+        var requirement = NoShowRequirement(entry: policies.entry(for: carlos), cards: cards, start: first)
+        XCTAssertEqual(requirement.card, kept, "This booking still uses it")
+        let firstBooked = await submitter.book(draft(first), noShow: requirement.agreement)
+        XCTAssertEqual(firstBooked?.snapshot.card?.last4, "4242")
+        requirement = NoShowRequirement(entry: policies.entry(for: carlos), cards: cards, start: second)
+        XCTAssertEqual(requirement, .needsCard(NoShowTestData.carlosPolicy, unusable: nil), "The next booking asks for a card")
+        XCTAssertNil(cardsNextTime.saved)
+
+        let addedResult = await CardSetup(api: fake, saver: FakeCardSaver(api: fake), cards: cards).addCard(for: carlos, remember: false)
+        let added = try XCTUnwrap(addedResult)
+        XCTAssertNil(cardsNextTime.saved, "Never in the Keychain")
+        requirement = NoShowRequirement(entry: policies.entry(for: carlos), cards: cards, start: second)
+        XCTAssertEqual(requirement.card, added)
+        let secondBooked = await submitter.book(draft(second), noShow: requirement.agreement)
+        XCTAssertNotNil(secondBooked)
+        XCTAssertNil(cards.saved)
+        XCTAssertEqual(NoShowRequirement(entry: policies.entry(for: carlos), cards: cards, start: third), .needsCard(NoShowTestData.carlosPolicy, unusable: nil))
+        XCTAssertEqual(fake.bookingsMade, 2)
+    }
+
+    func testTheWords() {
+        XCTAssertEqual(NoShowCopy.forgetDetailsTitle(hasCard: false), "Forget your name and number?")
+        XCTAssertEqual(NoShowCopy.forgetDetailsTitle(hasCard: true), "Forget your name, number and card?")
+        XCTAssertEqual(NoShowCopy.forgetDetailsMessage(hasCard: false), "You'll type them again next time you book.")
+        XCTAssertEqual(NoShowCopy.forgetDetailsMessage(hasCard: true), "You'll type them again, and add a card, next time you book.")
+        XCTAssertEqual(NoShowCopy.removeCardButton, "Remove card")
+        XCTAssertEqual(NoShowCopy.remindersNote, "Reminders also say until when you can cancel for free.")
+    }
+}
+
 // MARK: - Cancelling inside the window
 
 @MainActor

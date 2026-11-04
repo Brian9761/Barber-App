@@ -56,14 +56,14 @@ struct CustomerDetailsSheet: View {
                                 + (card.card.isValid(at: Date(), in: AppData.shop.timeZone) ? card.card.expiryLabel : "Expired")
                         )
                         .accessibilityIdentifier("detailsSheetCard")
-                        Button("Remove card", role: .destructive) {
+                        Button(NoShowCopy.removeCardButton, role: .destructive) {
                             cards.forget()
                         }
                         .accessibilityIdentifier("removeCardButton")
                     } header: {
-                        Text("Card on file")
+                        Text(NoShowCopy.detailsCardHeader)
                     } footer: {
-                        Text("Used when the shop asks for a card to book. Stripe keeps the card; this iPhone keeps only a key to it. Appointments already booked keep their card.")
+                        Text(NoShowCopy.detailsCardNote)
                     }
                 }
                 Section {
@@ -87,19 +87,18 @@ struct CustomerDetailsSheet: View {
                 }
             }
             .confirmationDialog(
-                cards.saved == nil ? "Forget your name and number?" : "Forget your name, number and card?",
+                NoShowCopy.forgetDetailsTitle(hasCard: cards.saved != nil),
                 isPresented: $isConfirmingForget,
                 titleVisibility: .visible
             ) {
                 Button("Forget", role: .destructive) {
-                    store.forget()
-                    cards.forget()
+                    RememberedDetails.forget(store, cards: cards)
                     router.rememberedDetailsChanged(to: nil)
                     dismiss()
                 }
                 Button("Keep them", role: .cancel) {}
             } message: {
-                Text(cards.saved == nil ? "You'll type them again next time you book." : "You'll type them again, and add a card, next time you book.")
+                Text(NoShowCopy.forgetDetailsMessage(hasCard: cards.saved != nil))
             }
         }
         .onAppear {
