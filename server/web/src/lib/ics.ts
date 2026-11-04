@@ -74,23 +74,36 @@ export function icsFile(event: CalendarEvent, now: Date = new Date()): string {
   return `${lines.map(foldLine).join('\r\n')}\r\n`;
 }
 
-/** The event for an appointment at the shop, as the app's Add to Calendar words it. */
-export function appointmentEvent(appointment: Omit<Appointment, 'customer' | 'note'>, shop: Shop, siteOrigin: string): CalendarEvent {
+/**
+ * The event for an appointment at the shop, as the app's Add to Calendar words it. A booking
+ * made in the demo says so in its title and first line, and has no reminder: the shop doesn't
+ * have it, and nobody should go to the shop for it.
+ */
+export function appointmentEvent(
+  appointment: Omit<Appointment, 'customer' | 'note'>,
+  shop: Shop,
+  siteOrigin: string,
+  { demo = false }: { demo?: boolean } = {},
+): CalendarEvent {
   const barber = appointment.barberName;
+  const what = `${appointment.serviceName} at ${shop.name}`;
   return {
     uid: `${appointment.id}@izzyclipz`,
     start: new Date(appointment.start),
     end: new Date(appointment.end),
-    title: `${appointment.serviceName} at ${shop.name}`,
+    title: demo ? `DEMO, not booked: ${what}` : what,
     location: `${shop.fullName}, ${shop.address.lines.join(', ')}`,
     description: [
+      ...(demo
+        ? [`Demo version: this booking wasn't sent to the shop, and ${shop.name} doesn't have it. To book for real, call ${shop.phone.display}.`]
+        : []),
       `${appointment.serviceName} with ${barber}`,
       `${appointment.priceLabel} · ${durationLabel(appointment.durationMinutes)} · Pay at the shop`,
-      `To change or cancel, go to ${siteOrigin}/appointments or call ${shop.phone.display}.`,
+      ...(demo ? [] : [`To change or cancel, go to ${siteOrigin}/appointments or call ${shop.phone.display}.`]),
     ].join('\n'),
     url: `${siteOrigin}/appointments`,
     geo: shop.coordinate,
-    alarmMinutes: 60,
+    ...(demo ? {} : { alarmMinutes: 60 }),
   };
 }
 

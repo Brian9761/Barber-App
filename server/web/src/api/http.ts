@@ -121,6 +121,12 @@ export const httpApi = {
       headers: { 'X-Manage-Token': manageToken },
       ...(acceptLateCancelFee ? { body: { acceptLateCancelFee: true } } : {}),
     }).then((r) => r.appointment),
+
+  /**
+   * "Forget me on this computer": what the backend itself keeps in this browser. The shop's
+   * server keeps nothing here (the demo's stand-in keeps its bookings, and forgets them).
+   */
+  forgetHere: (): void => undefined,
 };
 
 /** What the pages call: the shop's server (this file), or the demo's stand-in, which answers the same way. */

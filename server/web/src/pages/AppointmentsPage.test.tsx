@@ -7,9 +7,19 @@ import lateCancelFee from '../../../test/fixtures/contract/errors/late_cancel_fe
 import notCancellable from '../../../test/fixtures/contract/errors/not_cancellable.json';
 import type { Appointment } from '../api/types';
 import cardSaved from '../../../test/fixtures/contract/card-saved.json';
-import { APPOINTMENTS_KEY, loadAppointments, loadCard, loadRememberedDetails, rememberDetails, saveAppointment, storeCard } from '../lib/storage';
+import {
+  APPOINTMENTS_KEY,
+  carriedAppointments,
+  loadAppointments,
+  loadCard,
+  loadRememberedDetails,
+  rememberDetails,
+  saveAppointment,
+  storeCard,
+} from '../lib/storage';
 import { newToken } from '../lib/tokens';
 import { apiError, fixtureAppointment, mockApi, renderApp } from '../test/api';
+import { USER_AGENTS } from '../test/pwa';
 import { times } from '../test/text';
 
 // Flowxbori's haircut at 10 AM on Tuesday, November 3, 2026 ($35, Visa on file, 1-hour window).
@@ -63,6 +73,14 @@ describe('My appointments', () => {
     await waitFor(() => expect(screen.getByTestId('appointment-status').textContent).toBe('Cancelled by the shop'));
     expect(screen.getByText('The shop cancelled this appointment. Book another time, or call the shop.')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Book another time' }).getAttribute('href')).toBe('/book?service=haircut');
+  });
+
+  it('names the device it’s on: this phone, this computer', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(USER_AGENTS.iphoneSafari);
+    mockApi([]);
+    renderApp('/appointments');
+    expect(screen.getByText('The appointments booked on this phone. Check them, add them to your calendar, or cancel.')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'No appointments booked on this phone yet.' })).toBeTruthy();
   });
 
   it('says there’s nothing yet, and how to book', async () => {
@@ -201,6 +219,7 @@ describe('on a shared computer', () => {
     expect(loadAppointments()).toEqual([]);
     expect(loadRememberedDetails()).toBeNull();
     expect(loadCard()).toBeNull();
+    expect(carriedAppointments()).toEqual([]);
     // Nothing was cancelled.
     expect(api.calls.filter((c) => c.method === 'POST')).toEqual([]);
   });
@@ -209,6 +228,47 @@ describe('on a shared computer', () => {
     renderApp('/appointments');
     expect(screen.getByText('No appointments booked on this computer yet.')).toBeTruthy();
     expect(screen.queryByTestId('forget-computer')).toBeNull();
+  });
+});
+
+describe('in the app added to the Home Screen', () => {
+  // On an iPhone the app has website data of its own, with only the cookies copied from Safari.
+  it('brings in the appointments booked in the browser before, checked with the shop', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    localStorage.clear();
+    const api = mockApi([['GET /api/appointments/*', { body: { appointment: fixtureAppointment } }]]);
+    renderApp('/appointments');
+
+    const card = await screen.findByTestId('appointment-card');
+    expect(within(card).getByTestId('appointment-status').textContent).toBe('Next appointment');
+    expect(card.textContent).toContain('Haircut with Flowxbori');
+    expect(loadAppointments().map((s) => [s.id, s.manageToken])).toEqual([[fixtureAppointment.id, MANAGE]]);
+    // Looked up once, with its own token.
+    await waitFor(() => expect(api.calls).toHaveLength(1));
+    expect(api.calls[0]).toMatchObject({ path: `/api/appointments/${fixtureAppointment.id}`, headers: { 'x-manage-token': MANAGE } });
+  });
+
+  it('lets go of one the shop doesn’t know any more', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    localStorage.clear();
+    mockApi([['GET /api/appointments/*', apiError('not_found', "We couldn't find that appointment.", 404)]]);
+    renderApp('/appointments');
+    await waitFor(() => expect(carriedAppointments()).toEqual([]));
+    expect(screen.getByText('No appointments booked on this computer yet.')).toBeTruthy();
+    expect(loadAppointments()).toEqual([]);
+  });
+
+  it('says it’s offline when the ones on their way in can’t be checked yet', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    localStorage.clear();
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mockApi([]);
+    renderApp('/appointments');
+    expect(await screen.findByTestId('appointments-offline')).toBeTruthy();
+    expect(carriedAppointments()).toHaveLength(1);
   });
 });
 

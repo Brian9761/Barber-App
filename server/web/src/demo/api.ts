@@ -14,6 +14,10 @@
 //   manage token gets the same appointment back, a number can hold 3 upcoming
 //   appointments, cancelling works until the start, and inside the late-cancellation
 //   window of a booking with a card on file the client is asked first.
+// - What's kept is the appointment (service, barber, time, status) and its manage
+//   token, never the client's name, number, email or note: a computer can be shared.
+//   Only a scrambled code of the number is kept, for the 3-per-number rule. "Forget
+//   me" on My appointments clears it all (forgetHere).
 // - No-show protection is off, as on the shop's server until the owner turns it
 //   on: no card is needed, and Stripe is never involved.
 // - Reviews are samples, and say so.
@@ -37,7 +41,7 @@ import type {
 import { cancelledLate, lateCancelWarning } from '../lib/lateCancel';
 import { charLength, emailProblem, parseUSPhone, toE164 } from '../lib/phone';
 import { addDays, clockMinutes, daysBetween, localDate, parseDate, weekdayOf, zonedInstant } from '../lib/shopTime';
-import { readJSON, writeJSON } from '../lib/storage';
+import { DEMO_STORE_KEY, readJSON, removeKey, writeJSON } from '../lib/storage';
 import { isToken } from '../lib/tokens';
 import { sampleReviews } from './samples';
 
@@ -45,7 +49,9 @@ import { sampleReviews } from './samples';
 export const DEMO_CATALOG = catalogData as unknown as Catalog;
 
 /** Where the demo keeps the bookings made in it (this browser only). */
-export const DEMO_STORE_KEY = 'izzy.demo.v1';
+export { DEMO_STORE_KEY };
+/** The store's layout: 2 keeps no name, number, email or note. */
+const STORE_VERSION = 2;
 
 /** The server's limits (server/src/appointments.ts and booking.ts). */
 export const MAX_UPCOMING_PER_PHONE = 3;
@@ -55,13 +61,49 @@ const KEEP_DAYS = 60;
 /** How long each sample booking is. */
 const SAMPLE_MINUTES = 60;
 
-/** A booking made in the demo, as the server would keep it. */
+/** An appointment as the demo keeps it: without the client's name, number, email and note. */
+export type KeptAppointment = Omit<Appointment, 'customer' | 'note'>;
+
+/** A booking made in the demo, as the server would keep it, less the client's own details. */
 export interface DemoBooking {
-  appointment: Appointment;
+  appointment: KeptAppointment;
   /** The manage token it was booked with: looking it up and cancelling it need it. */
   manageToken: string;
   /** Booked for "Any barber", so the demo picked the barber. */
   anyBarber: boolean;
+  /** A scrambled code of the client's number (never the number), for the 3-per-number rule and retries. */
+  phoneCode: string;
+}
+
+/** The client's details in a later answer: the demo doesn't keep them, and the site never shows them back. */
+const NOT_KEPT = { name: '', phone: '', email: null };
+
+function asAnswered(appointment: KeptAppointment): Appointment {
+  return { ...appointment, customer: { ...NOT_KEPT }, note: null };
+}
+
+/** The appointment without the client's own details, whatever was handed in. */
+function kept(appointment: KeptAppointment | Appointment): KeptAppointment {
+  const { customer: _customer, note: _note, ...rest } = appointment as Partial<Appointment> & KeptAppointment;
+  return rest;
+}
+
+/**
+ * A scrambled code of a number (cyrb53, 53 bits), so the demo can count a number's bookings
+ * without keeping the number itself.
+ */
+export function phoneCode(e164: string): string {
+  const text = `izzy-demo|${e164}`;
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');
 }
 
 export interface DemoOptions {
@@ -185,7 +227,9 @@ function isObject(value: unknown): value is Record<string, unknown> {
 }
 
 function isDemoBooking(value: unknown): value is DemoBooking {
-  if (!isObject(value) || typeof value.manageToken !== 'string' || typeof value.anyBarber !== 'boolean') return false;
+  if (!isObject(value) || typeof value.manageToken !== 'string' || typeof value.anyBarber !== 'boolean' || typeof value.phoneCode !== 'string') {
+    return false;
+  }
   const a = value.appointment;
   return (
     isObject(a) &&
@@ -193,9 +237,7 @@ function isDemoBooking(value: unknown): value is DemoBooking {
     typeof a.start === 'string' &&
     typeof a.end === 'string' &&
     typeof a.status === 'string' &&
-    typeof a.barberId === 'string' &&
-    isObject(a.customer) &&
-    typeof a.customer.phone === 'string'
+    typeof a.barberId === 'string'
   );
 }
 
@@ -211,15 +253,24 @@ class DemoStore {
     let list = this.memory;
     if (!this.inMemory) {
       const stored = readJSON('local', DEMO_STORE_KEY);
-      if (isObject(stored) && Array.isArray(stored.bookings)) list = stored.bookings.filter(isDemoBooking);
+      list = isObject(stored) && stored.version === STORE_VERSION && Array.isArray(stored.bookings) ? stored.bookings.filter(isDemoBooking) : [];
     }
     const cutoff = now.getTime() - KEEP_DAYS * 86_400_000;
-    return list.filter((booking) => new Date(booking.appointment.end).getTime() >= cutoff);
+    return list
+      .filter((booking) => new Date(booking.appointment.end).getTime() >= cutoff)
+      .map((booking) => ({ ...booking, appointment: kept(booking.appointment) }));
   }
 
   save(list: DemoBooking[]): void {
-    this.memory = list;
-    if (!this.inMemory && !writeJSON('local', DEMO_STORE_KEY, { version: 1, bookings: list })) this.inMemory = true;
+    const clean = list.map((booking) => ({ ...booking, appointment: kept(booking.appointment) }));
+    this.memory = clean;
+    if (!this.inMemory && !writeJSON('local', DEMO_STORE_KEY, { version: STORE_VERSION, bookings: clean })) this.inMemory = true;
+  }
+
+  /** "Forget me": every booking made here, gone from this browser. */
+  clear(): void {
+    this.memory = [];
+    removeKey('local', DEMO_STORE_KEY);
   }
 }
 
@@ -273,7 +324,7 @@ function startProblem(catalog: Catalog, offering: Offering, start: Date, now: Da
 /** The server's rule for a retry: the same target asked for the same way, the same start and the same number. */
 function sameBooking(booking: DemoBooking, target: BookingTarget, start: Date, phone: string): boolean {
   const a = booking.appointment;
-  if (Date.parse(a.start) !== start.getTime() || a.customer.phone !== phone) return false;
+  if (Date.parse(a.start) !== start.getTime() || booking.phoneCode !== phoneCode(phone)) return false;
   return 'offeringId' in target ? !booking.anyBarber && a.offeringId === target.offeringId : booking.anyBarber && a.serviceId === target.serviceId;
 }
 
@@ -459,7 +510,7 @@ export function createDemoApi(options: DemoOptions = {}): Api {
       const earlier = bookings.find((b) => b.manageToken === manageToken);
       if (earlier) {
         if (!sameBooking(earlier, appointment.target, booking.start, booking.phone)) throw invalid('That booking token was already used.');
-        return { appointment: earlier.appointment, manageToken };
+        return { appointment: asAnswered(earlier.appointment), manageToken };
       }
 
       const { offerings, anyBarber } = resolveTarget(catalog, appointment.target);
@@ -467,8 +518,9 @@ export function createDemoApi(options: DemoOptions = {}): Api {
       const candidates = offerings.filter((_, i) => problems[i] === null);
       if (candidates.length === 0) throw problems[0] ?? slotTaken();
 
+      const code = phoneCode(booking.phone);
       const upcoming = bookings.filter(
-        (b) => b.appointment.customer.phone === booking.phone && b.appointment.status === 'booked' && Date.parse(b.appointment.start) > now.getTime(),
+        (b) => b.phoneCode === code && b.appointment.status === 'booked' && Date.parse(b.appointment.start) > now.getTime(),
       );
       if (upcoming.length >= MAX_UPCOMING_PER_PHONE) {
         throw fail(
@@ -491,8 +543,9 @@ export function createDemoApi(options: DemoOptions = {}): Api {
       const offering = free[0];
       if (!offering) throw slotTaken();
 
+      // The answer has the client's details, as the shop's would; what's kept doesn't.
       const created = makeAppointment(offering, booking, now);
-      store.save([...bookings, { appointment: created, manageToken, anyBarber }]);
+      store.save([...bookings, { appointment: kept(created), manageToken, anyBarber, phoneCode: code }]);
       return { appointment: created, manageToken };
     },
 
@@ -502,7 +555,7 @@ export function createDemoApi(options: DemoOptions = {}): Api {
       const found = store.load(clock()).find((b) => b.appointment.id === id && b.manageToken === manageToken);
       // Same answer for "no such appointment" and "wrong token", like the server.
       if (!found) throw notFound();
-      return found.appointment;
+      return asAnswered(found.appointment);
     },
 
     async cancel(id: string, manageToken: string, acceptLateCancelFee = false): Promise<Appointment> {
@@ -522,7 +575,7 @@ export function createDemoApi(options: DemoOptions = {}): Api {
         if (warning && !acceptLateCancelFee) throw fail(ErrorCode.lateCancelFee, warning, 409);
         const fee = current.noShowFee;
         const firstAsked = fee?.customerCancelledAt ?? iso(now);
-        const cancelled: Appointment = {
+        const cancelled: KeptAppointment = {
           ...current,
           status: 'cancelled',
           cancelledBy: 'customer',
@@ -535,7 +588,7 @@ export function createDemoApi(options: DemoOptions = {}): Api {
             : null,
         };
         store.save(bookings.map((b, i) => (i === index ? { ...b, appointment: cancelled } : b)));
-        return cancelled;
+        return asAnswered(cancelled);
       }
 
       // Asked in time, but it isn't booked any more: like the server, the request still counts.
@@ -546,6 +599,11 @@ export function createDemoApi(options: DemoOptions = {}): Api {
       if (current.status === 'cancelled') throw fail(ErrorCode.notCancellable, 'This appointment is already cancelled.', 409);
       if (current.status !== 'booked') throw fail(ErrorCode.notCancellable, "This appointment can't be cancelled any more.", 409);
       throw fail(ErrorCode.notCancellable, 'This appointment has already started. Call the shop if you need help.', 409);
+    },
+
+    /** "Forget me on this computer": the bookings made in the demo go too, from this browser. */
+    forgetHere(): void {
+      store.clear();
     },
   };
   return api;

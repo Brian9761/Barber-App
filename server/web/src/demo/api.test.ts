@@ -6,7 +6,7 @@ import type { Appointment, Catalog, Slot } from '../api/types';
 import { clockMinutes, localDate, wallClock, weekdayOf } from '../lib/shopTime';
 import { newToken } from '../lib/tokens';
 import { fixtureAppointment, FLOW45 } from '../test/api';
-import { createDemoApi, DEMO_CATALOG, DEMO_STORE_KEY, gridStarts, sampleBookings, type DemoBooking } from './api';
+import { createDemoApi, DEMO_CATALOG, DEMO_STORE_KEY, gridStarts, phoneCode, sampleBookings, type DemoBooking } from './api';
 
 // The demo's stand-in for the shop's server: the shop's real catalog, open times from its
 // hours, lead time, window and time zone, bookings and cancellations kept in this browser,
@@ -34,6 +34,9 @@ async function failure(promise: Promise<unknown>): Promise<ApiError> {
 }
 
 const client = { name: 'Demo Client', phone: '(760) 555-0123' };
+
+/** An appointment as the demo answers it later: it never keeps the client's name, number, email or note. */
+const later = (appointment: Appointment): Appointment => ({ ...appointment, customer: { name: '', phone: '', email: null }, note: null });
 
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
@@ -190,7 +193,7 @@ describe('booking and cancelling', () => {
     });
     expect(appointment.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
     expect(await firstSlot(api)).not.toEqual(slot);
-    expect(await api.appointment(appointment.id, token)).toEqual(appointment);
+    expect(await api.appointment(appointment.id, token)).toEqual(later(appointment));
 
     const cancelled = await api.cancel(appointment.id, token);
     expect(cancelled).toMatchObject({ id: appointment.id, status: 'cancelled', cancelledBy: 'customer' });
@@ -209,7 +212,7 @@ describe('booking and cancelling', () => {
     const booking = { target: { serviceId: 'haircut', barberId: 'any' as const }, start: slot.start, customer: client };
     const { appointment } = await api.book(booking, token);
     expect(slot.barberIds).toContain(appointment.barberId);
-    expect((await api.book(booking, token)).appointment).toEqual(appointment);
+    expect((await api.book(booking, token)).appointment).toEqual(later(appointment));
     // The same token for the barber's own item isn't the same booking.
     expect((await failure(api.book({ ...booking, target: { offeringId: appointment.offeringId } }, token))).message).toBe(
       'That booking token was already used.',
@@ -222,7 +225,11 @@ describe('booking and cancelling', () => {
     const token = newToken();
     const booking = { target: { offeringId: FLOW45 }, start: slot.start, customer: client };
     const first = await api.book(booking, token);
-    expect(await api.book({ ...booking, customer: { ...client, name: 'Another name' } }, token)).toEqual(first);
+    expect(await api.book({ ...booking, customer: { ...client, name: 'Another name' } }, token)).toEqual({ ...first, appointment: later(first.appointment) });
+    // Another number with the same token isn't the same booking.
+    expect((await failure(api.book({ ...booking, customer: { ...client, phone: '(760) 555-0199' } }, token))).message).toBe(
+      'That booking token was already used.',
+    );
     await api.cancel(first.appointment.id, token);
     expect((await api.book(booking, token)).appointment.status).toBe('cancelled');
   });
@@ -285,6 +292,7 @@ describe('booking and cancelling', () => {
     const held: DemoBooking = {
       manageToken: token,
       anyBarber: false,
+      phoneCode: phoneCode('+17605550123'),
       appointment: {
         ...fixtureAppointment,
         id: '00000000-0000-4000-8000-0000000000aa',
@@ -293,7 +301,7 @@ describe('booking and cancelling', () => {
         status: 'booked',
       } satisfies Appointment,
     };
-    localStorage.setItem(DEMO_STORE_KEY, JSON.stringify({ version: 1, bookings: [held] }));
+    localStorage.setItem(DEMO_STORE_KEY, JSON.stringify({ version: 2, bookings: [held] }));
     const api = demo();
     expect(await failure(api.cancel(held.appointment.id, token))).toMatchObject({
       code: 'late_cancel_fee',
@@ -317,12 +325,52 @@ describe('what the browser keeps', () => {
 
     // A new page: a new stand-in, the same browser storage.
     const reloaded = demo();
-    expect(await reloaded.appointment(appointment.id, token)).toEqual(appointment);
+    expect(await reloaded.appointment(appointment.id, token)).toEqual(later(appointment));
     const after = await reloaded.availability({ offeringId: FLOW45 }, '2026-11-06', 1);
     expect(starts(after.days[0]!.slots)).not.toContain(slot.start);
     await reloaded.cancel(appointment.id, token);
     expect((await demo().appointment(appointment.id, token)).status).toBe('cancelled');
-    expect(JSON.parse(localStorage.getItem(DEMO_STORE_KEY)!)).toMatchObject({ version: 1, bookings: [{ manageToken: token }] });
+    expect(JSON.parse(localStorage.getItem(DEMO_STORE_KEY)!)).toMatchObject({ version: 2, bookings: [{ manageToken: token }] });
+  });
+
+  it('keeps no name, number, email or note: only a scrambled code of the number, for the 3-per-number rule', async () => {
+    const api = demo();
+    const { days } = await api.availability({ offeringId: FLOW45 }, '2026-11-06', 1);
+    const customer = { name: 'Private Person', phone: '(760) 555-8271', email: 'private.person@example.com' };
+    const { appointment } = await api.book({ target: { offeringId: FLOW45 }, start: days[0]!.slots[0]!.start, customer, note: 'gate code 4321' }, newToken());
+    // The answer to the booking itself has them, as the shop's would.
+    expect(appointment).toMatchObject({ customer: { name: 'Private Person', phone: '+17605558271', email: 'private.person@example.com' }, note: 'gate code 4321' });
+
+    const kept = localStorage.getItem(DEMO_STORE_KEY)!;
+    for (const detail of ['Private Person', '7605558271', '555-8271', 'private.person', 'gate code']) expect(kept, detail).not.toContain(detail);
+    const [booking] = (JSON.parse(kept) as { bookings: Record<string, unknown>[] }).bookings;
+    expect(booking!.phoneCode).toBe(phoneCode('+17605558271'));
+    expect(booking!.appointment).not.toHaveProperty('customer');
+    expect(booking!.appointment).not.toHaveProperty('note');
+  });
+
+  it('forgets every booking made in it when asked (Forget me on My appointments)', async () => {
+    const api = demo();
+    const { days } = await api.availability({ offeringId: FLOW45 }, '2026-11-06', 1);
+    const token = newToken();
+    const { appointment } = await api.book({ target: { offeringId: FLOW45 }, start: days[0]!.slots[0]!.start, customer: client }, token);
+    api.forgetHere();
+    expect(localStorage.getItem(DEMO_STORE_KEY)).toBeNull();
+    expect(await failure(demo().appointment(appointment.id, token))).toMatchObject({ code: 'not_found' });
+    expect(await failure(api.appointment(appointment.id, token))).toMatchObject({ code: 'not_found' });
+  });
+
+  it('drops what an earlier demo kept with the client’s details (version 1)', async () => {
+    const old = { version: 1, bookings: [{ manageToken: newToken(), anyBarber: false, appointment: { ...fixtureAppointment } }] };
+    localStorage.setItem(DEMO_STORE_KEY, JSON.stringify(old));
+    const api = demo();
+    expect(await failure(api.appointment(fixtureAppointment.id, old.bookings[0]!.manageToken))).toMatchObject({ code: 'not_found' });
+    const { days } = await api.availability({ offeringId: FLOW45 }, '2026-11-06', 1);
+    await api.book({ target: { offeringId: FLOW45 }, start: days[0]!.slots[0]!.start, customer: client }, newToken());
+    const kept = JSON.parse(localStorage.getItem(DEMO_STORE_KEY)!) as { version: number; bookings: unknown[] };
+    expect(kept.version).toBe(2);
+    expect(kept.bookings).toHaveLength(1);
+    expect(JSON.stringify(kept)).not.toContain(fixtureAppointment.customer.name);
   });
 
   it('still works for this visit where the browser keeps no site data', async () => {

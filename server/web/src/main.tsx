@@ -10,6 +10,8 @@ import './styles/pages.css';
 import './styles/app.css';
 import { App, ROUTER_FUTURE } from './App';
 import { CatalogProvider } from './data/catalog';
+import { isDemo } from './demo/mode';
+import { carryAppointments, forgetDemoLeftovers, loadAppointments } from './lib/storage';
 import { openOtherSitesOutside } from './pwa/externalLinks';
 import { listenForInstallPrompt } from './pwa/installPrompt';
 import { markStandalone } from './pwa/platform';
@@ -20,6 +22,13 @@ import { checkForUpdatesWhenShown, registerServiceWorker } from './pwa/register'
 listenForInstallPrompt();
 markStandalone();
 openOtherSitesOutside();
+
+if (!isDemo()) {
+  // The real site, where the demo may have been before: the demo's bookings were never the shop's.
+  forgetDemoLeftovers();
+  // The appointments booked here, ready for an app added to the Home Screen (lib/storage.ts).
+  carryAppointments(loadAppointments());
+}
 
 const root = document.getElementById('root');
 if (!root) throw new Error('The page has no #root element');

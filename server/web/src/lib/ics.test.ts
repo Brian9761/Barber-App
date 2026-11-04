@@ -27,6 +27,18 @@ describe('Add to calendar', () => {
     expect(lines.slice(-3)).toEqual(['END:VEVENT', 'END:VCALENDAR', '']);
   });
 
+  it('in the demo, says the shop doesn’t have it, and sets no reminder', () => {
+    const lines = unfolded(icsFile(appointmentEvent(fixtureAppointment, catalog.shop, ORIGIN, { demo: true }), new Date('2026-11-02T17:00:05.123Z')));
+    expect(lines).toContain('SUMMARY:DEMO\\, not booked: Haircut at Izzy Clipz');
+    expect(lines).toContain(
+      `DESCRIPTION:Demo version: this booking wasn't sent to the shop\\, and Izzy Clipz doesn't have it. To book for real\\, call ${catalog.shop.phone.display}.\\nHaircut with Flowxbori\\n$35 · 45 min · Pay at the shop`,
+    );
+    expect(lines.some((line) => line.startsWith('BEGIN:VALARM') || line.startsWith('TRIGGER'))).toBe(false);
+    // The rest is as on the real site: the time and the place.
+    expect(lines).toContain('DTSTART:20261103T180000Z');
+    expect(lines.some((line) => line.startsWith('LOCATION:Izzy Clipz Barbershop'))).toBe(true);
+  });
+
   it('follows RFC 5545: CRLF line ends and lines of at most 75 octets', () => {
     const ics = file();
     expect(ics.endsWith('\r\n')).toBe(true);

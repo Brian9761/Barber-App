@@ -10,30 +10,36 @@ import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
 import { CallLink, Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
+import { isDemo } from '../demo/mode';
 import { cardLabel, durationLabel } from '../lib/format';
 import { useOnline } from '../pwa/connection';
+import { thisDevice, type DeviceWord } from '../pwa/platform';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { isCancellable, lateCancelWarning } from '../lib/lateCancel';
 import { dateTimeLabel, longDateTimeLabel } from '../lib/shopTime';
 import {
+  carriedAppointments,
+  carryAppointments,
+  dropCarried,
   forgetAppointments,
   forgetClient,
   loadAppointments,
   loadCard,
   loadRememberedDetails,
   removeAppointment,
+  saveAppointment,
   updateAppointment,
   type ListedAppointment,
   type SavedAppointment,
 } from '../lib/storage';
 
 export function AppointmentsPage() {
-  usePageMeta('My appointments', 'The appointments you booked on this computer at Izzy Clipz Barbershop: check them, add them to your calendar, or cancel.');
+  usePageMeta('My appointments', 'The appointments you booked here at Izzy Clipz Barbershop: check them, add them to your calendar, or cancel.');
   return (
     <>
       <header className="page-header container">
         <h1>My appointments</h1>
-        <p className="lead secondary">The appointments booked on this computer. Check them, add them to your calendar, or cancel.</p>
+        <p className="lead secondary">The appointments booked on this {thisDevice()}. Check them, add them to your calendar, or cancel.</p>
         <PreferToCall className="page-header__call" />
       </header>
       <CatalogGate>{(catalog) => <AppointmentList catalog={catalog} />}</CatalogGate>
@@ -52,20 +58,48 @@ function remembersAnything(saved: SavedAppointment[]): boolean {
 /**
  * "Forget me on this computer": the name, number and email, the card, the booking in
  * progress and the appointments listed here. The appointments stay booked with the shop.
+ * (In the demo, the bookings made in it go too: they only ever lived in this browser.)
  */
 function forgetThisComputer(): void {
   forgetClient();
   forgetAppointments();
   clearDraft();
   forgetLastBooked();
+  api.forgetHere();
+}
+
+/**
+ * Appointments booked in the browser before this app was added to the Home Screen: on an iPhone
+ * or iPad the app has website data of its own, with only the cookies copied in, so they come
+ * from the cookie (lib/storage.ts) and are looked up with the shop. One the shop doesn't know any
+ * more isn't carried again. Stops at the first one the shop can't be reached for.
+ */
+async function bringInCarried(): Promise<{ checked: Set<string>; unreachable: boolean }> {
+  const known = new Set(loadAppointments().map((s) => s.id));
+  const checked = new Set<string>();
+  for (const carried of carriedAppointments()) {
+    if (known.has(carried.id)) continue;
+    try {
+      const fresh = await api.appointment(carried.id, carried.manageToken);
+      saveAppointment(fresh, carried.manageToken);
+      checked.add(carried.id);
+    } catch (error) {
+      if (isApiError(error) && (error.code === ErrorCode.notFound || error.code === ErrorCode.unauthorized)) dropCarried(carried.id);
+      else if (isApiError(error) && error.isOffline) return { checked, unreachable: true };
+    }
+  }
+  return { checked, unreachable: false };
 }
 
 function AppointmentList({ catalog }: { catalog: Catalog }) {
   const now = useNow();
+  const device = thisDevice();
+  const demo = isDemo();
   const [saved, setSaved] = useState<SavedAppointment[]>(() => loadAppointments());
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [forgotten, setForgotten] = useState(false);
-  const online = useOnline();
+  // The demo's stand-in for the shop is in this browser, so it can always be asked.
+  const online = useOnline() || demo;
   // Offline, the page doesn't show what it last heard from the shop: it could have changed since.
   const [offline, setOffline] = useState(() => !online);
   const [attempt, setAttempt] = useState(0);
@@ -77,7 +111,11 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
   };
   const forgottenNotice = forgotten ? (
     <Notice tone="success" role="status" testId="forgotten-notice">
-      <p>Done. This computer no longer keeps your details, card or appointments. Your appointments are still booked with the shop.</p>
+      <p>
+        {demo
+          ? `Done. This ${device} no longer keeps your details or the bookings made in the demo.`
+          : `Done. This ${device} no longer keeps your details, card or appointments. Your appointments are still booked with the shop.`}
+      </p>
     </Notice>
   ) : null;
 
@@ -90,10 +128,15 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
     }
     let live = true;
     (async () => {
+      const carried = await bringInCarried();
+      if (carried.checked.size > 0 && live) reload();
       const current = loadAppointments();
+      // The list here, carried too, so an app added to the Home Screen later has it.
+      carryAppointments(current);
       let failure: string | null = null;
-      let unreachable = false;
-      for (const item of current) {
+      let unreachable = carried.unreachable;
+      for (const item of unreachable ? [] : current) {
+        if (carried.checked.has(item.id)) continue;
         if (item.notFound || new Date(item.appointment.end).getTime() < Date.now() - CHECK_AFTER_END_MS) continue;
         try {
           const fresh = await api.appointment(item.id, item.manageToken);
@@ -125,7 +168,9 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
   const past = saved.filter((s) => new Date(s.appointment.end) <= now).reverse();
   const next = upcoming.find((s) => s.appointment.status === 'booked');
 
-  if (offline && saved.length > 0) {
+  // Offline in an app just added to the Home Screen, appointments may still be on their way in.
+  const carriedWaiting = offline && carriedAppointments().some((c) => !saved.some((s) => s.id === c.id));
+  if (offline && (saved.length > 0 || carriedWaiting)) {
     return (
       <div className="container container--narrow appointments">
         <div className="status-message card card--gray" role="status" data-testid="appointments-offline">
@@ -138,7 +183,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
             Try again
           </button>
         </div>
-        <ForgetComputer catalog={catalog} onForget={forget} />
+        <ForgetComputer catalog={catalog} device={device} onForget={forget} />
       </div>
     );
   }
@@ -148,7 +193,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
       <div className="container container--narrow appointments">
         {forgottenNotice}
         <div className="status-message card card--gray">
-          <h2>No appointments booked on this computer yet.</h2>
+          <h2>No appointments booked on this {device} yet.</h2>
           <p className="lead secondary">When you book here, your appointment shows up on this page, so you can check it or cancel it.</p>
           <Link className="button button--primary button--large" to="/book">
             Book an appointment
@@ -157,7 +202,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
             Booked in the Izzy Clipz app or by phone? Check it in the app, or call the shop at <CallLink className="inline-link nowrap" />.
           </p>
         </div>
-        {remembersAnything(saved) ? <ForgetComputer catalog={catalog} onForget={forget} /> : null}
+        {remembersAnything(saved) ? <ForgetComputer catalog={catalog} device={device} onForget={forget} /> : null}
       </div>
     );
   }
@@ -177,7 +222,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
         <ul className="appointment-list">
           {upcoming.map((item) => (
             <li key={item.id}>
-              <AppointmentCard catalog={catalog} item={item} isNext={item.id === next?.id} now={now} onChange={reload} />
+              <AppointmentCard catalog={catalog} device={device} item={item} isNext={item.id === next?.id} now={now} onChange={reload} />
             </li>
           ))}
         </ul>
@@ -190,7 +235,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
           <ul className="appointment-list">
             {past.map((item) => (
               <li key={item.id}>
-                <AppointmentCard catalog={catalog} item={item} isNext={false} now={now} onChange={reload} />
+                <AppointmentCard catalog={catalog} device={device} item={item} isNext={false} now={now} onChange={reload} />
               </li>
             ))}
           </ul>
@@ -201,30 +246,33 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
           Book another appointment
         </Link>
       </div>
-      <ForgetComputer catalog={catalog} onForget={forget} />
+      <ForgetComputer catalog={catalog} device={device} onForget={forget} />
     </div>
   );
 }
 
 /** For a shared computer: forget the client here, after asking (and saying the appointments stay booked). */
-function ForgetComputer({ catalog, onForget }: { catalog: Catalog; onForget: () => void }) {
+function ForgetComputer({ catalog, device, onForget }: { catalog: Catalog; device: DeviceWord; onForget: () => void }) {
   const [asking, setAsking] = useState(false);
+  const demo = isDemo();
   return (
     <section className="forget-computer" aria-labelledby="forget-title" data-testid="forget-computer">
       <h2 id="forget-title" className="forget-computer__title">
-        Not you, or on a shared computer?
+        Not you, or on a shared {device}?
       </h2>
       <p className="secondary">
-        This computer can forget your name, number, saved card and the appointments listed here. They stay booked with the shop.
+        {demo
+          ? `This ${device} can forget your name and number, and the bookings made in the demo.`
+          : `This ${device} can forget your name, number, saved card and the appointments listed here. They stay booked with the shop.`}
       </p>
       <div>
         <button type="button" className="button button--secondary" onClick={() => setAsking(true)}>
-          Forget me on this computer
+          Forget me on this {device}
         </button>
       </div>
       <Dialog
         open={asking}
-        title="Forget me on this computer?"
+        title={`Forget me on this ${device}?`}
         onClose={() => setAsking(false)}
         testId="forget-dialog"
         actions={
@@ -246,10 +294,16 @@ function ForgetComputer({ catalog, onForget }: { catalog: Catalog; onForget: () 
           </>
         }
       >
-        <p>This computer will forget your name and number, your saved card, and the appointments listed here.</p>
-        <p>
-          Your appointments stay booked. To change one later, call the shop at <span className="nowrap">{catalog.shop.phone.display}</span>.
-        </p>
+        {demo ? (
+          <p>This {device} will forget your name and number, and the bookings made in the demo.</p>
+        ) : (
+          <>
+            <p>This {device} will forget your name and number, your saved card, and the appointments listed here.</p>
+            <p>
+              Your appointments stay booked. To change one later, call the shop at <span className="nowrap">{catalog.shop.phone.display}</span>.
+            </p>
+          </>
+        )}
       </Dialog>
     </section>
   );
@@ -276,12 +330,14 @@ type CancelStep = { warning: string | null; fromServer: boolean } | null;
 
 function AppointmentCard({
   catalog,
+  device,
   item,
   isNext,
   now,
   onChange,
 }: {
   catalog: Catalog;
+  device: DeviceWord;
   item: SavedAppointment;
   isNext: boolean;
   now: Date;
@@ -317,7 +373,7 @@ function AppointmentCard({
         setConfirm({ warning: error.message, fromServer: true });
       } else if (isApiError(error) && (error.code === ErrorCode.notFound || error.code === ErrorCode.unauthorized)) {
         updateAppointment(item.id, (s) => ({ ...s, notFound: true }));
-        setProblem(`This computer can't change this appointment anymore. Call the shop at ${catalog.shop.phone.display} to cancel it.`);
+        setProblem(`This ${device} can't change this appointment anymore. Call the shop at ${catalog.shop.phone.display} to cancel it.`);
         onChange();
       } else if (isApiError(error) && error.code === ErrorCode.notCancellable) {
         // It changed at the shop (or has started): show how it is now.
@@ -342,7 +398,7 @@ function AppointmentCard({
   };
 
   const note = item.notFound
-    ? "This computer can't check this appointment with the shop anymore. Call the shop if anything changed."
+    ? `This ${device} can't check this appointment with the shop anymore. Call the shop if anything changed.`
     : a.status === 'cancelled' && a.cancelledBy === 'shop'
       ? 'The shop cancelled this appointment. Book another time, or call the shop.'
       : null;
@@ -384,7 +440,9 @@ function AppointmentCard({
             <button
               type="button"
               className="button button--secondary"
-              onClick={() => downloadIcs('izzy-clipz-appointment.ics', icsFile(appointmentEvent(a, catalog.shop, window.location.origin)))}
+              onClick={() =>
+                downloadIcs('izzy-clipz-appointment.ics', icsFile(appointmentEvent(a, catalog.shop, window.location.origin, { demo: isDemo() })))
+              }
             >
               <Icon name="calendar" className="button__icon" /> Add to calendar
             </button>
