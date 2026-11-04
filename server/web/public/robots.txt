@@ -1,0 +1,5 @@
+# The Izzy Clipz website: every page may be crawled and listed.
+# The API under /api/ answers the apps and the site, not people searching.
+User-agent: *
+Allow: /
+Disallow: /api/

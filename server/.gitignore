@@ -4,3 +4,8 @@ node_modules/
 !.env.example
 coverage/
 *.log
+# The website's build output (npm run build:web), served from public/ on Vercel.
+/public/
+# Playwright's output from the website's end-to-end tests
+web/test-results/
+web/playwright-report/
