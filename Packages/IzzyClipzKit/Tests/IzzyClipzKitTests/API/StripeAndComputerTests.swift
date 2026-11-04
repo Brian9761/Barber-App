@@ -120,6 +120,9 @@ final class StripeConnectionTests: XCTestCase {
         XCTAssertThrowsError(try decodeAPI(IzzyAPI.StripeConnectLink.self, #"{ "url": "izzyclipzbusiness://x", "expiresAt": "2026-11-02T17:15:00Z" }"#))
         let server = try decoder.decode(IzzyAPI.StripeConnectLink.self, from: try serverFixture("stripe-connect-link.json"))
         XCTAssertEqual(server.url.host, "connect.stripe.com")
+        // It opens the shop's Stripe account: never in a log.
+        XCTAssertEqual(String(describing: link), "StripeConnectLink(url: <redacted>, expiresAt: 2026-11-02T17:15:00Z)")
+        XCTAssertFalse("\(server)".contains("connect.stripe.com"))
     }
 
     func testStripesWayBackToTheApp() throws {

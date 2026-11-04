@@ -231,8 +231,9 @@ extension IzzyAPI {
     }
 
     /// `POST /api/owner/stripe/connect` → 201 `{ url, expiresAt }`: Stripe's own page, where the owner
-    /// signs in to Stripe (or signs up) and finishes setting up.
-    public struct StripeConnectLink: Codable, Hashable, Sendable {
+    /// signs in to Stripe (or signs up) and finishes setting up. The link opens the shop's Stripe
+    /// account, so keep it out of logs.
+    public struct StripeConnectLink: Codable, Hashable, Sendable, CustomStringConvertible {
         /// Open it in `ASWebAuthenticationSession` with `callbackScheme`, keeping the owner's Stripe
         /// sign-in (`prefersEphemeralWebBrowserSession = false`).
         public var url: URL
@@ -246,6 +247,9 @@ extension IzzyAPI {
 
         /// The Business app's URL scheme Stripe's pages come back to (through the server's https page).
         public static let callbackScheme = "izzyclipzbusiness"
+
+        /// Leaves the link out, so it never ends up in a log.
+        public var description: String { "StripeConnectLink(url: <redacted>, expiresAt: \(Timestamp.string(from: expiresAt)))" }
 
         private enum CodingKeys: String, CodingKey {
             case url, expiresAt
