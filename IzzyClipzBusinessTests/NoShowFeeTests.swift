@@ -813,6 +813,52 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertNil(FeePanel.reopenWarning(for: kim, now: TestClock.now))
     }
 
+    /// What "Cancel appointment" adds for a booking with a card on file: the shop cancelling is never
+    /// charged, but once a fee is charged (or may have been), cancelling doesn't refund it.
+    func testCancellingByTheShopSaysWhatHappensToTheFee() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let nia = try XCTUnwrap(harness.appointment(named: "Nia Sample"))
+        XCTAssertEqual(FeePanel.shopCancelNote(for: nia), "There's no fee when the shop cancels.")
+        XCTAssertEqual(FeePanel.shopCancelNote(for: nia), FeePanel.noFeeWhenTheShopCancels)
+        let walkIn = try XCTUnwrap(harness.server.appointments.first { $0.card == nil })
+        XCTAssertNil(FeePanel.shopCancelNote(for: walkIn), "no card on file: nothing to say about a fee")
+
+        // Kim's no-show fee is charged, then the owner reopens her appointment and cancels it.
+        let store = makeStore(harness.api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        _ = await store.chargeFee(for: kim)
+        _ = await store.setStatus(.booked, for: try XCTUnwrap(store.appointment(withID: kim.id)))
+        let reopened = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(reopened.status, .booked)
+        XCTAssertEqual(
+            FeePanel.shopCancelNote(for: reopened),
+            "The $35 no-show fee stays charged: cancelling doesn't refund it. Refunds are made in the Stripe Dashboard."
+        )
+
+        var lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        lee.status = .booked
+        lee.cancelledBy = nil
+        lee.noShowFee?.reason = .lateCancel
+        lee.noShowFee?.status = .charged
+        XCTAssertEqual(
+            FeePanel.shopCancelNote(for: lee),
+            "The $35 late cancellation fee stays charged: cancelling doesn't refund it. Refunds are made in the Stripe Dashboard."
+        )
+        lee.noShowFee?.status = .pending
+        XCTAssertEqual(
+            FeePanel.shopCancelNote(for: lee),
+            "Stripe hasn't confirmed the $35 late cancellation fee yet. If it went through, cancelling doesn't refund it. Refunds are made in the Stripe Dashboard."
+        )
+        // Declined, or needing the client: nothing was charged, and cancelling is free.
+        for status in [IzzyAPI.NoShowFeeStatus.none, .declined, .needsAction] {
+            lee.noShowFee?.status = status
+            XCTAssertEqual(FeePanel.shopCancelNote(for: lee), "There's no fee when the shop cancels.", "\(status)")
+        }
+        lee.noShowFee = nil
+        XCTAssertEqual(FeePanel.shopCancelNote(for: lee), "There's no fee when the shop cancels.", "a card without a fee")
+    }
+
     func testTheNoShowHintSaysTheDayForAnotherDay() throws {
         let harness = Harness(options: cardsOnFile())
         var nia = try XCTUnwrap(harness.appointment(named: "Nia Sample"))

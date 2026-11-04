@@ -217,8 +217,24 @@ struct FeePanel: Equatable {
         return "You can mark a no-show once the appointment starts \(when). Until then, the client can still cancel in the app."
     }
 
-    /// Added to "Cancel appointment"'s question for a booking with a card on file.
-    static let shopCancelNote = "There's no fee when the shop cancels."
+    /// Added to "Cancel appointment"'s question for a booking with a card on file: the shop
+    /// cancelling is never charged, but a fee already charged isn't refunded by it, and one Stripe
+    /// hasn't confirmed may have gone through. `nil` without a card on file.
+    static func shopCancelNote(for appointment: IzzyAPI.Appointment) -> String? {
+        guard appointment.card != nil else { return nil }
+        guard let fee = appointment.noShowFee else { return noFeeWhenTheShopCancels }
+        let what = "\(fee.amountLabel) \(fee.title.lowercased())"
+        switch fee.status {
+        case .charged:
+            return "The \(what) stays charged: cancelling doesn't refund it. Refunds are made in the Stripe Dashboard."
+        case .pending:
+            return "Stripe hasn't confirmed the \(what) yet. If it went through, cancelling doesn't refund it. Refunds are made in the Stripe Dashboard."
+        case .none, .declined, .needsAction:
+            return noFeeWhenTheShopCancels
+        }
+    }
+
+    static let noFeeWhenTheShopCancels = "There's no fee when the shop cancels."
 }
 
 extension IzzyAPI.Appointment {

@@ -87,6 +87,7 @@ struct AppointmentDetailView: View {
             }
             .accessibilityIdentifier("confirmCancelAppointment")
             Button("Keep it", role: .cancel) {}
+                .accessibilityIdentifier("keepAppointment")
         } message: {
             Text(cancelMessage(appointment))
         }
@@ -258,7 +259,7 @@ struct AppointmentDetailView: View {
 
     private func cancelMessage(_ appointment: IzzyAPI.Appointment) -> String {
         var message = "\(store.shopTime.time(appointment.start)) with \(appointment.barberName). The time opens up for other clients. The app doesn't message the client, so let them know."
-        if appointment.card != nil { message += " \(FeePanel.shopCancelNote)" }
+        if let note = FeePanel.shopCancelNote(for: appointment) { message += " \(note)" }
         return message
     }
 

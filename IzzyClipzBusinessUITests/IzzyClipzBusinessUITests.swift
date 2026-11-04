@@ -468,6 +468,12 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(statusShows("Booked"))
         XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "No-show fee charged"))
         XCTAssertFalse(element("chargeFee").exists, "Still never twice")
+        // Cancelling it doesn't refund the fee either, and the question says so (not "no fee").
+        tap("cancelAppointment")
+        XCTAssertTrue(text(containing: "The $35 no-show fee stays charged: cancelling doesn't refund it.").waitForExistence(timeout: 10))
+        XCTAssertFalse(text(containing: "There's no fee when the shop cancels.").exists)
+        tapDialogButton("Keep it", identifier: "keepAppointment")
+        XCTAssertTrue(statusShows("Booked"))
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForLabel(reveal("appointment-Kim Sample"), containing: "No-show fee $35 charged"))
