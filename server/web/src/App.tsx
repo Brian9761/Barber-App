@@ -1,6 +1,12 @@
 import { Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
+import { BarbersPage } from './pages/BarbersPage';
+import { BusinessPage } from './pages/BusinessPage';
+import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
+import { ReviewsPage } from './pages/ReviewsPage';
+import { ServicesPage } from './pages/ServicesPage';
+import { VisitPage } from './pages/VisitPage';
 
 /**
  * React Router's future flags, set so it doesn't warn. Navigation stays outside
@@ -15,6 +21,12 @@ export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
+        <Route index element={<HomePage />} />
+        <Route path="services" element={<ServicesPage />} />
+        <Route path="barbers" element={<BarbersPage />} />
+        <Route path="reviews" element={<ReviewsPage />} />
+        <Route path="visit" element={<VisitPage />} />
+        <Route path="business/*" element={<BusinessPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>
