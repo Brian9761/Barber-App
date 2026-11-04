@@ -9,8 +9,9 @@
 // changes the port.
 //
 // Test plumbing under /__e2e/ (never part of the real site): the requests that
-// reached /api (the demo must never make one), and a new version of the service
-// worker, for the "A new version is ready" bar.
+// reached /api (the demo must never make one), a new version of the service
+// worker, for the "A new version is ready" bar, and the demo retired: the retired
+// site (`npm run build:retired`, in dist-retired/) deployed at its address instead.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -19,10 +20,11 @@ import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.E2E_DEMO_PORT) || 4174;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
-const ROOT = resolve(fileURLToPath(new URL('../dist-demo/', import.meta.url)));
+const DEMO_ROOT = resolve(fileURLToPath(new URL('../dist-demo/', import.meta.url)));
+const RETIRED_ROOT = resolve(fileURLToPath(new URL('../dist-retired/', import.meta.url)));
 
-if (!existsSync(join(ROOT, 'index.html')) || !existsSync(join(ROOT, 'vercel.json'))) {
-  console.error(`No demo build in ${ROOT}. Run \`npm run build:demo\` in server/web first.`);
+if (!existsSync(join(DEMO_ROOT, 'index.html')) || !existsSync(join(DEMO_ROOT, 'vercel.json'))) {
+  console.error(`No demo build in ${DEMO_ROOT}. Run \`npm run build:demo\` in server/web first.`);
   process.exit(1);
 }
 
@@ -30,8 +32,6 @@ interface HostingSettings {
   rewrites?: { source: string; destination: string }[];
   headers?: { source: string; headers: { key: string; value: string }[] }[];
 }
-
-const hosting = JSON.parse(readFileSync(join(ROOT, 'vercel.json'), 'utf8')) as HostingSettings;
 
 /**
  * A vercel.json `source` as a regular expression: what's in parentheses already is one
@@ -48,8 +48,25 @@ function sourcePattern(source: string): RegExp {
   return new RegExp(`^${pattern}$`);
 }
 
-const rewrites = (hosting.rewrites ?? []).map((rule) => ({ pattern: sourcePattern(rule.source), destination: rule.destination }));
-const headerRules = (hosting.headers ?? []).map((rule) => ({ pattern: sourcePattern(rule.source), headers: rule.headers }));
+interface Site {
+  root: string;
+  rewrites: { pattern: RegExp; destination: string }[];
+  headerRules: { pattern: RegExp; headers: { key: string; value: string }[] }[];
+}
+
+/** A folder deployed as its vercel.json says. */
+function site(root: string): Site {
+  const hosting = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8')) as HostingSettings;
+  return {
+    root,
+    rewrites: (hosting.rewrites ?? []).map((rule) => ({ pattern: sourcePattern(rule.source), destination: rule.destination })),
+    headerRules: (hosting.headers ?? []).map((rule) => ({ pattern: sourcePattern(rule.source), headers: rule.headers })),
+  };
+}
+
+const demo = site(DEMO_ROOT);
+/** What's deployed now: the demo, or (with /__e2e/retire) the retired site in its place. */
+let current = demo;
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -67,7 +84,7 @@ const TYPES: Record<string, string> = {
 /** The headers vercel.json sets for this path: every rule that matches, in order. */
 function headersFor(pathname: string): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const rule of headerRules) {
+  for (const rule of current.headerRules) {
     if (!rule.pattern.test(pathname)) continue;
     for (const { key, value } of rule.headers) out[key.toLowerCase()] = value;
   }
@@ -82,9 +99,10 @@ function siteFile(pathname: string): string | null {
   } catch {
     return null;
   }
-  const file = normalize(join(ROOT, decoded));
-  if (file !== ROOT && !file.startsWith(ROOT + sep)) return null;
-  if (file === join(ROOT, 'vercel.json')) return null;
+  const root = current.root;
+  const file = normalize(join(root, decoded));
+  if (file !== root && !file.startsWith(root + sep)) return null;
+  if (file === join(root, 'vercel.json')) return null;
   return existsSync(file) && statSync(file).isFile() ? file : null;
 }
 
@@ -115,6 +133,14 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, pathname: str
     workerVersion = reset ? 0 : workerVersion + 1;
     return send(res, 200, JSON.stringify({ version: workerVersion }), json);
   }
+  if (pathname === '/__e2e/retire' && req.method === 'POST') {
+    const { on } = await readBody(req);
+    if (on && !existsSync(join(RETIRED_ROOT, 'vercel.json'))) {
+      return send(res, 409, JSON.stringify({ error: 'No retired site: run `DEMO_MOVED_TO=https://izzy-clipz.example npm run build:retired` first' }), json);
+    }
+    current = on ? site(RETIRED_ROOT) : demo;
+    return send(res, 200, JSON.stringify({ retired: Boolean(on) }), json);
+  }
   send(res, 404, JSON.stringify({ error: 'No such end-to-end control' }), json);
 }
 
@@ -129,13 +155,15 @@ const server = createServer(async (req, res) => {
     // Files first, then the rewrites (the page, for every path but /api/ and /assets/), like Vercel.
     let file = siteFile(pathname);
     if (!file) {
-      const rewrite = rewrites.find((rule) => rule.pattern.test(pathname));
+      const rewrite = current.rewrites.find((rule) => rule.pattern.test(pathname));
       if (rewrite) file = siteFile(rewrite.destination);
     }
     const headers = { 'content-type': file ? (TYPES[extname(file)] ?? 'application/octet-stream') : 'text/plain; charset=utf-8', ...headersFor(pathname) };
     if (!file) return send(res, 404, 'Not found', headers);
     let body = readFileSync(file);
-    if (pathname === '/sw.js' && workerVersion > 0) body = Buffer.concat([body, Buffer.from(`\n// New version ${workerVersion}, for the end-to-end tests.\n`)]);
+    if (pathname === '/sw.js' && workerVersion > 0 && current === demo) {
+      body = Buffer.concat([body, Buffer.from(`\n// New version ${workerVersion}, for the end-to-end tests.\n`)]);
+    }
     send(res, 200, body, headers);
   } catch (error) {
     console.error(error);
