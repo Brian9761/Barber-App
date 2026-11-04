@@ -48,8 +48,11 @@ async function toReview(page: Page, testInfo: TestInfo, client: { name: string; 
   await expectStep(page, 4, 'Your details');
   await fillDetails(page, client);
   const remember = detailsFields(page).remember;
-  if (client.remember && !(await remember.isChecked())) await remember.check();
-  if (client.remember === false && (await remember.isChecked())) await remember.uncheck();
+  if (client.remember !== undefined && (await remember.isChecked()) !== client.remember) {
+    // The label covers the box, so a click anywhere on it ticks it, as a visitor would.
+    await page.locator('label.checkbox__label').click();
+    await expect(remember).toBeChecked({ checked: client.remember });
+  }
   await page.getByRole('button', { name: 'Continue' }).click();
   await expectStep(page, 5, 'Review and book');
 }
