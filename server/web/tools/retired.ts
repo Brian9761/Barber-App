@@ -159,7 +159,10 @@ self.addEventListener('activate', function (event) {
     await Promise.all(names.map(function (name) { return caches.delete(name); }));
     var pages = await self.clients.matchAll({ type: 'window' });
     await self.registration.unregister();
-    await Promise.all(pages.map(function (page) { return page.navigate(page.url).catch(function () {}); }));
+    // A browser that can't reload them from here shows "A new version is ready · Reload" instead.
+    await Promise.all(pages.map(function (page) {
+      return typeof page.navigate === 'function' ? page.navigate(page.url).catch(function () {}) : undefined;
+    }));
   })());
 });
 `;
