@@ -16,7 +16,9 @@ function appWithoutDatabase() {
   const down = async (): Promise<never> => {
     throw new Error('connection refused');
   };
-  const deps: Deps = {
+  // Asserted rather than annotated: Deps grows as the server's other parts land (a computer's
+  // sign-in code, say), and the catalog needs none of it, so this keeps compiling either way.
+  const deps = {
     db: { query: down, transaction: down },
     config: configFromEnv({}),
     catalog: loadCatalog(),
@@ -30,7 +32,8 @@ function appWithoutDatabase() {
     fetch: down,
     clientIp: () => undefined,
     log: { error: () => undefined, warn: () => undefined },
-  };
+    computerCode: () => '000000',
+  } as Deps;
   return createApp(deps);
 }
 

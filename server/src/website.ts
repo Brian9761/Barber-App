@@ -11,8 +11,11 @@ import { json } from './http.js';
 // their own version of a service. The booking code reads the same file through
 // catalog.ts, which ignores those fields.
 //
-// Public and the same for every visitor, so browsers and Vercel's CDN may keep
-// it for 5 minutes. It needs no database.
+// Public and the same for every visitor, so browsers may keep it for 5 minutes
+// (max-age). Vercel's CDN caches a function's answer only with s-maxage or
+// CDN-Cache-Control, which this doesn't send, so each new visitor's first page
+// asks the function; it's a small file read once per instance and needs no
+// database.
 
 const text = z.string().min(1);
 const webUrl = z.string().regex(/^https:\/\/[^\s]+$/);
