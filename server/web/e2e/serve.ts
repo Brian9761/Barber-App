@@ -12,16 +12,17 @@
 //
 // Test plumbing under /__e2e/ (never part of the real server): turn the live
 // reviews and no-show protection on and off, and a stand-in for Stripe's card
-// page, which sends the browser back to /book/card-return the way the server's
-// card return does for the website. There's no Stripe key: nothing leaves this
-// machine.
+// page. Like Stripe, its Save and Back go to the success_url and cancel_url the
+// server gave the Checkout Session, so the server's own way back to the website
+// (/api/cards/return and /api/cards/cancel with to=web) is part of the test.
+// There's no Stripe key: nothing leaves this machine.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { PGlite } from '@electric-sql/pglite';
 import { btree_gist } from '@electric-sql/pglite/contrib/btree_gist';
 import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
@@ -68,13 +69,21 @@ const notHere = async (): Promise<never> => {
   throw new Error('Not used in the end-to-end tests');
 };
 
-/** Just the card-saving calls (Customers and Checkout in setup mode), answered like Stripe. */
-class StandInStripe implements StripeClient {
+/**
+ * Just the card-saving calls (Customers and Checkout in setup mode), answered like Stripe.
+ * The rest of the server's Stripe client (Tap to Pay, payments, and Connect on a server that
+ * has it) isn't part of these tests: those calls fail if anything makes them.
+ */
+class StandInStripe implements Pick<StripeClient, 'customers' | 'checkout'> {
   readonly sessions = new Map<string, Stripe.Checkout.Session>();
+  /** Where each session sends the browser back to, as the server asked: Save, and Back. */
+  readonly returns = new Map<string, { success: string; cancel: string }>();
   private counter = 0;
 
-  readonly terminal = { connectionTokens: { create: notHere } };
+  readonly terminal = { connectionTokens: { create: notHere }, locations: { create: notHere } };
   readonly paymentIntents = { create: notHere, retrieve: notHere, list: notHere };
+  readonly accounts = { create: notHere, retrieve: notHere };
+  readonly accountLinks = { create: notHere };
 
   readonly customers = {
     create: async () => ({ id: `cus_e2e${String(++this.counter).padStart(6, '0')}`, object: 'customer' }) as unknown as Stripe.Customer,
@@ -96,6 +105,11 @@ class StandInStripe implements StripeClient {
           setup_intent: null,
         } as unknown as Stripe.Checkout.Session;
         this.sessions.set(id, session);
+        this.returns.set(id, {
+          // Stripe fills in the session's id where the URL asks for it.
+          success: (params.success_url ?? '').replaceAll('{CHECKOUT_SESSION_ID}', id),
+          cancel: params.cancel_url ?? '',
+        });
         return session;
       },
       retrieve: async (id: string) => {
@@ -164,23 +178,26 @@ const reviewsFetch: typeof fetch = async (input) => {
 
 const config = configFromEnv({});
 
-const deps: Deps = {
+// Asserted rather than annotated: Deps grows as the server's other parts land (a computer's
+// sign-in code, say), and this keeps compiling either way.
+const deps = {
   db: poolDb(pool),
   config,
   catalog,
   now: () => new Date(),
   uuid: randomUUID,
   manageToken: newManageToken,
-  stripe: () => stripe,
+  stripe: () => stripe as unknown as StripeClient,
   blob: { put: notHere, del: notHere },
   fetch: reviewsFetch,
   // Each test passes its own address, so the booking limits (5 an hour per network) are per test.
-  clientIp: (request) => request.headers.get('x-real-ip') ?? undefined,
+  clientIp: (request: Request) => request.headers.get('x-real-ip') ?? undefined,
   log: {
-    error: (message, details) => console.error(JSON.stringify({ level: 'error', message, ...details })),
-    warn: (message, details) => console.warn(JSON.stringify({ level: 'warn', message, ...details })),
+    error: (message: string, details?: Record<string, unknown>) => console.error(JSON.stringify({ level: 'error', message, ...details })),
+    warn: (message: string, details?: Record<string, unknown>) => console.warn(JSON.stringify({ level: 'warn', message, ...details })),
   },
-};
+  computerCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
+} as Deps;
 
 const app = createApp(deps);
 
@@ -222,6 +239,13 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Pr
     config.yelpApiKey = live ? 'e2e-yelp-key' : undefined;
     return send(res, 200, JSON.stringify({ live: Boolean(live) }));
   }
+  if (parts[1] === 'card-return' && req.method === 'GET') {
+    // Whether this server sends Stripe's card page back to the website (returnTo "web"),
+    // or only to the app: the way back for the website came with a later part of the server.
+    const probe = await app.fetch(new Request(`${ORIGIN}/api/cards/cancel?to=web`));
+    const location = probe.headers.get('location') ?? '';
+    return send(res, 200, JSON.stringify({ web: probe.status >= 300 && probe.status < 400 && location.includes('/book/card-return') }));
+  }
   if (parts[1] === 'protection' && req.method === 'POST') {
     const { on } = await readBody(req);
     config.stripeSecretKey = on ? 'sk_test_e2e' : undefined;
@@ -237,13 +261,14 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Pr
     if (req.method === 'GET' && parts.length === 3) {
       return stripe.sessions.has(id) ? send(res, 200, stripePage(id), 'text/html; charset=utf-8') : send(res, 404, 'No such session', 'text/plain');
     }
-    if (req.method === 'POST' && parts[3] === 'save') {
+    const back = stripe.returns.get(id);
+    if (req.method === 'POST' && parts[3] === 'save' && back) {
       stripe.complete(id);
-      // What the server's card return does for the website (returnTo "web").
-      return send(res, 302, '', 'text/plain', { location: `/book/card-return?status=saved&session_id=${encodeURIComponent(id)}` });
+      // Where the server told Stripe to send the client once the card is saved.
+      return send(res, 303, '', 'text/plain', { location: back.success });
     }
-    if (req.method === 'POST' && parts[3] === 'back') {
-      return send(res, 302, '', 'text/plain', { location: '/book/card-return?status=cancelled' });
+    if (req.method === 'POST' && parts[3] === 'back' && back) {
+      return send(res, 303, '', 'text/plain', { location: back.cancel });
     }
   }
   send(res, 404, JSON.stringify({ error: 'No such end-to-end control' }));

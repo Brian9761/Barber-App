@@ -28,18 +28,20 @@ The site never moves on its own: no carousels, no autoplay, no animated page cha
 
 ## What the browser keeps
 
-- `localStorage` `izzy.appointments.v1`: each appointment booked here, with its manage token (what My appointments lists and cancels with), until 30 days after it ended.
+- `localStorage` `izzy.appointments.v1`: each appointment booked here, with its manage token (what My appointments lists and cancels with), until 30 days after it ended. Not the client's name, number, email or note.
 - `localStorage` `izzy.details.v1`: name, number and email, only with "Remember me on this computer".
-- `izzy.card.v1`: the card token and the card's brand and last four digits, in `localStorage` with "Remember me", otherwise in `sessionStorage`.
+- `izzy.card.v1`: the card token, the card's brand and last four digits, and the number (E.164) of the client who added it, in `localStorage` with "Remember me", otherwise in `sessionStorage` until it's booked.
 - `sessionStorage`: the booking in progress (`izzy.booking.v1`, so a reload or the trip to Stripe's card page doesn't lose it), the card checkout in progress, and the last booking for "You're booked".
+
+A computer can be shared, so "Remember me" starts off unless this computer already remembers the client, a saved card is only ever offered to the number that added it, and a booking that's done (or a new one) doesn't carry the last client's details or note. "Not you? Forget me on this computer" on Your details, and "Forget me on this computer" on My appointments, clear what's kept here; the appointments stay booked with the shop.
 
 ## The card on file
 
-When the shop's no-show protection needs a card, Review's "Add a card" makes a card token, calls `POST /api/cards/checkout` with `returnTo: "web"` and `X-Card-Token`, keeps the token and the booking in this tab, and sends the browser to Stripe's page. Stripe comes back through the server to `/book/card-return?status=saved&session_id=…` (or `?status=cancelled`); that page saves the card with `POST /api/cards` and goes back to Review, which then shows "Visa •••• 4242 · Change" and lets the client book.
+When the shop's no-show protection needs a card, Review's "Add a card" makes a card token, calls `POST /api/cards/checkout` with `returnTo: "web"` and `X-Card-Token`, keeps the token and the booking in this tab, and sends the browser to Stripe's page. Stripe comes back through the server to `/book/card-return?status=saved&session_id=…` (or `?status=cancelled`); that page saves the card with `POST /api/cards` and goes back to Review, which then shows "Visa •••• 4242 · Change" and lets the client book. Only the card page this tab opened last is saved (an older one, reached through the browser's history, says so), and "Try again" shows only when trying again can work (the shop wasn't reached, or asked to wait). If the server answers `card_required` anyway (the shop turned protection on meanwhile), Review checks the policy again and forgets only a card it sent.
 
 ## End-to-end tests
 
-`e2e/serve.ts` serves the built site and the API's own code on PGlite (through `@electric-sql/pglite-socket`, like the server's tests) with the migrations and the catalog's barbers, from one Node server routed like Vercel. Playwright starts it by itself (or reuses one already running on the port, except in CI). `/__e2e/…` is test plumbing that only this server has: live reviews from the server's own fixtures, no-show protection on and off, and a stand-in for Stripe's card page (there's no Stripe key; nothing leaves the computer).
+`e2e/serve.ts` serves the built site and the API's own code on PGlite (through `@electric-sql/pglite-socket`, like the server's tests) with the migrations and the catalog's barbers, from one Node server routed like Vercel. Playwright starts it by itself (or reuses one already running on the port, except in CI). `/__e2e/…` is test plumbing that only this server has: live reviews from the server's own fixtures, no-show protection on and off, and a stand-in for Stripe's card page (there's no Stripe key; nothing leaves the computer). Its Save and Back go to the `success_url` and `cancel_url` the server gave it, so the server's own way back to the website is tested too; on a server without that way back (`returnTo: "web"`), the test of coming back from the card page is skipped and says why.
 
 The tests run at 1440×900 and 390×844: every page and the nav, a booking with Any barber through to My appointments and cancelling, a time someone else takes mid-booking, booking with the keyboard alone, the card on file, no errors in the browser's console, no serious axe-core findings, and nothing wider than the screen. Screenshots of every page and step go to `E2E_SHOTS_DIR` (default `test-results/shots`). `E2E_PORT` changes the port (4173).
 

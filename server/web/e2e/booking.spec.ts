@@ -219,9 +219,11 @@ test('booking with the keyboard alone', async ({ page, phone }, testInfo) => {
   await page.keyboard.type('Kim Keyboard');
   await tabTo(page, fields.phone);
   await page.keyboard.type(phone);
+  // "Remember me" starts off (a computer can be shared); Space turns it on.
   await tabTo(page, fields.remember);
-  await page.keyboard.press('Space');
   await expect(fields.remember).not.toBeChecked();
+  await page.keyboard.press('Space');
+  await expect(fields.remember).toBeChecked();
   await tabTo(page, page.getByRole('button', { name: 'Continue' }));
   await page.keyboard.press('Enter');
 

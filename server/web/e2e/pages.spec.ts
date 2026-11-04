@@ -57,6 +57,35 @@ test('every page fits a small phone, 375 pixels wide', async ({ page }, testInfo
   }
 });
 
+test('the phone number is on the first screen of every page and booking step', async ({ page }, testInfo) => {
+  // "Prefer to call?" near the top, so nobody has to scroll past the whole menu to find it.
+  for (const path of ['/', '/services', '/barbers', '/reviews', '/visit', '/appointments', '/book', '/book?barber=carlos-rafael&service=haircut']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const top = await page
+      .locator('main a[href="tel:+14423413053"]')
+      .evaluateAll((links) => Math.min(...links.map((link) => link.getBoundingClientRect().top + window.scrollY)));
+    const screen = page.viewportSize()!.height;
+    expect(top, `${path} at ${testInfo.project.name} size: the first number at ${Math.round(top)}px`).toBeLessThan(screen);
+  }
+});
+
+test('the phone menu keeps Tab inside it while it covers the page', async ({ page }, testInfo) => {
+  test.skip(!isPhone(testInfo), 'The menu is for phone sizes');
+  await page.goto('/services');
+  await page.getByRole('button', { name: 'Menu' }).click();
+  await expect(page.getByRole('button', { name: 'Close' })).toHaveAttribute('aria-expanded', 'true');
+  for (let i = 0; i < 14; i += 1) {
+    await page.keyboard.press('Tab');
+    const inNav = await page.evaluate(() => document.activeElement?.closest('nav.globalnav') !== null || document.activeElement === document.body);
+    expect(inNav, `Tab ${i + 1} stays in the menu and nav`).toBe(true);
+  }
+  // Escape closes it, back on Menu, and the page can be reached again.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
+  expect(await page.evaluate(() => document.getElementById('main')?.hasAttribute('inert'))).toBe(false);
+});
+
 test('reviews that can’t be shown say so kindly and link to Google and Yelp', async ({ page }, testInfo) => {
   await page.goto('/reviews');
   await expect(page.getByTestId('reviews-elsewhere')).toContainText("Reviews can't be shown here right now");
@@ -74,7 +103,7 @@ test('the nav goes to every page and back home', async ({ page }, testInfo) => {
     { link: 'Barbers', heading: 'Meet the barbers' },
     { link: 'Reviews', heading: 'Reviews' },
     { link: 'Visit', heading: 'Visit the shop' },
-    { link: 'My appointment', heading: 'My appointments' },
+    { link: 'My appointments', heading: 'My appointments' },
   ];
   for (const destination of destinations) {
     if (isPhone(testInfo)) {
@@ -89,7 +118,7 @@ test('the nav goes to every page and back home', async ({ page }, testInfo) => {
     }
     await nav.getByRole('link', { name: destination.link, exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: destination.heading })).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`/${destination.link === 'My appointment' ? 'appointments' : destination.link.toLowerCase()}$`));
+    await expect(page).toHaveURL(new RegExp(`/${destination.link === 'My appointments' ? 'appointments' : destination.link.toLowerCase()}$`));
     if (!isPhone(testInfo)) await expect(nav.getByRole('link', { name: destination.link, exact: true })).toHaveAttribute('aria-current', 'page');
     // The menu closes once the page changes.
     await expect(nav.getByRole('button', { name: 'Close' })).toHaveCount(0);
