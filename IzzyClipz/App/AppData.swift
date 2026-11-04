@@ -64,14 +64,12 @@ enum Asset {
     static let storefront = "Storefront"
     static let hero = GalleryPhoto.texturedCrop.assetName
     static let launchLogo = "LaunchLogo"
-    /// The shop's official logo, transparent background.
+    /// The shop's official logo: white art on a transparent background.
     static let logo = "Logo"
-    /// The barber-pole mascot from the logo, transparent background.
-    static let mascot = "LogoMascot"
 
     /// Every bundled image the app refers to, for a test to check.
     static var all: [String] {
-        [storefront, hero, launchLogo, logo, mascot]
+        [storefront, hero, launchLogo, logo]
             + GalleryPhoto.allCases.map(\.assetName)
     }
 }

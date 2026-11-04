@@ -117,7 +117,7 @@ private struct VisitScreen: View {
 
 // MARK: - Storefront
 
-/// The storefront photo under the photo scrim, with the logo slapped on the bottom-left as a white
+/// The storefront photo under the photo scrim, with the logo slapped on the bottom-left as a black
 /// sticker (the one place the full logo shows large), the open status at the top and "WALK-INS
 /// WELCOME" in the dark bottom-right corner.
 private struct VisitHero: View {
@@ -731,7 +731,7 @@ private struct VisitLinkRow: View {
 private struct VisitFooter: View {
     var body: some View {
         VStack(spacing: Theme.Space.m) {
-            MascotSticker(size: 40)
+            LogoBadge(size: 40)
             VStack(spacing: Theme.Space.xxs) {
                 Text("Book in the app, pay at the shop")
                 Text("Version \(VisitView.appVersion)")

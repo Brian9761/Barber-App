@@ -12,10 +12,12 @@ struct SignInView: View {
             Form {
                 Section {
                     VStack(spacing: 12) {
+                        // The shop's white logo, taller than it is wide: 160 pt wide is about
+                        // 175 pt tall.
                         Image("Logo")
                             .resizable()
                             .scaledToFit()
-                            .frame(maxWidth: 220)
+                            .frame(maxWidth: 160)
                             .accessibilityHidden(true)
                         Text("Izzy Clipz Business")
                             .font(.title2.bold())

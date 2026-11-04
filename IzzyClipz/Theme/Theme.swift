@@ -52,12 +52,12 @@ enum Theme {
     static let dripRed = Color(hex: 0xD7141C)
     /// Red text on ink, used in one place: the wordmark's "Clipz".
     static let hotRed = Color(hex: 0xFF4545)
-    /// Red text on bone (5.97). Kept for the logo's own red; the build rules leave it almost unused.
+    /// Red text on bone (5.97). Kept from the previous logo's red; the build rules leave it almost unused.
     static let logoRed = Color(hex: 0xB80000)
 
     // MARK: Blue
 
-    /// The logo's royal blue: the blue monogram tiles, blue text on bone.
+    /// The previous logo's royal blue: the blue monogram tiles, blue text on bone.
     static let royal = Color(hex: 0x00309A)
     /// The promo gradient's end, and the blue monogram tiles.
     static let blue = Color(hex: 0x1F4FD8)
@@ -91,7 +91,7 @@ enum Theme {
         static let arrowSquare: CGFloat = 13
         /// Chips and time slots.
         static let chip: CGFloat = 12
-        /// The white sticker behind the logo.
+        /// The logo sticker's black plate, for a sticker 120 pt wide (it scales with the width).
         static let sticker: CGFloat = 14
     }
 
