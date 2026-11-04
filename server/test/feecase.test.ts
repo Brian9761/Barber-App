@@ -1,6 +1,17 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { cancelledLate, FEE_KIND, feeCase, isFeeKind, reasonOfKind, windowLabel } from '../src/feecase.js';
+import {
+  cancelledLate,
+  cancellingIsLate,
+  FEE_KIND,
+  feeCase,
+  isFeeKind,
+  isFullPrice,
+  lateCancelWarning,
+  money,
+  reasonOfKind,
+  windowLabel,
+} from '../src/feecase.js';
 import type { AppointmentRow } from '../src/serialize.js';
 
 // Which fee a booking with a card on file can be charged: a no-show, a late
@@ -132,6 +143,50 @@ describe('which fee a booking can be charged', () => {
   });
 });
 
+describe('cancelling now', () => {
+  it('is late inside the agreed window, counting from the first time the client cancelled or asked to', () => {
+    const free = booking();
+    expect(cancellingIsLate(free, minutesBefore(61))).toBe(false);
+    expect(cancellingIsLate(free, minutesBefore(60))).toBe(false);
+    expect(cancellingIsLate(free, minutesBefore(59))).toBe(true);
+    expect(cancellingIsLate(free, minutesBefore(1))).toBe(true);
+    // Cancelled early before (then reopened by the shop): that time counts, so it stays free.
+    expect(cancellingIsLate(booking({ customer_cancelled_at: minutesBefore(600) }), minutesBefore(5))).toBe(false);
+    // Asked inside the window before (the shop had marked it), so it's late whenever it goes through.
+    expect(cancellingIsLate(booking({ customer_cancelled_at: minutesBefore(30) }), minutesBefore(20))).toBe(true);
+    // No late cancellations in the agreed policy, or no card on file: always free.
+    expect(cancellingIsLate(booking({ late_cancel_window_minutes: null }), minutesBefore(5))).toBe(false);
+    expect(cancellingIsLate(booking({ saved_card_id: null, no_show_fee_cents: null, late_cancel_window_minutes: null }), minutesBefore(5))).toBe(false);
+    // A longer window agreed at booking.
+    expect(cancellingIsLate(booking({ late_cancel_window_minutes: 180 }), minutesBefore(120))).toBe(true);
+  });
+
+  it('warns with the agreed fee, and says when it is the full service price', () => {
+    expect(isFullPrice({ no_show_fee_cents: 3500, price_cents: 3500 })).toBe(true);
+    expect(isFullPrice({ no_show_fee_cents: 1750, price_cents: 3500 })).toBe(false);
+    expect(isFullPrice({ no_show_fee_cents: 2500, price_cents: 1600 })).toBe(false);
+    expect(isFullPrice({ no_show_fee_cents: null, price_cents: 3500 })).toBe(false);
+    expect(isFullPrice({ no_show_fee_cents: null, price_cents: 0 })).toBe(false);
+    expect(lateCancelWarning(60, 3500, true)).toBe('Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price.');
+    expect(lateCancelWarning(60, 1750, false)).toBe('Cancelling now, less than 1 hour before your appointment, may be charged $17.50.');
+    expect(lateCancelWarning(90, 2500, false)).toBe('Cancelling now, less than 90 minutes before your appointment, may be charged $25.');
+    expect(lateCancelWarning(2880, 8000, true)).toBe('Cancelling now, less than 48 hours before your appointment, may be charged $80, the full service price.');
+    expect([money(2000), money(1750), money(5)]).toEqual(['$20', '$17.50', '$0.05']);
+  });
+});
+
+/** The warnings the Kit's mirror is checked against (window, fee, full price). */
+const WARNINGS: [number, number, boolean][] = [
+  [30, 3500, true],
+  [60, 3500, true],
+  [60, 1750, false],
+  [60, 2005, false],
+  [90, 2500, false],
+  [120, 4000, true],
+  [180, 50, false],
+  [2880, 8000, true],
+];
+
 describe('test/fixtures/fee-cases.json (read by the Kit)', () => {
   it('lists every case, as the apps see a booking, and is up to date', () => {
     const iso = (d: Date | null) => (d ? d.toISOString().replace(/\.\d{3}Z$/, 'Z') : null);
@@ -147,8 +202,16 @@ describe('test/fixtures/fee-cases.json (read by the Kit)', () => {
         lateCancelWindowMinutes: c.row.late_cancel_window_minutes,
         reason: c.reason ? REASON[c.reason] : null,
         refusal: c.refusal,
+        // Whether the client's cancel time (if any) was inside the agreed window, whatever happened since.
+        cancelledLate: cancelledLate(c.row),
       })),
       notStarted: "The appointment hasn't started yet, so it can't be a no-show.",
+      cancelWarnings: WARNINGS.map(([lateCancelWindowMinutes, amountCents, fullPrice]) => ({
+        lateCancelWindowMinutes,
+        amountCents,
+        fullPrice,
+        warning: lateCancelWarning(lateCancelWindowMinutes, amountCents, fullPrice),
+      })),
     };
     const file = new URL('./fixtures/fee-cases.json', import.meta.url);
     const text = `${JSON.stringify(document, null, 2)}\n`;

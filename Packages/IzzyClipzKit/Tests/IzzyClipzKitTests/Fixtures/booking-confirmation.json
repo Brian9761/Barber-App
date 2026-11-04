@@ -17,7 +17,7 @@
     "note": null,
     "createdAt": "2026-10-31T17:05:09Z",
     "card": { "brand": "visa", "last4": "4242" },
-    "noShowFee": { "amountCents": 3500, "status": "none", "chargedAt": null, "message": null, "customerCancelledAt": null, "lateCancelWindowMinutes": 60, "reason": null }
+    "noShowFee": { "amountCents": 3500, "fullPrice": true, "status": "none", "chargedAt": null, "message": null, "customerCancelledAt": null, "lateCancelWindowMinutes": 60, "reason": null }
   },
   "manageToken": "dGVzdC1tYW5hZ2UtdG9rZW4tZm9yLWZpeHR1cmVzLTAx"
 }

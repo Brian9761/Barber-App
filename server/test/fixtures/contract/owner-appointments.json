@@ -59,6 +59,7 @@
       },
       "noShowFee": {
         "amountCents": 3500,
+        "fullPrice": true,
         "status": "none",
         "chargedAt": null,
         "message": null,
@@ -98,6 +99,7 @@
       },
       "noShowFee": {
         "amountCents": 3500,
+        "fullPrice": true,
         "status": "none",
         "chargedAt": null,
         "message": null,

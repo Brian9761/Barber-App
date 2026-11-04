@@ -104,8 +104,8 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.appointment(id: id, manageToken: manageToken)).appointment
     }
 
-    public func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
-        try await send(IzzyAPI.Endpoints.cancelAppointment(id: id, manageToken: manageToken)).appointment
+    public func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment {
+        try await send(IzzyAPI.Endpoints.cancelAppointment(id: id, manageToken: manageToken, acceptLateCancelFee: acceptLateCancelFee)).appointment
     }
 
     public func reviews() async throws -> IzzyAPI.ReviewsResponse {

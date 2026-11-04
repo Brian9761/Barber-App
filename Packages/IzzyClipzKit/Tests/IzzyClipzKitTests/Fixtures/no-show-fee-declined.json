@@ -19,6 +19,7 @@
     "card": { "brand": "visa", "last4": "4242" },
     "noShowFee": {
       "amountCents": 1750,
+      "fullPrice": false,
       "status": "declined",
       "chargedAt": null,
       "message": "The card was declined: there isn't enough money on it.",

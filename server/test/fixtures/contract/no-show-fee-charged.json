@@ -30,6 +30,7 @@
     },
     "noShowFee": {
       "amountCents": 3500,
+      "fullPrice": true,
       "status": "charged",
       "chargedAt": "2026-11-03T18:20:00Z",
       "message": null,

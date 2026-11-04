@@ -40,6 +40,7 @@
       "card": { "brand": "mastercard", "last4": "4444" },
       "noShowFee": {
         "amountCents": 4500,
+        "fullPrice": true,
         "status": "charged",
         "chargedAt": "2026-11-02T19:05:00Z",
         "message": null,
@@ -88,6 +89,7 @@
       "card": { "brand": "visa", "last4": "4242" },
       "noShowFee": {
         "amountCents": 3500,
+        "fullPrice": true,
         "status": "none",
         "chargedAt": null,
         "message": null,

@@ -146,6 +146,7 @@ describe('booking when a card is needed', () => {
     // The starting settings: the full service price ($35), and cancelling less than 1 hour before may be charged.
     expect(res.body.appointment.noShowFee).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'none',
       chargedAt: null,
       message: null,
@@ -211,6 +212,29 @@ describe('booking when a card is needed', () => {
     expect(noShowOnly.status).toBe(201);
     expect(noShowOnly.body.appointment.noShowFee).toMatchObject({ amountCents: 3500, lateCancelWindowMinutes: null });
     expect((await row(noShowOnly.body.appointment.id)).no_show_policy).toBe(policy);
+  });
+
+  it('says whether the agreed fee is the full service price, so the cancel warning can say it', async () => {
+    await protectionOn(h);
+    const headers = { 'x-card-token': await savedCard() };
+    const fullPrice = async (settings: Record<string, unknown>, n: number, offeringId = FLOW45) => {
+      await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: settings });
+      const policy = await policyFor(`offeringId=${encodeURIComponent(offeringId)}`);
+      const res = await book(
+        { offeringId, start: `2026-11-${String(3 + n).padStart(2, '0')}T18:00:00Z`, customer: { name: `Client ${n}`, phone: `44255502${10 + n}` }, noShowPolicy: policy },
+        headers,
+        `198.51.100.${20 + n}`,
+      );
+      expect(res.status, res.text).toBe(201);
+      return [res.body.appointment.noShowFee.amountCents, res.body.appointment.noShowFee.fullPrice];
+    };
+    // The $35 haircut: 100% is the full price; half, or a flat $25, isn't; a flat $35 is, whatever the mode.
+    expect(await fullPrice({ feeMode: 'percent', percent: 100 }, 0)).toEqual([3500, true]);
+    expect(await fullPrice({ percent: 50 }, 1)).toEqual([1750, false]);
+    expect(await fullPrice({ feeMode: 'flat', flatCents: 2500 }, 2)).toEqual([2500, false]);
+    expect(await fullPrice({ flatCents: 3500 }, 3)).toEqual([3500, true]);
+    // "From $80": 100% of the starting price, as the warning at booking said.
+    expect(await fullPrice({ feeMode: 'percent', percent: 100 }, 4, 'israel-flores/8f795304-bb2d-4f55-bd37-a6fe6cabb43c')).toEqual([8000, true]);
   });
 
   it('one card books more than once; a retry with the manage token doesn’t look at the card again', async () => {
