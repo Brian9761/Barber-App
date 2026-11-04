@@ -125,6 +125,8 @@ struct ReviewCardSection: View {
                         .textRole(.callout)
                         .foregroundStyle(Theme.caution)
                         .fixedSize(horizontal: false, vertical: true)
+                        // "Visa ending in 4242", not each dot.
+                        .accessibilityLabel(NoShowCopy.spokenUnusableCardNote(unusable, now: Date(), timeZone: timeZone))
                         .accessibilityIdentifier("unusableCardNote")
                 }
                 failureNote

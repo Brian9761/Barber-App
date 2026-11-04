@@ -283,16 +283,25 @@ enum NoShowCopy {
     static let bookChecking = "Checking with the shop…"
     /// The card page is open, or the card is being saved.
     static let addingCard = "Adding your card…"
-    /// Said once a card is added.
-    static func cardAdded(_ card: StoredCard) -> String { "\(card.label) added." }
+    /// What VoiceOver says once a card is added: "Visa ending in 4242 added."
+    static func cardAdded(_ card: StoredCard) -> String { "\(spokenCard(card.card.cardOnFile)) added." }
 
     /// Why the saved card can't hold this booking: "Your Visa •••• 4242 has expired. Add another
     /// card." or "Your Visa •••• 4242 expires before this appointment. Add another card."
     static func unusableCardNote(_ card: StoredCard, now: Date, timeZone: TimeZone) -> String {
+        unusableCardNote(card, naming: card.label, now: now, timeZone: timeZone)
+    }
+
+    /// `unusableCardNote` as VoiceOver says it: "Your Visa ending in 4242 has expired. Add another card."
+    static func spokenUnusableCardNote(_ card: StoredCard, now: Date, timeZone: TimeZone) -> String {
+        unusableCardNote(card, naming: spokenCard(card.card.cardOnFile), now: now, timeZone: timeZone)
+    }
+
+    private static func unusableCardNote(_ card: StoredCard, naming name: String, now: Date, timeZone: TimeZone) -> String {
         if !card.card.isValid(at: now, in: timeZone) {
-            return "Your \(card.label) has expired. Add another card."
+            return "Your \(name) has expired. Add another card."
         }
-        return "Your \(card.label) expires before this appointment. Add another card."
+        return "Your \(name) expires before this appointment. Add another card."
     }
 
     /// "Card on file for no-shows", or "… and late cancellations" when the booking's policy has them.

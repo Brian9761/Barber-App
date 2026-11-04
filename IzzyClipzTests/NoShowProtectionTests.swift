@@ -989,11 +989,49 @@ final class NoShowCopyTests: XCTestCase {
     }
 
     func testACardThatCantHoldTheBooking() {
+        let zone = AppData.shop.timeZone
         let expired = NoShowTestData.stored(NoShowTestData.card(expMonth: 9, expYear: 2026))
-        XCTAssertEqual(NoShowCopy.unusableCardNote(expired, now: TestData.now, timeZone: AppData.shop.timeZone), "Your Visa •••• 4242 has expired. Add another card.")
+        XCTAssertEqual(NoShowCopy.unusableCardNote(expired, now: TestData.now, timeZone: zone), "Your Visa •••• 4242 has expired. Add another card.")
         let october = NoShowTestData.stored(NoShowTestData.card(expMonth: 10, expYear: 2026))
-        XCTAssertEqual(NoShowCopy.unusableCardNote(october, now: TestData.now, timeZone: AppData.shop.timeZone), "Your Visa •••• 4242 expires before this appointment. Add another card.")
-        XCTAssertEqual(NoShowCopy.cardAdded(october), "Visa •••• 4242 added.")
+        XCTAssertEqual(NoShowCopy.unusableCardNote(october, now: TestData.now, timeZone: zone), "Your Visa •••• 4242 expires before this appointment. Add another card.")
+
+        // VoiceOver hears "ending in", not each dot.
+        XCTAssertEqual(NoShowCopy.spokenUnusableCardNote(expired, now: TestData.now, timeZone: zone), "Your Visa ending in 4242 has expired. Add another card.")
+        XCTAssertEqual(NoShowCopy.spokenUnusableCardNote(october, now: TestData.now, timeZone: zone), "Your Visa ending in 4242 expires before this appointment. Add another card.")
+    }
+
+    /// Said once a card is added: the card as VoiceOver says it.
+    func testACardAdded() {
+        let card = NoShowTestData.stored(NoShowTestData.card(last4: "0005"))
+        XCTAssertEqual(NoShowCopy.cardAdded(card), "Visa ending in 0005 added.")
+        let amex = StoredCard(token: .generate(), card: IzzyAPI.SavedCard(brand: "amex", last4: "8431", expMonth: 4, expYear: 2030))
+        XCTAssertEqual(NoShowCopy.cardAdded(amex), "American Express ending in 8431 added.")
+    }
+
+    /// Nothing VoiceOver reads about a card has the dots of "•••• 4242" in it.
+    func testNothingSpokenHasTheDots() {
+        let zone = AppData.shop.timeZone
+        let expired = NoShowTestData.stored(NoShowTestData.card(expMonth: 9, expYear: 2026))
+        let good = NoShowTestData.stored()
+        let lateCancel = NoShowTestData.appointment(start: TestData.friday)
+        var noShowOnly = lateCancel
+        noShowOnly.noShowFee = IzzyAPI.NoShowFee(amountCents: 2_000)
+        let spoken: [String?] = [
+            NoShowCopy.cardAdded(good),
+            NoShowCopy.spokenUnusableCardNote(expired, now: TestData.now, timeZone: zone),
+            NoShowCopy.spokenUnusableCardNote(good, now: TestData.now, timeZone: zone),
+            NoShowCopy.spokenCard(good.card.cardOnFile),
+            NoShowCopy.spokenCardOnFileLine(lateCancel),
+            NoShowCopy.spokenCardOnFileLine(noShowOnly),
+        ]
+        for (index, text) in spoken.enumerated() {
+            guard let text else {
+                XCTFail("Nothing to say for line \(index)")
+                continue
+            }
+            XCTAssertFalse(text.contains("•"), text)
+            XCTAssertTrue(text.contains("ending in"), text)
+        }
     }
 
     func testRememberMe() {
