@@ -35,8 +35,9 @@ jobs:
   app:
     name: App on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    # Intel Macs run the simulator much more slowly than Apple silicon.
-    timeout-minutes: ${{ inputs.macs == 'intel' && 120 || 60 }}
+    # With no-show protection's UI tests, a run takes close to an hour on Apple silicon and over two
+    # hours on Intel Macs, which run the simulator much more slowly.
+    timeout-minutes: ${{ inputs.macs == 'intel' && 180 || 90 }}
     strategy:
       fail-fast: false
       matrix:
@@ -189,7 +190,7 @@ jobs:
   owner-app:
     name: Owner app on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ inputs.macs == 'intel' && 120 || 60 }}
+    timeout-minutes: ${{ inputs.macs == 'intel' && 180 || 90 }}
     strategy:
       fail-fast: false
       matrix:
