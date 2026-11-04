@@ -1,9 +1,10 @@
-// The build and test configs and the end-to-end tests, which run in Node.
-// e2e/serve.ts imports the API's own code, so the options match server/tsconfig.json.
+// The build and test configs and the end-to-end tests, which run in Node (with
+// the browser's DOM types for what the tests run inside the page). e2e/serve.ts
+// imports the API's own code, so the options match server/tsconfig.json.
 {
   "compilerOptions": {
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "types": ["node"],
