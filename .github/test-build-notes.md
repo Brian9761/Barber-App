@@ -8,7 +8,7 @@ Demo versions of the two Izzy Clipz apps, to try on an iPhone or a Mac before th
 - **IzzyClipz-Demo.ipa**: Izzy Clipz, the app clients book with, for an iPhone with iOS 17 or later.
 - **IzzyClipzBusiness-Demo.ipa**: Izzy Clipz Business, the shop's app (schedule, walk-ins, products, payments), for an iPhone XS or newer with iOS 18 or later.
 - **IzzyClipz-Demo-Simulator.zip**: the client app for the iPhone Simulator on a Mac.
-- **IzzyClipzBusiness-Demo-Simulator.zip**: the shop's app for the iPhone Simulator on a Mac with Apple silicon (M1 or later).
+- **IzzyClipzBusiness-Demo-Simulator.zip**: the shop's app for the iPhone Simulator on a Mac.
 - **SHA256SUMS.txt**: fingerprints of the four files above, to check a download arrived whole (optional).
 
 The two "Source code" downloads GitHub adds at the end are for developers; you don't need them.
@@ -36,7 +36,7 @@ With a free Apple ID:
 3. Unzip the `.zip` you downloaded (double-click it, if your browser didn't already). You get `IzzyClipz.app` or `IzzyClipzBusiness.app`.
 4. Drag that `.app` onto the Simulator's iPhone (it won't open on the Mac itself). It installs; click its icon to open it.
 
-The shop's app needs a Mac with Apple silicon (M1 or later) for this; the client app also works on Intel Macs.
+Both apps work on Macs with Apple silicon and on Intel Macs.
 
 ## What doesn't work in the demo
 
