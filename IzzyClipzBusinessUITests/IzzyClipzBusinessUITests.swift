@@ -418,6 +418,222 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 10), "Signing out didn't go back to sign in")
     }
 
+    // MARK: No-show protection
+
+    /// Kim Sample booked online with a card on file (Visa 4242) for a $35 haircut at 10 AM and
+    /// didn't come (`-fake-cards-on-file`). The fee is charged once, after a question that names
+    /// the amount and the card, and Payments today lists it as a no-show fee.
+    func testChargeANoShowFeeToTheCardOnFile() {
+        launch("-fake-cards-on-file")
+        let row = reveal("appointment-Kim Sample")
+        XCTAssertTrue(row.label.contains("No-show"), "Got: \(row.label)")
+        XCTAssertTrue(row.label.contains("Card on file"), "Got: \(row.label)")
+        row.tap()
+        XCTAssertTrue(waitForLabel(element("detailClientName"), containing: "Kim Sample"))
+        XCTAssertTrue(waitForLabel(reveal("detailCard"), containing: "Visa •••• 4242"))
+        XCTAssertTrue(reveal("detailFee").label.contains("$35 (the full service price)"), "Got: \(element("detailFee").label)")
+        let charge = reveal("chargeFee")
+        XCTAssertTrue(waitForLabel(charge, containing: "Charge no-show fee ($35)"), "Got: \(charge.label)")
+        screenshot("O23-No-Show-Fee")
+
+        charge.tap()
+        XCTAssertTrue(text(containing: "Charge $35 to Kim Sample's Visa •••• 4242?").waitForExistence(timeout: 10), "The question names the amount and the card")
+        screenshot("O24-Confirm-No-Show-Fee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        let status = reveal("feeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "No-show fee charged"), "Got: \(status.label)")
+        XCTAssertTrue(status.label.contains("$35 to Visa •••• 4242"), "Got: \(status.label)")
+        XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        screenshot("O25-No-Show-Fee-Charged")
+
+        // Reopening doesn't refund it, and says so first.
+        tap("reopenAppointment")
+        XCTAssertTrue(text(containing: "reopening doesn't refund it. Refunds are made in the Stripe Dashboard.").waitForExistence(timeout: 10))
+        tapDialogButton("Reopen", identifier: "confirmReopen")
+        XCTAssertTrue(statusShows("Booked"))
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "No-show fee charged"))
+        XCTAssertFalse(element("chargeFee").exists, "Still never twice")
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForLabel(reveal("appointment-Kim Sample"), containing: "No-show fee $35 charged"))
+
+        openTab("Take payment")
+        tap("paymentsTodayLink")
+        XCTAssertTrue(waitForLabel(element("paymentsTotal"), containing: "$75.00"), "Marcus's $40 cut and Kim's $35 fee")
+        XCTAssertTrue(waitForLabel(element("paymentsFees"), containing: "$35.00"))
+        let fee = reveal("feePayment")
+        XCTAssertTrue(fee.label.contains("No-show fee"), "Got: \(fee.label)")
+        XCTAssertTrue(fee.label.contains("Haircut with Flowxbori"), "Got: \(fee.label)")
+        screenshot("O26-Payments-Today-Fee")
+    }
+
+    /// Lee Sample cancelled in the app at 10:50 AM, less than 1 hour before an 11:30 AM haircut
+    /// booked with a card on file: a late cancellation the owner may charge.
+    func testChargeALateCancellationFee() {
+        launch("-fake-cards-on-file")
+        let row = reveal("appointment-Lee Sample")
+        XCTAssertTrue(row.label.contains("Cancelled late"), "Got: \(row.label)")
+        row.tap()
+        XCTAssertTrue(statusShows("Cancelled late"))
+        XCTAssertTrue(waitForLabel(reveal("detailCustomerCancelled"), containing: "10:50 AM"))
+        let charge = reveal("chargeFee")
+        XCTAssertTrue(waitForLabel(charge, containing: "Charge late cancellation fee ($35)"), "Got: \(charge.label)")
+        screenshot("O27-Late-Cancellation-Fee")
+
+        charge.tap()
+        XCTAssertTrue(text(containing: "Charge $35 to Lee Sample's Visa •••• 4242?").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "the client cancelled at 10:50 AM, less than 1 hour before").exists, "The question says why")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "Late cancellation fee charged"))
+        XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        screenshot("O28-Late-Cancellation-Fee-Charged")
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let charged = reveal("appointment-Lee Sample")
+        XCTAssertTrue(waitForLabel(charged, containing: "Late cancellation fee $35 charged"), "Got: \(charged.label)")
+        XCTAssertTrue(charged.label.contains("Cancelled late"), "Got: \(charged.label)")
+        openTab("Take payment")
+        tap("paymentsTodayLink")
+        XCTAssertTrue(waitForLabel(reveal("feePayment"), containing: "Late cancellation fee"))
+    }
+
+    func testADeclinedFeeSaysWhyAndCanBeTriedAgain() {
+        launch("-fake-cards-on-file", "-fake-no-show-declined")
+        tap("appointment-Kim Sample")
+        tap("chargeFee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        let status = reveal("feeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "Declined"), "Got: \(status.label)")
+        XCTAssertTrue(status.label.contains("there isn't enough money on it"), "Got: \(status.label)")
+        screenshot("O29-No-Show-Fee-Declined")
+
+        // Another try is a new charge, and it asks again.
+        let again = reveal("chargeFee")
+        XCTAssertTrue(waitForLabel(again, containing: "Charge again ($35)"), "Got: \(again.label)")
+        again.tap()
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "No-show fee charged"))
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForLabel(reveal("appointment-Kim Sample"), containing: "No-show fee $35 charged"))
+    }
+
+    func testAFeeTheBankWantsTheClientToApproveSaysToAskThemToPayAtTheShop() {
+        launch("-fake-cards-on-file", "-fake-no-show-needs-action")
+        tap("appointment-Lee Sample")
+        tap("chargeFee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        let status = reveal("feeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "The card needs the client to approve it"), "Got: \(status.label)")
+        XCTAssertTrue(status.label.contains("Ask them to pay at the shop"), "Got: \(status.label)")
+        screenshot("O30-Fee-Needs-The-Client")
+    }
+
+    /// The charge never reaches Stripe (`-fake-no-show-unreachable`): nobody knows yet whether the
+    /// card was charged, so the details offer Check again, which finishes the same try.
+    func testAChargeWithoutAnAnswerOffersCheckAgain() {
+        launch("-fake-cards-on-file", "-fake-no-show-unreachable")
+        tap("appointment-Kim Sample")
+        tap("chargeFee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        XCTAssertTrue(waitForLabel(reveal("feeError"), containing: "We don't know yet if the card was charged"))
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "Not confirmed yet"))
+        let check = reveal("chargeFee")
+        XCTAssertTrue(waitForLabel(check, containing: "Check again"), "Got: \(check.label)")
+        // No second question: it only finishes the try that was confirmed.
+        check.tap()
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "No-show fee charged"))
+        XCTAssertTrue(waitForDisappearance(of: element("feeError")), "The old message goes")
+    }
+
+    /// Nia Sample booked online with a card for 2:30 PM. Until it starts she can still cancel in the
+    /// app, so there's no Mark no-show yet, and no fee to charge.
+    func testANoShowWithACardWaitsForTheStart() {
+        launch("-fake-cards-on-file")
+        let row = reveal("appointment-Nia Sample")
+        XCTAssertTrue(row.label.contains("Card on file"), "Got: \(row.label)")
+        row.tap()
+        XCTAssertTrue(statusShows("Booked"))
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "you can mark a no-show once the appointment has started"))
+        XCTAssertFalse(element("chargeFee").exists)
+        XCTAssertTrue(reveal("markCompleted").exists)
+        XCTAssertFalse(element("markNoShow").exists, "Not before the start")
+        XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: "once the appointment starts at 2:30 PM"))
+        tap("cancelAppointment")
+        XCTAssertTrue(text(containing: "There's no fee when the shop cancels.").waitForExistence(timeout: 10))
+    }
+
+    func testTurnOnNoShowProtectionWithAFlatFee() {
+        launch()
+        openTab("Settings")
+        let link = reveal("noShowSettingsLink")
+        XCTAssertTrue(waitForLabel(link, containing: "Off: clients book online without a card"), "Got: \(link.label)")
+        link.tap()
+        flipSwitch(reveal("noShowEnabled"))
+        XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $40"))
+        XCTAssertTrue(waitForLabel(reveal("noShowClientWarning"), containing: "Full Service Cancellation & No-Show Fee"))
+        screenshot("O31-No-Show-Settings")
+
+        // A flat amount the server wouldn't take is explained.
+        reveal("noShowFeeMode", searchingFirst: .up)
+        tapButton("Flat amount")
+        replaceText(in: "noShowFlatAmount", with: "600")
+        XCTAssertTrue(waitForLabel(reveal("noShowSettingsProblem"), containing: "Pick a flat fee from $0.50 to $500."))
+        // $25 for every booking.
+        replaceText(in: "noShowFlatAmount", with: "25")
+        XCTAssertTrue(waitForDisappearance(of: element("noShowSettingsProblem")))
+        closeKeyboard()
+        XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $25"))
+        let warning = reveal("noShowClientWarning")
+        XCTAssertTrue(waitForLabel(warning, containing: "Late Cancellation & No-Show Fee"), "Got: \(warning.label)")
+        XCTAssertTrue(warning.label.contains("is charged $25."), "Got: \(warning.label)")
+        tap("saveNoShowSettings")
+        XCTAssertTrue(reveal("noShowSaved").exists, "Saved to the server")
+        screenshot("O32-No-Show-Settings-Saved")
+
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForLabel(reveal("noShowSettingsLink"), containing: "On: $25 flat for no-shows and cancellations less than 1 hour before"))
+    }
+
+    func testLateCancellationsCanBeOffOrGivenAnotherWindow() {
+        launch()
+        openTab("Settings")
+        tap("noShowSettingsLink")
+        flipSwitch(reveal("noShowEnabled"))
+        tap("noShowWindow")
+        tapButton("2 hours before")
+        XCTAssertTrue(waitForLabel(reveal("noShowClientWarning"), containing: "Cancelling less than 2 hours before your appointment"))
+
+        // Only no-shows.
+        flipSwitch(reveal("noShowLateCancel", searchingFirst: .up))
+        XCTAssertTrue(waitForDisappearance(of: element("noShowWindow")))
+        let warning = reveal("noShowClientWarning")
+        XCTAssertTrue(waitForLabel(warning, containing: "Not showing up is charged the full service price ($40)."), "Got: \(warning.label)")
+        tap("saveNoShowSettings")
+        XCTAssertTrue(reveal("noShowSaved").exists)
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForLabel(reveal("noShowSettingsLink"), containing: "On: the full service price for no-shows"))
+    }
+
+    func testUnsavedNoShowChangesAskBeforeTheyreDiscarded() {
+        launch()
+        openTab("Settings")
+        tap("noShowSettingsLink")
+        flipSwitch(reveal("noShowEnabled"))
+        tap("cancelNoShowSettings")
+        tapDialogButton("Discard changes", identifier: "confirmDiscardNoShowSettings")
+        XCTAssertTrue(waitForLabel(reveal("noShowSettingsLink"), containing: "Off: clients book online without a card"), "Nothing was saved")
+    }
+
+    func testNoShowSettingsOfflineOfferToTryAgain() {
+        launch("-fake-offline")
+        openTab("Settings")
+        let link = reveal("noShowSettingsLink")
+        XCTAssertTrue(waitForLabel(link, containing: "Couldn't load"), "Got: \(link.label)")
+        link.tap()
+        XCTAssertTrue(element("retryNoShowSettings").waitForExistence(timeout: 10), "No way to try again")
+        XCTAssertTrue(text(containing: "Couldn't load the settings").exists)
+    }
+
     // MARK: Empty and offline
 
     func testAnEmptyShop() {
@@ -480,6 +696,39 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let field = reveal(identifier, file: file, line: line)
         field.tap()
         field.typeText(text)
+    }
+
+    /// Replaces a text field's text: taps its trailing end (so the cursor goes after the text),
+    /// deletes what's there and types `text`.
+    private func replaceText(in identifier: String, with text: String, file: StaticString = #filePath, line: UInt = #line) {
+        let field = reveal(identifier, file: file, line: line)
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "No keyboard for \(identifier)", file: file, line: line)
+        let value = field.value as? String ?? ""
+        let current = value == field.placeholderValue ? "" : value
+        // "\u{8}" is the keyboard's delete key (XCUIKeyboardKey.delete.rawValue).
+        field.typeText(String(repeating: "\u{8}", count: current.count) + text)
+    }
+
+    /// Closes the keyboard with the Done button above it (a decimal pad has no return key).
+    private func closeKeyboard() {
+        let keyboard = app.keyboards.firstMatch
+        guard keyboard.exists else { return }
+        let done = element("flatAmountDone")
+        let labelled = app.toolbars.buttons["Done"]
+        if done.waitForExistence(timeout: 3) {
+            done.tap()
+        } else if labelled.exists {
+            labelled.tap()
+        } else {
+            drag(.up)
+        }
+        _ = waitForDisappearance(of: keyboard, timeout: 5)
+    }
+
+    /// The first text on screen that contains `fragment`: a dialog's title or message, a footer.
+    private func text(containing fragment: String) -> XCUIElement {
+        app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", fragment)).firstMatch
     }
 
     private func tabButton(_ name: String) -> XCUIElement {
