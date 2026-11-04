@@ -3,7 +3,7 @@ import type Stripe from 'stripe';
 import { requireOwner } from './auth.js';
 import type { Queryable } from './db.js';
 import type { Deps, StripeClient } from './deps.js';
-import { FEE_KIND, feeCase, isFeeKind, reasonOfKind, type FeeKind, type FeeReason } from './feecase.js';
+import { FEE_KIND, feeCase, isFeeKind, nothingCharged, reasonOfKind, type FeeKind, type FeeReason } from './feecase.js';
 import { ApiError, json } from './http.js';
 import { stripeClient, stripeFailure, type StripeErrorLike } from './payments.js';
 import type { Context } from './router.js';
@@ -20,7 +20,10 @@ import { UUID_RE } from './validation.js';
 // and before sending it again the server asks Stripe for that attempt's
 // PaymentIntent (Stripe may forget a key after 24 hours, and then a reused key
 // would charge again); only a definite "no" from Stripe (declined, or the bank
-// wants the client to approve it) lets the next try make a new one.
+// wants the client to approve it) lets the next try make a new one. When Stripe
+// has nothing for that try and the booking can't be charged any more (the shop
+// reopened it, say), the fee is settled as not charged instead of staying
+// pending for good; a later charge picks up that same try (same key) first.
 //
 // A client who cancelled in the app before the start (or asked to) is never
 // charged a no-show fee, even if the shop reopened the booking since; only a
@@ -92,10 +95,10 @@ type Claim =
   | { kind: 'done'; row: AppointmentRow }
   | { kind: 'retrieve'; row: ChargeRow; paymentIntentId: string }
   /**
-   * A new attempt, or (`resumed`) the current one again after its answer was lost: then
-   * Stripe is asked for that attempt's PaymentIntent first, and `refusal` (why it can't be
-   * charged now, if anything changed) only stops a new request. `reason` is what the
-   * attempt charges for.
+   * A new attempt, or (`resumed`) the current one again after its answer was lost (or after it
+   * was settled as not charged): then Stripe is asked for that attempt's PaymentIntent first,
+   * and `refusal` (why it can't be charged now, if anything changed) stops a new request and
+   * settles a pending try Stripe has nothing for. `reason` is what the attempt charges for.
    */
   | { kind: 'create'; row: ChargeRow; attempt: number; attemptAt: Date; resumed: boolean; refusal: ApiError | null; reason: FeeReason };
 
@@ -249,6 +252,32 @@ function definiteNo(error: unknown): { intent: FeeIntent | null; status: NoShowF
   return null;
 }
 
+/**
+ * A pending try Stripe has no PaymentIntent for, on a booking that can't be charged any more (the
+ * shop reopened it, say): nothing was charged, so it's settled as that, status `none` again. Its
+ * attempt is kept, so a later charge picks it up first (same key, looked up at Stripe). The answer
+ * is a 409 saying so, or, if an answer from Stripe was recorded meanwhile (a webhook), the
+ * appointment as it is now.
+ */
+async function settleUnsent(deps: Deps, id: string, attempt: number, refusal: ApiError): Promise<Response> {
+  const { rows } = await deps.db.query<AppointmentRow>(
+    `UPDATE appointments
+        SET no_show_fee_status = 'none', no_show_fee_message = NULL, updated_at = $3
+      WHERE id = $1 AND no_show_fee_status = 'pending' AND no_show_fee_attempt = $2 AND no_show_fee_payment_intent_id IS NULL
+      RETURNING *`,
+    [id, attempt, deps.now()],
+  );
+  if (rows[0]) {
+    deps.log.warn('Settled a fee Stripe never got as not charged', { appointmentId: id, attempt });
+    throw notChargeable(nothingCharged(refusal.message));
+  }
+  const { rows: current } = await deps.db.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1', [id]);
+  const row = current[0];
+  if (!row) throw notFound();
+  if (row.no_show_fee_status === 'none') throw notChargeable(nothingCharged(refusal.message));
+  return json({ appointment: appointmentJSON(row) });
+}
+
 /** What this booking (it has a card on file) can be charged for now, or why it can't be. */
 function chargeCase(row: AppointmentRow, now: Date): { reason: FeeReason; refusal: null } | { reason: null; refusal: ApiError } {
   const found = feeCase(row);
@@ -289,18 +318,26 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     const chargeable = chargeCase(row, now);
     // A try whose answer never came keeps its attempt (Stripe key and reason) and is looked up
     // first, whatever happened since; after a "no", a new attempt, only for a chargeable case.
-    const resumed = row.no_show_fee_status === 'pending';
-    if (!resumed && chargeable.refusal) throw chargeable.refusal;
+    const pending = row.no_show_fee_status === 'pending';
+    // A try settled as not charged (Stripe had nothing for it when the booking couldn't be charged
+    // any more): charging again picks up that same attempt, looked up first, so a request of it that
+    // reached Stripe late is found (or deduplicated by its key), never charged a second time.
+    const settled = row.no_show_fee_status === 'none' && row.no_show_fee_attempt > 0;
+    const resumed = pending || settled;
+    // Only a pending try is looked up when the booking can't be charged now (to settle it).
+    if (chargeable.refusal && !pending) throw chargeable.refusal;
     const attempt = resumed ? Math.max(row.no_show_fee_attempt, 1) : row.no_show_fee_attempt + 1;
     const attemptAt = resumed && row.no_show_fee_attempt_at ? row.no_show_fee_attempt_at : now;
     const reason: FeeReason = (resumed ? row.no_show_fee_reason : chargeable.reason) ?? chargeable.reason ?? 'no_show';
-    await tx.query(
-      `UPDATE appointments
-          SET no_show_fee_status = 'pending', no_show_fee_attempt = $2, no_show_fee_attempt_at = $4, no_show_fee_reason = $5,
-              no_show_fee_payment_intent_id = NULL, no_show_fee_message = NULL, updated_at = $3
-        WHERE id = $1`,
-      [id, attempt, now, attemptAt, reason],
-    );
+    if (!chargeable.refusal) {
+      await tx.query(
+        `UPDATE appointments
+            SET no_show_fee_status = 'pending', no_show_fee_attempt = $2, no_show_fee_attempt_at = $4, no_show_fee_reason = $5,
+                no_show_fee_payment_intent_id = NULL, no_show_fee_message = NULL, updated_at = $3
+          WHERE id = $1`,
+        [id, attempt, now, attemptAt, reason],
+      );
+    }
     return { kind: 'create', row, attempt, attemptAt, resumed, refusal: chargeable.refusal, reason };
   });
 
@@ -335,8 +372,9 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
       const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, found, attempt, deps.now()));
       return json({ appointment: appointmentJSON(updated ?? row) });
     }
-    // Nothing reached Stripe: send it again (same key), unless it can't be charged any more.
-    if (claim.refusal) throw claim.refusal;
+    // Nothing reached Stripe: send it again (same key), unless it can't be charged any more. Then
+    // nothing was charged, so the try is settled as that instead of staying pending for good.
+    if (claim.refusal) return settleUnsent(deps, id, attempt, claim.refusal);
   }
   let intent: Stripe.PaymentIntent;
   try {

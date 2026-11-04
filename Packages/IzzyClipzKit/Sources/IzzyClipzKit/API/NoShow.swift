@@ -189,18 +189,33 @@ extension IzzyAPI.Appointment {
         return found
     }
 
-    /// The fee the owner can charge now ("Charge no-show fee" or "Charge late cancellation fee"),
-    /// or `nil`: a no-show whose start has passed, or a late cancellation by the client, with a
-    /// card on file and a fee that isn't charged yet. `pending` counts: charging again only asks
-    /// Stripe how the earlier try went (it never charges twice).
+    /// The fee the owner can act on now, or `nil`:
+    /// - "Charge no-show fee" or "Charge late cancellation fee": a no-show whose start has passed,
+    ///   or a late cancellation by the client, with a card on file and a fee that isn't charged yet
+    ///   (a declined one, or one that needs the client, can be tried again);
+    /// - a `pending` fee (an earlier try's answer never came), always, whatever happened since, as
+    ///   "Check again" (`isFeePending`): the server only asks Stripe how that try went, never
+    ///   charges twice, and settles it as not charged ("Nothing was charged. …", a 409) when Stripe
+    ///   never got it and the booking can't be charged any more. Its reason is that try's.
     public func chargeableFee(at now: Date) -> IzzyAPI.NoShowFeeReason? {
-        guard let noShowFee, noShowFee.status != .charged, case .chargeable(let reason) = feeCase(at: now) else { return nil }
+        guard card != nil, let noShowFee, noShowFee.status != .charged else { return nil }
+        if noShowFee.status == .pending {
+            if case .chargeable(let reason) = feeCase(at: now) { return noShowFee.reason ?? reason }
+            return noShowFee.reason ?? .noShow
+        }
+        guard case .chargeable(let reason) = feeCase(at: now) else { return nil }
         return reason
     }
 
-    /// Whether the owner can charge the fee now, for a no-show or a late cancellation (`chargeableFee(at:)`).
+    /// Whether the owner can charge the fee now, or check again on a pending one (`chargeableFee(at:)`).
     public func canChargeNoShowFee(at now: Date) -> Bool {
         chargeableFee(at: now) != nil
+    }
+
+    /// Whether an earlier try at the fee has no final answer yet: the owner's button reads "Check
+    /// again" rather than "Charge" (calling `chargeNoShowFee` then only asks Stripe how it went).
+    public var isFeePending: Bool {
+        card != nil && noShowFee?.status == .pending
     }
 
     /// For the client's "Cancel appointment" confirmation: "Cancelling now, less than 1 hour
@@ -730,6 +745,13 @@ extension IzzyAPI {
 
         public static let noCardMessage = "This booking has no card on file, so there's no fee to charge."
         public static let notStartedMessage = "The appointment hasn't started yet, so it can't be a no-show."
+
+        /// The server's 409 when a pending try turns out never to have reached Stripe and the booking
+        /// can't be charged any more (it's settled as not charged): "Nothing was charged. Mark the
+        /// appointment as a no-show first."
+        public static func nothingChargedMessage(_ refusal: String) -> String {
+            "Nothing was charged. " + refusal
+        }
         static let cancelledInAppMessage = "The client cancelled this booking in the app, so there's no fee."
         static let shopCancelledMessage = "The shop cancelled this booking, so there's no fee."
         static let markNoShowMessage = "Mark the appointment as a no-show first."

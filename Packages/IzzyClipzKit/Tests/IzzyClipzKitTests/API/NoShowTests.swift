@@ -113,6 +113,40 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertEqual(appointment.feeCase(at: start.addingTimeInterval(600)), .refused("This booking has no card on file, so there's no fee to charge."))
     }
 
+    /// An earlier try with no final answer: "Check again" is always there, whatever happened since,
+    /// because the server then only asks Stripe how that try went.
+    func testAPendingFeeCanAlwaysBeCheckedAgain() throws {
+        var appointment = try decoder.decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
+        let later = appointment.start.addingTimeInterval(3_600)
+        appointment.status = .noShow
+        appointment.noShowFee?.status = .pending
+        appointment.noShowFee?.reason = .noShow
+        XCTAssertEqual(appointment.chargeableFee(at: later), .noShow)
+        XCTAssertTrue(appointment.isFeePending)
+        // The client walked in late: reopened, then completed. Still something to check.
+        appointment.status = .completed
+        XCTAssertEqual(appointment.feeCase(at: later), .refused("Mark the appointment as a no-show first."))
+        XCTAssertEqual(appointment.chargeableFee(at: later), .noShow)
+        XCTAssertTrue(appointment.canChargeNoShowFee(at: later))
+        // A late cancellation's try keeps its own reason.
+        appointment.noShowFee?.reason = .lateCancel
+        XCTAssertEqual(appointment.chargeableFee(at: later), .lateCancel)
+        // Settled as not charged (the server found nothing at Stripe): nothing to do on a completed visit.
+        appointment.noShowFee?.status = .none
+        appointment.noShowFee?.reason = nil
+        XCTAssertNil(appointment.chargeableFee(at: later))
+        XCTAssertFalse(appointment.isFeePending)
+        // Without a card on file there's never anything to check.
+        appointment.noShowFee?.status = .pending
+        appointment.card = nil
+        XCTAssertNil(appointment.chargeableFee(at: later))
+        XCTAssertFalse(appointment.isFeePending)
+        XCTAssertEqual(
+            IzzyAPI.NoShowRule.nothingChargedMessage("Mark the appointment as a no-show first."),
+            "Nothing was charged. Mark the appointment as a no-show first."
+        )
+    }
+
     func testWhichFeeTheOwnerCanCharge() throws {
         var appointment = try decoder.decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
         let start = appointment.start
@@ -505,8 +539,14 @@ final class NoShowRuleTests: XCTestCase {
             let warning: String
         }
 
+        struct NothingCharged: Decodable {
+            let refusal: String
+            let message: String
+        }
+
         let cases: [Case]
         let notStarted: String
+        let nothingCharged: NothingCharged
         let cancelWarnings: [CancelWarning]
     }
 
@@ -520,6 +560,7 @@ final class NoShowRuleTests: XCTestCase {
         let document = try IzzyAPI.makeDecoder().decode(FeeCasesDocument.self, from: data)
         XCTAssertGreaterThan(document.cases.count, 10)
         XCTAssertEqual(document.notStarted, IzzyAPI.NoShowRule.notStartedMessage)
+        XCTAssertEqual(IzzyAPI.NoShowRule.nothingChargedMessage(document.nothingCharged.refusal), document.nothingCharged.message)
         let template = try IzzyAPI.makeDecoder().decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
         for c in document.cases {
             let expected: IzzyAPI.NoShowRule.FeeCase = c.reason.map { .chargeable($0) } ?? .refused(c.refusal ?? "")

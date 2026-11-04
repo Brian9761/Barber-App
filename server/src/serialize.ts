@@ -110,8 +110,8 @@ export interface Appointment {
     lateCancelWindowMinutes: number | null;
     /**
      * What the fee is for: once the shop tried to charge it, what that charge was for;
-     * before, the case that applies now (a late cancellation by the client, or a no-show),
-     * or null when neither does.
+     * before (or once a try that never reached Stripe was settled as not charged), the case
+     * that applies now (a late cancellation by the client, or a no-show), or null when neither does.
      */
     reason: NoShowFeeReason | null;
   } | null;
@@ -171,9 +171,13 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
   };
 }
 
-/** The fee's `reason` in the JSON (see `Appointment.noShowFee`). */
+/**
+ * The fee's `reason` in the JSON (see `Appointment.noShowFee`): what the shop's try charges for while
+ * it shows (pending, charged, declined, needs the client); otherwise, also once a try that never
+ * reached Stripe was settled as not charged, the case that applies now.
+ */
 function feeReasonOf(row: AppointmentRow): NoShowFeeReason | null {
-  if (row.no_show_fee_reason) return FEE_REASON_OUT[row.no_show_fee_reason];
+  if (row.no_show_fee_reason && row.no_show_fee_status !== 'none') return FEE_REASON_OUT[row.no_show_fee_reason];
   const now = feeCase(row);
   return now.reason ? FEE_REASON_OUT[now.reason] : null;
 }
