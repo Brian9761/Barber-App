@@ -24,11 +24,13 @@ export function InstallHint() {
     <aside className="ribbon install-hint" aria-label="Get the app" data-testid="install-hint">
       <div className="container install-hint__inner">
         <p className="install-hint__text">
-          Add Izzy Clipz to your Home Screen
-          <span aria-hidden="true"> · </span>
-          <Link to="/app" aria-label="How to add Izzy Clipz to your Home Screen">
-            How
-          </Link>
+          Add Izzy Clipz to your{' '}
+          <span className="nowrap">
+            Home Screen<span aria-hidden="true"> · </span>
+            <Link to="/app" aria-label="How to add Izzy Clipz to your Home Screen">
+              How
+            </Link>
+          </span>
         </p>
         <button
           type="button"

@@ -98,9 +98,6 @@ export function AddButtonDrawing() {
       <text x="28" y="38" fontSize="15" fill={BLUE}>
         Cancel
       </text>
-      <text x="140" y="38" fontSize="14" fontWeight="600" fill={TEXT} textAnchor="middle">
-        Add to Home Screen
-      </text>
       <text x="252" y="38" fontSize="15" fontWeight="600" fill={BLUE} textAnchor="end">
         Add
       </text>
@@ -163,7 +160,7 @@ export function InstallDialogDrawing() {
       <text x="78" y="65" fontSize="15" fill={TEXT}>
         Izzy Clipz
       </text>
-      <text x="150" y="100" fontSize="15" fill={BLUE} textAnchor="middle">
+      <text x="132" y="100" fontSize="15" fill={BLUE} textAnchor="middle">
         Cancel
       </text>
       <rect x="182" y="82" width="62" height="28" rx="14" fill={BLUE} />

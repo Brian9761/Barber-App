@@ -122,14 +122,20 @@ export async function expectLogosStandOut(page: Page, what: string): Promise<voi
   expect(faint, `${what}: every logo stands out from its background`).toEqual([]);
 }
 
-/** Loads every photo now (they're lazy below the fold) and waits for them and the fonts. */
+/**
+ * Loads every photo now (they're lazy below the fold) and waits for them and the fonts, once the
+ * service worker has kept the app's files (on a first visit it downloads them in the background),
+ * and until they're painted, not only decoded.
+ */
 export async function settle(page: Page): Promise<void> {
   await page.evaluate(async () => {
+    if ('serviceWorker' in navigator) await Promise.race([navigator.serviceWorker.ready, new Promise((resolve) => setTimeout(resolve, 5000))]);
     const images = Array.from(document.images);
     for (const image of images) image.loading = 'eager';
     // decode() waits until each photo has loaded and can be painted.
     await Promise.all(images.map((image) => image.decode().catch(() => undefined)));
     await document.fonts.ready;
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
 }
 

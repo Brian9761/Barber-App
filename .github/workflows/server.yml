@@ -82,7 +82,7 @@ jobs:
   web:
     name: Website (build, unit and end-to-end tests)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -111,6 +111,16 @@ jobs:
         working-directory: server/web
         env:
           E2E_SHOTS_DIR: ${{ github.workspace }}/web-shots
+      # The demo version: the same site answering in the browser, with no API at all.
+      - run: npm run build:demo
+        working-directory: server/web
+      - name: The demo builds into dist-demo/ with its hosting settings, and stays out of git
+        working-directory: server/web
+        run: test -f dist-demo/index.html && test -f dist-demo/sw.js && test -f dist-demo/vercel.json && test -z "$(git status --porcelain --ignored=no -- dist-demo)"
+      - run: npm run e2e:demo
+        working-directory: server/web
+        env:
+          E2E_SHOTS_DIR: ${{ github.workspace }}/web-shots/demo
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v7
