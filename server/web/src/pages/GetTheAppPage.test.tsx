@@ -132,28 +132,55 @@ describe('Get the app', () => {
     expect(screen.getByTestId('phone-code-url').textContent).toBe(address.replace(/^https?:\/\//, ''));
   });
 
-  it('suggests Chrome or Edge in a browser that can’t install, and Add to Dock in Safari on a Mac', () => {
+  it('suggests Chrome or Edge in a browser that can’t install, Add to Dock in Safari on a Mac, and the taskbar in Firefox on Windows', () => {
+    for (const userAgent of [USER_AGENTS.macFirefox, USER_AGENTS.linuxFirefox]) {
+      on(userAgent);
+      const { unmount } = renderApp('/app');
+      expect(screen.getByTestId('use-chrome-or-edge').textContent, userAgent).toBe("This browser can't install apps. Use Chrome or Edge, like this:");
+      unmount();
+    }
+    // Firefox 143 and later pin a site to the Windows taskbar as an app.
     on(USER_AGENTS.windowsFirefox);
     const { unmount } = renderApp('/app');
-    expect(screen.getByTestId('use-chrome-or-edge').textContent).toBe("This browser can't install apps. Use Chrome or Edge, like this:");
+    expect(screen.getByTestId('use-chrome-or-edge').textContent).toBe(
+      'In Firefox, click Add tab to taskbar at the right end of the address bar. Or use Chrome or Edge, like this:',
+    );
     unmount();
     on(USER_AGENTS.ipadSafari, 0);
     renderApp('/app');
     expect(screen.getByTestId('use-chrome-or-edge').textContent).toContain('choose File, then Add to Dock');
   });
 
+  it('says Home Screen on phones and tablets, and “with your other apps” on computers', () => {
+    on(USER_AGENTS.iphoneSafari);
+    const { unmount } = renderApp('/app');
+    expect(screen.getByTestId('get-app-lead').textContent).toBe('Put Izzy Clipz on your Home Screen. It opens like an app, with no App Store and nothing to pay.');
+    unmount();
+    on(USER_AGENTS.windowsEdge);
+    renderApp('/app');
+    expect(screen.getByTestId('get-app-lead').textContent).toBe(
+      'Put Izzy Clipz with your other apps. It opens in its own window, with no App Store and nothing to pay.',
+    );
+  });
+
   it('says "You’re using the app" when it’s open as the app, without the steps', () => {
     on(USER_AGENTS.iphoneSafari);
     displayMode(true);
-    renderApp('/app');
+    const { unmount } = renderApp('/app');
     expect(screen.getByTestId('using-the-app').textContent).toContain("You're using the app.");
+    expect(screen.getByTestId('using-the-app').textContent).toContain('Izzy Clipz is on your Home Screen.');
     expect(screen.queryByRole('radio')).toBeNull();
     expect(screen.queryByTestId('iphone-steps')).toBeNull();
+    unmount();
+    // An app window on a computer: no Home Screen there.
+    on(USER_AGENTS.macChrome);
+    renderApp('/app');
+    expect(screen.getByTestId('using-the-app').textContent).toContain('Izzy Clipz is with your other apps.');
   });
 });
 
 describe('in the nav and footer', () => {
-  it('is "Get the app" in both, and leaves the nav once it’s the app', () => {
+  it('is "Get the app" in both, and leaves them once it’s the app', () => {
     mockApi([['GET /api/reviews', { body: reviewsUnavailable }]]);
     const { unmount } = renderApp('/visit');
     expect(within(screen.getByRole('navigation', { name: 'Izzy Clipz' })).getByRole('link', { name: 'Get the app' }).getAttribute('href')).toBe('/app');
@@ -162,6 +189,7 @@ describe('in the nav and footer', () => {
     displayMode(true);
     renderApp('/visit');
     expect(within(screen.getByRole('navigation', { name: 'Izzy Clipz' })).queryByRole('link', { name: 'Get the app' })).toBeNull();
+    expect(within(screen.getByRole('navigation', { name: 'Site directory' })).queryByRole('link', { name: 'Get the app' })).toBeNull();
   });
 });
 
@@ -191,6 +219,26 @@ describe('the Add to Home Screen bar', () => {
     saveAppointment(fixtureAppointment, newToken());
     renderApp('/visit');
     expect(screen.getByTestId('install-hint')).toBeTruthy();
+  });
+
+  it('goes for good once the browser says it installed the app', () => {
+    on(USER_AGENTS.androidChrome);
+    mockApi([['GET /api/reviews', { body: reviewsUnavailable }]]);
+    localStorage.setItem('izzy.visits.v1', '1');
+    const stop = listenForInstallPrompt();
+    const { unmount } = renderApp('/visit');
+    expect(screen.getByTestId('install-hint')).toBeTruthy();
+    act(() => {
+      window.dispatchEvent(new Event('appinstalled'));
+    });
+    expect(screen.queryByTestId('install-hint')).toBeNull();
+    unmount();
+    stop();
+    // Another visit, in the browser, after the page forgot this one.
+    forgetInstallPrompt();
+    sessionStorage.clear();
+    renderApp('/visit');
+    expect(screen.queryByTestId('install-hint')).toBeNull();
   });
 
   it('never shows on a computer or in the app', () => {

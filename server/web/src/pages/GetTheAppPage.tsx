@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
+import { DemoNotice } from '../demo/DemoNotice';
+import { isDemo } from '../demo/mode';
 import {
   AddButtonDrawing,
   AddressBarInstallDrawing,
@@ -28,29 +30,44 @@ const DEVICES: { id: Device; label: string }[] = [
 ];
 
 export function GetTheAppPage() {
-  usePageMeta('Get the app', 'Put Izzy Clipz on your Home Screen: it opens like an app, with no App Store and nothing to pay.');
+  usePageMeta('Get the app', 'Put Izzy Clipz on your phone or computer: it opens like an app, with no App Store and nothing to pay.');
   const platform = useMemo(currentPlatform, []);
   const standalone = useStandalone();
+  const computer = platform.device === 'computer';
   return (
     <>
       <header className="page-header container get-app-header">
         <img className="app-icon" src="/icon-192.png" width={96} height={96} alt="" />
         <h1>Get the app.</h1>
-        <p className="lead secondary">Put Izzy Clipz on your Home Screen. It opens like an app, with no App Store and nothing to pay.</p>
+        <p className="lead secondary" data-testid="get-app-lead">
+          {computer
+            ? 'Put Izzy Clipz with your other apps. It opens in its own window, with no App Store and nothing to pay.'
+            : 'Put Izzy Clipz on your Home Screen. It opens like an app, with no App Store and nothing to pay.'}
+        </p>
         <PreferToCall className="page-header__call" />
       </header>
-      {standalone ? <UsingTheApp /> : <HowToGetIt platform={platform} />}
+      {/* The demo says what it is here too, before anyone adds it: its bookings never reach the shop. */}
+      {isDemo() ? (
+        <div className="container container--narrow get-app-demo">
+          <DemoNotice />
+        </div>
+      ) : null}
+      {standalone ? <UsingTheApp computer={computer} /> : <HowToGetIt platform={platform} />}
     </>
   );
 }
 
-function UsingTheApp() {
+function UsingTheApp({ computer }: { computer: boolean }) {
   return (
     <section className="container container--narrow using-app" aria-labelledby="using-app-title" data-testid="using-the-app">
       <div className="status-message card card--gray">
         <Icon name="check" className="using-app__icon" />
         <h2 id="using-app-title">You're using the app.</h2>
-        <p className="lead secondary">Izzy Clipz is on your Home Screen. Open it from there whenever you want to book.</p>
+        <p className="lead secondary">
+          {computer
+            ? 'Izzy Clipz is with your other apps. Open it from there whenever you want to book.'
+            : 'Izzy Clipz is on your Home Screen. Open it from there whenever you want to book.'}
+        </p>
         <Link className="button button--primary button--large" to="/book">
           Book an appointment
         </Link>
@@ -84,7 +101,13 @@ function HowToGetIt({ platform }: { platform: Platform }) {
           {declined && !canInstall ? <p className="secondary get-app__declined">No problem. You can install it any time with the steps below.</p> : null}
           {device === 'iphone' ? <IPhoneSteps browser={platform.device === 'iphone' ? platform.browser : 'safari'} url={url} /> : null}
           {device === 'android' ? <AndroidSteps orMenu={canInstall} browser={platform.device === 'android' ? platform.browser : 'chrome'} url={url} /> : null}
-          {device === 'computer' ? <ComputerSteps orAddressBar={canInstall} browser={platform.device === 'computer' ? platform.browser : 'chrome'} /> : null}
+          {device === 'computer' ? (
+            <ComputerSteps
+              orAddressBar={canInstall}
+              browser={platform.device === 'computer' ? platform.browser : 'chrome'}
+              windows={platform.device === 'computer' && platform.windows}
+            />
+          ) : null}
         </div>
         {platform.device === 'computer' ? <PhoneCode url={url} /> : null}
       </div>
@@ -233,7 +256,20 @@ function AndroidSteps({ orMenu, browser, url }: { orMenu: boolean; browser: Brow
   );
 }
 
-function ComputerSteps({ orAddressBar, browser }: { orAddressBar: boolean; browser: Browser }) {
+/** What a computer's own browser can do, when it isn't Chrome or Edge: Safari's Add to Dock, Firefox's taskbar on Windows. */
+function otherBrowserNote(browser: Browser, windows: boolean): ReactNode {
+  if (browser === 'safari') return 'On a Mac with Safari, choose File, then Add to Dock. Or use Chrome or Edge, like this:';
+  if (browser === 'firefox' && windows) {
+    return (
+      <>
+        In Firefox, click <strong>Add tab to taskbar</strong> at the right end of the address bar. Or use Chrome or Edge, like this:
+      </>
+    );
+  }
+  return "This browser can't install apps. Use Chrome or Edge, like this:";
+}
+
+function ComputerSteps({ orAddressBar, browser, windows }: { orAddressBar: boolean; browser: Browser; windows: boolean }) {
   return (
     <Steps
       id="computer"
@@ -241,7 +277,7 @@ function ComputerSteps({ orAddressBar, browser }: { orAddressBar: boolean; brows
       before={
         browser === 'firefox' || browser === 'safari' || browser === 'other' ? (
           <Notice tone="info" testId="use-chrome-or-edge">
-            <p>{browser === 'safari' ? 'On a Mac with Safari, choose File, then Add to Dock. Or use Chrome or Edge, like this:' : "This browser can't install apps. Use Chrome or Edge, like this:"}</p>
+            <p>{otherBrowserNote(browser, windows)}</p>
           </Notice>
         ) : null
       }

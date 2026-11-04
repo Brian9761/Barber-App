@@ -12,17 +12,20 @@ export type Browser = 'safari' | 'chrome' | 'edge' | 'firefox' | 'samsung' | 'in
 export interface Platform {
   device: Device;
   browser: Browser;
+  /** A Windows computer: Firefox there can pin a site to the taskbar as an app. */
+  windows: boolean;
 }
 
 const IN_APP = /FBAN|FBAV|FB_IAB|Instagram|Snapchat|musical_ly|BytedanceWebview|TikTok|Line\/|MicroMessenger/;
 
-/**
- * The device and browser from what the browser says it is. An iPad says it's a Mac, so a "Mac"
- * with a touch screen (`maxTouchPoints` over 1) is an iPad.
- */
+/** An iPad says it's a Mac, so a "Mac" with a touch screen (`maxTouchPoints` over 1) is an iPad. */
+function isIPad(userAgent: string, maxTouchPoints: number): boolean {
+  return /iPad/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+}
+
+/** The device and browser from what the browser says it is. */
 export function detectPlatform(userAgent: string, maxTouchPoints = 0): Platform {
-  const ipad = /iPad/.test(userAgent) || (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
-  const device: Device = /iPhone|iPod/.test(userAgent) || ipad ? 'iphone' : /Android/.test(userAgent) ? 'android' : 'computer';
+  const device: Device = /iPhone|iPod/.test(userAgent) || isIPad(userAgent, maxTouchPoints) ? 'iphone' : /Android/.test(userAgent) ? 'android' : 'computer';
   let browser: Browser = 'other';
   if (IN_APP.test(userAgent)) browser = 'inApp';
   else if (/Edg(e|A|iOS)?\//.test(userAgent)) browser = 'edge';
@@ -31,12 +34,28 @@ export function detectPlatform(userAgent: string, maxTouchPoints = 0): Platform 
   else if (/OPR\/|OPiOS\/|Opera/.test(userAgent)) browser = 'other';
   else if (/CriOS\/|Chrome\/|Chromium\//.test(userAgent)) browser = 'chrome';
   else if (/Safari\//.test(userAgent) && /Version\//.test(userAgent)) browser = 'safari';
-  return { device, browser };
+  return { device, browser, windows: device === 'computer' && /Windows NT/.test(userAgent) };
 }
 
 /** This visitor's device and browser. */
 export function currentPlatform(): Platform {
   return detectPlatform(navigator.userAgent, navigator.maxTouchPoints ?? 0);
+}
+
+/** The visitor's device in a sentence: "Remember me on this phone", "This computer can forget…". */
+export type DeviceWord = 'phone' | 'iPad' | 'tablet' | 'computer';
+
+export function deviceWord(userAgent: string, maxTouchPoints = 0): DeviceWord {
+  if (isIPad(userAgent, maxTouchPoints)) return 'iPad';
+  if (/iPhone|iPod/.test(userAgent)) return 'phone';
+  // Android phones say "Mobile"; Android tablets don't.
+  if (/Android/.test(userAgent)) return /Mobile/.test(userAgent) ? 'phone' : 'tablet';
+  return /Mobi/.test(userAgent) ? 'phone' : 'computer';
+}
+
+/** What to call this visitor's device: "phone", "iPad", "tablet" or "computer". */
+export function thisDevice(): DeviceWord {
+  return deviceWord(navigator.userAgent, navigator.maxTouchPoints ?? 0);
 }
 
 /** How the app can be open without the browser around it. */

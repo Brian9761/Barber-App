@@ -31,6 +31,11 @@ export function dismissHint(now: Date = new Date()): void {
   writeJSON('local', INSTALL_HINT_KEY, { dismissed: true, at: now.toISOString() });
 }
 
+/** The browser installed it (Chrome or Edge said so): the bar has done its job, for good. */
+export function hintInstalled(now: Date = new Date()): void {
+  writeJSON('local', INSTALL_HINT_KEY, { dismissed: true, installed: true, at: now.toISOString() });
+}
+
 export interface HintFacts {
   device: Device;
   standalone: boolean;

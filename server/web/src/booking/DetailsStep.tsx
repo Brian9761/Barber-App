@@ -3,6 +3,7 @@ import type { Catalog } from '../api/types';
 import { Icon } from '../components/Icon';
 import { displayPhone, emailProblem, MAX_NOTE_LENGTH, charLength, nameProblem, noteProblem, parseUSPhone, phoneProblem, toE164 } from '../lib/phone';
 import { forgetClient, forgetDetails, keepCardFor, loadRememberedDetails, rememberDetails } from '../lib/storage';
+import { thisDevice } from '../pwa/platform';
 import { useBooking, useStepNavigation } from './BookingContext';
 import type { Details } from './flow';
 import { BookingLayout, StepHeader } from './StepChrome';
@@ -14,13 +15,15 @@ const EMPTY_DETAILS: Details = { name: '', phone: '', email: '', note: '', remem
 /**
  * Step 4: who it's for. A name and a US mobile number (so the shop knows who's
  * coming and can reach them), an optional email and note, and "Remember me on
- * this computer". Problems show once the client tries to continue.
+ * this phone" (or computer, iPad, tablet). Problems show once the client tries
+ * to continue.
  *
  * A computer can be shared, so "Remember me" starts off, unless this computer
  * already remembers the client (they ticked it last time); then "Not you? Forget
  * me on this computer" clears it for whoever is booking now.
  */
 export function DetailsStep({ catalog }: { catalog: Catalog }) {
+  const device = thisDevice();
   const { draft, dispatch } = useBooking();
   const { goTo } = useStepNavigation('details');
   const [remembered, setRemembered] = useState(() => loadRememberedDetails());
@@ -88,15 +91,17 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
       <StepHeader step="details" title="Your details" subtitle="So the shop knows who's coming and can reach you if anything changes." />
       {remembered ? (
         <p className="remembered-note" data-testid="remembered-note">
-          <span>Welcome back, {firstName(remembered.name)}. Your details are filled in from this computer.</span>{' '}
+          <span>
+            Welcome back, {firstName(remembered.name)}. Your details are filled in from this {device}.
+          </span>{' '}
           <button type="button" className="text-button" onClick={forgetMe}>
-            Not you? Forget me on this computer
+            Not you? Forget me on this {device}
           </button>
         </p>
       ) : null}
       {forgotten ? (
         <p className="remembered-note" role="status">
-          Done. This computer no longer keeps those details or a saved card.
+          Done. This {device} no longer keeps those details or a saved card.
         </p>
       ) : null}
       <form className="form details-form" noValidate onSubmit={submit}>
@@ -170,11 +175,11 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
           <span className="checkbox__text">
             {/* The label covers the whole box, so a click anywhere on it ticks the box. */}
             <label className="checkbox__label" htmlFor={ids.remember}>
-              Remember me on this computer
+              Remember me on this {device}
             </label>
             <span id={`${ids.remember}-hint`} className="secondary">
-              Your name and number fill in next time you book here, and a card you add stays saved. Leave it off on a shared
-              computer.
+              Your name and number fill in next time you book here, and a card you add stays saved. Leave it off on a shared{' '}
+              {device}.
             </span>
           </span>
         </div>

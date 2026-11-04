@@ -101,7 +101,8 @@ export function AddButtonDrawing() {
       <text x="252" y="38" fontSize="15" fontWeight="600" fill={BLUE} textAnchor="end">
         Add
       </text>
-      <Ring x={222} y={18} width={40} height={30} radius={10} />
+      {/* Round "Add" with room on both sides: the word is about 31 wide, ending at 252. */}
+      <Ring x={211} y={18} width={52} height={30} radius={10} />
       <path d="M12 54H268" stroke={LINE} />
       <image href="/icon-192.png" x="28" y="64" width="36" height="36" />
       <text x="76" y="88" fontSize="16" fill={TEXT}>

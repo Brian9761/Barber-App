@@ -1,10 +1,11 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import cardSaved from '../../../test/fixtures/contract/card-saved.json';
 import { CARD_KEY, loadCard, loadRememberedDetails, rememberDetails, storeCard } from '../lib/storage';
 import { newToken } from '../lib/tokens';
 import { FLOW45, mockApi, policy35, renderApp } from '../test/api';
+import { USER_AGENTS } from '../test/pwa';
 import { EMPTY_DRAFT, loadDraft, saveDraft } from './flow';
 
 // "Remember me on this computer": a computer can be shared, so it starts off for anyone
@@ -37,6 +38,18 @@ describe('Remember me on this computer', () => {
     expect(field('Name').value).toBe('');
     expect(screen.getByText(/a card you add stays saved\. Leave it off on a shared computer\./)).toBeTruthy();
     expect(screen.queryByTestId('remembered-note')).toBeNull();
+  });
+
+  it('names the device it’s on: on a phone, this phone', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(USER_AGENTS.iphoneSafari);
+    rememberDetails(ALEX);
+    atDetails();
+    await screen.findByRole('heading', { level: 1, name: 'Your details' });
+    expect(screen.getByRole('checkbox', { name: 'Remember me on this phone' })).toBeTruthy();
+    expect(screen.getByText(/a card you add stays saved\. Leave it off on a shared phone\./)).toBeTruthy();
+    expect(screen.getByTestId('remembered-note').textContent).toContain('Your details are filled in from this phone.');
+    await userEvent.click(screen.getByRole('button', { name: 'Not you? Forget me on this phone' }));
+    expect(screen.getByText('Done. This phone no longer keeps those details or a saved card.')).toBeTruthy();
   });
 
   it('remembers nothing when left off', async () => {

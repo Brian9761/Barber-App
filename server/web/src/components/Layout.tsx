@@ -189,6 +189,8 @@ function AppBack() {
 export function Footer() {
   const catalog = useCatalog();
   const contact = useShopContact();
+  // Opened as the app, "Get the app" has done its job, here as in the nav.
+  const standalone = useStandalone();
   const year = new Date().getFullYear();
   return (
     <footer className="globalfooter">
@@ -226,9 +228,11 @@ export function Footer() {
               <li>
                 <Link to="/appointments">My appointments</Link>
               </li>
-              <li>
-                <Link to="/app">Get the app</Link>
-              </li>
+              {standalone ? null : (
+                <li>
+                  <Link to="/app">Get the app</Link>
+                </li>
+              )}
             </ul>
           </div>
           <div>

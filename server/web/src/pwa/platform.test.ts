@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { displayMode, installOffer, USER_AGENTS } from '../test/pwa';
-import { countVisit, dismissHint, hintDismissed, showInstallHint, type HintFacts } from './installHint';
+import { countVisit, dismissHint, hintDismissed, INSTALL_HINT_KEY, showInstallHint, type HintFacts } from './installHint';
 import { forgetInstallPrompt, listenForInstallPrompt, promptInstall } from './installPrompt';
 import { openOtherSitesOutside } from './externalLinks';
-import { detectPlatform, isStandalone, markStandalone } from './platform';
+import { detectPlatform, deviceWord, isStandalone, markStandalone } from './platform';
 
 // What the Get the app page and the install hint decide from: the device and browser, whether
 // the site is already open as the app, and the browser's own offer to install it.
@@ -14,20 +14,34 @@ afterEach(() => {
 
 describe('the device and browser', () => {
   it('knows iPhones, iPads, Android phones and computers, and the browser on each', () => {
-    expect(detectPlatform(USER_AGENTS.iphoneSafari)).toEqual({ device: 'iphone', browser: 'safari' });
-    expect(detectPlatform(USER_AGENTS.iphoneChrome)).toEqual({ device: 'iphone', browser: 'chrome' });
-    expect(detectPlatform(USER_AGENTS.iphoneInstagram)).toEqual({ device: 'iphone', browser: 'inApp' });
-    expect(detectPlatform(USER_AGENTS.androidChrome)).toEqual({ device: 'android', browser: 'chrome' });
-    expect(detectPlatform(USER_AGENTS.androidSamsung)).toEqual({ device: 'android', browser: 'samsung' });
-    expect(detectPlatform(USER_AGENTS.androidFirefox)).toEqual({ device: 'android', browser: 'firefox' });
-    expect(detectPlatform(USER_AGENTS.windowsEdge)).toEqual({ device: 'computer', browser: 'edge' });
-    expect(detectPlatform(USER_AGENTS.macChrome)).toEqual({ device: 'computer', browser: 'chrome' });
-    expect(detectPlatform(USER_AGENTS.windowsFirefox)).toEqual({ device: 'computer', browser: 'firefox' });
+    expect(detectPlatform(USER_AGENTS.iphoneSafari)).toEqual({ device: 'iphone', browser: 'safari', windows: false });
+    expect(detectPlatform(USER_AGENTS.iphoneChrome)).toEqual({ device: 'iphone', browser: 'chrome', windows: false });
+    expect(detectPlatform(USER_AGENTS.iphoneInstagram)).toEqual({ device: 'iphone', browser: 'inApp', windows: false });
+    expect(detectPlatform(USER_AGENTS.androidChrome)).toEqual({ device: 'android', browser: 'chrome', windows: false });
+    expect(detectPlatform(USER_AGENTS.androidSamsung)).toEqual({ device: 'android', browser: 'samsung', windows: false });
+    expect(detectPlatform(USER_AGENTS.androidFirefox)).toEqual({ device: 'android', browser: 'firefox', windows: false });
+    expect(detectPlatform(USER_AGENTS.windowsEdge)).toEqual({ device: 'computer', browser: 'edge', windows: true });
+    expect(detectPlatform(USER_AGENTS.macChrome)).toEqual({ device: 'computer', browser: 'chrome', windows: false });
+    expect(detectPlatform(USER_AGENTS.windowsFirefox)).toEqual({ device: 'computer', browser: 'firefox', windows: true });
+    expect(detectPlatform(USER_AGENTS.macFirefox)).toEqual({ device: 'computer', browser: 'firefox', windows: false });
+    expect(detectPlatform(USER_AGENTS.linuxFirefox)).toEqual({ device: 'computer', browser: 'firefox', windows: false });
   });
 
   it('tells an iPad, which says it’s a Mac, by its touch screen', () => {
-    expect(detectPlatform(USER_AGENTS.ipadSafari, 5)).toEqual({ device: 'iphone', browser: 'safari' });
-    expect(detectPlatform(USER_AGENTS.ipadSafari, 0)).toEqual({ device: 'computer', browser: 'safari' });
+    expect(detectPlatform(USER_AGENTS.ipadSafari, 5)).toEqual({ device: 'iphone', browser: 'safari', windows: false });
+    expect(detectPlatform(USER_AGENTS.ipadSafari, 0)).toEqual({ device: 'computer', browser: 'safari', windows: false });
+  });
+
+  it('names the device in a sentence: this phone, this iPad, this tablet, this computer', () => {
+    expect(deviceWord(USER_AGENTS.iphoneSafari)).toBe('phone');
+    expect(deviceWord(USER_AGENTS.iphoneInstagram)).toBe('phone');
+    expect(deviceWord(USER_AGENTS.androidChrome)).toBe('phone');
+    expect(deviceWord(USER_AGENTS.androidFirefox)).toBe('phone');
+    expect(deviceWord(USER_AGENTS.ipadSafari, 5)).toBe('iPad');
+    expect(deviceWord(USER_AGENTS.androidTablet)).toBe('tablet');
+    expect(deviceWord(USER_AGENTS.ipadSafari, 0)).toBe('computer');
+    expect(deviceWord(USER_AGENTS.windowsEdge)).toBe('computer');
+    expect(deviceWord(USER_AGENTS.macChrome)).toBe('computer');
   });
 });
 
@@ -76,6 +90,20 @@ describe('the browser’s offer to install', () => {
     const stop = listenForInstallPrompt();
     window.dispatchEvent(installOffer('dismissed'));
     expect(await promptInstall()).toBe('dismissed');
+    expect(hintDismissed()).toBe(false);
+    stop();
+  });
+
+  it('closes the Add to Home Screen bar for good once installed, from the page’s button or the browser’s own', async () => {
+    const stop = listenForInstallPrompt();
+    window.dispatchEvent(installOffer('accepted'));
+    expect(await promptInstall()).toBe('accepted');
+    expect(hintDismissed()).toBe(true);
+    expect(JSON.parse(localStorage.getItem(INSTALL_HINT_KEY)!)).toMatchObject({ dismissed: true, installed: true });
+
+    localStorage.clear();
+    window.dispatchEvent(new Event('appinstalled'));
+    expect(hintDismissed()).toBe(true);
     stop();
   });
 });

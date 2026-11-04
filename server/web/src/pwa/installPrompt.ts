@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { hintInstalled } from './installHint';
 
 // Chrome and Edge (on Android and computers) offer to install a site that can be installed
 // with a `beforeinstallprompt` event. The page keeps it for its own "Install Izzy Clipz"
@@ -37,6 +38,8 @@ export function listenForInstallPrompt(target: Window = window): () => void {
   };
   const onInstalled = () => {
     offer = null;
+    // The Add to Home Screen bar never needs to show again in this browser.
+    hintInstalled();
     changed({ canInstall: false, installed: true });
   };
   target.addEventListener('beforeinstallprompt', onOffer);
@@ -60,7 +63,10 @@ export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unava
   try {
     await event.prompt();
     const choice = await event.userChoice;
-    if (choice.outcome === 'accepted') changed({ installed: true });
+    if (choice.outcome === 'accepted') {
+      hintInstalled();
+      changed({ installed: true });
+    }
     return choice.outcome;
   } catch {
     return 'unavailable';
