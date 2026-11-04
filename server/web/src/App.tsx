@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { BookingRoutes } from './booking/BookingRoutes';
 import { Layout } from './components/Layout';
 import { BarbersPage } from './pages/BarbersPage';
 import { BusinessPage } from './pages/BusinessPage';
@@ -26,6 +27,7 @@ export function App() {
         <Route path="barbers" element={<BarbersPage />} />
         <Route path="reviews" element={<ReviewsPage />} />
         <Route path="visit" element={<VisitPage />} />
+        <Route path="book/*" element={<BookingRoutes />} />
         <Route path="business/*" element={<BusinessPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>

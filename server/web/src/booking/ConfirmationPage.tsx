@@ -1,0 +1,93 @@
+import { Link, Navigate, useLocation } from 'react-router-dom';
+import type { Appointment, Catalog } from '../api/types';
+import { Icon } from '../components/Icon';
+import { MoreLink, Notice, PreferToCall } from '../components/ui';
+import { usePageMeta } from '../components/usePageMeta';
+import { cardLabel, durationLabel, list } from '../lib/format';
+import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
+import { longDateTimeLabel } from '../lib/shopTime';
+import { loadAppointments } from '../lib/storage';
+import { lastBookedId } from './lastBooked';
+
+interface ConfirmationState {
+  appointment?: Appointment;
+  /** False when this browser couldn't keep the appointment and its token. */
+  saved?: boolean;
+}
+
+/**
+ * "You're booked": the appointment as the shop booked it (with the barber it
+ * picked for "Any barber"), Add to calendar, Manage or cancel, Book another, and
+ * the pay-at-the-shop line. It replaces the review step, so going back can't book
+ * the same time twice.
+ */
+export function ConfirmationPage({ catalog }: { catalog: Catalog }) {
+  usePageMeta("You're booked", 'Your appointment at Izzy Clipz Barbershop is booked. No payment now: you pay at the shop.');
+  const location = useLocation();
+  const state = (location.state as ConfirmationState | null) ?? {};
+  const fromStorage = loadAppointments().find((s) => s.id === lastBookedId())?.appointment;
+  const appointment = state.appointment ?? fromStorage;
+  if (!appointment) return <Navigate to="/appointments" replace />;
+  const saved = state.saved ?? true;
+  const shop = catalog.shop;
+
+  const addToCalendar = () => {
+    downloadIcs('izzy-clipz-appointment.ics', icsFile(appointmentEvent(appointment, shop, window.location.origin)));
+  };
+
+  return (
+    <section className="container container--narrow confirmation" aria-labelledby="booked-title">
+      <div className="confirmation__header">
+        <Icon name="check" className="confirmation__icon" />
+        <h1 id="booked-title" data-testid="booked-title">
+          You're booked
+        </h1>
+        <p className="lead secondary">See you at {shop.name}. It's saved in My appointments on this computer.</p>
+      </div>
+
+      <dl className="review-summary card" data-testid="booked-summary">
+        <ConfirmationRow label="When" value={longDateTimeLabel(new Date(appointment.start), catalog.timeZone)} />
+        <ConfirmationRow label="Service" value={appointment.serviceName} detail={`${appointment.priceLabel} · ${durationLabel(appointment.durationMinutes)}`} />
+        <ConfirmationRow label="Barber" value={appointment.barberName} />
+        <ConfirmationRow label="Where" value={shop.address.lines[0] ?? ''} detail={shop.address.lines.slice(1).join(', ')} />
+        {appointment.card ? <ConfirmationRow label="Card on file" value={cardLabel(appointment.card)} detail="Nothing is charged now." /> : null}
+      </dl>
+
+      <Notice tone="success" title="No payment now. You'll pay at the shop.">
+        <p>Pay at the shop with a {list(shop.paymentMethods.map((m) => m.toLowerCase()))}.</p>
+      </Notice>
+
+      {!saved ? (
+        <Notice tone="warning" title="Write this one down">
+          <p>
+            This browser couldn't save your appointment, so you can't change or cancel it here later. To change or cancel it, call the shop at{' '}
+            <a href={`tel:${shop.phone.e164}`}>{shop.phone.display}</a>.
+          </p>
+        </Notice>
+      ) : null}
+
+      <div className="actions confirmation__actions">
+        <button type="button" className="button button--primary button--large" onClick={addToCalendar}>
+          <Icon name="calendar" className="button__icon" /> Add to calendar
+        </button>
+        <Link className="button button--secondary button--large" to="/appointments">
+          Manage or cancel
+        </Link>
+        <MoreLink to="/book">Book another</MoreLink>
+      </div>
+      <PreferToCall />
+    </section>
+  );
+}
+
+function ConfirmationRow({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return (
+    <div className="summary-row">
+      <div className="summary-row__text">
+        <dt className="summary-row__label">{label}</dt>
+        <dd className="summary-row__value">{value}</dd>
+        {detail ? <dd className="summary-row__detail">{detail}</dd> : null}
+      </div>
+    </div>
+  );
+}
