@@ -35,9 +35,12 @@ final class ScheduleStore {
     /// Why the last try at an appointment's fee got no answer (or was refused), by appointment ID,
     /// with how the appointment stood then. Its details show it until the next try, and only while
     /// the appointment stands the same (`feeError(for:)`): a status change here, or a refresh that
-    /// shows the appointment changed (on another iPhone, say), forgets it for good.
+    /// shows the appointment changed (on another iPhone, say), forgets it for good. Never under a fee
+    /// Stripe charged, and a "we don't know yet" goes once a load shows Stripe's answer.
     private var feeErrorNotes: [String: FeeErrorNote] = [:]
-    /// Called when Stripe charged a fee, with the appointment as it is now (Payments today changed).
+    /// Called when the schedule first shows a fee Stripe charged, with the appointment as it is now
+    /// (Payments today changed): the charge's answer, or a load that shows it charged after all (its
+    /// answer was lost, or Stripe confirmed it later).
     @ObservationIgnored var onFeeCharged: ((IzzyAPI.Appointment) -> Void)?
 
     let shopTime: ShopTime
@@ -49,6 +52,9 @@ final class ScheduleStore {
     /// Bumped by every refresh, so a slow answer for an older request (or
     /// another day) never replaces a newer one.
     @ObservationIgnored private var generation = 0
+    /// The `generation` of the refresh whose answer is on screen: a fee try that failed when
+    /// `generation` was lower knows the day was loaded again since.
+    @ObservationIgnored private var loadedGeneration = 0
     /// The schedule shows today and the owner hasn't moved to another day, so
     /// a new day moves it on too (see `catchUpToToday()`).
     @ObservationIgnored private var followsToday = true
@@ -128,12 +134,20 @@ final class ScheduleStore {
             async let timeOff = api.timeOff(from: day, to: day)
             let (loadedAppointments, loadedTimeOff) = try await (appointments, timeOff)
             guard requested == generation, day == self.day else { return }
+            let shown = self.appointments
             self.appointments = loadedAppointments.sorted(by: Self.inScheduleOrder)
-            dropOutdatedFeeErrors()
+            loadedGeneration = requested
+            dropOutdatedFeeErrors(loaded: true)
             self.timeOff = loadedTimeOff.sorted { $0.start < $1.start }
             lastUpdated = clock()
             refreshError = nil
             loadState = .loaded
+            // Fees Stripe charged since they were last on screen: Payments today changed.
+            for appointment in self.appointments where appointment.noShowFee?.status == .charged {
+                if let before = shown.first(where: { $0.id == appointment.id }), before.noShowFee?.status != .charged {
+                    onFeeCharged?(appointment)
+                }
+            }
         } catch is CancellationError {
             if requested == generation, loadState == .loading { loadState = .idle }
         } catch {
@@ -235,7 +249,8 @@ final class ScheduleStore {
     /// declined (and why), needing the client, or still pending. A fee is never charged twice: the
     /// server charges each one at most once, and a tap while one is running is ignored. When no
     /// answer comes back, the day is loaded again so the details show the fee as the server has it
-    /// (say, waiting for Stripe, with Check again). Returns the updated appointment, or `nil`.
+    /// (say, waiting for Stripe, with Check again, or charged after all), and `feeError(for:)` says
+    /// what went wrong only while that leaves the fee undecided. Returns the updated appointment, or `nil`.
     ///
     /// Nothing is sent while the appointment's status is changing (`setStatus(_:for:)`): a charge
     /// that reached the server first could charge a no-show the owner is reopening.
@@ -250,16 +265,27 @@ final class ScheduleStore {
             // A refresh that started before this would bring the old fee back.
             generation += 1
             replace(updated)
-            if updated.noShowFee?.status == .charged { onFeeCharged?(updated) }
             return updated
         } catch is CancellationError {
             return nil
         } catch {
             let message = Self.feeErrorMessage(for: error)
+            let triedAt = generation
             await refresh()
-            // Kept with how the appointment stands now (as loaded again, or as it was if that failed).
-            let current = self.appointment(withID: appointment.id) ?? appointment
-            feeErrorNotes[appointment.id] = FeeErrorNote(message: message, status: current.status, feeStatus: current.noShowFee?.status)
+            // Kept with how the appointment stands now: as loaded again, or as it was if that failed.
+            // Loaded again, the fee may show what happened after all (the server got the charge, and
+            // only its answer was lost): charged, so there's nothing to add (and Payments today was
+            // told), or Stripe's "no", which a "we don't know yet" would contradict.
+            let shown = self.appointment(withID: appointment.id)
+            let current = shown ?? appointment
+            let note = FeeErrorNote(
+                message: message,
+                status: current.status,
+                feeStatus: current.noShowFee?.status,
+                outcomeUnknown: Self.chargeOutcomeIsUnknown(error)
+            )
+            let loadedSince = shown != nil && loadedGeneration > triedAt
+            feeErrorNotes[appointment.id] = (loadedSince ? note.applies(toLoaded: current) : note.applies(to: current)) ? note : nil
             return nil
         }
     }
@@ -278,20 +304,53 @@ final class ScheduleStore {
         let message: String
         let status: IzzyAPI.AppointmentStatus
         let feeStatus: IzzyAPI.NoShowFeeStatus?
+        /// Nobody knew whether Stripe charged the card: the try got no answer
+        /// (`ScheduleStore.chargeOutcomeIsUnknown(_:)`), and the message says so.
+        var outcomeUnknown = false
 
-        /// The appointment still stands as it did when this was said.
+        /// The appointment still stands as it did when this was said. Never under a fee Stripe
+        /// charged: that's final, and the details say so.
         func applies(to appointment: IzzyAPI.Appointment) -> Bool {
-            status == appointment.status && feeStatus == appointment.noShowFee?.status
+            status == appointment.status && feeStatus == appointment.noShowFee?.status && feeStatus != .charged
+        }
+
+        /// The same, for the appointment as loaded from the server since the try. The server marks a
+        /// try pending before it asks Stripe, so a fee that shows Stripe's "no" (declined, or needing
+        /// the client) has no charge on its way: a "we don't know yet" isn't true any more, and the
+        /// details say what happened instead. A refusal (the server's own words) still applies.
+        func applies(toLoaded appointment: IzzyAPI.Appointment) -> Bool {
+            guard applies(to: appointment) else { return false }
+            switch appointment.noShowFee?.status {
+            case .some(.declined), .some(.needsAction): return !outcomeUnknown
+            default: return true
+            }
         }
     }
 
     /// Forgets the fee errors of appointments that stand differently now (changed here, or on
     /// another iPhone and seen by a refresh): they were about the appointment as it was then.
-    private func dropOutdatedFeeErrors() {
+    /// `loaded`: the whole day was just loaded from the server, after every note was said (an
+    /// older refresh's answer is dropped), so `FeeErrorNote.applies(toLoaded:)` decides.
+    private func dropOutdatedFeeErrors(loaded: Bool) {
         for (id, note) in feeErrorNotes {
-            if let appointment = appointment(withID: id), !note.applies(to: appointment) {
+            guard let appointment = appointment(withID: id) else { continue }
+            if !(loaded ? note.applies(toLoaded: appointment) : note.applies(to: appointment)) {
                 feeErrorNotes[id] = nil
             }
+        }
+    }
+
+    /// Whether a fee charge's error leaves nobody knowing if Stripe charged the card: no connection,
+    /// a timeout, or the server (or Stripe behind it) failing on the way. A 409 and the like are the
+    /// server's own answer: nothing was charged.
+    static func chargeOutcomeIsUnknown(_ error: Error) -> Bool {
+        switch error as? APIError {
+        case .offline?:
+            return true
+        case .server(let code, _, let status)?:
+            return code == APIError.networkErrorCode || status == 0 || status >= 500
+        default:
+            return false
         }
     }
 
@@ -301,14 +360,9 @@ final class ScheduleStore {
     /// always safe (Check again, or Charge if the request never reached the server).
     static func feeErrorMessage(for error: Error) -> String {
         let unknown = "We don't know yet if the card was charged. Try again in a moment: the fee is never charged twice."
-        switch error as? APIError {
-        case .offline?:
-            return "We couldn't reach the server. \(unknown)"
-        case .server(let code, _, let status)? where code == APIError.networkErrorCode || status == 0 || status >= 500:
-            return "\(ErrorText.message(for: error)) \(unknown)"
-        default:
-            return ErrorText.message(for: error)
-        }
+        guard chargeOutcomeIsUnknown(error) else { return ErrorText.message(for: error) }
+        if case .offline? = error as? APIError { return "We couldn't reach the server. \(unknown)" }
+        return "\(ErrorText.message(for: error)) \(unknown)"
     }
 
     /// A booking made in New booking: shown right away if it's on this day.
@@ -317,14 +371,18 @@ final class ScheduleStore {
         replace(appointment)
     }
 
+    /// Puts the server's answer for one appointment on screen. A fee it shows charged for the first
+    /// time is passed to `onFeeCharged`, even when the appointment isn't on this day any more.
     private func replace(_ appointment: IzzyAPI.Appointment) {
+        let wasCharged = self.appointment(withID: appointment.id)?.noShowFee?.status == .charged
         if let index = appointments.firstIndex(where: { $0.id == appointment.id }) {
             appointments[index] = appointment
         } else if shopTime.day(containing: appointment.start) == day {
             appointments.append(appointment)
         }
         appointments.sort(by: Self.inScheduleOrder)
-        dropOutdatedFeeErrors()
+        dropOutdatedFeeErrors(loaded: false)
+        if appointment.noShowFee?.status == .charged, !wasCharged { onFeeCharged?(appointment) }
     }
 
     /// Blocks time for a barber (or the whole shop). Throws a plain message.

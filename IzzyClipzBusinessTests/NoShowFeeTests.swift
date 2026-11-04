@@ -618,6 +618,188 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(store.appointment(withID: kim.id)?.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none, "what was shown stays")
     }
 
+    /// The server charged the card, but its answer was lost on the way back (a dropped connection, a
+    /// timeout). Loading the day again shows the fee charged: no "we don't know yet" under it, no
+    /// second charge offered, and Payments today is told.
+    func testAChargeWhoseAnswerIsLostShowsItChargedWithNoError() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let api = ScriptedAPI(base: harness.api)
+        api.chargeHandler = { [base = api.base] id in
+            _ = try await base.chargeNoShowFee(appointmentId: id)
+            throw APIError.offline
+        }
+        let store = makeStore(api)
+        await store.refresh()
+        var charged: [String] = []
+        store.onFeeCharged = { charged.append($0.customer.name) }
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+
+        let none = await store.chargeFee(for: kim)
+        XCTAssertNil(none, "no answer came back")
+        let shown = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(shown.noShowFee?.status, .charged, "the day was loaded again")
+        XCTAssertNil(store.feeError(for: shown), "no \"we don't know yet\" under a fee Stripe charged")
+        XCTAssertNil(store.feeError(for: kim), "nor for the appointment as it was")
+        XCTAssertEqual(panel(shown)?.status, .charged(title: "No-show fee charged", detail: "$35 to Visa •••• 4242, Mon, Nov 2 at 11:05 AM."))
+        XCTAssertNil(panel(shown)?.action, "no second charge offered")
+        XCTAssertEqual(charged, ["Kim Sample"], "Payments today is told once")
+        await store.refresh()
+        XCTAssertEqual(charged, ["Kim Sample"], "and not again by the next refresh")
+        XCTAssertNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))))
+        XCTAssertEqual(harness.server.payments.filter { $0.payment.kind.isFee }.map(\.payment.status), ["succeeded"])
+
+        // The same when the answer is a timeout from the server's host (a 504) after Stripe charged it.
+        api.chargeHandler = { [base = api.base] id in
+            _ = try await base.chargeNoShowFee(appointmentId: id)
+            throw APIError.server(code: IzzyAPI.ErrorCode.serverError, message: "The server took too long to answer.", status: 504)
+        }
+        let lee = try XCTUnwrap(store.appointments.first { $0.customer.name == "Lee Sample" })
+        _ = await store.chargeFee(for: lee)
+        let leeShown = try XCTUnwrap(store.appointment(withID: lee.id))
+        XCTAssertEqual(leeShown.noShowFee?.status, .charged)
+        XCTAssertNil(store.feeError(for: leeShown))
+        XCTAssertEqual(panel(leeShown)?.status, .charged(title: "Late cancellation fee charged", detail: "$35 to Visa •••• 4242, Mon, Nov 2 at 11:05 AM."))
+        XCTAssertEqual(charged, ["Kim Sample", "Lee Sample"])
+    }
+
+    /// The same for Stripe's "no": the decline (or "needs the client") shows with its reason, and a
+    /// "we don't know yet" would contradict it, so there's none.
+    func testADeclineWhoseAnswerIsLostShowsTheDeclineWithNoError() async throws {
+        var options = cardsOnFile()
+        options.nextFeeAnswer = .declined
+        let harness = Harness(options: options)
+        let api = ScriptedAPI(base: harness.api)
+        api.chargeHandler = { [base = api.base] id in
+            _ = try await base.chargeNoShowFee(appointmentId: id)
+            throw APIError.offline
+        }
+        let store = makeStore(api)
+        await store.refresh()
+        var charged = 0
+        store.onFeeCharged = { _ in charged += 1 }
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+
+        _ = await store.chargeFee(for: kim)
+        let declined = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(declined.noShowFee?.status, .declined)
+        XCTAssertNil(store.feeError(for: declined), "Stripe's answer is on screen")
+        XCTAssertEqual(panel(declined)?.status, .declined(FakeServer.insufficientFundsMessage))
+        XCTAssertEqual(panel(declined)?.action?.title, "Charge again ($35)")
+        XCTAssertEqual(charged, 0)
+
+        // "Needs the client" after a lost answer reads the same way (a dropped connection this time).
+        harness.server.options.nextFeeAnswer = .needsAction
+        api.chargeHandler = { [base = api.base] id in
+            _ = try await base.chargeNoShowFee(appointmentId: id)
+            throw APIError.server(code: APIError.networkErrorCode, message: "", status: 0)
+        }
+        let lee = try XCTUnwrap(store.appointments.first { $0.customer.name == "Lee Sample" })
+        _ = await store.chargeFee(for: lee)
+        let needsClient = try XCTUnwrap(store.appointment(withID: lee.id))
+        XCTAssertEqual(needsClient.noShowFee?.status, .needsAction)
+        XCTAssertNil(store.feeError(for: needsClient))
+        XCTAssertEqual(panel(needsClient)?.status, .needsClient(FakeServer.authenticationMessage))
+    }
+
+    /// Charge again on a declined fee, and the request never reaches the server: loaded again, the
+    /// fee shows the earlier decline. Nothing is on its way (the server marks a try pending before it
+    /// asks Stripe), so there's no "we don't know yet", and Charge again is still there.
+    func testATryThatNeverReachedTheServerLeavesTheEarlierDeclineWithNoError() async throws {
+        var options = cardsOnFile()
+        options.nextFeeAnswer = .declined
+        let harness = Harness(options: options)
+        let api = ScriptedAPI(base: harness.api)
+        let store = makeStore(api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        let declined = try await XCTUnwrapAsync(await store.chargeFee(for: kim))
+        XCTAssertEqual(declined.noShowFee?.status, .declined)
+
+        api.chargeHandler = { _ in throw APIError.offline }
+        _ = await store.chargeFee(for: declined)
+        let shown = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(shown.noShowFee?.status, .declined)
+        XCTAssertNil(store.feeError(for: shown))
+        XCTAssertEqual(panel(shown)?.action?.title, "Charge again ($35)")
+        XCTAssertEqual(harness.server.payments.filter { $0.payment.kind.isFee }.map(\.payment.status), ["requires_payment_method"], "only the first try reached Stripe")
+    }
+
+    /// When the day can't be loaded again either, nobody knows what happened to the new try, so the
+    /// message stays under the earlier decline, until a load shows the fee as the server has it.
+    func testAWeDontKnowYetUnderADeclineGoesOnceTheDayLoads() async throws {
+        var options = cardsOnFile()
+        options.nextFeeAnswer = .declined
+        let harness = Harness(options: options)
+        let store = makeStore(harness.api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        let declined = try await XCTUnwrapAsync(await store.chargeFee(for: kim))
+
+        harness.server.options.offline = true
+        _ = await store.chargeFee(for: declined)
+        let unknown = "We couldn't reach the server. We don't know yet if the card was charged. Try again in a moment: the fee is never charged twice."
+        XCTAssertEqual(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))), unknown)
+        await store.refresh()
+        XCTAssertEqual(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))), unknown, "still offline: nothing new to say")
+
+        harness.server.options.offline = false
+        await store.refresh()
+        let loaded = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(loaded.noShowFee?.status, .declined, "the try never reached the server")
+        XCTAssertNil(store.feeError(for: loaded), "loaded again: the decline on screen is what happened")
+    }
+
+    /// A refusal is the server's own answer, so it stays under a decline: here Kim was reopened on
+    /// another iPhone, and Charge again on this one is turned down.
+    func testARefusalStaysUnderADecline() async throws {
+        var options = cardsOnFile()
+        options.nextFeeAnswer = .declined
+        let harness = Harness(options: options)
+        let store = makeStore(harness.api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        let declined = try await XCTUnwrapAsync(await store.chargeFee(for: kim))
+        _ = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+
+        _ = await store.chargeFee(for: declined)
+        let reopened = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(reopened.status, .booked, "loaded again")
+        XCTAssertEqual(reopened.noShowFee?.status, .declined)
+        XCTAssertEqual(store.feeError(for: reopened), "Mark the appointment as a no-show first.")
+        await store.refresh()
+        XCTAssertEqual(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))), "Mark the appointment as a no-show first.", "a refresh changes nothing")
+    }
+
+    /// A fee Check again couldn't confirm, which Stripe confirms later (the webhook, or Check again
+    /// on another iPhone): the next load shows it charged, the message goes, and Payments today is
+    /// told once. Loading another day and coming back tells it nothing new.
+    func testAFeeConfirmedLaterTellsPaymentsTodayOnce() async throws {
+        var options = cardsOnFile()
+        options.nextFeeChargeFails = true
+        let harness = Harness(options: options)
+        let store = makeStore(harness.api)
+        await store.refresh()
+        var charged: [String] = []
+        store.onFeeCharged = { charged.append($0.customer.name) }
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        _ = await store.chargeFee(for: kim)
+        XCTAssertNotNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))), "pending: nobody knows yet")
+        XCTAssertEqual(charged, [])
+
+        _ = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        await store.refresh()
+        let confirmed = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(confirmed.noShowFee?.status, .charged)
+        XCTAssertNil(store.feeError(for: confirmed))
+        XCTAssertEqual(charged, ["Kim Sample"])
+        await store.refresh()
+        store.showNextDay()
+        await store.refresh()
+        store.showToday()
+        await store.refresh()
+        XCTAssertEqual(charged, ["Kim Sample"], "told once")
+    }
+
     func testARefusalSaysWhyInTheServersWords() async throws {
         var options = cardsOnFile()
         options.nextFeeChargeFails = true
@@ -1007,6 +1189,7 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertFalse(plain.options.noShowWithCard || plain.options.lateCancelWithCard || plain.options.upcomingWithCard)
         XCTAssertNil(plain.options.nextFeeAnswer)
         XCTAssertFalse(plain.options.nextFeeChargeFails)
+        XCTAssertFalse(plain.options.loseNextFeeAnswer)
         XCTAssertTrue(plain.appointments.allSatisfy { $0.card == nil }, "the usual day has no cards on file")
         XCTAssertEqual(plain.noShowSettings, .default, "protection off, as the server starts")
 
@@ -1018,10 +1201,46 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(try server([LaunchArgument.cardsOnFile, LaunchArgument.noShowDeclined]).options.nextFeeAnswer, .declined)
         XCTAssertEqual(try server([LaunchArgument.noShowNeedsAction]).options.nextFeeAnswer, .needsAction)
         XCTAssertTrue(try server([LaunchArgument.noShowUnreachable]).options.nextFeeChargeFails)
+        XCTAssertTrue(try server([LaunchArgument.noShowAnswerLost]).options.loseNextFeeAnswer)
         XCTAssertEqual(LaunchArgument.cardsOnFile, "-fake-cards-on-file")
         XCTAssertEqual(LaunchArgument.noShowDeclined, "-fake-no-show-declined")
         XCTAssertEqual(LaunchArgument.noShowNeedsAction, "-fake-no-show-needs-action")
         XCTAssertEqual(LaunchArgument.noShowUnreachable, "-fake-no-show-unreachable")
+        XCTAssertEqual(LaunchArgument.noShowAnswerLost, "-fake-no-show-answer-lost")
+    }
+
+    /// `-fake-no-show-answer-lost`: the sample server charges (or declines, with `nextFeeAnswer`) and
+    /// records it like the server, then the answer is lost once, as if the phone went offline.
+    func testTheSampleServerCanLoseAFeesAnswerAfterRecordingIt() async throws {
+        var options = cardsOnFile()
+        options.loseNextFeeAnswer = true
+        let harness = Harness(options: options)
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        do {
+            _ = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+            XCTFail("the answer should be lost")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .offline)
+        }
+        XCTAssertEqual(harness.appointment(named: "Kim Sample")?.noShowFee?.status, .charged, "recorded before the answer was lost")
+        XCTAssertFalse(harness.server.options.loseNextFeeAnswer, "only once")
+        let again = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        XCTAssertEqual(again.noShowFee?.status, .charged, "charging again answers as it is")
+        XCTAssertEqual(harness.server.payments.filter { $0.payment.kind.isFee }.count, 1, "never twice")
+
+        var declining = cardsOnFile()
+        declining.loseNextFeeAnswer = true
+        declining.nextFeeAnswer = .declined
+        let other = Harness(options: declining)
+        let lee = try XCTUnwrap(other.appointment(named: "Lee Sample"))
+        do {
+            _ = try await other.api.chargeNoShowFee(appointmentId: lee.id)
+            XCTFail("the answer should be lost")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .offline)
+        }
+        XCTAssertEqual(other.appointment(named: "Lee Sample")?.noShowFee?.status, .declined)
+        XCTAssertEqual(other.appointment(named: "Lee Sample")?.noShowFee?.message, FakeServer.insufficientFundsMessage)
     }
 
     func testTheWorkspaceReloadsPaymentsTodayWhenAFeeIsCharged() async throws {
@@ -1035,6 +1254,22 @@ final class NoShowFeeTests: XCTestCase {
         let listed = await eventually { workspace.checkout.todaysFeesCents == 3_500 }
         XCTAssertTrue(listed, "Payments today lists the fee")
         XCTAssertTrue(workspace.checkout.todaysPayments.contains { $0.kind == .noShowFee })
+    }
+
+    func testTheWorkspaceReloadsPaymentsTodayWhenAChargesAnswerWasLost() async throws {
+        let environment = AppEnvironment.sample(arguments: [LaunchArgument.cardsOnFile, LaunchArgument.noShowAnswerLost], stepDelay: .zero)
+        let workspace = Workspace(environment: environment, ownerKey: FakeServer.ownerKey, status: nil)
+        await workspace.schedule.refresh()
+        await workspace.checkout.loadPayments()
+        XCTAssertEqual(workspace.checkout.todaysFeesCents, 0)
+        let kim = try XCTUnwrap(workspace.schedule.appointments.first { $0.customer.name == "Kim Sample" })
+        let answer = await workspace.schedule.chargeFee(for: kim)
+        XCTAssertNil(answer, "the answer was lost")
+        let shown = try XCTUnwrap(workspace.schedule.appointment(withID: kim.id))
+        XCTAssertEqual(shown.noShowFee?.status, .charged)
+        XCTAssertNil(workspace.schedule.feeError(for: shown))
+        let listed = await eventually { workspace.checkout.todaysFeesCents == 3_500 }
+        XCTAssertTrue(listed, "Payments today lists the fee")
     }
 }
 

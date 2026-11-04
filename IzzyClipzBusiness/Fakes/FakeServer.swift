@@ -55,6 +55,10 @@ final class FakeServer {
         /// declined (not enough money on the card), or the client's bank wants them to approve it. The
         /// answer is 200 with the fee declined or needing the client; charging again is a new try.
         var nextFeeAnswer: FeeAnswer?
+        /// The next fee charge reaches the server and Stripe answers it (approved, or `nextFeeAnswer`'s
+        /// "no"), and the server records that, but the answer never reaches the phone: the app sees it
+        /// as offline. Loading the day again shows what happened.
+        var loseNextFeeAnswer = false
         /// How long each call takes, so loading states are visible.
         var latency: Duration = .zero
     }
@@ -448,6 +452,11 @@ final class FakeServer {
             ),
             clientSecret: "\(paymentID)_secret_sample", receiptEmail: nil
         ))
+        if options.loseNextFeeAnswer {
+            // Recorded as Stripe answered, but the answer never reaches the phone.
+            options.loseNextFeeAnswer = false
+            throw APIError.offline
+        }
         return appointment
     }
 

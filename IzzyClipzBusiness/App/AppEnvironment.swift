@@ -32,6 +32,9 @@ enum LaunchArgument {
     static let noShowNeedsAction = "-fake-no-show-needs-action"
     /// The next fee charged to a card on file never reaches Stripe: it waits, and Check again charges it.
     static let noShowUnreachable = "-fake-no-show-unreachable"
+    /// The next fee charged to a card on file goes through (or is declined, with `noShowDeclined`), but
+    /// the answer is lost on the way back: the app loads the day again and shows what happened.
+    static let noShowAnswerLost = "-fake-no-show-answer-lost"
 }
 
 /// What the app talks to and how: the real server and Tap to Pay, or the
@@ -178,6 +181,7 @@ final class AppEnvironment {
         if arguments.contains(LaunchArgument.noShowDeclined) { options.nextFeeAnswer = .declined }
         if arguments.contains(LaunchArgument.noShowNeedsAction) { options.nextFeeAnswer = .needsAction }
         options.nextFeeChargeFails = arguments.contains(LaunchArgument.noShowUnreachable)
+        options.loseNextFeeAnswer = arguments.contains(LaunchArgument.noShowAnswerLost)
         let server = FakeServer(options: options, shopTime: shopTime, now: clock)
 
         let terminal = SimulatedPaymentTerminal(stepDelay: stepDelay)

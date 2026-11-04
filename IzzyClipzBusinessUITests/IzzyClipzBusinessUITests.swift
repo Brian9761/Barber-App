@@ -568,6 +568,36 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("feeError")), "The old message goes")
     }
 
+    /// The charge goes through, but its answer is lost on the way back (`-fake-no-show-answer-lost`):
+    /// the app loads the day again, so the details show the fee charged, with nothing under it about
+    /// not knowing, and Payments today lists it.
+    func testAChargeWhoseAnswerIsLostShowsItCharged() {
+        launch("-fake-cards-on-file", "-fake-no-show-answer-lost")
+        tap("appointment-Kim Sample")
+        tap("chargeFee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "No-show fee charged"))
+        XCTAssertFalse(element("feeError").exists, "No \"we don't know yet\" under a fee Stripe charged")
+        XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        openTab("Take payment")
+        tap("paymentsTodayLink")
+        XCTAssertTrue(waitForLabel(element("paymentsFees"), containing: "$35.00"))
+    }
+
+    /// The same for a decline: it shows with the bank's reason and Charge again, and nothing else.
+    func testADeclineWhoseAnswerIsLostShowsTheDecline() {
+        launch("-fake-cards-on-file", "-fake-no-show-declined", "-fake-no-show-answer-lost")
+        tap("appointment-Kim Sample")
+        tap("chargeFee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        let status = reveal("feeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "Declined"), "Got: \(status.label)")
+        XCTAssertTrue(status.label.contains("there isn't enough money on it"), "Got: \(status.label)")
+        XCTAssertFalse(element("feeError").exists, "Stripe's answer is on screen")
+        XCTAssertTrue(waitForLabel(reveal("chargeFee"), containing: "Charge again ($35)"))
+    }
+
     /// Nia Sample booked online with a card for 2:30 PM. Until it starts she can still cancel in the
     /// app, so there's no Mark no-show yet, and no fee to charge.
     func testANoShowWithACardWaitsForTheStart() {
