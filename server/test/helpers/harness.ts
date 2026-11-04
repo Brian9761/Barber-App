@@ -52,6 +52,17 @@ export class FakeStripe implements StripeClient {
   private readonly idempotent = new Map<string, { params: string; intent?: Stripe.PaymentIntent; error?: unknown }>();
   private counter = 0;
 
+  /** Stripe's clock (the test's), for each PaymentIntent's `created`. */
+  constructor(private readonly clock: () => Date = () => new Date()) {}
+
+  /**
+   * What Stripe does to idempotency keys at least 24 hours old: it may prune them, and a
+   * key reused after that is a new request.
+   */
+  forgetIdempotencyKeys(): void {
+    this.idempotent.clear();
+  }
+
   private maybeFail(): void {
     if (this.nextError) {
       const error = this.nextError;
@@ -99,6 +110,20 @@ export class FakeStripe implements StripeClient {
         throw error;
       }
     },
+    // Like Stripe: newest first, filtered by customer and `created`, `limit` per page, `starting_after` for the next.
+    list: async (params: Stripe.PaymentIntentListParams) => {
+      this.calls.push({ method: 'paymentIntents.list', params: structuredClone(params) });
+      this.maybeFail();
+      const created = typeof params.created === 'number' ? { gte: params.created, lte: params.created } : (params.created ?? {});
+      let all = [...this.intents.values()]
+        .filter((pi) => params.customer === undefined || pi.customer === params.customer)
+        .filter((pi) => (created.gte === undefined || pi.created >= created.gte) && (created.gt === undefined || pi.created > created.gt))
+        .filter((pi) => (created.lte === undefined || pi.created <= created.lte) && (created.lt === undefined || pi.created < created.lt))
+        .reverse();
+      if (params.starting_after) all = all.slice(all.findIndex((pi) => pi.id === params.starting_after) + 1);
+      const limit = params.limit ?? 10;
+      return { object: 'list', url: '/v1/payment_intents', data: all.slice(0, limit), has_more: all.length > limit } as Stripe.ApiList<Stripe.PaymentIntent>;
+    },
     retrieve: async (id: string) => {
       this.calls.push({ method: 'paymentIntents.retrieve', params: id });
       this.maybeFail();
@@ -132,6 +157,7 @@ export class FakeStripe implements StripeClient {
         metadata: params.metadata ?? {},
         status: 'requires_payment_method',
         livemode: false,
+        created: Math.floor(this.clock().getTime() / 1000),
         customer: params.customer ?? null,
         payment_method: params.payment_method ?? null,
         last_payment_error: null,
@@ -331,6 +357,16 @@ export interface HarnessOptions {
   config?: Partial<Config>;
 }
 
+/**
+ * Stripe set up with `key` and no-show protection turned on by the owner, as it must be
+ * before online bookings need a card (it's off until then).
+ */
+export async function protectionOn(h: Harness, key = 'sk_test_fixture'): Promise<void> {
+  h.config.stripeSecretKey = key;
+  const res = await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { enabled: true } });
+  if (res.status !== 200) throw new Error(`Couldn't turn no-show protection on: ${res.text}`);
+}
+
 /** Deterministic UUIDs: 00000000-0000-4000-8000-000000000001, …002, … */
 export function fixtureUuid(n: number): string {
   return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -362,7 +398,7 @@ export function useHarness(options: HarnessOptions = {}): Harness {
       ...options.config,
     };
     h.now = new Date(options.now ?? '2026-11-02T17:00:00Z');
-    h.stripe = new FakeStripe();
+    h.stripe = new FakeStripe(() => h.now);
     h.blob = new FakeBlob();
     h.fetch = new FakeFetch();
     h.logs = [];

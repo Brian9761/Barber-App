@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { createApp } from '../src/app.js';
 import { ErrorBody, RESPONSES, type ResponseName } from './helpers/contract.js';
-import { useHarness, type CallResult } from './helpers/harness.js';
+import { protectionOn, useHarness, type CallResult } from './helpers/harness.js';
 
 // Writes one example per §5 response type to test/fixtures/contract/, produced
 // by the real handlers, after checking it against strict schemas. The Swift Kit
@@ -66,6 +66,8 @@ describe('contract fixtures (API v1)', () => {
 
     check('owner-me', await h.call('GET', '/api/owner/me', owner));
     check('no-show-settings', await h.call('GET', '/api/owner/no-show-settings', owner));
+    // Off until the owner turns it on.
+    await protectionOn(h);
 
     // Products
     const pomade = check(
@@ -222,8 +224,8 @@ describe('contract fixtures (API v1)', () => {
       await book({ offeringId: FLOW45, start: `2026-11-${day}T18:00:00Z` }, `203.0.113.${4 + i}`);
     }
     examples.rate_limited = await book({ offeringId: FLOW45, start: '2026-11-09T18:00:00Z' }, '203.0.113.7');
-    // No-show protection's own errors, with Stripe set up.
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    // No-show protection's own errors, with Stripe set up and protection on.
+    await protectionOn(h);
     examples.card_required = await book({ offeringId: FLOW45, start: '2026-11-10T18:00:00Z' }, '203.0.113.8');
     const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': CARD_TOKEN }, body: { offeringId: FLOW45 } });
     h.stripe.completeSession(checkout.body.sessionId);
@@ -234,6 +236,20 @@ describe('contract fixtures (API v1)', () => {
       ip: '203.0.113.8',
     });
     examples.not_chargeable = await h.call('POST', `/api/owner/appointments/${first.body.appointment.id}/no-show-fee`, { owner: true });
+    const protectedBooking = await h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': CARD_TOKEN },
+      body: {
+        offeringId: FLOW45,
+        start: '2026-11-10T18:00:00Z',
+        customer: { name: 'Fixture Client', phone: '4425550126' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText,
+      },
+      ip: '203.0.113.9',
+    });
+    examples.not_started = await h.call('PATCH', `/api/owner/appointments/${protectedBooking.body.appointment.id}`, {
+      owner: true,
+      body: { status: 'noShow' },
+    });
     h.config.stripeSecretKey = undefined;
     examples.stripe_not_configured = await h.call('POST', '/api/owner/terminal/connection-token', { owner: true });
     h.config.ownerKey = undefined;
@@ -266,6 +282,7 @@ describe('contract fixtures (API v1)', () => {
       card_required: 400,
       policy_changed: 409,
       not_chargeable: 409,
+      not_started: 409,
       stripe_not_configured: 503,
       owner_not_configured: 503,
       server_error: 500,

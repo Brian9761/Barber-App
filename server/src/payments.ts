@@ -45,7 +45,8 @@ export type StripeCall =
   | 'create card checkout'
   | 'retrieve card checkout'
   | 'charge no-show fee'
-  | 'retrieve no-show fee';
+  | 'retrieve no-show fee'
+  | 'find no-show fee';
 
 /** The parts of a stripe-node error worth logging. */
 export interface StripeErrorLike {

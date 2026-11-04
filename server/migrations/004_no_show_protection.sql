@@ -47,10 +47,18 @@ ALTER TABLE appointments
   -- How many PaymentIntents were asked for; part of Stripe's idempotency key, so a retry after a
   -- lost answer reuses the same one and a new try (after a decline) makes a new one.
   ADD COLUMN no_show_fee_attempt integer NOT NULL DEFAULT 0 CHECK (no_show_fee_attempt >= 0),
+  -- When the current attempt started: a retry looks for that attempt's PaymentIntent at Stripe
+  -- from then on, since Stripe may forget an idempotency key after 24 hours.
+  ADD COLUMN no_show_fee_attempt_at timestamptz NULL,
   ADD COLUMN no_show_fee_payment_intent_id text NULL CHECK (no_show_fee_payment_intent_id ~ '^pi_[A-Za-z0-9_]+$'),
   -- Why it was declined or needs the client, in plain words for the owner.
   ADD COLUMN no_show_fee_message text NULL CHECK (char_length(no_show_fee_message) <= 300),
   ADD COLUMN no_show_fee_charged_at timestamptz NULL,
+  -- When the client cancelled in the app, or asked to, before the start. Set once and never
+  -- cleared, not even when the shop reopens the booking: cancelling in the app before the start
+  -- is free, so such a booking is never charged a no-show fee.
+  ADD COLUMN customer_cancelled_at timestamptz NULL,
+  ADD CONSTRAINT appointments_no_show_fee_attempt_at CHECK ((no_show_fee_attempt = 0) = (no_show_fee_attempt_at IS NULL)),
   ADD CONSTRAINT appointments_no_show_terms CHECK (
     (saved_card_id IS NULL) = (card_brand IS NULL)
     AND (saved_card_id IS NULL) = (card_last4 IS NULL)

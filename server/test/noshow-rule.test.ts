@@ -11,14 +11,14 @@ import {
   protectionFor,
   type NoShowSettings,
 } from '../src/noshow.js';
-import { useHarness } from './helpers/harness.js';
+import { protectionOn, useHarness } from './helpers/harness.js';
 
 // The fee rule, the policy wording, the public policy endpoint and the owner's
 // settings. The rule's cases are also written to test/fixtures/no-show-rule.json,
 // which the Kit's tests read to check its mirror of the rule (the owner app's preview).
 
-const percent = (p: number): NoShowSettings => ({ ...DEFAULT_NO_SHOW_SETTINGS, feeMode: 'percent', percent: p });
-const flat = (cents: number): NoShowSettings => ({ ...DEFAULT_NO_SHOW_SETTINGS, feeMode: 'flat', flatCents: cents });
+const percent = (p: number): NoShowSettings => ({ ...DEFAULT_NO_SHOW_SETTINGS, enabled: true, feeMode: 'percent', percent: p });
+const flat = (cents: number): NoShowSettings => ({ ...DEFAULT_NO_SHOW_SETTINGS, enabled: true, feeMode: 'flat', flatCents: cents });
 const fixed = (priceCents: number) => ({ priceCents, priceKind: 'fixed' as const });
 
 describe('the fee rule', () => {
@@ -153,8 +153,15 @@ describe('GET /api/no-show-policy', () => {
     expect(res.headers.get('cache-control')).toBe('no-store');
   });
 
+  it('a Stripe key alone doesn’t turn protection on: the owner does', async () => {
+    for (const key of ['sk_test_fixture', 'sk_live_fixture']) {
+      h.config.stripeSecretKey = key;
+      expect((await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.required, key).toBe(false);
+    }
+  });
+
   it('with Stripe: the fee for one barber, or the range for any barber, following the owner’s settings', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const one = await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`);
     expect(one.body).toEqual({
       required: true,
@@ -176,7 +183,7 @@ describe('GET /api/no-show-policy', () => {
   });
 
   it('turns down a target that isn’t on the menu, like availability', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     expect((await h.call('GET', '/api/no-show-policy')).status).toBe(400);
     expect((await h.call('GET', '/api/no-show-policy?offeringId=nope')).status).toBe(400);
     expect((await h.call('GET', '/api/no-show-policy?serviceId=haircut')).status).toBe(400);
@@ -188,13 +195,17 @@ describe('GET/PATCH /api/owner/no-show-settings', () => {
   const get = () => h.call('GET', '/api/owner/no-show-settings', { owner: true });
   const patch = (body: unknown) => h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body });
 
-  it('starts at 50% of the service, on, with a $20 flat amount ready', async () => {
+  it('starts off (the owner turns it on), at 50% of the service, with a $20 flat amount ready', async () => {
     const res = await get();
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ noShowSettings: { enabled: true, feeMode: 'percent', percent: 50, flatCents: 2000 } });
+    expect(res.body).toEqual({ noShowSettings: { enabled: false, feeMode: 'percent', percent: 50, flatCents: 2000 } });
+    // Setting a Stripe key changes nothing here either.
+    h.config.stripeSecretKey = 'sk_live_fixture';
+    expect((await get()).body.noShowSettings.enabled).toBe(false);
   });
 
   it('changes only what is sent, and keeps it', async () => {
+    expect((await patch({ enabled: true })).body.noShowSettings).toEqual({ enabled: true, feeMode: 'percent', percent: 50, flatCents: 2000 });
     expect((await patch({ percent: 40 })).body.noShowSettings).toEqual({ enabled: true, feeMode: 'percent', percent: 40, flatCents: 2000 });
     expect((await patch({ feeMode: 'flat', flatCents: 2500 })).body.noShowSettings).toEqual({
       enabled: true,
@@ -234,13 +245,13 @@ describe('GET/PATCH /api/owner/no-show-settings', () => {
     expect((await patch({ percent: 1 })).status).toBe(200);
     expect((await patch({ percent: 100, flatCents: 50 })).status).toBe(200);
     expect((await patch({ flatCents: 50_000 })).status).toBe(200);
-    expect((await get()).body.noShowSettings).toEqual({ enabled: true, feeMode: 'percent', percent: 100, flatCents: 50_000 });
+    expect((await get()).body.noShowSettings).toEqual({ enabled: false, feeMode: 'percent', percent: 100, flatCents: 50_000 });
   });
 
   it('falls back to the defaults for anything stored that isn’t valid', async () => {
     await h.database.pool.query(
       `INSERT INTO settings (key, value, updated_at) VALUES ('no_show', '{"percent": 0, "feeMode": "flat", "flatCents": "x"}', now())`,
     );
-    expect((await get()).body.noShowSettings).toEqual({ enabled: true, feeMode: 'flat', percent: 50, flatCents: 2000 });
+    expect((await get()).body.noShowSettings).toEqual({ enabled: false, feeMode: 'flat', percent: 50, flatCents: 2000 });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
 import { RESPONSES } from './helpers/contract.js';
-import { useHarness, type FakeCard } from './helpers/harness.js';
+import { protectionOn, useHarness, type FakeCard } from './helpers/harness.js';
 
 // Booking with no-show protection: a card on file and the agreed policy when
 // the booking needs them, and exactly today's behavior when it doesn't.
@@ -50,7 +50,7 @@ describe('booking when no card is needed', () => {
   });
 
   it('with protection turned off, or for an item with no fee', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const lineup = await book({ offeringId: LINEUP, start: '2026-11-03T18:00:00Z' });
     expect(lineup.status, lineup.text).toBe(201);
     expect(lineup.body.appointment.card).toBeNull();
@@ -61,7 +61,7 @@ describe('booking when no card is needed', () => {
   });
 
   it('a fee under 50¢ means no card is needed', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { percent: 1 } });
     // 1% of $35 is 35¢.
     expect((await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.required).toBe(false);
@@ -69,7 +69,7 @@ describe('booking when no card is needed', () => {
   });
 
   it('the shop’s own bookings never need a card', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const res = await h.call('POST', '/api/owner/appointments', { owner: true, body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Walk-in' } } });
     expect(res.status).toBe(201);
     expect(res.body.appointment.card).toBeNull();
@@ -79,7 +79,7 @@ describe('booking when no card is needed', () => {
 
 describe('booking when a card is needed', () => {
   it('no card: 400 card_required, and it isn’t counted as a booking attempt', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const res = await book({ noShowPolicy: await flowPolicy() });
     expect(res.status).toBe(400);
     expect(res.body.error).toEqual({ code: 'card_required', message: "Add a card to book this time. You won't be charged now." });
@@ -88,7 +88,7 @@ describe('booking when a card is needed', () => {
   });
 
   it('a card token the server doesn’t know, or a malformed one', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const unknown = await book({ noShowPolicy: await flowPolicy() }, { 'x-card-token': newManageToken() });
     expect(unknown.status).toBe(400);
     expect(unknown.body.error).toEqual({ code: 'card_required', message: "We couldn't find your saved card. Add it again." });
@@ -98,7 +98,7 @@ describe('booking when a card is needed', () => {
   });
 
   it('a card that expires before the appointment’s month is no card; one good through that month works', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const october = await savedCard({ brand: 'visa', last4: '0001', exp_month: 11, exp_year: 2026 });
     // Booked for December 1: the card ends November 30.
     const december = await book({ start: '2026-12-01T18:00:00Z', noShowPolicy: await flowPolicy() }, { 'x-card-token': october });
@@ -109,7 +109,7 @@ describe('booking when a card is needed', () => {
   });
 
   it('a card saved in test mode can’t book once the shop uses a live key', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = await savedCard();
     h.config.stripeSecretKey = 'sk_live_fixture';
     const res = await book({ noShowPolicy: await flowPolicy() }, { 'x-card-token': token });
@@ -118,7 +118,7 @@ describe('booking when a card is needed', () => {
   });
 
   it('the policy must be the one the server gives for this booking right now', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = await savedCard();
     const headers = { 'x-card-token': token };
     const missing = await book({}, headers);
@@ -136,14 +136,14 @@ describe('booking when a card is needed', () => {
   });
 
   it('books with the card on file: the fee for this item, the exact policy and the consent time are kept', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = await savedCard({ brand: 'amex', last4: '8431', exp_month: 1, exp_year: 2031 });
     const policy = await flowPolicy();
     h.advance(3);
     const res = await book({ noShowPolicy: policy }, { 'x-card-token': token });
     expect(res.status).toBe(201);
     expect(res.body.appointment.card).toEqual({ brand: 'amex', last4: '8431' });
-    expect(res.body.appointment.noShowFee).toEqual({ amountCents: 1750, status: 'none', chargedAt: null, message: null });
+    expect(res.body.appointment.noShowFee).toEqual({ amountCents: 1750, status: 'none', chargedAt: null, message: null, customerCancelledAt: null });
     expect(res.body.appointment.payment).toEqual({ status: 'unpaid', amountCents: null, paidAt: null });
     const stored = await row(res.body.appointment.id);
     expect(stored.no_show_policy).toBe(policy);
@@ -155,7 +155,7 @@ describe('booking when a card is needed', () => {
   });
 
   it('any barber: the fee of the barber the shop picks, within the range the client saw', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = await savedCard();
     const policy = await policyFor('serviceId=haircut-and-beard&barberId=any');
     const prices: Record<string, number> = { 'israel-flores': 5500, 'carlos-rafael': 6000, flowxbori: 5500, 'cristian-ceja': 5500, 'julian-ramos': 5500 };
@@ -176,7 +176,7 @@ describe('booking when a card is needed', () => {
   });
 
   it('one card books more than once; a retry with the manage token doesn’t look at the card again', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const card = await savedCard();
     const manage = newManageToken();
     const policy = await flowPolicy();
@@ -187,7 +187,7 @@ describe('booking when a card is needed', () => {
     const retry = await book({ noShowPolicy: 'whatever' }, { 'x-manage-token': manage });
     expect(retry.status).toBe(200);
     expect(retry.body).toEqual(first.body);
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const second = await book({ start: '2026-11-03T19:00:00Z', noShowPolicy: policy }, { 'x-card-token': card }, '203.0.113.61');
     expect(second.status).toBe(201);
     expect(second.body.appointment.card).toEqual(first.body.appointment.card);

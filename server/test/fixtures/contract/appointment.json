@@ -32,7 +32,8 @@
       "amountCents": 1750,
       "status": "none",
       "chargedAt": null,
-      "message": null
+      "message": null,
+      "customerCancelledAt": null
     }
   }
 }

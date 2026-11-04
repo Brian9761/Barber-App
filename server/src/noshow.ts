@@ -16,7 +16,10 @@ import { parse, shortId } from './validation.js';
 export type FeeMode = 'percent' | 'flat';
 
 export interface NoShowSettings {
-  /** Whether online bookings need a card (only while Stripe is set up, too). */
+  /**
+   * Whether online bookings need a card (only while Stripe is set up, too). Off until the
+   * owner turns it on: setting STRIPE_SECRET_KEY alone never changes how clients book.
+   */
   enabled: boolean;
   feeMode: FeeMode;
   /** Used in percent mode: 1–100 % of the booked service's price. */
@@ -25,7 +28,13 @@ export interface NoShowSettings {
   flatCents: number;
 }
 
-export const DEFAULT_NO_SHOW_SETTINGS: NoShowSettings = { enabled: true, feeMode: 'percent', percent: 50, flatCents: 2000 };
+/**
+ * Before the owner saves anything: protection off, and 50% of the service ($20 ready for flat
+ * mode) once it's on. Off by default because the shop may set a test key to try Tap to Pay
+ * while real clients book: Stripe's test-mode card page turns real cards down, so they
+ * couldn't book online at all. The owner turns it on when the app with the card screen is out.
+ */
+export const DEFAULT_NO_SHOW_SETTINGS: NoShowSettings = { enabled: false, feeMode: 'percent', percent: 50, flatCents: 2000 };
 
 /** Stripe's smallest US card charge. A fee below it means the booking isn't protected. */
 export const MIN_NO_SHOW_FEE_CENTS = 50;

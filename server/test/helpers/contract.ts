@@ -33,6 +33,7 @@ export const Appointment = z.strictObject({
       status: z.enum(['none', 'pending', 'charged', 'declined', 'needsAction']),
       chargedAt: instant.nullable(),
       message: z.string().min(1).nullable(),
+      customerCancelledAt: instant.nullable(),
     })
     .nullable(),
 });
@@ -108,6 +109,7 @@ export const ErrorBody = z.strictObject({
       'card_required',
       'policy_changed',
       'not_chargeable',
+      'not_started',
       'stripe_not_configured',
       'owner_not_configured',
       'server_error',

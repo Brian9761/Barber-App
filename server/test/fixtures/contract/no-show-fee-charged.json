@@ -32,7 +32,8 @@
       "amountCents": 1750,
       "status": "charged",
       "chargedAt": "2026-11-03T18:20:00Z",
-      "message": null
+      "message": null,
+      "customerCancelledAt": null
     }
   }
 }

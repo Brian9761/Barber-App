@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
 import { publicBase } from '../src/cards.js';
-import { stripeError, useHarness } from './helpers/harness.js';
+import { protectionOn, stripeError, useHarness } from './helpers/harness.js';
 
 // Saving a card for no-show protection: Stripe Checkout in setup mode, the https
 // page Stripe returns to, and saving the completed session under the app's token.
@@ -36,7 +36,7 @@ describe('POST /api/cards/checkout', () => {
   });
 
   it('makes a Customer and a setup-mode Checkout Session with the policy, cards only, returning over https', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     const res = await checkout(token);
     expect(res.status).toBe(201);
@@ -75,7 +75,7 @@ describe('POST /api/cards/checkout', () => {
   });
 
   it('uses PUBLIC_BASE_URL for the way back when it is set', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     h.config.publicBaseUrl = 'https://api.izzyclipz.example/';
     await checkout(newManageToken());
     const params = h.stripe.calls[1]!.params as Record<string, unknown>;
@@ -92,7 +92,7 @@ describe('POST /api/cards/checkout', () => {
   });
 
   it('needs the app’s card token, in the manage token format', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     for (const token of [undefined, '', 'short', 'x'.repeat(43) + 'y', `${newManageToken().slice(0, 42)}B`]) {
       const res = await checkout(token);
       expect(res.status, String(token)).toBe(400);
@@ -102,7 +102,7 @@ describe('POST /api/cards/checkout', () => {
   });
 
   it('turns down a booking that needs no card, and a target that isn’t on the menu', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const lineup = await checkout(newManageToken(), { offeringId: LINEUP });
     expect(lineup.status).toBe(400);
     expect(lineup.body.error.message).toBe("This booking doesn't need a card. Go ahead and book.");
@@ -117,7 +117,7 @@ describe('POST /api/cards/checkout', () => {
   });
 
   it('allows 10 a hour from one network, then 429', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     for (let i = 0; i < 10; i++) expect((await checkout(newManageToken())).status).toBe(201);
     const eleventh = await checkout(newManageToken());
     expect(eleventh.status).toBe(429);
@@ -132,7 +132,7 @@ describe('POST /api/cards/checkout', () => {
   });
 
   it('a Stripe failure is a plain 500, logged without the key', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
     const res = await checkout(newManageToken());
     expect(res.status).toBe(500);
@@ -165,7 +165,7 @@ describe('GET /api/cards/return and /api/cards/cancel', () => {
 
 describe('POST /api/cards', () => {
   it('saves the card from a completed session: brand, last 4 and expiry only, under the token’s hash', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     const sessionId = await completedSession(token, { brand: 'mastercard', last4: '4444', exp_month: 3, exp_year: 2029 });
     const res = await save(token, sessionId);
@@ -192,7 +192,7 @@ describe('POST /api/cards', () => {
   });
 
   it('saving again with the same token and session answers 200 with the same card (a lost answer)', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     const sessionId = await completedSession(token);
     const first = await save(token, sessionId);
@@ -203,7 +203,7 @@ describe('POST /api/cards', () => {
   });
 
   it('one token, one card: the same token for another session is a 400', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     const first = await completedSession(token);
     const second = await completedSession(token);
@@ -214,7 +214,7 @@ describe('POST /api/cards', () => {
   });
 
   it('someone who only knows the session id gets nothing', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const sessionId = await completedSession(newManageToken());
     const res = await save(newManageToken(), sessionId);
     expect(res.status).toBe(404);
@@ -223,7 +223,7 @@ describe('POST /api/cards', () => {
   });
 
   it('a session that isn’t finished is a 400 that says to add it again', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     const open = (await checkout(token)).body.sessionId;
     const res = await save(token, open);
@@ -236,7 +236,7 @@ describe('POST /api/cards', () => {
   });
 
   it('a session Stripe doesn’t know, one this server didn’t make, or one not in setup mode is a 404', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     expect((await save(token, 'cs_test_Unknown')).status).toBe(404);
     const foreign = await completedSession(token);
@@ -248,7 +248,7 @@ describe('POST /api/cards', () => {
   });
 
   it('turns down an expired card, and anything that isn’t a card', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     const expired = await completedSession(token, { brand: 'visa', last4: '0069', exp_month: 10, exp_year: 2026 });
     const res = await save(token, expired);
@@ -270,7 +270,7 @@ describe('POST /api/cards', () => {
   });
 
   it('validates the token and the session id before calling Stripe', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     expect((await save(undefined, 'cs_test_abc')).status).toBe(400);
     expect((await save('bad', 'cs_test_abc')).status).toBe(400);
     for (const sessionId of ['', 'pi_123', 'cs_test_', 'cs_test_a/b', 'cs_prod_abc']) {
@@ -283,7 +283,7 @@ describe('POST /api/cards', () => {
   });
 
   it('allows 10 saves a hour from one network; a repeat of one that went through isn’t counted', async () => {
-    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn(h);
     const token = newManageToken();
     const sessionId = await completedSession(token);
     for (let i = 0; i < 10; i++) expect((await save(newManageToken(), 'cs_test_Unknown', '192.0.2.9')).status).toBe(404);

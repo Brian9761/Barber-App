@@ -229,20 +229,40 @@ export async function getAppointment(ctx: Context): Promise<Response> {
   return json({ appointment: appointmentJSON(await loadWithToken(ctx)) });
 }
 
+/**
+ * The client cancels in the app. Cancelling before the start is free, so the
+ * time is kept in `customer_cancelled_at` and never cleared: even if the shop
+ * reopens the booking later, it can't be charged a no-show fee. A request the
+ * status turns down (the shop already marked it) still counts when it came
+ * before the start, because the client asked in time.
+ */
 export async function cancelAppointment(ctx: Context): Promise<Response> {
   const row = await loadWithToken(ctx);
   const now = ctx.deps.now();
-  const { rows } = await ctx.deps.db.query<AppointmentRow>(
-    `UPDATE appointments SET status = 'cancelled', cancelled_by = 'customer', updated_at = $2
-      WHERE id = $1 AND status = 'booked' AND start_at > $2
-      RETURNING *`,
-    [row.id, now],
-  );
-  const updated = rows[0];
-  if (updated) return json({ appointment: appointmentJSON(updated) });
+  // Locked while deciding, so the answer matches what happened even if the shop changes it at the same moment.
+  const outcome = await ctx.deps.db.transaction(async (tx) => {
+    const { rows } = await tx.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1 FOR UPDATE', [row.id]);
+    const current = rows[0] ?? row;
+    if (current.start_at <= now) return { cancelled: false, row: current };
+    if (current.status === 'booked') {
+      const { rows: done } = await tx.query<AppointmentRow>(
+        `UPDATE appointments
+            SET status = 'cancelled', cancelled_by = 'customer', customer_cancelled_at = COALESCE(customer_cancelled_at, $2), updated_at = $2
+          WHERE id = $1
+          RETURNING *`,
+        [row.id, now],
+      );
+      return { cancelled: true, row: done[0] ?? current };
+    }
+    // Asked in time, but the shop already marked it: the request still counts against a no-show fee.
+    if (current.customer_cancelled_at === null) {
+      await tx.query('UPDATE appointments SET customer_cancelled_at = $2, updated_at = $2 WHERE id = $1', [row.id, now]);
+    }
+    return { cancelled: false, row: current };
+  });
+  if (outcome.cancelled) return json({ appointment: appointmentJSON(outcome.row) });
 
-  const { rows: current } = await ctx.deps.db.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1', [row.id]);
-  const latest = current[0] ?? row;
+  const latest = outcome.row;
   if (latest.status === 'cancelled') {
     throw new ApiError('not_cancellable', 'This appointment is already cancelled.');
   }
@@ -401,18 +421,26 @@ export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
   if (!UUID_RE.test(id)) throw notFound();
   const { status } = parse(statusPatch, await readJsonObject(ctx.request));
   const dbStatus = STATUS_IN[status as AppointmentStatus];
+  const now = ctx.deps.now();
   try {
+    // A booking with a card on file can be marked a no-show only once it has started: until
+    // then the client may still cancel it in the app for free (and a no-show is what can be charged).
     const { rows } = await ctx.deps.db.query<AppointmentRow>(
       `UPDATE appointments
           SET status = $2,
               cancelled_by = CASE WHEN $2 = 'cancelled' THEN COALESCE(cancelled_by, 'shop') ELSE NULL END,
               updated_at = CASE WHEN status = $2 THEN updated_at ELSE $3 END
         WHERE id = $1
+          AND NOT ($2 = 'no_show' AND saved_card_id IS NOT NULL AND start_at > $3)
         RETURNING *`,
-      [id, dbStatus, ctx.deps.now()],
+      [id, dbStatus, now],
     );
     const row = rows[0];
-    if (!row) throw notFound();
+    if (!row) {
+      const known = ((await ctx.deps.db.query('SELECT 1 FROM appointments WHERE id = $1', [id])).rowCount ?? 0) > 0;
+      if (!known) throw notFound();
+      throw new ApiError('not_started', 'You can mark a no-show once the appointment has started.');
+    }
     return json({ appointment: appointmentJSON(row) });
   } catch (error) {
     if (isOverlapConflict(error)) {

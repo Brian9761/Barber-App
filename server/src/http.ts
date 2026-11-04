@@ -13,6 +13,8 @@ export const ERROR_STATUS = {
   card_required: 400,
   policy_changed: 409,
   not_chargeable: 409,
+  /** A no-show can only be marked once a booking with a card on file has started. */
+  not_started: 409,
   stripe_not_configured: 503,
   owner_not_configured: 503,
   server_error: 500,

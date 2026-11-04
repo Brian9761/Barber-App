@@ -2,7 +2,7 @@ import { DateTime } from 'luxon';
 import type Stripe from 'stripe';
 import { requireOwner } from './auth.js';
 import type { Queryable } from './db.js';
-import type { Deps } from './deps.js';
+import type { Deps, StripeClient } from './deps.js';
 import { ApiError, json } from './http.js';
 import { stripeClient, stripeFailure, type StripeErrorLike } from './payments.js';
 import type { Context } from './router.js';
@@ -15,8 +15,14 @@ import { UUID_RE } from './validation.js';
 // step is decided, Stripe gets an idempotency key made from the appointment id
 // and the attempt number, and only a PaymentIntent Stripe reports as succeeded
 // ever makes the fee "charged". A try whose answer was lost keeps the same key,
-// so trying again can't charge twice; only a definite "no" from Stripe (declined,
-// or the bank wants the client to approve it) lets the next try make a new one.
+// and before sending it again the server asks Stripe for that attempt's
+// PaymentIntent (Stripe may forget a key after 24 hours, and then a reused key
+// would charge again); only a definite "no" from Stripe (declined, or the bank
+// wants the client to approve it) lets the next try make a new one.
+//
+// A client who cancelled in the app before the start (or asked to) is never
+// charged, even if the shop reopened the booking since: that's the policy they
+// agreed to.
 
 const notFound = () => new ApiError('not_found', "We couldn't find that appointment.");
 const notChargeable = (message: string) => new ApiError('not_chargeable', message);
@@ -81,7 +87,12 @@ interface ChargeRow extends AppointmentRow {
 type Claim =
   | { kind: 'done'; row: AppointmentRow }
   | { kind: 'retrieve'; row: ChargeRow; paymentIntentId: string }
-  | { kind: 'create'; row: ChargeRow; attempt: number };
+  /**
+   * A new attempt, or (`resumed`) the current one again after its answer was lost: then
+   * Stripe is asked for that attempt's PaymentIntent first, and `refusal` (why it can't be
+   * charged now, if anything changed) only stops a new request.
+   */
+  | { kind: 'create'; row: ChargeRow; attempt: number; attemptAt: Date; resumed: boolean; refusal: ApiError | null };
 
 /** The parts of a PaymentIntent the fee follows. */
 export interface FeeIntent {
@@ -96,14 +107,61 @@ function feeDescription(row: AppointmentRow, zone: string): string {
   return `No-show fee: ${row.service_name} with ${row.barber_name}, ${when}`.slice(0, 200);
 }
 
-/** The fee's status and message for a PaymentIntent Stripe answered with. */
-function outcomeOf(intent: FeeIntent): { status: NoShowFeeRowStatus; message: string | null } {
+/** Whether Stripe's error says the bank wants the client to approve the charge (an off-session charge can't). */
+export function needsTheClient(error: { code?: string | null; decline_code?: string | null } | null | undefined): boolean {
+  return error?.code === 'authentication_required' || error?.decline_code === 'authentication_required';
+}
+
+/**
+ * The fee's status and message for a PaymentIntent Stripe answered with. A failed
+ * off-session charge leaves the PaymentIntent in requires_payment_method; when its
+ * last_payment_error is authentication_required, that's "needs the client", not a decline.
+ */
+export function outcomeOf(intent: FeeIntent): { status: NoShowFeeRowStatus; message: string | null } {
   const status = feeStatusFor(intent.status);
   if (status === 'needs_action') return { status, message: AUTHENTICATION_MESSAGE };
   if (status === 'declined') {
-    return { status, message: intent.status === 'canceled' ? 'The charge was cancelled in Stripe.' : declineMessage(intent.last_payment_error) };
+    if (intent.status === 'canceled') return { status, message: 'The charge was cancelled in Stripe.' };
+    if (needsTheClient(intent.last_payment_error)) return { status: 'needs_action', message: AUTHENTICATION_MESSAGE };
+    return { status, message: declineMessage(intent.last_payment_error) };
   }
   return { status, message: null };
+}
+
+/** How far before the attempt's start the lookup reaches, in case this server's clock is ahead of Stripe's. */
+const LOOKUP_SLACK_SECONDS = 3600;
+/** Pages of 100 to look through; one saved card's Stripe Customer has a handful of PaymentIntents. */
+const LOOKUP_MAX_PAGES = 20;
+
+/**
+ * This appointment's PaymentIntent for `attempt`, if Stripe has one: found among the
+ * PaymentIntents of the card's own Stripe Customer created since the attempt began, by
+ * the metadata the charge carries. Null when Stripe has none (the request never reached it).
+ */
+export async function findAttemptIntent(
+  stripe: StripeClient,
+  customerId: string,
+  appointmentId: string,
+  attempt: number,
+  since: Date,
+): Promise<Stripe.PaymentIntent | null> {
+  const params: Stripe.PaymentIntentListParams = {
+    customer: customerId,
+    created: { gte: Math.floor(since.getTime() / 1000) - LOOKUP_SLACK_SECONDS },
+    limit: 100,
+  };
+  for (let page = 0; page < LOOKUP_MAX_PAGES; page++) {
+    const list = await stripe.paymentIntents.list(params);
+    const match = list.data.find(
+      (pi) => pi.metadata?.kind === 'no_show_fee' && pi.metadata?.appointment_id === appointmentId && pi.metadata?.attempt === String(attempt),
+    );
+    if (match) return match;
+    const last = list.data.at(-1);
+    if (!list.has_more || !last) return null;
+    params.starting_after = last.id;
+  }
+  // Never guess "not there": sending the request again could charge twice.
+  throw new Error(`More than ${LOOKUP_MAX_PAGES} pages of PaymentIntents for one saved card`);
 }
 
 /**
@@ -165,7 +223,7 @@ function definiteNo(error: unknown): { intent: FeeIntent | null; status: NoShowF
   const e = error as StripeErrorLike & { decline_code?: string; payment_intent?: Stripe.PaymentIntent };
   const intent = e.payment_intent && typeof e.payment_intent.id === 'string' ? e.payment_intent : null;
   if (e.type === 'StripeCardError') {
-    const needsClient = e.code === 'authentication_required' || e.decline_code === 'authentication_required';
+    const needsClient = needsTheClient({ code: e.code ?? null, decline_code: e.decline_code ?? null });
     return {
       intent,
       status: needsClient ? 'needs_action' : 'declined',
@@ -176,6 +234,14 @@ function definiteNo(error: unknown): { intent: FeeIntent | null; status: NoShowF
     // e.g. the card was removed from its Stripe customer: this card can't be charged.
     return { intent, status: 'declined', message: UNUSABLE_CARD_MESSAGE };
   }
+  return null;
+}
+
+/** Why a fee can't be charged for this booking now (it has a card on file), or null when it can. */
+function whyNotChargeable(row: AppointmentRow, now: Date): ApiError | null {
+  if (row.customer_cancelled_at) return notChargeable("The client cancelled this booking in the app, so there's no fee.");
+  if (row.status !== 'no_show') return notChargeable('Mark the appointment as a no-show first.');
+  if (row.start_at > now) return notChargeable("The appointment hasn't started yet, so it can't be a no-show.");
   return null;
 }
 
@@ -206,18 +272,21 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (!row.saved_card_id || row.no_show_fee_cents === null || !row.stripe_customer_id || !row.stripe_payment_method_id) {
       throw notChargeable("This booking has no card on file, so there's no fee to charge.");
     }
-    if (row.status !== 'no_show') throw notChargeable('Mark the appointment as a no-show first.');
-    if (row.start_at > now) throw notChargeable("The appointment hasn't started yet, so it can't be a no-show.");
-    // A try whose answer never came keeps its attempt (and Stripe key); after a "no", a new attempt.
-    const attempt = row.no_show_fee_status === 'pending' ? Math.max(row.no_show_fee_attempt, 1) : row.no_show_fee_attempt + 1;
+    const refusal = whyNotChargeable(row, now);
+    // A try whose answer never came keeps its attempt (and Stripe key) and is looked up first,
+    // whatever happened since; after a "no", a new attempt, only for a chargeable no-show.
+    const resumed = row.no_show_fee_status === 'pending';
+    if (!resumed && refusal) throw refusal;
+    const attempt = resumed ? Math.max(row.no_show_fee_attempt, 1) : row.no_show_fee_attempt + 1;
+    const attemptAt = resumed && row.no_show_fee_attempt_at ? row.no_show_fee_attempt_at : now;
     await tx.query(
       `UPDATE appointments
-          SET no_show_fee_status = 'pending', no_show_fee_attempt = $2, no_show_fee_payment_intent_id = NULL,
-              no_show_fee_message = NULL, updated_at = $3
+          SET no_show_fee_status = 'pending', no_show_fee_attempt = $2, no_show_fee_attempt_at = $4,
+              no_show_fee_payment_intent_id = NULL, no_show_fee_message = NULL, updated_at = $3
         WHERE id = $1`,
-      [id, attempt, now],
+      [id, attempt, now, attemptAt],
     );
-    return { kind: 'create', row, attempt };
+    return { kind: 'create', row, attempt, attemptAt, resumed, refusal };
   });
 
   if (claim.kind === 'done') return json({ appointment: appointmentJSON(claim.row) });
@@ -236,6 +305,22 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
   }
 
   const { row, attempt } = claim;
+  if (claim.resumed) {
+    // The answer to this attempt was lost. Stripe may have charged it, and may have forgotten its
+    // idempotency key by now (after 24 hours), so ask for the PaymentIntent before sending it again.
+    let found: Stripe.PaymentIntent | null;
+    try {
+      found = await findAttemptIntent(stripe, row.stripe_customer_id ?? '', id, attempt, claim.attemptAt);
+    } catch (error) {
+      throw stripeFailure(deps, error, 'find no-show fee');
+    }
+    if (found) {
+      const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, found, attempt, deps.now()));
+      return json({ appointment: appointmentJSON(updated ?? row) });
+    }
+    // Nothing reached Stripe: send it again (same key), unless it can't be charged any more.
+    if (claim.refusal) throw claim.refusal;
+  }
   let intent: Stripe.PaymentIntent;
   try {
     intent = await stripe.paymentIntents.create(

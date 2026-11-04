@@ -41,9 +41,13 @@ export interface AppointmentRow {
   no_show_consent_at: Date | null;
   no_show_fee_status: NoShowFeeRowStatus;
   no_show_fee_attempt: number;
+  /** When the current attempt started (null before the first). */
+  no_show_fee_attempt_at: Date | null;
   no_show_fee_payment_intent_id: string | null;
   no_show_fee_message: string | null;
   no_show_fee_charged_at: Date | null;
+  /** When the client cancelled in the app, or asked to, before the start; never cleared. No fee then. */
+  customer_cancelled_at: Date | null;
 }
 
 export type NoShowFeeRowStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needs_action';
@@ -79,7 +83,14 @@ export interface Appointment {
   /** The card on file for no-shows, or null when the booking has none. */
   card: { brand: string; last4: string } | null;
   /** The no-show fee agreed at booking and what happened to it, or null without a card on file. */
-  noShowFee: { amountCents: number; status: NoShowFeeStatus; chargedAt: string | null; message: string | null } | null;
+  noShowFee: {
+    amountCents: number;
+    status: NoShowFeeStatus;
+    chargedAt: string | null;
+    message: string | null;
+    /** When the client cancelled in the app (or asked to) before the start: then there's no fee to charge. */
+    customerCancelledAt: string | null;
+  } | null;
 }
 
 const STATUS_OUT: Record<AppointmentRow['status'], AppointmentStatus> = {
@@ -127,6 +138,7 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
             status: FEE_STATUS_OUT[row.no_show_fee_status],
             chargedAt: row.no_show_fee_charged_at ? formatInstant(row.no_show_fee_charged_at) : null,
             message: row.no_show_fee_message,
+            customerCancelledAt: row.customer_cancelled_at ? formatInstant(row.customer_cancelled_at) : null,
           }
         : null,
   };

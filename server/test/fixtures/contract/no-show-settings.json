@@ -1,6 +1,6 @@
 {
   "noShowSettings": {
-    "enabled": true,
+    "enabled": false,
     "feeMode": "percent",
     "percent": 50,
     "flatCents": 2000
