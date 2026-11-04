@@ -12,6 +12,14 @@ name: Test builds
 #       and Intel Macs; the owner app on Apple silicon only (see "Package").
 #   SHA256SUMS.txt
 # Screenshots of each Simulator build just after it launched are in demo-screenshots.
+#
+# The five files from each build of a push to test-builds are also published as a public
+# prerelease that anyone can download without signing in (the release job below). Each new build
+# replaces it, so its links never change:
+#   https://github.com/Brian9761/Barber-App/releases/tag/test-build              the page
+#   https://github.com/Brian9761/Barber-App/releases/download/test-build/<file>  each file
+# The notes on that page, for testers, are .github/test-build-notes.md. Pushes to v4 and v5/**
+# and runs started by hand publish nothing; to publish again, re-run the newest push run.
 on:
   push:
     branches: [test-builds, v4, "v5/**"]
@@ -21,11 +29,8 @@ on:
       - "IzzyClipzBusiness/**"
       - "Packages/**"
       - ".github/workflows/test-builds.yml"
+      - ".github/test-build-notes.md"
   workflow_dispatch:
-
-concurrency:
-  group: test-builds-${{ github.ref }}
-  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -35,6 +40,11 @@ jobs:
     name: Demo builds
     runs-on: macos-26
     timeout-minutes: 60
+    # A newer push stops an older build, but never a publish halfway through (the release job has
+    # its own group), which would leave no release until the next build finished.
+    concurrency:
+      group: test-builds-${{ github.ref }}
+      cancel-in-progress: true
     env:
       # Swift packages (Stripe Terminal's 34 MB download) are fetched once and shared by every build.
       PACKAGES: build/SourcePackages
@@ -271,3 +281,119 @@ jobs:
           path: build/logs
           if-no-files-found: ignore
           retention-days: 14
+
+  # Replaces the public prerelease tagged test-build with this run's files (see the top). Only
+  # pushes to test-builds publish, and this is the only job that may write to the repo.
+  release:
+    name: Publish the test build
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/test-builds'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    # One publish at a time; a newer one waits for this one to finish.
+    concurrency:
+      group: test-build-release
+      cancel-in-progress: false
+    env:
+      GH_REPO: ${{ github.repository }}
+      TAG: test-build
+      FILES: IzzyClipz-Demo.ipa IzzyClipzBusiness-Demo.ipa IzzyClipz-Demo-Simulator.zip IzzyClipzBusiness-Demo-Simulator.zip SHA256SUMS.txt
+    steps:
+      # Just the notes template.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/test-build-notes.md
+          sparse-checkout-cone-mode: false
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: izzy-clipz-demo-builds
+          path: build/demo-builds
+
+      - name: Check the files
+        working-directory: build/demo-builds
+        run: |
+          set -euo pipefail
+          ls -l
+          for file in $FILES; do
+            [ -s "$file" ] || { echo "::error::$file is missing or empty"; exit 1; }
+          done
+          # SHA256SUMS.txt lists the four apps, and each one matches it.
+          listed=$(awk '{ print $2 }' SHA256SUMS.txt | sort)
+          expected=$(printf '%s\n' $FILES | grep -vx SHA256SUMS.txt | sort)
+          if [ "$listed" != "$expected" ]; then
+            echo "::error::SHA256SUMS.txt doesn't list the four apps"
+            cat SHA256SUMS.txt
+            exit 1
+          fi
+          sha256sum --check --strict SHA256SUMS.txt
+
+      # The template (without its first line, a comment for whoever edits it) with this build's
+      # commit, date (the shop's time) and checksums.
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          notes=$(sed '1{/^<!--.*-->$/d;}' .github/test-build-notes.md)
+          commit="${GITHUB_SHA::7}"
+          commit_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA"
+          date=$(TZ=America/Los_Angeles date '+%B %-d, %Y at %-I:%M %p %Z')
+          sums=$(cat build/demo-builds/SHA256SUMS.txt)
+          notes=${notes//'{{COMMIT}}'/"$commit"}
+          notes=${notes//'{{COMMIT_URL}}'/"$commit_url"}
+          notes=${notes//'{{DATE}}'/"$date"}
+          notes=${notes//'{{SHA256SUMS}}'/"$sums"}
+          if grep -o '{{[A-Za-z0-9_]*}}' <<< "$notes"; then
+            echo "::error::.github/test-build-notes.md has a placeholder this job doesn't fill in"
+            exit 1
+          fi
+          printf '%s\n' "$notes" > build/notes.md
+          cat build/notes.md
+
+      # Deletes the release and its tag (there's none the first time), then makes both again at
+      # this commit. gh uploads the files to a draft and publishes it once they're all there.
+      - name: Publish
+        working-directory: build/demo-builds
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" --prerelease --title "Izzy Clipz test build (demo)" \
+            --notes-file ../notes.md --target "$GITHUB_SHA" $FILES
+
+      # The tag is this commit, the page is a public prerelease with the five files, and anyone
+      # can download them without signing in.
+      - name: Check the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tagged=$(gh api "repos/$GH_REPO/git/ref/tags/$TAG" --jq .object.sha)
+          if [ "$tagged" != "$GITHUB_SHA" ]; then
+            echo "::error::The $TAG tag is $tagged, not this commit"
+            exit 1
+          fi
+          state=$(gh release view "$TAG" --json isDraft,isPrerelease,assets --jq '"\(.isDraft) \(.isPrerelease) \(.assets | length)"')
+          if [ "$state" != "false true 5" ]; then
+            echo "::error::The release isn't a published prerelease with five files (draft, prerelease, files: $state)"
+            exit 1
+          fi
+          mkdir -p build/public
+          for file in $FILES; do
+            curl -sSfL --retry 5 --retry-delay 5 --retry-all-errors -o "build/public/$file" \
+              "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$file"
+          done
+          cmp build/public/SHA256SUMS.txt build/demo-builds/SHA256SUMS.txt
+          (cd build/public && sha256sum --check --strict SHA256SUMS.txt)
+          page="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG"
+          echo "Published: $page"
+          {
+            echo "### [Izzy Clipz test build (demo)]($page)"
+            echo
+            for file in $FILES; do
+              echo "- $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/download/$TAG/$file"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
