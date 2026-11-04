@@ -257,7 +257,8 @@
       "durationMinutes": 45,
       "priceCents": 4500,
       "priceKind": "fixed",
-      "priceLabel": "$45"
+      "priceLabel": "$45",
+      "note": "Includes mustache & eyebrows, plus straight-razor detail and styling."
     },
     {
       "id": "carlos-rafael/ff42ccab-844e-4afd-9ee1-0f6c5e2cf930",
@@ -266,7 +267,8 @@
       "durationMinutes": 45,
       "priceCents": 3500,
       "priceKind": "fixed",
-      "priceLabel": "$35"
+      "priceLabel": "$35",
+      "note": "Includes mustache & eyebrows, plus straight-razor detail and styling."
     },
     {
       "id": "carlos-rafael/23936782-15f7-4ed5-9cde-ece8cc1d730c",

@@ -19,7 +19,7 @@ import Foundation
 ///   hours: { "1": { opens: "10:00", closes: "18:00" }, … },
 ///   services: [{ id, name, description?, category, popular }],
 ///   barbers: [{ id, name, title, bio, specialties, monogram, instagram? }],
-///   offerings: [{ id, serviceId, barberId, durationMinutes, priceCents, priceKind, priceLabel, name? }],
+///   offerings: [{ id, serviceId, barberId, durationMinutes, priceCents, priceKind, priceLabel, name?, note? }],
 ///   firstAvailable: [{ serviceId, offeringIds }],
 ///   shop: { name, fullName, tagline, phone: { e164, display },
 ///           address: { street, unit?, city, state, postalCode, lines },
@@ -34,7 +34,8 @@ import Foundation
 ///   e.g. "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a".
 /// - `priceKind` is "fixed", "startingAt" or "includedWithCut";
 ///   `priceCents` is 0 for "includedWithCut"; `priceLabel` is `Price.label`.
-/// - `name` is left out: the Kit's offerings use their service's name.
+/// - `name` is left out: the Kit's offerings use their service's name. `note` is
+///   the barber's own note on their version (`Offering.note`), left out without one.
 /// - `firstAvailable` lists, for each service that more than one barber shares
 ///   an item for, the offerings "Any barber" picks from, in team order
 ///   (`Catalog.firstAvailableOption(forService:)`). Services without "Any
@@ -136,6 +137,9 @@ public enum CatalogExport {
             public var priceKind: String
             public var priceLabel: String
             public var name: String?
+            /// What this barber's version includes, when it says more than the service does
+            /// (Carlos's cuts come with mustache and eyebrow detail); left out otherwise.
+            public var note: String?
         }
 
         public struct FirstAvailable: Codable, Hashable, Sendable {
@@ -206,7 +210,8 @@ public enum CatalogExport {
                     priceCents: offering.price.cents,
                     priceKind: priceKind(offering.price.kind),
                     priceLabel: offering.price.label,
-                    name: nil
+                    name: nil,
+                    note: offering.note
                 )
             },
             firstAvailable: catalog.services.compactMap { service in

@@ -162,7 +162,11 @@ final class CatalogExportTests: XCTestCase {
             XCTAssertEqual(exported.priceCents, offering.price.cents)
             XCTAssertEqual(exported.priceLabel, offering.price.label)
             XCTAssertNil(exported.name)
+            XCTAssertEqual(exported.note, offering.note)
         }
+        let carlosCut = document.offerings.first { $0.barberId == "carlos-rafael" && $0.serviceId == "haircut" }
+        XCTAssertEqual(carlosCut?.note, "Includes mustache & eyebrows, plus straight-razor detail and styling.")
+        XCTAssertEqual(document.offerings.compactMap(\.note).count, 2, "only Carlos's two cuts have a note")
         let lightener = document.offerings.first { $0.serviceId == "lightener" }
         XCTAssertEqual(lightener?.priceKind, "startingAt")
         XCTAssertEqual(lightener?.priceLabel, "From $80")

@@ -57,8 +57,13 @@ describe('GET /api/catalog', () => {
     // The server's own catalog loads it as is.
     const website = new Catalog(body);
     expect(website.data).toEqual(server.data);
+    expect(website.data.offerings.some((o) => 'note' in o)).toBe(false);
     expect(body).toMatchObject({ timeZone: 'America/Los_Angeles', slotIntervalMinutes: 30, leadTimeMinutes: 30, windowDays: 60 });
-    expect(body.offerings).toEqual(server.data.offerings);
+    // The booking code reads the same offerings (a barber's note is only for the website).
+    expect(body.offerings.map(({ note: _note, ...offering }: { note?: string }) => offering)).toEqual(server.data.offerings);
+    expect(body.offerings.find((o: { id: string }) => o.id === 'carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41').note).toBe(
+      'Includes mustache & eyebrows, plus straight-razor detail and styling.',
+    );
     expect(body.firstAvailable).toEqual(server.data.firstAvailable);
     expect(body.hours).toEqual(server.data.hours);
     expect(body.offerings.find((o: { serviceId: string }) => o.serviceId === 'lightener')).toMatchObject({

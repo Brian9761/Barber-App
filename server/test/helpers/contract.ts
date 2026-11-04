@@ -161,6 +161,7 @@ export const WebsiteCatalog = z.strictObject({
       priceKind: z.enum(['fixed', 'startingAt', 'includedWithCut']),
       priceLabel: z.string().min(1),
       name: z.string().min(1).optional(),
+      note: z.string().min(1).optional(),
     }),
   ),
   firstAvailable: z.array(z.strictObject({ serviceId: id, offeringIds: z.array(id).min(2) })),

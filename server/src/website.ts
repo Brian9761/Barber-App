@@ -7,8 +7,9 @@ import { json } from './http.js';
 // what this server books against (data/catalog.json, exported from
 // IzzyClipzKit), with what the Kit exports for the website only: the shop's own
 // details (`shop`), each service's description, category and whether it's a
-// favorite, and each barber's title, bio and tile letters. The booking code
-// reads the same file through catalog.ts, which ignores those fields.
+// favorite, each barber's title, bio and tile letters, and a barber's note on
+// their own version of a service. The booking code reads the same file through
+// catalog.ts, which ignores those fields.
 //
 // Public and the same for every visitor, so browsers and Vercel's CDN may keep
 // it for 5 minutes. It needs no database.
@@ -46,6 +47,7 @@ const shopSchema = z.object({
 
 /** catalog.json as the website gets it: the booking catalog plus the shop and the menu's and team's words. */
 export const websiteCatalogSchema = catalogSchema.extend({
+  offerings: z.array(catalogSchema.shape.offerings.element.extend({ note: text.optional() })),
   services: z.array(
     z.object({ id: text, name: text, description: text.optional(), category: text, popular: z.boolean() }),
   ),
