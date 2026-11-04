@@ -1,0 +1,226 @@
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { MASCOT_HEAD } from '../assets/images';
+import { useCatalog, useShopContact } from '../data/catalog';
+import { hoursSummary } from '../lib/shopTime';
+import { Icon } from './Icon';
+import { CallLink } from './ui';
+
+const NAV_LINKS = [
+  { to: '/services', label: 'Services' },
+  { to: '/barbers', label: 'Barbers' },
+  { to: '/reviews', label: 'Reviews' },
+  { to: '/visit', label: 'Visit' },
+  { to: '/appointments', label: 'My appointment' },
+];
+
+/** Every page: the global nav, the page, and the footer. */
+export function Layout() {
+  const { pathname, hash } = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+  const firstRender = useRef(true);
+
+  // A new page starts at the top, and screen readers and keyboards start at its content.
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    if (hash) return;
+    window.scrollTo(0, 0);
+    mainRef.current?.focus({ preventScroll: true });
+  }, [pathname, hash]);
+
+  return (
+    <>
+      <a className="skip-link" href="#main">
+        Skip to main content
+      </a>
+      <GlobalNav />
+      <main id="main" tabIndex={-1} ref={mainRef}>
+        <Outlet />
+      </main>
+      <Footer />
+    </>
+  );
+}
+
+function Wordmark() {
+  return (
+    <span className="wordmark" aria-hidden="true">
+      Izzy <span className="wordmark__clipz">Clipz</span>
+    </span>
+  );
+}
+
+export function GlobalNav() {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => setMenuOpen(false), [pathname]);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setMenuOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = overflow;
+    };
+  }, [menuOpen]);
+
+  return (
+    <nav className="globalnav" aria-label="Izzy Clipz">
+      <div className="container globalnav__inner">
+        <Link to="/" className="globalnav__logo" aria-label="Izzy Clipz home">
+          <span className="mascot" aria-hidden="true">
+            <img src={MASCOT_HEAD} alt="" width={30} height={30} />
+          </span>
+          <Wordmark />
+        </Link>
+        <ul className="globalnav__links">
+          {NAV_LINKS.map((link) => (
+            <li key={link.to}>
+              <NavLink to={link.to} className="globalnav__link">
+                {link.label}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+        <Link to="/book" className="globalnav__book" aria-label="Book an appointment">
+          <span className="globalnav__book-pill" aria-hidden="true">
+            Book
+          </span>
+        </Link>
+        <button
+          ref={buttonRef}
+          type="button"
+          className="globalnav__menu-button"
+          aria-expanded={menuOpen}
+          aria-controls="globalnav-menu"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <Icon name={menuOpen ? 'close' : 'menu'} />
+          <span>{menuOpen ? 'Close' : 'Menu'}</span>
+        </button>
+      </div>
+      {menuOpen ? (
+        <div id="globalnav-menu" className="globalnav__menu-panel">
+          <div className="container">
+            <ul className="globalnav__menu-list">
+              <li>
+                <NavLink to="/" end className="globalnav__menu-link">
+                  Home
+                </NavLink>
+              </li>
+              {NAV_LINKS.map((link) => (
+                <li key={link.to}>
+                  <NavLink to={link.to} className="globalnav__menu-link">
+                    {link.label}
+                  </NavLink>
+                </li>
+              ))}
+              <li>
+                <NavLink to="/book" className="globalnav__menu-link">
+                  Book an appointment
+                </NavLink>
+              </li>
+            </ul>
+            <p className="globalnav__menu-call">
+              Prefer to call?
+              <br />
+              <CallLink />
+            </p>
+          </div>
+        </div>
+      ) : null}
+    </nav>
+  );
+}
+
+export function Footer() {
+  const catalog = useCatalog();
+  const contact = useShopContact();
+  const year = new Date().getFullYear();
+  return (
+    <footer className="globalfooter">
+      <div className="container">
+        <p className="globalfooter__call">
+          Prefer to call? <CallLink /> · Walk-ins welcome.
+        </p>
+        <nav className="globalfooter__directory" aria-label="Site directory">
+          <div>
+            <h2 className="globalfooter__heading">Explore</h2>
+            <ul className="globalfooter__list">
+              <li>
+                <Link to="/">Home</Link>
+              </li>
+              <li>
+                <Link to="/services">Services and prices</Link>
+              </li>
+              <li>
+                <Link to="/barbers">Barbers</Link>
+              </li>
+              <li>
+                <Link to="/reviews">Reviews</Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h2 className="globalfooter__heading">Book</h2>
+            <ul className="globalfooter__list">
+              <li>
+                <Link to="/book">Book an appointment</Link>
+              </li>
+              <li>
+                <Link to="/appointments">My appointments</Link>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h2 className="globalfooter__heading">Visit the shop</h2>
+            <address className="globalfooter__address">
+              <Link to="/visit">
+                {contact.addressLines.map((line) => (
+                  <span key={line}>{line}</span>
+                ))}
+              </Link>
+            </address>
+            {catalog ? (
+              <ul className="globalfooter__list globalfooter__hours" aria-label="Hours">
+                {hoursSummary(catalog.hours).map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+          <div>
+            <h2 className="globalfooter__heading">For the shop</h2>
+            <ul className="globalfooter__list">
+              <li>
+                <Link to="/business">Izzy Clipz Business</Link>
+              </li>
+              <li>
+                <a href={contact.instagram.url}>Instagram @{contact.instagram.handle}</a>
+              </li>
+            </ul>
+          </div>
+        </nav>
+        <div className="globalfooter__legal">
+          <p>
+            Copyright © {year} {contact.fullName}. All rights reserved.
+          </p>
+          <p>{contact.addressLines.join(', ')}</p>
+        </div>
+      </div>
+    </footer>
+  );
+}

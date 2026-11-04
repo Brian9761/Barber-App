@@ -1,0 +1,100 @@
+/*
+ * Design tokens: colors from the apps' theme (IzzyClipz/Theme/Theme.swift) and
+ * apple.com's calm palette, the same system font as the apps (SF Pro), and the
+ * spacing, radii and type scale every page uses.
+ *
+ * Contrast (WCAG 2.x, from these exact values):
+ * - text #1d1d1f on white 16.8:1, on #f5f5f7 15.4:1; secondary #6e6e73 5.1:1 and 4.7:1.
+ * - the action blue #1f4fd8 is 6.6:1 with white (button labels, blue text on white).
+ * - on black: bone #f2eee5 18.1:1, smoke #a39e94 7.9:1, link blue #8fb0ff 9.8:1.
+ * - the warning's amber #a14a0a is 5.5:1 on its #fff4d6 background.
+ */
+:root {
+  /* The apps use the system font, SF Pro; elsewhere Inter (self-hosted) is the closest match. */
+  --font-text: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Inter", "Inter Variable", "Segoe UI", Arial, sans-serif;
+  /* Headings of 24px and up. */
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Inter", "Inter Variable", "Segoe UI", Arial, sans-serif;
+
+  /* Light surfaces */
+  --color-text: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+  --color-bg: #ffffff;
+  --color-bg-alt: #f5f5f7;
+  --color-line: #d2d2d7;
+  /* Borders of fields and chips: 3.6:1 on white, enough for a control's edge. */
+  --color-control-line: #86868b;
+
+  /* Dark surfaces: black and the apps' ink, with bone text */
+  --color-black: #000000;
+  --color-ink: #0b0b0c;
+  --color-ink-2: #1d1d1f;
+  --color-bone: #f2eee5;
+  --color-smoke: #a39e94;
+  --color-link-on-dark: #8fb0ff;
+
+  /* Actions: the brand blue. Red is the barber pole's, used sparingly. */
+  --color-action: #1f4fd8;
+  --color-action-hover: #1942b8;
+  --color-action-pressed: #15389c;
+  --color-red: #d7141c;
+  --color-pole-blue: #1f4fd8;
+
+  /* States */
+  --color-warning-bg: #fff4d6;
+  --color-warning-line: #a14a0a;
+  --color-error: #c4161c;
+  --color-error-bg: #fdeded;
+  --color-success: #1b7f3b;
+  --color-success-bg: #e9f6ed;
+  --color-focus: #1f4fd8;
+
+  /* The global nav, like apple.com's */
+  --nav-height: 44px;
+  --nav-bg: rgba(22, 22, 23, 0.8);
+  --nav-text: rgba(245, 245, 247, 0.88);
+
+  /* Layout */
+  --content-width: 1024px;
+  --content-wide: 1200px;
+  --content-narrow: 692px;
+  --gutter: clamp(16px, 4vw, 24px);
+
+  /* Spacing (4px grid) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;
+  --space-24: 96px;
+
+  /* Radii */
+  --radius-tile: 18px;
+  --radius-card: 18px;
+  --radius-field: 12px;
+  --radius-chip: 12px;
+  --radius-notice: 14px;
+  --radius-pill: 980px;
+
+  /* Type scale: SF Pro Display for 24px and up, SF Pro Text below. Body text is never under 17px. */
+  --text-hero: clamp(44px, 6.2vw, 80px);
+  --text-h1: clamp(36px, 4.6vw, 56px);
+  --text-h2: clamp(30px, 3.6vw, 48px);
+  --text-h3: clamp(24px, 2.4vw, 32px);
+  --text-h4: 21px;
+  --text-lead: clamp(19px, 1.8vw, 24px);
+  --text-body: 17px;
+  --text-small: 15px;
+  --text-fine: 14px;
+
+  /* The smallest thing anyone taps */
+  --tap: 44px;
+
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.08);
+  --shadow-dialog: 0 24px 64px rgba(0, 0, 0, 0.3);
+}
