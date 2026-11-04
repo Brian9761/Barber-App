@@ -1,0 +1,27 @@
+{
+  "sale": {
+    "id": "00000000-0000-4000-8000-000000000013",
+    "barberId": "julian-ramos",
+    "barberName": "Julian",
+    "appointmentId": null,
+    "customerName": null,
+    "method": "cash",
+    "paymentIntentId": null,
+    "totalCents": 3500,
+    "items": [
+      {
+        "kind": "service",
+        "serviceId": "haircut",
+        "productId": null,
+        "name": "Haircut",
+        "quantity": 1,
+        "unitCents": 3500,
+        "totalCents": 3500
+      }
+    ],
+    "soldAt": "2026-11-02T22:00:00Z",
+    "voidedAt": "2026-11-02T22:02:00Z",
+    "voidReason": "Rang up twice"
+  },
+  "message": "The sale was voided, so it no longer counts in your sales."
+}

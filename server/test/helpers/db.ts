@@ -37,6 +37,8 @@ const TABLES = [
   'stripe_connect_states',
   'computer_codes',
   'computer_sessions',
+  'sales',
+  'sale_items',
 ];
 
 async function prepare(pool: pg.Pool): Promise<void> {

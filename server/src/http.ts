@@ -20,6 +20,13 @@ export const ERROR_STATUS = {
    * warning to show the client, and they cancel again with `acceptLateCancelFee: true`.
    */
   late_cancel_fee: 409,
+  // Sales
+  /** Only a booked or completed appointment can be checked out. */
+  not_checkoutable: 409,
+  /** The appointment already has a live (not voided) sale. */
+  already_checked_out: 409,
+  /** A card payment's amount isn't its ticket's total. */
+  amount_mismatch: 400,
   stripe_not_configured: 503,
   owner_not_configured: 503,
   // The shop's own Stripe account (Stripe Connect) and computer sign-in

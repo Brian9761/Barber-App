@@ -55,7 +55,7 @@ export const usPhone = z
   });
 
 /** Optional text: empty or missing becomes null. */
-function optionalText(max: number, tooLong: string, label: string) {
+export function optionalText(max: number, tooLong: string, label: string) {
   return z
     .string({ error: `The ${label} must be text.` })
     .nullish()

@@ -148,6 +148,22 @@ export function isNewManageToken(token: string): boolean {
   return TOKEN_RE.test(token) && Buffer.from(token, 'base64url').toString('base64url') === token;
 }
 
+/**
+ * A key the app made itself and sent in `header`, if it sent one (a booking's
+ * X-Manage-Token, or the owner app's Idempotency-Key for a booking or a sale). It
+ * must be exactly what the server makes for a manage token (32 random bytes,
+ * base64url); anything else, an empty header included, is a 400.
+ */
+export function appMadeKey(request: Request, header: 'X-Manage-Token' | 'Idempotency-Key'): string | undefined {
+  const value = request.headers.get(header);
+  if (value === null) return undefined;
+  const key = value.trim();
+  if (!isNewManageToken(key)) {
+    throw new ApiError('invalid_request', `${header} must be 32 random bytes in base64url (43 characters).`);
+  }
+  return key;
+}
+
 /** Constant-time comparison of a presented token with a stored digest. */
 export function manageTokenMatches(token: string, storedHash: string | null): boolean {
   if (!storedHash || !/^[0-9a-f]{64}$/.test(storedHash) || !isWellFormedManageToken(token)) return false;

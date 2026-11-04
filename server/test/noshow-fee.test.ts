@@ -607,6 +607,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
         status: 'succeeded',
         createdAt: '2026-11-03T18:20:00Z',
         kind: 'noShowFee',
+        saleId: null,
       },
     ]);
   });

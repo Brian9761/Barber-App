@@ -1,0 +1,257 @@
+{
+  "from": "2026-11-01",
+  "to": "2026-11-07",
+  "barberId": null,
+  "timeZone": "America/Los_Angeles",
+  "generatedAt": "2026-11-07T23:00:00Z",
+  "granularity": "day",
+  "totals": {
+    "salesCents": 72400,
+    "servicesCents": 50000,
+    "productsCents": 12400,
+    "otherCents": 2500,
+    "feesCents": 7500,
+    "servicesCount": 12,
+    "productsCount": 8,
+    "clientsServed": 12,
+    "checkouts": 13,
+    "averageTicketCents": 4992
+  },
+  "previous": {
+    "from": "2026-10-25",
+    "to": "2026-10-31",
+    "salesCents": 12000
+  },
+  "productivity": {
+    "openMinutes": 15480,
+    "bookedMinutes": 630,
+    "chairTimeBooked": 0.040697674418604654,
+    "appointments": {
+      "booked": 2,
+      "completed": 10,
+      "noShows": 3,
+      "cancelled": 3,
+      "lateCancellations": 1,
+      "upcoming": 1
+    },
+    "completionRate": 0.7692307692307693,
+    "noShowRate": 0.23076923076923078,
+    "salesPerHourCents": 252,
+    "productAttachRate": 0.6
+  },
+  "topBarber": {
+    "barberId": "israel-flores",
+    "name": "Izzy",
+    "salesCents": 21500,
+    "servicesCount": 3,
+    "productsCount": 2
+  },
+  "leaderboard": [
+    {
+      "rank": 1,
+      "barberId": "israel-flores",
+      "name": "Izzy",
+      "salesCents": 21500,
+      "servicesCents": 14500,
+      "productsCents": 3000,
+      "servicesCount": 3,
+      "productsCount": 2,
+      "clientsServed": 3,
+      "averageTicketCents": 5833
+    },
+    {
+      "rank": 2,
+      "barberId": "carlos-rafael",
+      "name": "Carlos",
+      "salesCents": 18800,
+      "servicesCents": 10500,
+      "productsCents": 5800,
+      "servicesCount": 2,
+      "productsCount": 4,
+      "clientsServed": 3,
+      "averageTicketCents": 6267
+    },
+    {
+      "rank": 3,
+      "barberId": "flowxbori",
+      "name": "Flowxbori",
+      "salesCents": 14600,
+      "servicesCents": 7500,
+      "productsCents": 3600,
+      "servicesCount": 2,
+      "productsCount": 2,
+      "clientsServed": 2,
+      "averageTicketCents": 5550
+    },
+    {
+      "rank": 4,
+      "barberId": "julian-ramos",
+      "name": "Julian",
+      "salesCents": 10500,
+      "servicesCents": 10500,
+      "productsCents": 0,
+      "servicesCount": 3,
+      "productsCount": 0,
+      "clientsServed": 2,
+      "averageTicketCents": 3500
+    },
+    {
+      "rank": 5,
+      "barberId": "cristian-ceja",
+      "name": "Cristian",
+      "salesCents": 7000,
+      "servicesCents": 7000,
+      "productsCents": 0,
+      "servicesCount": 2,
+      "productsCount": 0,
+      "clientsServed": 2,
+      "averageTicketCents": 3500
+    }
+  ],
+  "services": [
+    {
+      "serviceId": "haircut",
+      "name": "Haircut",
+      "count": 9,
+      "salesCents": 33500
+    },
+    {
+      "serviceId": "vip",
+      "name": "VIP",
+      "count": 1,
+      "salesCents": 8000
+    },
+    {
+      "serviceId": "haircut-and-beard",
+      "name": "Haircut & Beard",
+      "count": 1,
+      "salesCents": 6000
+    },
+    {
+      "serviceId": "military-haircut",
+      "name": "Military Haircut",
+      "count": 1,
+      "salesCents": 2500
+    }
+  ],
+  "products": [
+    {
+      "productId": "00000000-0000-4000-8000-000000000001",
+      "name": "Matte pomade",
+      "quantity": 4,
+      "salesCents": 7200
+    },
+    {
+      "productId": "00000000-0000-4000-8000-000000000002",
+      "name": "Beard oil",
+      "quantity": 2,
+      "salesCents": 3000
+    },
+    {
+      "productId": "00000000-0000-4000-8000-000000000003",
+      "name": "Sea salt spray",
+      "quantity": 1,
+      "salesCents": 1200
+    },
+    {
+      "productId": null,
+      "name": "Old gel",
+      "quantity": 1,
+      "salesCents": 1000
+    }
+  ],
+  "series": [
+    {
+      "date": "2026-11-01",
+      "salesCents": 18300,
+      "servicesCents": 11000,
+      "productsCents": 4800,
+      "otherCents": 2500,
+      "feesCents": 0,
+      "servicesCount": 3,
+      "productsCount": 3
+    },
+    {
+      "date": "2026-11-02",
+      "salesCents": 9800,
+      "servicesCents": 8000,
+      "productsCents": 1800,
+      "otherCents": 0,
+      "feesCents": 0,
+      "servicesCount": 2,
+      "productsCount": 1
+    },
+    {
+      "date": "2026-11-03",
+      "salesCents": 16200,
+      "servicesCents": 11500,
+      "productsCents": 1200,
+      "otherCents": 0,
+      "feesCents": 3500,
+      "servicesCount": 2,
+      "productsCount": 1
+    },
+    {
+      "date": "2026-11-04",
+      "salesCents": 0,
+      "servicesCents": 0,
+      "productsCents": 0,
+      "otherCents": 0,
+      "feesCents": 0,
+      "servicesCount": 0,
+      "productsCount": 0
+    },
+    {
+      "date": "2026-11-05",
+      "salesCents": 10500,
+      "servicesCents": 9500,
+      "productsCents": 1000,
+      "otherCents": 0,
+      "feesCents": 0,
+      "servicesCount": 2,
+      "productsCount": 1
+    },
+    {
+      "date": "2026-11-06",
+      "salesCents": 14100,
+      "servicesCents": 6500,
+      "productsCents": 3600,
+      "otherCents": 0,
+      "feesCents": 4000,
+      "servicesCount": 2,
+      "productsCount": 2
+    },
+    {
+      "date": "2026-11-07",
+      "salesCents": 3500,
+      "servicesCents": 3500,
+      "productsCents": 0,
+      "otherCents": 0,
+      "feesCents": 0,
+      "servicesCount": 1,
+      "productsCount": 0
+    }
+  ],
+  "barbers": [
+    {
+      "barberId": "israel-flores",
+      "name": "Izzy"
+    },
+    {
+      "barberId": "carlos-rafael",
+      "name": "Carlos"
+    },
+    {
+      "barberId": "flowxbori",
+      "name": "Flowxbori"
+    },
+    {
+      "barberId": "cristian-ceja",
+      "name": "Cristian"
+    },
+    {
+      "barberId": "julian-ramos",
+      "name": "Julian"
+    }
+  ]
+}

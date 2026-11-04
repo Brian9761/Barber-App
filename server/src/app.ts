@@ -16,6 +16,8 @@ import { getNoShowPolicy, getNoShowSettings, patchNoShowSettings } from './nosho
 import { chargeNoShowFee } from './noshowfee.js';
 import { createProduct, deleteProduct, listOwnerProducts, listPublicProducts, updateProduct, uploadProductPhoto } from './products.js';
 import { getReviews } from './reviews.js';
+import { getAnalytics } from './analytics.js';
+import { listSales, postSale, voidSale } from './sales.js';
 import { Router } from './router.js';
 import { deleteStripeConnect, getOwnerStripe, postStripeConnect, stripeConnectRefresh, stripeConnectReturn } from './stripeconnect.js';
 import { deleteTimeOff, listTimeOff, postTimeOff } from './timeoff.js';
@@ -65,6 +67,11 @@ export function createRouter(): Router {
       .on('POST', '/api/owner/payments', createPayment) // the owner key only
       .on('GET', '/api/owner/payments', listPayments)
       .on('POST', '/api/owner/payments/:id/complete', completePayment)
+      // Sales (checkout) and analytics
+      .on('POST', '/api/owner/sales', postSale)
+      .on('GET', '/api/owner/sales', listSales)
+      .on('POST', '/api/owner/sales/:id/void', voidSale)
+      .on('GET', '/api/owner/analytics', getAnalytics)
       // The shop's own Stripe account (STRIPE_CONNECT=on)
       .on('GET', '/api/owner/stripe', getOwnerStripe)
       .on('POST', '/api/owner/stripe/connect', postStripeConnect)
