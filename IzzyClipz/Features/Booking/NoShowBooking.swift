@@ -373,6 +373,10 @@ enum NoShowCopy {
         return "Nothing is charged now. If you don't come, the shop may charge \(fee.amountLabel)."
     }
 
+    /// Under "Remind me the day before and an hour before" on "You're booked", for a booking whose
+    /// late cancellations may be charged.
+    static let remindersNote = "Reminders also say until when you can cancel for free."
+
     /// Under "Remember me on this iPhone" on the details step.
     static func rememberNote(cardNeeded: Bool) -> String {
         cardNeeded ? "Your name and number fill in next time, and your card stays saved." : "Your name and number fill in next time."

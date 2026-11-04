@@ -24,7 +24,8 @@ struct SavedAppointment: Codable, Hashable, Identifiable {
 
     var snapshot: IzzyAPI.Appointment
     var origin: Origin
-    /// Whether the client wants the day-before and hour-before reminders.
+    /// Whether the client wants the reminders: the day before and an hour before (and the one before
+    /// free cancelling ends, for a booking whose late cancellations may be charged).
     var remind: Bool
     /// When the shop's server last confirmed it.
     var checkedAt: Date?
@@ -160,7 +161,8 @@ struct PendingBooking: Codable, Equatable {
 
 /// The client's appointments: kept on this iPhone with their manage tokens (in the Keychain),
 /// checked with the shop's server when the app opens and on pull to refresh, cancellable from the
-/// app, and reminded about the day before and an hour before.
+/// app, and reminded about the day before and an hour before (and, when cancelling late may be
+/// charged, in time to cancel for free: see `AppointmentPlanner.reminders`).
 ///
 /// Appointments stay listed until 30 days after they end. Nothing is dropped because the server
 /// couldn't be reached or didn't recognize it: those are shown with what went wrong instead.
@@ -710,7 +712,9 @@ final class AppointmentStore {
         }
     }
 
-    /// The reminders still ahead for appointments that are on and want them.
+    /// The reminders still ahead for appointments that are on and want them. One booked with a card
+    /// on file, under a policy that charges late cancellations, says until when cancelling is free
+    /// (and gets one more reminder before then when the others would come too late).
     private func pendingReminders(now current: Date) -> [(appointmentID: String, reminder: AppointmentReminder)] {
         appointments
             .filter { $0.isUpcoming(at: current) && $0.remind && $0.status == .booked }
@@ -720,7 +724,8 @@ final class AppointmentStore {
                     shopName: AppData.shop.name,
                     address: AppData.shop.address.street,
                     calendar: calendar,
-                    now: current
+                    now: current,
+                    lateCancel: saved.snapshot.lateCancelTerms
                 )
                 .map { (appointmentID: saved.id, reminder: $0) }
             }

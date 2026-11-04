@@ -239,6 +239,31 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertNil(appointment.lateCancelWarning(at: minutes(-5)))
     }
 
+    /// What the reminders say about cancelling late comes from the booking's own terms.
+    func testTheTermsForTheReminders() throws {
+        var appointment = try decoder.decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
+        XCTAssertEqual(appointment.lateCancelTerms, LateCancelTerms(windowMinutes: 60, feeLabel: "$35"))
+        appointment.noShowFee?.lateCancelWindowMinutes = 90
+        appointment.noShowFee?.amountCents = 1_750
+        XCTAssertEqual(appointment.lateCancelTerms, LateCancelTerms(windowMinutes: 90, feeLabel: "$17.50"))
+
+        // Late cancellations weren't in the agreed policy: nothing to say.
+        appointment.noShowFee?.lateCancelWindowMinutes = nil
+        XCTAssertNil(appointment.lateCancelTerms)
+        // The client cancelled (or asked to) before: the first time decides, so nothing to say.
+        appointment.noShowFee?.lateCancelWindowMinutes = 60
+        appointment.noShowFee?.customerCancelledAt = appointment.start.addingTimeInterval(-24 * 60 * 60)
+        XCTAssertNil(appointment.lateCancelTerms)
+        // No card on file, or no fee.
+        appointment.noShowFee?.customerCancelledAt = nil
+        XCTAssertNotNil(appointment.lateCancelTerms)
+        appointment.card = nil
+        XCTAssertNil(appointment.lateCancelTerms)
+        appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
+        appointment.noShowFee = nil
+        XCTAssertNil(appointment.lateCancelTerms)
+    }
+
     /// A time less than the window away can't be cancelled for free once it's booked: the booking
     /// steps say so for the time the client picked.
     func testATimeInsideTheWindowSaysCancellingItMayBeCharged() throws {

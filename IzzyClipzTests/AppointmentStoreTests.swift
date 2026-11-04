@@ -160,6 +160,83 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertTrue(store.willSendHourBeforeReminder(for: id))
     }
 
+    /// A booking with a card on file under the shop's starting policy: the full price ($45) for
+    /// cancelling less than 1 hour before.
+    private func confirmationWithCard(start: Date) -> IzzyAPI.BookingConfirmation {
+        var appointment = TestData.appointment(id: id, start: start)
+        appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
+        appointment.noShowFee = IzzyAPI.NoShowFee(amountCents: 4_500, fullPrice: true, lateCancelWindowMinutes: 60)
+        return IzzyAPI.BookingConfirmation(appointment: appointment, manageToken: "token-1")
+    }
+
+    /// Booked days ahead with a card on file: the day-before reminder says until when cancelling is
+    /// free, and the hour-before one, which comes just as free cancelling ends, says cancelling now
+    /// may be charged, so it never leads the client into the fee unawares.
+    func testRemindersSayUntilWhenCancellingIsFree() async throws {
+        scheduler.status = .authorized
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(confirmationWithCard(start: TestData.friday), remind: true)
+        await store.settle()
+
+        let dayBefore = AppointmentStore.identifier(for: id, kind: .dayBefore)
+        let hourBefore = AppointmentStore.identifier(for: id, kind: .hourBefore)
+        XCTAssertEqual(Set(scheduler.pending.keys), [dayBefore, hourBefore], "The day before is in time: nothing more")
+        let dayBeforeBody = try XCTUnwrap(scheduler.pending[dayBefore]?.content.body)
+        XCTAssertTrue(dayBeforeBody.hasPrefix("With Carlos at"), dayBeforeBody)
+        XCTAssertTrue(dayBeforeBody.hasSuffix(" Can't make it? Cancel in the app by 1:30 PM tomorrow so it's free."), dayBeforeBody)
+        let hourBeforeBody = try XCTUnwrap(scheduler.pending[hourBefore]?.content.body)
+        XCTAssertTrue(hourBeforeBody.hasSuffix(" Cancelling now may be charged $45."), hourBeforeBody)
+        let trigger = try XCTUnwrap(scheduler.pending[hourBefore]?.trigger as? UNTimeIntervalNotificationTrigger)
+        XCTAssertEqual(trigger.timeInterval, TestData.friday.timeIntervalSince(now) - 60 * 60, accuracy: 1)
+    }
+
+    /// Booked the same day, the hour-before reminder would be the only one, coming just as free
+    /// cancelling ends: one more comes an hour before that. Turning reminders off, or cancelling,
+    /// takes it away with the others.
+    func testASameDayBookingIsRemindedBeforeFreeCancellingEnds() async throws {
+        scheduler.status = .authorized
+        let store = makeStore(defaults: TestData.defaults())
+        // Today at 3:30 PM; it's noon.
+        store.add(confirmationWithCard(start: TestData.now.addingTimeInterval(3.5 * 60 * 60)), remind: true)
+        await store.settle()
+
+        let freeCancelEnds = AppointmentStore.identifier(for: id, kind: .freeCancelEnds)
+        let hourBefore = AppointmentStore.identifier(for: id, kind: .hourBefore)
+        XCTAssertEqual(Set(scheduler.pending.keys), [freeCancelEnds, hourBefore])
+        let trigger = try XCTUnwrap(scheduler.pending[freeCancelEnds]?.trigger as? UNTimeIntervalNotificationTrigger)
+        XCTAssertEqual(trigger.timeInterval, 1.5 * 60 * 60, accuracy: 1, "At 1:30 PM, an hour before free cancelling ends")
+        let content = try XCTUnwrap(scheduler.pending[freeCancelEnds]?.content)
+        XCTAssertEqual(content.title, "Haircut at 3:30 PM")
+        XCTAssertEqual(content.body, "Can't make it? Cancel in the app by 2:30 PM so it's free. After that, cancelling may be charged $45.")
+        XCTAssertTrue(store.willSendHourBeforeReminder(for: id))
+        // What's cleared before planning again covers it too.
+        XCTAssertTrue(AppointmentStore.identifiers(for: id).contains(freeCancelEnds))
+
+        store.setReminders(false, for: id)
+        await store.settle()
+        XCTAssertTrue(scheduler.pending.isEmpty)
+        store.setReminders(true, for: id)
+        await store.settle()
+        XCTAssertEqual(Set(scheduler.pending.keys), [freeCancelEnds, hourBefore])
+
+        api.cancelHandler = { id, _ in TestData.appointment(id: id, status: .cancelled, cancelledBy: .customer) }
+        try await store.cancel(id)
+        await store.settle()
+        XCTAssertTrue(scheduler.pending.isEmpty, "No reminders for a cancelled appointment")
+    }
+
+    /// Without a card on file the reminders are as always, however soon the appointment.
+    func testWithoutACardTheRemindersAreAsAlways() async throws {
+        scheduler.status = .authorized
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(start: TestData.now.addingTimeInterval(3.5 * 60 * 60)), remind: true)
+        await store.settle()
+        let hourBefore = AppointmentStore.identifier(for: id, kind: .hourBefore)
+        XCTAssertEqual(Set(scheduler.pending.keys), [hourBefore])
+        let body = try XCTUnwrap(scheduler.pending[hourBefore]?.content.body)
+        XCTAssertFalse(body.contains("Cancel"), body)
+    }
+
     func testTurningRemindersOffRemovesThem() async {
         scheduler.status = .authorized
         let store = makeStore(defaults: TestData.defaults())
@@ -573,8 +650,10 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertFalse(saved.canCancelInApp(at: now), "Booked on Squire: the shop changes it")
         XCTAssertNil(defaults.data(forKey: "appointments.v1"))
         XCTAssertNil(defaults.stringArray(forKey: "appointments.reminding.v1"))
-        // Its reminders keep v3's identifiers, so nothing is scheduled twice.
-        XCTAssertEqual(Set(scheduler.pending.keys), Set(AppointmentStore.identifiers(for: ahead.id.uuidString)))
+        // Its reminders keep v3's identifiers, so nothing is scheduled twice. (No card on file, so
+        // no reminder before free cancelling ends.)
+        let v3Kinds: [AppointmentReminderKind] = [.dayBefore, .hourBefore]
+        XCTAssertEqual(Set(scheduler.pending.keys), Set(v3Kinds.map { AppointmentStore.identifier(for: ahead.id.uuidString, kind: $0) }))
 
         // Not something the server knows: it's never asked about.
         await store.refresh(force: true)

@@ -110,6 +110,8 @@ struct BookedView: View {
 }
 
 /// "Remind me the day before and an hour before", and what happens when notifications are off.
+/// For a booking whose late cancellations may be charged, the reminders also say until when
+/// cancelling is free (`AppointmentPlanner.reminders`), and the toggle says so.
 struct AppointmentRemindersToggle: View {
     let appointment: SavedAppointment
 
@@ -121,10 +123,18 @@ struct AppointmentRemindersToggle: View {
                 get: { appointment.remind },
                 set: { appointments.setReminders($0, for: appointment.id) }
             )) {
-                Text("Remind me the day before and an hour before")
-                    .textRole(.body)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Remind me the day before and an hour before")
+                        .textRole(.body)
+                        .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if appointment.snapshot.lateCancelTerms != nil {
+                        Text(NoShowCopy.remindersNote)
+                            .textRole(.caption)
+                            .foregroundStyle(Theme.smoke)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .tint(Theme.electric)
             .accessibilityIdentifier("appointmentRemindersToggle")
