@@ -1,6 +1,5 @@
 import { z } from 'zod';
-import { appMadeKey } from './appointments.js';
-import { hashManageToken, requireOwner } from './auth.js';
+import { appMadeKey, hashManageToken, requireOwner } from './auth.js';
 import type { Catalog } from './catalog.js';
 import { pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
 import type { Deps } from './deps.js';

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { hashManageToken, isNewManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
+import { appMadeKey, hashManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
 import { availability } from './availability.js';
 import { checkStart, createAppointment, resolveTarget, targetOfferings, type Target } from './booking.js';
 import { cardTokenFrom, noShowTermsForBooking } from './cards.js';
@@ -88,21 +88,6 @@ const tokenUsed = () => new ApiError('invalid_request', 'That booking token was 
 
 /** The unique index on `appointments.manage_token_hash` (migrations/002). */
 const MANAGE_TOKEN_INDEX = 'appointments_manage_token_hash_key';
-
-/**
- * A key the app made itself and sent in `header`, if it sent one. It must be
- * exactly what the server makes for a manage token (32 random bytes,
- * base64url); anything else, an empty header included, is a 400.
- */
-export function appMadeKey(request: Request, header: 'X-Manage-Token' | 'Idempotency-Key'): string | undefined {
-  const value = request.headers.get(header);
-  if (value === null) return undefined;
-  const key = value.trim();
-  if (!isNewManageToken(key)) {
-    throw new ApiError('invalid_request', `${header} must be 32 random bytes in base64url (43 characters).`);
-  }
-  return key;
-}
 
 /** The app's own manage token from `X-Manage-Token`, if it sent one. */
 function clientManageToken(request: Request): string | undefined {

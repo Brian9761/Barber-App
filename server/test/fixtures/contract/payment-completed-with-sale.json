@@ -1,0 +1,12 @@
+{
+  "payment": {
+    "id": "pi_3TestFixture000001",
+    "amountCents": 6300,
+    "description": null,
+    "appointmentId": "00000000-0000-4000-8000-000000000003",
+    "status": "succeeded",
+    "createdAt": "2026-11-02T19:50:00Z",
+    "kind": "inPerson",
+    "saleId": "00000000-0000-4000-8000-000000000008"
+  }
+}

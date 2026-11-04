@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { expect } from 'vitest';
 import { z } from 'zod';
 
 // The API v1 contract's response types as strict schemas: every key present, no extra keys, exact types.
@@ -280,3 +282,33 @@ export const RESPONSES = {
 } as const;
 
 export type ResponseName = keyof typeof RESPONSES;
+
+// Writing the fixtures (test/contract.test.ts has its own copy of these two; they work the same way).
+
+const FIXTURES = new URL('../fixtures/contract/', import.meta.url);
+const UPDATE = process.env.UPDATE_CONTRACT_FIXTURES === '1';
+
+/** Writes `body` to test/fixtures/contract/`path` (with UPDATE_CONTRACT_FIXTURES=1, or when it's new); otherwise checks it's unchanged. */
+export function recordFixture(path: string, body: unknown): void {
+  const file = new URL(path, FIXTURES);
+  const text = `${JSON.stringify(body, null, 2)}\n`;
+  if (UPDATE || !existsSync(file)) {
+    mkdirSync(new URL('.', file), { recursive: true });
+    writeFileSync(file, text);
+    return;
+  }
+  expect(JSON.parse(readFileSync(file, 'utf8')), `${path} is out of date: run UPDATE_CONTRACT_FIXTURES=1 npm test`).toEqual(body);
+}
+
+/** Checks a response against the contract's strict schema for `name` and records it as `name`.json. */
+export function checkFixture<N extends ResponseName>(
+  name: N,
+  res: { status: number; body: unknown; text: string },
+  status = 200,
+): z.output<(typeof RESPONSES)[N]> {
+  expect(res.status, `${name}: ${res.text}`).toBe(status);
+  const parsed = RESPONSES[name].safeParse(res.body);
+  if (!parsed.success) throw new Error(`${name} doesn't match the contract: ${JSON.stringify(parsed.error.issues, null, 2)}`);
+  recordFixture(`${name}.json`, res.body);
+  return parsed.data as z.output<(typeof RESPONSES)[N]>;
+}
