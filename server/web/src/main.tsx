@@ -10,6 +10,7 @@ import './styles/pages.css';
 import './styles/app.css';
 import { App, ROUTER_FUTURE } from './App';
 import { CatalogProvider } from './data/catalog';
+import { checkForUpdatesWhenShown, registerServiceWorker } from './pwa/register';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('The page has no #root element');
@@ -23,3 +24,13 @@ createRoot(root).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// The service worker, in the built site only (the dev server changes files as they're edited).
+// After the page has loaded, so keeping the app's files never slows the first visit down.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    void registerServiceWorker().then((registration) => {
+      if (registration) checkForUpdatesWhenShown(registration);
+    });
+  });
+}

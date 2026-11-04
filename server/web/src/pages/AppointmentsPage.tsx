@@ -11,6 +11,7 @@ import { Icon } from '../components/Icon';
 import { CallLink, Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { cardLabel, durationLabel } from '../lib/format';
+import { useOnline } from '../pwa/connection';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { isCancellable, lateCancelWarning } from '../lib/lateCancel';
 import { dateTimeLabel, longDateTimeLabel } from '../lib/shopTime';
@@ -64,6 +65,10 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
   const [saved, setSaved] = useState<SavedAppointment[]>(() => loadAppointments());
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [forgotten, setForgotten] = useState(false);
+  const online = useOnline();
+  // Offline, the page doesn't show what it last heard from the shop: it could have changed since.
+  const [offline, setOffline] = useState(() => !online);
+  const [attempt, setAttempt] = useState(0);
   const reload = useCallback(() => setSaved(loadAppointments()), []);
   const forget = () => {
     forgetThisComputer();
@@ -76,12 +81,18 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
     </Notice>
   ) : null;
 
-  // Check each one with the shop: it may have been cancelled by the shop, or completed.
+  // Check each one with the shop: it may have been cancelled by the shop, or completed. With no
+  // connection, the page says so instead, and checks again once the connection is back.
   useEffect(() => {
+    if (!online) {
+      setOffline(true);
+      return;
+    }
     let live = true;
     (async () => {
       const current = loadAppointments();
       let failure: string | null = null;
+      let unreachable = false;
       for (const item of current) {
         if (item.notFound || new Date(item.appointment.end).getTime() < Date.now() - CHECK_AFTER_END_MS) continue;
         try {
@@ -92,23 +103,45 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
             updateAppointment(item.id, (s) => ({ ...s, notFound: true }));
           } else {
             failure = errorMessage(error);
-            if (isApiError(error) && error.isOffline) break;
+            if (isApiError(error) && error.isOffline) {
+              unreachable = true;
+              break;
+            }
           }
         }
       }
       if (live) {
-        setRefreshError(failure);
+        setOffline(unreachable);
+        setRefreshError(unreachable ? null : failure);
         reload();
       }
     })();
     return () => {
       live = false;
     };
-  }, [reload]);
+  }, [reload, online, attempt]);
 
   const upcoming = saved.filter((s) => new Date(s.appointment.end) > now);
   const past = saved.filter((s) => new Date(s.appointment.end) <= now).reverse();
   const next = upcoming.find((s) => s.appointment.status === 'booked');
+
+  if (offline && saved.length > 0) {
+    return (
+      <div className="container container--narrow appointments">
+        <div className="status-message card card--gray" role="status" data-testid="appointments-offline">
+          <h2>You're offline.</h2>
+          <p className="lead secondary">Your appointments show here again once you're back online and they're checked with the shop.</p>
+          <p className="secondary">
+            To check or change one now, call the shop at <CallLink className="inline-link nowrap" />.
+          </p>
+          <button type="button" className="button button--primary" onClick={() => setAttempt((n) => n + 1)}>
+            Try again
+          </button>
+        </div>
+        <ForgetComputer catalog={catalog} onForget={forget} />
+      </div>
+    );
+  }
 
   if (saved.length === 0) {
     return (

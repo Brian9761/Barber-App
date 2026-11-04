@@ -21,5 +21,7 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // The service worker has its own check (tsconfig.sw.json): it runs in a worker, not a page.
+  "exclude": ["src/sw/sw.ts"]
 }

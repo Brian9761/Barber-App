@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useCatalog, useShopContact } from '../data/catalog';
+import { OfflineNotice } from '../pwa/OfflineNotice';
+import { UpdateBar } from '../pwa/UpdateBar';
 import { hoursSummary } from '../lib/shopTime';
 import { Icon } from './Icon';
 import { Logo } from './Logo';
@@ -37,10 +39,14 @@ export function Layout() {
         Skip to main content
       </a>
       <GlobalNav />
+      <div className="app-ribbons">
+        <OfflineNotice />
+      </div>
       <main id="main" tabIndex={-1} ref={mainRef}>
         <Outlet />
       </main>
       <Footer />
+      <UpdateBar />
     </>
   );
 }
@@ -66,7 +72,13 @@ export function GlobalNav() {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     // The page under the open menu can't be reached (Tab, a screen reader's cursor) while it's covered.
-    const covered = [document.getElementById('main'), document.querySelector('.globalfooter'), document.querySelector('.skip-link')].filter(
+    const covered = [
+      document.getElementById('main'),
+      document.querySelector('.globalfooter'),
+      document.querySelector('.skip-link'),
+      document.querySelector('.app-ribbons'),
+      document.querySelector('.update-bar'),
+    ].filter(
       (element): element is HTMLElement => element instanceof HTMLElement,
     );
     for (const element of covered) element.setAttribute('inert', '');

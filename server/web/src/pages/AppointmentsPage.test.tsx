@@ -211,3 +211,39 @@ describe('on a shared computer', () => {
     expect(screen.queryByTestId('forget-computer')).toBeNull();
   });
 });
+
+describe('offline', () => {
+  it('shows nothing it can’t check with the shop, says so, and checks once the connection is back', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const api = mockApi([['GET /api/appointments/*', { body: { appointment: cancelledByClient('2026-11-02T16:00:00Z') } }]]);
+    renderApp('/appointments');
+
+    const offline = await screen.findByTestId('appointments-offline');
+    expect(offline.textContent).toContain("You're offline.");
+    expect(within(offline).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
+    expect(screen.queryByTestId('appointment-card')).toBeNull();
+    expect(api.calls).toHaveLength(0);
+
+    onLine.mockReturnValue(true);
+    window.dispatchEvent(new Event('online'));
+    const card = await screen.findByTestId('appointment-card');
+    expect(within(card).getByTestId('appointment-status').textContent).toBe('Cancelled');
+    expect(screen.queryByTestId('appointments-offline')).toBeNull();
+  });
+
+  it('says so too when the shop can’t be reached, without the status it last heard', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    const api = mockApi([['GET /api/appointments/*', 'offline']]);
+    renderApp('/appointments');
+    expect(await screen.findByTestId('appointments-offline')).toBeTruthy();
+    expect(screen.queryByTestId('appointment-card')).toBeNull();
+
+    // Try again, and the shop answers this time.
+    api.once('GET /api/appointments/*', { body: { appointment: fixtureAppointment } });
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(within(await screen.findByTestId('appointment-card')).getByTestId('appointment-status').textContent).toBe('Next appointment');
+  });
+});
