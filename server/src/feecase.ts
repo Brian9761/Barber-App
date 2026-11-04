@@ -81,6 +81,14 @@ export function lateCancelWarning(windowMinutes: number, feeCents: number, fullP
   return `Cancelling now, less than ${windowLabel(windowMinutes)} before your appointment, may be charged ${amount}.`;
 }
 
+/**
+ * The owner's answer when a try whose answer was lost turns out never to have reached Stripe and
+ * the booking can't be charged any more: "Nothing was charged. Mark the appointment as a no-show first."
+ */
+export function nothingCharged(refusal: string): string {
+  return `Nothing was charged. ${refusal}`;
+}
+
 /** The case a fee applies to now, or why there's none (in plain words for the owner). */
 export type FeeCase = { reason: FeeReason; refusal: null } | { reason: null; refusal: string };
 

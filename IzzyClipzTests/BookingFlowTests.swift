@@ -574,6 +574,63 @@ final class FakeShopAPITests: XCTestCase {
         XCTAssertNil(confirmation.appointment.noShowFee)
     }
 
+    /// The fake never makes a booking with a card on file, but one it holds is cancelled the
+    /// server's way: inside the agreed window it asks first and changes nothing, the client's first
+    /// cancel time counts, and a request the shop's status turned down still counts.
+    func testABookingWithACardOnFileIsCancelledLikeOnTheServer() async throws {
+        let fake = makeFake()
+        func held(_ n: Int, startsIn minutes: Double, status: IzzyAPI.AppointmentStatus = .booked, cancelledAt: Date? = nil) -> (id: String, token: String) {
+            let id = "00000000-0000-4000-8000-00000000000\(n)"
+            var appointment = TestData.appointment(id: id, start: TestData.now.addingTimeInterval(minutes * 60), status: status)
+            appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
+            appointment.noShowFee = IzzyAPI.NoShowFee(amountCents: 4_500, fullPrice: true, customerCancelledAt: cancelledAt, lateCancelWindowMinutes: 60)
+            fake.hold(appointment, token: "token-\(n)")
+            return (id, "token-\(n)")
+        }
+        // 30 minutes ahead: inside the hour.
+        let soon = held(1, startsIn: 30)
+        do {
+            _ = try await fake.cancelAppointment(id: soon.id, manageToken: soon.token)
+            XCTFail("Inside the window the server asks first")
+        } catch {
+            XCTAssertEqual(error as? APIError, .lateCancelFee(
+                message: "Cancelling now, less than 1 hour before your appointment, may be charged $45, the full service price."
+            ))
+        }
+        let unchanged = try await fake.appointment(id: soon.id, manageToken: soon.token)
+        XCTAssertEqual(unchanged.status, .booked)
+        XCTAssertNil(unchanged.noShowFee?.customerCancelledAt)
+        let late = try await fake.cancelAppointment(id: soon.id, manageToken: soon.token, acceptLateCancelFee: true)
+        XCTAssertEqual(late.status, .cancelled)
+        XCTAssertEqual(late.cancelledBy, .customer)
+        XCTAssertEqual(late.noShowFee?.customerCancelledAt, TestData.now)
+        XCTAssertEqual(late.noShowFee?.reason, .lateCancel)
+
+        // Two hours ahead: free, and nothing is asked.
+        let early = held(2, startsIn: 120)
+        let free = try await fake.cancelAppointment(id: early.id, manageToken: early.token)
+        XCTAssertEqual(free.noShowFee?.customerCancelledAt, TestData.now)
+        XCTAssertNil(free.noShowFee?.reason)
+
+        // Cancelled the day before, then reopened by the shop: the first time counts, so it's still free.
+        let dayBefore = TestData.now.addingTimeInterval(-86_400)
+        let reopened = held(3, startsIn: 30, cancelledAt: dayBefore)
+        let stillFree = try await fake.cancelAppointment(id: reopened.id, manageToken: reopened.token)
+        XCTAssertEqual(stillFree.noShowFee?.customerCancelledAt, dayBefore)
+        XCTAssertNil(stillFree.noShowFee?.reason)
+
+        // Already marked by the shop: turned down, but asked before the start, so it still counts.
+        let marked = held(4, startsIn: 30, status: .completed)
+        do {
+            _ = try await fake.cancelAppointment(id: marked.id, manageToken: marked.token, acceptLateCancelFee: true)
+            XCTFail("Not booked any more")
+        } catch {
+            XCTAssertEqual(error as? APIError, .notCancellable)
+        }
+        let afterRefusal = try await fake.appointment(id: marked.id, manageToken: marked.token)
+        XCTAssertEqual(afterRefusal.noShowFee?.customerCancelledAt, TestData.now)
+    }
+
     func testOffersTheShopsTimesMinusItsBookings() async throws {
         let fake = makeFake()
         let response = try await fake.availability(IzzyAPI.AvailabilityQuery(target: .offering(id: TestData.carlosHaircutID), from: tomorrow, days: 1))

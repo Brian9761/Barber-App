@@ -210,9 +210,13 @@ describe('contract fixtures (API v1)', () => {
     });
     expect(lateBooking.status, lateBooking.text).toBe(201);
     h.setNow('2026-11-03T20:30:00Z');
+    // Inside the window: the client confirmed the warning (the server asks first: errors/late_cancel_fee.json).
     check(
       'appointment-cancelled-late',
-      await h.call('POST', `/api/appointments/${lateBooking.body.appointment.id}/cancel`, { headers: { 'x-manage-token': lateBooking.body.manageToken } }),
+      await h.call('POST', `/api/appointments/${lateBooking.body.appointment.id}/cancel`, {
+        headers: { 'x-manage-token': lateBooking.body.manageToken },
+        body: { acceptLateCancelFee: true },
+      }),
     );
     h.advance(2);
     check('late-cancel-fee-charged', await h.call('POST', `/api/owner/appointments/${lateBooking.body.appointment.id}/no-show-fee`, owner));
@@ -312,6 +316,11 @@ describe('contract fixtures (API v1)', () => {
       owner: true,
       body: { status: 'noShow' },
     });
+    // The client cancels that booking 30 minutes before, without having seen the warning yet.
+    h.setNow('2026-11-10T17:30:00Z');
+    examples.late_cancel_fee = await h.call('POST', `/api/appointments/${protectedBooking.body.appointment.id}/cancel`, {
+      headers: { 'x-manage-token': protectedBooking.body.manageToken },
+    });
     // The shop's own Stripe account and computer sign-in.
     examples.stripe_connect_off = await h.call('POST', '/api/owner/stripe/connect', { owner: true, body: { returnTo: 'app' } });
     await h.call('POST', '/api/owner/computer-codes', { owner: true });
@@ -352,6 +361,7 @@ describe('contract fixtures (API v1)', () => {
       policy_changed: 409,
       not_chargeable: 409,
       not_started: 409,
+      late_cancel_fee: 409,
       stripe_not_configured: 503,
       owner_not_configured: 503,
       stripe_connect_off: 409,

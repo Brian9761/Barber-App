@@ -820,4 +820,74 @@ final class SampleServerNoShowTests: XCTestCase {
         XCTAssertNil(harness.appointment(named: "Kim Sample"))
         XCTAssertNil(harness.appointment(named: "Lee Sample"))
     }
+
+    /// The charge never reached Stripe: the fee waits as pending, and Check again charges it (once)
+    /// while Kim is still a no-show.
+    func testAChargeThatNeverReachedStripeWaitsThenCheckAgainChargesIt() async throws {
+        var options = FakeServer.Options()
+        options.noShowWithCard = true
+        options.nextFeeChargeFails = true
+        let harness = Harness(options: options)
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        do {
+            _ = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+            XCTFail("Expected Stripe to be out of reach")
+        } catch {
+            XCTAssertEqual(error as? APIError, .server(code: IzzyAPI.ErrorCode.serverError, message: "We couldn't reach Stripe. Please try again.", status: 500))
+        }
+        let waiting = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        XCTAssertEqual(waiting.noShowFee?.status, .pending)
+        XCTAssertEqual(waiting.noShowFee?.reason, .noShow)
+        XCTAssertTrue(waiting.isFeePending, "the button reads Check again")
+        XCTAssertEqual(waiting.chargeableFee(at: TestClock.now), .noShow)
+        let before = try await harness.api.payments(on: TestClock.today)
+        XCTAssertFalse(before.contains { $0.kind.isFee }, "nothing was charged yet")
+
+        let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        XCTAssertEqual(charged.noShowFee?.status, .charged)
+        XCTAssertEqual(charged.noShowFee?.reason, .noShow)
+        XCTAssertFalse(charged.isFeePending)
+        let after = try await harness.api.payments(on: TestClock.today)
+        XCTAssertEqual(after.filter(\.kind.isFee).count, 1)
+    }
+
+    /// Kim walked in late after a charge that never reached Stripe: the visit is completed, and Check
+    /// again settles the fee as not charged, so no fee stays pending on a completed visit.
+    func testCheckAgainOnACompletedVisitSettlesTheFeeAsNotCharged() async throws {
+        var options = FakeServer.Options()
+        options.noShowWithCard = true
+        options.nextFeeChargeFails = true
+        let harness = Harness(options: options)
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        _ = try? await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        _ = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+        let completed = try await harness.api.setStatus(.completed, ofAppointment: kim.id)
+        XCTAssertEqual(completed.noShowFee?.status, .pending)
+        XCTAssertEqual(completed.noShowFee?.reason, .noShow, "what the waiting try was for")
+        XCTAssertEqual(completed.chargeableFee(at: TestClock.now), .noShow, "Check again is still there")
+        func expect(_ message: String, line: UInt = #line) async {
+            do {
+                _ = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+                XCTFail("Expected not_chargeable", line: line)
+            } catch {
+                XCTAssertEqual(error as? APIError, .server(code: IzzyAPI.ErrorCode.notChargeable, message: message, status: 409), line: line)
+            }
+        }
+        await expect("Nothing was charged. Mark the appointment as a no-show first.")
+        let settled = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        XCTAssertEqual(settled.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none)
+        XCTAssertNil(settled.noShowFee?.reason)
+        XCTAssertNil(settled.chargeableFee(at: TestClock.now))
+        XCTAssertFalse(settled.isFeePending)
+        let payments = try await harness.api.payments(on: TestClock.today)
+        XCTAssertFalse(payments.contains { $0.kind.isFee })
+        // Asked again: the plain answer.
+        await expect("Mark the appointment as a no-show first.")
+        // Marked a no-show again after all: it can be charged, once.
+        _ = try await harness.api.setStatus(.noShow, ofAppointment: kim.id)
+        let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        XCTAssertEqual(charged.noShowFee?.status, .charged)
+        let after = try await harness.api.payments(on: TestClock.today)
+        XCTAssertEqual(after.filter(\.kind.isFee).count, 1)
+    }
 }

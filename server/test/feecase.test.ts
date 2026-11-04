@@ -9,6 +9,7 @@ import {
   isFullPrice,
   lateCancelWarning,
   money,
+  nothingCharged,
   reasonOfKind,
   windowLabel,
 } from '../src/feecase.js';
@@ -173,6 +174,10 @@ describe('cancelling now', () => {
     expect(lateCancelWarning(2880, 8000, true)).toBe('Cancelling now, less than 48 hours before your appointment, may be charged $80, the full service price.');
     expect([money(2000), money(1750), money(5)]).toEqual(['$20', '$17.50', '$0.05']);
   });
+
+  it('a lost try settled as not charged says so, then why there is no fee now', () => {
+    expect(nothingCharged('Mark the appointment as a no-show first.')).toBe('Nothing was charged. Mark the appointment as a no-show first.');
+  });
 });
 
 /** The warnings the Kit's mirror is checked against (window, fee, full price). */
@@ -206,6 +211,7 @@ describe('test/fixtures/fee-cases.json (read by the Kit)', () => {
         cancelledLate: cancelledLate(c.row),
       })),
       notStarted: "The appointment hasn't started yet, so it can't be a no-show.",
+      nothingCharged: { refusal: CASES[0]!.refusal, message: nothingCharged(CASES[0]!.refusal ?? '') },
       cancelWarnings: WARNINGS.map(([lateCancelWindowMinutes, amountCents, fullPrice]) => ({
         lateCancelWindowMinutes,
         amountCents,

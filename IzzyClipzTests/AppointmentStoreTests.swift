@@ -396,6 +396,37 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertEqual(store.appointment(withID: id)?.status, .booked)
     }
 
+    /// Inside the late-cancellation window the server asks first: the warning comes back as is and
+    /// nothing changes, and the client's yes goes with the next try.
+    func testCancellingInsideTheWindowAsksFirstThenSendsTheClientsYes() async throws {
+        scheduler.status = .authorized
+        let store = makeStore(defaults: TestData.defaults())
+        store.add(TestData.confirmation(token: "t1"), remind: true)
+        await store.settle()
+        let warning = "Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price."
+        api.cancelHandler = { [api] id, _ in
+            guard api.cancellations.last?.acceptLateCancelFee == true else { throw APIError.lateCancelFee(message: warning) }
+            return TestData.appointment(id: id, status: .cancelled, cancelledBy: .customer)
+        }
+        do {
+            try await store.cancel(id)
+            XCTFail("The server asks first")
+        } catch {
+            XCTAssertEqual(error as? AppointmentActionError, .server(.lateCancelFee(message: warning)))
+            XCTAssertEqual((error as? AppointmentActionError)?.userMessage, warning)
+        }
+        await store.settle()
+        XCTAssertEqual(store.appointment(withID: id)?.status, .booked, "nothing changed")
+        XCTAssertTrue(api.lookups.isEmpty, "nothing to look up: the server changed nothing")
+        XCTAssertFalse(scheduler.pending.isEmpty, "its reminders stay")
+
+        try await store.cancel(id, acceptLateCancelFee: true)
+        await store.settle()
+        XCTAssertEqual(api.cancellations.map(\.acceptLateCancelFee), [false, true])
+        XCTAssertEqual(store.appointment(withID: id)?.status, .cancelled)
+        XCTAssertTrue(scheduler.pending.isEmpty)
+    }
+
     /// The shop changed it meanwhile: the error comes back and the appointment shows how it is now.
     func testCancellingSomethingThatCanNoLongerBeCancelledShowsItAsItIs() async {
         let store = makeStore(defaults: TestData.defaults())
