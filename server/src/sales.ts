@@ -3,7 +3,7 @@ import { appMadeKey, hashManageToken, requireOwner } from './auth.js';
 import type { Catalog } from './catalog.js';
 import { pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
 import type { Deps } from './deps.js';
-import { ApiError, json, readJsonObject } from './http.js';
+import { ApiError, json, readJsonObject, readOptionalJsonObject } from './http.js';
 import type { Context } from './router.js';
 import type { AppointmentRow, SaleMethod } from './serialize.js';
 import { dayBounds, formatInstant, localDate } from './time.js';
@@ -502,7 +502,7 @@ export async function listSales(ctx: Context): Promise<Response> {
   });
 }
 
-// POST /api/owner/sales/:id/void { reason? }: idempotent; voiding again answers the same.
+// POST /api/owner/sales/:id/void { reason? } (or no body): idempotent; voiding again answers the same.
 
 const voidBody = z.object({ reason: optionalText(200, 'Keep the reason to 200 characters or fewer.', 'reason') });
 
@@ -519,7 +519,7 @@ export async function voidSale(ctx: Context): Promise<Response> {
   const notFound = () => new ApiError('not_found', "We couldn't find that sale.");
   const id = (ctx.params.id ?? '').toLowerCase();
   if (!UUID_RE.test(id)) throw notFound();
-  const { reason } = parse(voidBody, await readJsonObject(ctx.request));
+  const { reason } = parse(voidBody, await readOptionalJsonObject(ctx.request));
   const now = ctx.deps.now();
   await ctx.deps.db.transaction(async (tx) => {
     const { rows } = await tx.query<{ appointment_id: string | null; voided_at: Date | null }>(

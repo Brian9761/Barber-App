@@ -27,6 +27,13 @@ export function reasonOfKind(kind: FeeKind): FeeReason {
 export const MIN_LATE_CANCEL_WINDOW_MINUTES = 30;
 export const MAX_LATE_CANCEL_WINDOW_MINUTES = 48 * 60;
 
+/** "$20", "$17.50": like the Kit's `Price.currencyString`. */
+export function money(cents: number): string {
+  const dollars = Math.floor(cents / 100);
+  const rest = cents % 100;
+  return rest === 0 ? `$${dollars}` : `$${dollars}.${String(rest).padStart(2, '0')}`;
+}
+
 /** "30 minutes", "1 hour", "90 minutes", "2 hours", "48 hours": as the policy and warning say it. */
 export function windowLabel(minutes: number): string {
   if (minutes % 60 !== 0) return `${minutes} minutes`;
@@ -48,6 +55,38 @@ export function cancelledLate(row: FeeTerms): boolean {
   if (row.saved_card_id === null || row.no_show_fee_cents === null) return false;
   if (row.late_cancel_window_minutes === null || row.customer_cancelled_at === null) return false;
   return row.start_at.getTime() - row.customer_cancelled_at.getTime() < row.late_cancel_window_minutes * 60_000;
+}
+
+/**
+ * Whether the client cancelling at `now` would be a late cancellation. The time that
+ * counts is the first one the client cancelled (or asked to) before the start, if
+ * there was one: a booking cancelled early and reopened by the shop stays free.
+ */
+export function cancellingIsLate(row: FeeTerms, now: Date): boolean {
+  return cancelledLate({ ...row, customer_cancelled_at: row.customer_cancelled_at ?? now });
+}
+
+/** Whether the agreed fee is the booked service's whole price (it is at 100%). */
+export function isFullPrice(row: Pick<AppointmentRow, 'no_show_fee_cents' | 'price_cents'>): boolean {
+  return row.no_show_fee_cents !== null && row.no_show_fee_cents === row.price_cents;
+}
+
+/**
+ * What the client is told before cancelling inside the agreed window, in the customer
+ * app's confirmation and in the server's 409 `late_cancel_fee`: "Cancelling now, less
+ * than 1 hour before your appointment, may be charged $35, the full service price."
+ */
+export function lateCancelWarning(windowMinutes: number, feeCents: number, fullPrice: boolean): string {
+  const amount = fullPrice ? `${money(feeCents)}, the full service price` : money(feeCents);
+  return `Cancelling now, less than ${windowLabel(windowMinutes)} before your appointment, may be charged ${amount}.`;
+}
+
+/**
+ * The owner's answer when a try whose answer was lost turns out never to have reached Stripe and
+ * the booking can't be charged any more: "Nothing was charged. Mark the appointment as a no-show first."
+ */
+export function nothingCharged(refusal: string): string {
+  return `Nothing was charged. ${refusal}`;
 }
 
 /** The case a fee applies to now, or why there's none (in plain words for the owner). */

@@ -314,10 +314,13 @@ describe('POST /api/owner/sales/:id/void', () => {
     expect((await voidSale(sale.id, { reason: 'r'.repeat(201) })).status).toBe(400);
     expect((await voidSale(sale.id, { reason: 7 })).body.error.message).toBe('The reason must be text.');
     expect((await voidSale(sale.id, { reason: 'Wrong\u0000client' })).body.error.message).toBe('The reason has characters we can’t use.');
-    const empty = await h.call('POST', `/api/owner/sales/${sale.id}/void`, owner);
-    expect(empty.status).toBe(415);
-    const voided = await voidSale(sale.id, { reason: '' });
+    // A body that isn't JSON is a 415; no body at all is a void without a reason.
+    const form = await h.call('POST', `/api/owner/sales/${sale.id}/void`, { ...owner, rawBody: 'reason=x', headers: { 'content-type': 'text/plain' } });
+    expect(form.status).toBe(415);
+    const voided = await h.call('POST', `/api/owner/sales/${sale.id}/void`, owner);
+    expect(voided.status, voided.text).toBe(200);
     expect(voided.body.sale).toMatchObject({ voidReason: null, voidedAt: '2026-11-02T19:10:00Z' });
+    expect((await voidSale(sale.id, { reason: '' })).body.sale.voidReason).toBeNull();
   });
 
   it('a card payment already paid the appointment: checking out and voiding leave the card’s numbers alone', async () => {

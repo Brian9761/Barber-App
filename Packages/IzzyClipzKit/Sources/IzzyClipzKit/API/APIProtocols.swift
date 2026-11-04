@@ -31,7 +31,14 @@ public protocol ShopAPI: Sendable {
     func appointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment
 
     /// `POST /api/appointments/:id/cancel`.
-    func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment
+    ///
+    /// Inside the late-cancellation window of a booking with a card on file, the server asks first:
+    /// without `acceptLateCancelFee` it throws `APIError.lateCancelFee(message:)` and changes
+    /// nothing. Show that message ("Cancelling now, less than 1 hour before your appointment, may be
+    /// charged $35, the full service price.") with "Cancel appointment" and "Keep appointment", and
+    /// call again with `acceptLateCancelFee: true` to cancel anyway. Send `true` only after the
+    /// client saw a warning: the server decides by its own clock, so the phone's may be off.
+    func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment
 
     /// `GET /api/reviews`: live, never stored.
     func reviews() async throws -> IzzyAPI.ReviewsResponse
@@ -56,6 +63,14 @@ public protocol ShopAPI: Sendable {
     /// `POST /api/cards`: saves the card from a completed Checkout Session under `token` (the
     /// one the checkout was started with). Safe to call again after a lost answer.
     func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard
+}
+
+extension ShopAPI {
+    /// `cancelAppointment(id:manageToken:acceptLateCancelFee:)` before any warning: a cancellation
+    /// inside the late-cancellation window comes back as `APIError.lateCancelFee`.
+    public func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
+        try await cancelAppointment(id: id, manageToken: manageToken, acceptLateCancelFee: false)
+    }
 }
 
 /// What the owner app needs from the server. Every call but `health` and

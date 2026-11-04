@@ -4,7 +4,7 @@ import { resolveTarget, targetOfferings, type Target } from './booking.js';
 import type { Offering } from './catalog.js';
 import type { Queryable } from './db.js';
 import type { Config } from './config.js';
-import { MAX_LATE_CANCEL_WINDOW_MINUTES, MIN_LATE_CANCEL_WINDOW_MINUTES, windowLabel } from './feecase.js';
+import { MAX_LATE_CANCEL_WINDOW_MINUTES, MIN_LATE_CANCEL_WINDOW_MINUTES, money, windowLabel } from './feecase.js';
 import { json, readJsonObject } from './http.js';
 import type { Context } from './router.js';
 import { parse, shortId } from './validation.js';
@@ -63,12 +63,7 @@ export const MAX_FLAT_CENTS = 50_000;
 
 const SETTINGS_KEY = 'no_show';
 
-/** "$20", "$17.50": like the Kit's `Price.currencyString`. */
-export function money(cents: number): string {
-  const dollars = Math.floor(cents / 100);
-  const rest = cents % 100;
-  return rest === 0 ? `$${dollars}` : `$${dollars}.${String(rest).padStart(2, '0')}`;
-}
+export { money };
 
 /**
  * The no-show fee for one menu item, in cents, or null when no fee applies: items

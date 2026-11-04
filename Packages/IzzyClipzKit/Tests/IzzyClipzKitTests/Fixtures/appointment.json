@@ -17,6 +17,6 @@
     "note": "Short on the sides, please.",
     "createdAt": "2026-10-31T17:05:09Z",
     "card": { "brand": "amex", "last4": "8431" },
-    "noShowFee": { "amountCents": 3500, "status": "none", "chargedAt": null, "message": null, "customerCancelledAt": "2026-11-01T23:10:00Z", "lateCancelWindowMinutes": 60, "reason": null }
+    "noShowFee": { "amountCents": 3500, "fullPrice": true, "status": "none", "chargedAt": null, "message": null, "customerCancelledAt": "2026-11-01T23:10:00Z", "lateCancelWindowMinutes": 60, "reason": null }
   }
 }

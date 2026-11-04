@@ -232,8 +232,11 @@ export async function seedWeek(h: Harness): Promise<Week> {
   });
   at('2026-11-05T20:50:00Z');
   await mark('A9', 'completed');
-  at('2026-11-05T21:30:00Z'); // 1:30 PM: Ivy cancels her 2 PM in the app: a late cancellation
-  ok(await h.call('POST', `/api/appointments/${week.appointments.C2}/cancel`, { headers: { 'x-manage-token': ivy } }));
+  at('2026-11-05T21:30:00Z'); // 1:30 PM: Ivy cancels her 2 PM in the app, is warned it's late, and confirms
+  const cancelIvy = (body?: Record<string, unknown>) =>
+    h.call('POST', `/api/appointments/${week.appointments.C2}/cancel`, { headers: { 'x-manage-token': ivy }, ...(body ? { body } : {}) });
+  expect((await cancelIvy()).body.error.code).toBe('late_cancel_fee');
+  ok(await cancelIvy({ acceptLateCancelFee: true }));
 
   // Friday Nov 6
   at('2026-11-06T17:00:00Z');

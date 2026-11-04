@@ -210,20 +210,51 @@ final class FakeShopAPI: ShopAPI {
         return entry.appointment
     }
 
-    func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
+    func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment {
         try await respond()
         guard var entry = stored[id], entry.token == manageToken else {
             throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "", status: 404)
         }
         guard entry.appointment.isCancellable(at: now) else {
+            // Asked before the start, but the shop had marked it: as on the server, the request still
+            // counts for a booking with a card on file (it's never charged as a no-show then).
+            if entry.appointment.start > now, var fee = entry.appointment.noShowFee, fee.customerCancelledAt == nil {
+                fee.customerCancelledAt = now
+                entry.appointment.noShowFee = fee
+                stored[id] = entry
+            }
             throw APIError.notCancellable
+        }
+        // Inside the late-cancellation window the booking agreed to, the server asks first and changes
+        // nothing (the warning counts from the client's first cancel time, as there).
+        if !acceptLateCancelFee, let warning = entry.appointment.lateCancelWarning(at: now) {
+            throw APIError.lateCancelFee(message: warning)
         }
         entry.appointment.status = .cancelled
         entry.appointment.cancelledBy = .customer
+        if var fee = entry.appointment.noShowFee {
+            // The first time counts, and the fee's reason is the case that applies now (a late cancellation, or none).
+            fee.customerCancelledAt = fee.customerCancelledAt ?? now
+            if fee.status == .none {
+                let found = IzzyAPI.NoShowRule.feeCase(
+                    status: .cancelled, cancelledBy: .customer, start: entry.appointment.start,
+                    customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes
+                )
+                if case .chargeable(let reason) = found { fee.reason = reason } else { fee.reason = nil }
+            }
+            entry.appointment.noShowFee = fee
+        }
         stored[id] = entry
         let appointment = entry.appointment
         busy[appointment.barberId]?.removeAll { $0.start == appointment.start }
         return appointment
+    }
+
+    /// Holds `appointment` as if this phone had booked it with `token`: say one with a card on file,
+    /// which this fake never makes itself (no-show protection is off here, as the server starts).
+    /// For tests.
+    func hold(_ appointment: IzzyAPI.Appointment, token: String) {
+        stored[appointment.id] = Stored(appointment: appointment, token: token, isSeeded: false)
     }
 
     func reviews() async throws -> IzzyAPI.ReviewsResponse {

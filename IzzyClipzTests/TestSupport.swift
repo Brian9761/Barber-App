@@ -24,7 +24,8 @@ final class ScriptedShopAPI: ShopAPI {
     /// The manage token each booking was sent with.
     private(set) var bookingTokens: [IzzyAPI.ManageToken] = []
     private(set) var lookups: [(id: String, token: String)] = []
-    private(set) var cancellations: [(id: String, token: String)] = []
+    /// Every cancellation, with whether the client had agreed to a late-cancellation fee.
+    private(set) var cancellations: [(id: String, token: String, acceptLateCancelFee: Bool)] = []
     private(set) var reviewRequests = 0
     private(set) var productRequests = 0
     private(set) var noShowPolicyRequests: [IzzyAPI.BookingTarget] = []
@@ -49,8 +50,9 @@ final class ScriptedShopAPI: ShopAPI {
         return try appointmentHandler(id, manageToken)
     }
 
-    func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
-        cancellations.append((id, manageToken))
+    /// The handler can read `cancellations.last?.acceptLateCancelFee` to answer like the server.
+    func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment {
+        cancellations.append((id, manageToken, acceptLateCancelFee))
         return try cancelHandler(id, manageToken)
     }
 

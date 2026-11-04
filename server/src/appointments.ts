@@ -4,7 +4,8 @@ import { availability } from './availability.js';
 import { checkStart, createAppointment, resolveTarget, targetOfferings, type Target } from './booking.js';
 import { cardTokenFrom, noShowTermsForBooking } from './cards.js';
 import { isOverlapConflict, pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
-import { ApiError, json, readJsonObject } from './http.js';
+import { cancellingIsLate, isFullPrice, lateCancelWarning } from './feecase.js';
+import { ApiError, json, readJsonObject, readOptionalJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
 import { appointmentJSON, customerAppointmentJSON, STATUS_IN, type AppointmentRow, type AppointmentStatus } from './serialize.js';
@@ -214,22 +215,36 @@ export async function getAppointment(ctx: Context): Promise<Response> {
   return json({ appointment: customerAppointmentJSON(await loadWithToken(ctx)) });
 }
 
+const cancelRequest = z.object({
+  /** The client saw the late-cancellation warning (the 409 `late_cancel_fee`) and cancels anyway. */
+  acceptLateCancelFee: z.boolean({ error: 'acceptLateCancelFee must be true or false.' }).optional(),
+});
+
 /**
  * The client cancels in the app. Cancelling before the start is free, so the
  * time is kept in `customer_cancelled_at` and never cleared: even if the shop
  * reopens the booking later, it can't be charged a no-show fee. A request the
  * status turns down (the shop already marked it) still counts when it came
  * before the start, because the client asked in time.
+ *
+ * Inside the late-cancellation window the booking agreed to (it has a card on
+ * file), cancelling may be charged the fee, so the server makes sure the client
+ * was told, by its own clock: without `acceptLateCancelFee: true` it answers 409
+ * `late_cancel_fee` with the warning to show and changes nothing. The first time
+ * the client cancelled is the one that counts, so a booking they cancelled early
+ * (which the shop then reopened) stays free and asks nothing.
  */
 export async function cancelAppointment(ctx: Context): Promise<Response> {
   const row = await loadWithToken(ctx);
+  const body = parse(cancelRequest, await readOptionalJsonObject(ctx.request));
   const now = ctx.deps.now();
   // Locked while deciding, so the answer matches what happened even if the shop changes it at the same moment.
-  const outcome = await ctx.deps.db.transaction(async (tx) => {
+  const outcome = await ctx.deps.db.transaction(async (tx): Promise<{ result: 'cancelled' | 'refused' | 'confirm'; row: AppointmentRow }> => {
     const { rows } = await tx.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1 FOR UPDATE', [row.id]);
     const current = rows[0] ?? row;
-    if (current.start_at <= now) return { cancelled: false, row: current };
+    if (current.start_at <= now) return { result: 'refused', row: current };
     if (current.status === 'booked') {
+      if (body.acceptLateCancelFee !== true && cancellingIsLate(current, now)) return { result: 'confirm', row: current };
       const { rows: done } = await tx.query<AppointmentRow>(
         `UPDATE appointments
             SET status = 'cancelled', cancelled_by = 'customer', customer_cancelled_at = COALESCE(customer_cancelled_at, $2), updated_at = $2
@@ -237,15 +252,23 @@ export async function cancelAppointment(ctx: Context): Promise<Response> {
           RETURNING *`,
         [row.id, now],
       );
-      return { cancelled: true, row: done[0] ?? current };
+      return { result: 'cancelled', row: done[0] ?? current };
     }
     // Asked in time, but the shop already marked it: the request still counts against a no-show fee.
     if (current.customer_cancelled_at === null) {
       await tx.query('UPDATE appointments SET customer_cancelled_at = $2, updated_at = $2 WHERE id = $1', [row.id, now]);
     }
-    return { cancelled: false, row: current };
+    return { result: 'refused', row: current };
   });
-  if (outcome.cancelled) return json({ appointment: customerAppointmentJSON(outcome.row) });
+  if (outcome.result === 'cancelled') return json({ appointment: customerAppointmentJSON(outcome.row) });
+  if (outcome.result === 'confirm') {
+    // A late cancellation needs a card and a fee, which `cancellingIsLate` checked.
+    const terms = outcome.row;
+    throw new ApiError(
+      'late_cancel_fee',
+      lateCancelWarning(terms.late_cancel_window_minutes ?? 0, terms.no_show_fee_cents ?? 0, isFullPrice(terms)),
+    );
+  }
 
   const latest = outcome.row;
   if (latest.status === 'cancelled') {

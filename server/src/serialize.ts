@@ -1,4 +1,4 @@
-import { feeCase, type FeeKind, type FeeReason } from './feecase.js';
+import { feeCase, isFullPrice, type FeeKind, type FeeReason } from './feecase.js';
 import { formatInstant } from './time.js';
 
 // Database rows → the API contract's JSON types (test/helpers/contract.ts has them as schemas).
@@ -103,6 +103,8 @@ export interface Appointment {
    */
   noShowFee: {
     amountCents: number;
+    /** Whether the fee is the booked service's whole price (it is at 100%): "the full service price". */
+    fullPrice: boolean;
     status: NoShowFeeStatus;
     chargedAt: string | null;
     message: string | null;
@@ -115,8 +117,8 @@ export interface Appointment {
     lateCancelWindowMinutes: number | null;
     /**
      * What the fee is for: once the shop tried to charge it, what that charge was for;
-     * before, the case that applies now (a late cancellation by the client, or a no-show),
-     * or null when neither does.
+     * before (or once a try that never reached Stripe was settled as not charged), the case
+     * that applies now (a late cancellation by the client, or a no-show), or null when neither does.
      */
     reason: NoShowFeeReason | null;
   } | null;
@@ -168,6 +170,7 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
       row.saved_card_id && row.no_show_fee_cents !== null
         ? {
             amountCents: row.no_show_fee_cents,
+            fullPrice: isFullPrice(row),
             // Only a fee Stripe reported as succeeded is "charged" (see noshowfee.ts).
             status: FEE_STATUS_OUT[row.no_show_fee_status],
             chargedAt: row.no_show_fee_charged_at ? formatInstant(row.no_show_fee_charged_at) : null,
@@ -190,9 +193,13 @@ export function customerAppointmentJSON(row: AppointmentRow): CustomerAppointmen
   return appointment;
 }
 
-/** The fee's `reason` in the JSON (see `Appointment.noShowFee`). */
+/**
+ * The fee's `reason` in the JSON (see `Appointment.noShowFee`): what the shop's try charges for while
+ * it shows (pending, charged, declined, needs the client); otherwise, also once a try that never
+ * reached Stripe was settled as not charged, the case that applies now.
+ */
 function feeReasonOf(row: AppointmentRow): NoShowFeeReason | null {
-  if (row.no_show_fee_reason) return FEE_REASON_OUT[row.no_show_fee_reason];
+  if (row.no_show_fee_reason && row.no_show_fee_status !== 'none') return FEE_REASON_OUT[row.no_show_fee_reason];
   const now = feeCase(row);
   return now.reason ? FEE_REASON_OUT[now.reason] : null;
 }
