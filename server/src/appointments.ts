@@ -9,7 +9,7 @@ import { ApiError, json, readJsonObject, readOptionalJsonObject } from './http.j
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
 import { appointmentJSON, STATUS_IN, type AppointmentRow, type AppointmentStatus } from './serialize.js';
-import { dayBounds, daysBetween, floorToMinute, localDate } from './time.js';
+import { dayBounds, daysBetween, floorToMinute, localDate, wholeSecond } from './time.js';
 import { calendarDate, email, instant, normalizeUSPhone, note, parse, personName, shortId, usPhone, UUID_RE } from './validation.js';
 
 export const BOOKINGS_PER_IP_PER_HOUR = 5;
@@ -248,11 +248,16 @@ const cancelRequest = z.object({
  * `late_cancel_fee` with the warning to show and changes nothing. The first time
  * the client cancelled is the one that counts, so a booking they cancelled early
  * (which the shop then reopened) stays free and asks nothing.
+ *
+ * The time is taken to the whole second, as the JSON writes it: the apps decide
+ * from `customerCancelledAt` whether to offer the late-cancellation fee, so a
+ * cancel that lands 400 ms inside the window (which they read as exactly 1 hour
+ * before) is free for the server too.
  */
 export async function cancelAppointment(ctx: Context): Promise<Response> {
   const row = await loadWithToken(ctx);
   const body = parse(cancelRequest, await readOptionalJsonObject(ctx.request));
-  const now = ctx.deps.now();
+  const now = wholeSecond(ctx.deps.now());
   // Locked while deciding, so the answer matches what happened even if the shop changes it at the same moment.
   const outcome = await ctx.deps.db.transaction(async (tx): Promise<{ result: 'cancelled' | 'refused' | 'confirm'; row: AppointmentRow }> => {
     const { rows } = await tx.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1 FOR UPDATE', [row.id]);

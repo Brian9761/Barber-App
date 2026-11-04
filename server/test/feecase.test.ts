@@ -14,6 +14,7 @@ import {
   windowLabel,
 } from '../src/feecase.js';
 import type { AppointmentRow } from '../src/serialize.js';
+import { wholeSecond } from '../src/time.js';
 
 // Which fee a booking with a card on file can be charged: a no-show, a late
 // cancellation, or none (and why). The cases are also written to
@@ -37,6 +38,9 @@ const booking = (changes: Partial<Terms> = {}): Terms => ({
 });
 const byClient = (minutes: number, changes: Partial<Terms> = {}) =>
   booking({ status: 'cancelled', cancelled_by: 'customer', customer_cancelled_at: minutesBefore(minutes), ...changes });
+/** Cancelled by the client `ms` milliseconds before the start, kept as the server keeps it: to the whole second. */
+const byClientMsBefore = (ms: number) =>
+  booking({ status: 'cancelled', cancelled_by: 'customer', customer_cancelled_at: wholeSecond(new Date(START.getTime() - ms)) });
 
 const CASES: { name: string; row: Terms; reason: AppointmentRow['no_show_fee_reason']; refusal: string | null }[] = [
   { name: 'booked', row: booking(), reason: null, refusal: 'Mark the appointment as a no-show first.' },
@@ -47,6 +51,13 @@ const CASES: { name: string; row: Terms; reason: AppointmentRow['no_show_fee_rea
   { name: 'cancelled 1 minute before', row: byClient(1), reason: 'late_cancel', refusal: null },
   { name: 'cancelled 59 minutes before', row: byClient(59), reason: 'late_cancel', refusal: null },
   { name: 'cancelled exactly 1 hour before', row: byClient(60), reason: null, refusal: "The client cancelled at least 1 hour before, so there's no fee." },
+  {
+    name: 'cancelled 400 ms inside the window, kept to the second: exactly 1 hour before',
+    row: byClientMsBefore(60 * 60_000 - 400),
+    reason: null,
+    refusal: "The client cancelled at least 1 hour before, so there's no fee.",
+  },
+  { name: 'cancelled 1 second inside the window', row: byClientMsBefore(60 * 60_000 - 1_000), reason: 'late_cancel', refusal: null },
   { name: 'cancelled 2 hours before', row: byClient(120), reason: null, refusal: "The client cancelled at least 1 hour before, so there's no fee." },
   {
     name: 'cancelled 2 hours before, with a 3-hour window',
@@ -127,6 +138,15 @@ describe('which fee a booking can be charged', () => {
     expect(cancelledLate(byClient(59))).toBe(true);
     expect(cancelledLate(byClient(10, { late_cancel_window_minutes: null }))).toBe(false);
     expect(cancelledLate(booking())).toBe(false);
+  });
+
+  it('a cancel time is decided as it is kept and written, to the second', () => {
+    // 59 min 59.6 s before is late by the millisecond, but the JSON (which the apps decide from)
+    // says exactly 1 hour before: the server keeps it to the whole second, so it's free for everyone.
+    const exact = new Date(START.getTime() - (60 * 60_000 - 400));
+    expect(cancelledLate(booking({ status: 'cancelled', cancelled_by: 'customer', customer_cancelled_at: exact }))).toBe(true);
+    expect(cancelledLate(byClientMsBefore(60 * 60_000 - 400))).toBe(false);
+    expect(cancelledLate(byClientMsBefore(60 * 60_000 - 1_000))).toBe(true);
   });
 
   it('a booking without a card on file is never a late cancellation', () => {
