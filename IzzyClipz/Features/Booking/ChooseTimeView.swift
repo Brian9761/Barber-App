@@ -10,7 +10,8 @@ import UIKit
 ///
 /// When the shop's server says this booking needs a card (no-show protection), the "Full Service
 /// Cancellation & No-Show Fee" notice shows under what's being booked, before any time is picked,
-/// and a picked time less than the late-cancellation window away says cancelling it may be charged.
+/// and a picked time less than the late-cancellation window away says, right over Continue (and to
+/// VoiceOver), that cancelling it may be charged.
 ///
 /// The screen's one red is the Continue bar; it stays `ink3` until a time is picked.
 struct ChooseTimeView: View {
@@ -94,9 +95,6 @@ private struct ChooseTimeScreen: View {
                     )
                 }
                 times
-                if let start = selectedStart, let lateNotice = policy?.lateCancelNotice(start: start, now: max(noticeClock, Date())) {
-                    ChooseTimeLateCancelNotice(text: lateNotice)
-                }
                 if let zone = BookingFlowCopy.timeZoneNote(at: selectedStart ?? Date()) {
                     Text(zone)
                         .textRole(.caption)
@@ -116,6 +114,11 @@ private struct ChooseTimeScreen: View {
             await policyReload
         }
         .stickyBottomBar {
+            // Right over the picked time's summary, so it's on screen wherever the time is in the
+            // list (the times inside the window are the day's first ones, at the top).
+            if let lateNotice {
+                ChooseTimeLateCancelNotice(text: lateNotice)
+            }
             ChooseTimeContinueBar(
                 summary: selectedStart.map { calendar.dateTimeLabel(for: $0) },
                 onContinue: continueToDetails
@@ -138,13 +141,12 @@ private struct ChooseTimeScreen: View {
             // Whether this booking needs a card, and the notice about the fee.
             await policies.load(choice.target)
         }
-        .task(id: LateCancelNoticeTimer(start: selectedStart, windowMinutes: policy?.lateCancelWindowMinutes)) {
+        .task(id: noticeTimer) {
             // The picked time comes inside the late-cancellation window while the client looks:
-            // show its note from that moment.
-            guard let start = selectedStart, let window = policy?.lateCancelWindowMinutes else { return }
-            let wait = start.addingTimeInterval(-Double(window) * 60).timeIntervalSinceNow
-            guard wait > 0, (try? await Task.sleep(for: .seconds(wait))) != nil else { return }
+            // show its note from that moment, and say it.
+            guard let wait = noticeTimer.wait(now: Date()), (try? await Task.sleep(for: .seconds(wait))) != nil else { return }
             noticeClock = Date()
+            announceLateNotice(for: selectedStart)
         }
         .onAppear {
             if loader.isStale(maxAge: Self.maxAge), loader.loadedAt != nil {
@@ -165,6 +167,30 @@ private struct ChooseTimeScreen: View {
     /// The shop's no-show policy for this choice, once the server has said.
     private var policy: IzzyAPI.NoShowPolicy? {
         policies.policy(for: choice.target)
+    }
+
+    /// "This time is less than 1 hour away, so cancelling it may be charged $45." for a picked time
+    /// inside the late-cancellation window.
+    private var lateNotice: String? {
+        lateNotice(for: selectedStart)
+    }
+
+    private func lateNotice(for start: Date?) -> String? {
+        guard let start else { return nil }
+        return policy?.lateCancelNotice(start: start, now: max(noticeClock, Date()))
+    }
+
+    /// When `lateNotice` starts to show for the picked time.
+    private var noticeTimer: LateCancelNoticeTimer {
+        LateCancelNoticeTimer(policy: policy, start: selectedStart)
+    }
+
+    /// VoiceOver says the note when a time inside the window is picked, or when the picked time
+    /// comes inside it: it's in the bar at the bottom, away from the times.
+    private func announceLateNotice(for start: Date?) {
+        if let text = lateNotice(for: start) {
+            UIAccessibility.post(notification: .announcement, argument: text)
+        }
     }
 
     // MARK: Times
@@ -199,6 +225,7 @@ private struct ChooseTimeScreen: View {
                 ChooseTimeGroupView(group: group, selectedStart: selectedStart) { slot in
                     selectedStart = slot.start
                     notice = nil
+                    announceLateNotice(for: slot.start)
                 }
             }
         case .noOpenings:
@@ -380,13 +407,8 @@ private struct ChooseTimeNotice: View {
     }
 }
 
-/// What the note about a picked time inside the late-cancellation window waits for.
-private struct LateCancelNoticeTimer: Equatable {
-    let start: Date?
-    let windowMinutes: Int?
-}
-
-/// Under the times: "This time is less than 1 hour away, so cancelling it may be charged $40."
+/// Over Continue, for a picked time inside the late-cancellation window: "This time is less than 1
+/// hour away, so cancelling it may be charged $40."
 private struct ChooseTimeLateCancelNotice: View {
     let text: String
 
@@ -395,6 +417,7 @@ private struct ChooseTimeLateCancelNotice: View {
             .textRole(.callout)
             .foregroundStyle(Theme.caution)
             .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityIdentifier("lateCancelNotice")
     }
 }

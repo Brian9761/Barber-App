@@ -55,6 +55,8 @@ private struct BookingReviewScreen: View {
     @Environment(SavedCardStore.self) private var cards
     @Environment(NoShowPolicyStore.self) private var policies
     @Environment(\.scenePhase) private var scenePhase
+    /// Set when the time comes inside the late-cancellation window, so the note about it shows then.
+    @State private var noticeClock = Date.distantPast
     private let calendar = AppData.bookingCalendar
 
     private var plan: BookingPlan { draft.plan }
@@ -67,18 +69,20 @@ private struct BookingReviewScreen: View {
 
     private var isBusy: Bool { submitter.isBooking || cardSetup.isWorking }
 
+    /// When "This time is less than 1 hour away…" starts to show.
+    private var noticeTimer: LateCancelNoticeTimer {
+        LateCancelNoticeTimer(policy: requirement.policy, start: plan.start)
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
                 BookingStepHeader(step: 5, title: "Review and book")
                 summary
-                if let policy = requirement.policy, policy.warning != nil {
-                    // Worked out again every minute: a time can come inside the late-cancellation window.
-                    TimelineView(.everyMinute) { context in
-                        if let warning = NoShowWarningContent(policy: policy, start: plan.start, now: context.date) {
-                            NoShowWarningCard(content: warning)
-                        }
-                    }
+                // Worked out from the clock now; `noticeTimer` brings it back when the time comes
+                // inside the late-cancellation window.
+                if let warning = NoShowWarningContent(policy: requirement.policy, start: plan.start, now: max(noticeClock, Date())) {
+                    NoShowWarningCard(content: warning)
                 }
                 ReviewCardSection(requirement: requirement, setup: cardSetup, onAddCard: addCard)
                     .disabled(submitter.isBooking)
@@ -136,6 +140,15 @@ private struct BookingReviewScreen: View {
         .task {
             // Usually already here from the times; asked again when it's more than a minute old.
             await policies.load(choice.target)
+        }
+        .task(id: noticeTimer) {
+            // The time comes inside the late-cancellation window while the client looks: say so
+            // from that moment.
+            guard let wait = noticeTimer.wait(now: Date()), (try? await Task.sleep(for: .seconds(wait))) != nil else { return }
+            noticeClock = Date()
+            if let notice = requirement.policy?.lateCancelNotice(start: plan.start, now: noticeClock) {
+                UIAccessibility.post(notification: .announcement, argument: notice)
+            }
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .active, !isBusy {

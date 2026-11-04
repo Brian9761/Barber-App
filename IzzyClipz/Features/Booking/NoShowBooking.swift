@@ -109,6 +109,36 @@ struct NoShowWarningContent: Equatable {
     }
 }
 
+/// When a picked time comes inside the late-cancellation window while the client looks at it, so
+/// Pick a day and time and Review show "This time is less than 1 hour away…" from that moment.
+///
+/// A once-a-minute timeline isn't enough: its moments are the starts of minutes, and a time on the
+/// hour or half hour comes inside a window of whole minutes exactly at the start of one (1:30 PM is
+/// an hour away at 12:30:00, which is still free). The note would then be a whole minute late, and
+/// a client booking at 12:30:40 would never see it.
+struct LateCancelNoticeTimer: Equatable {
+    let start: Date?
+    /// The window, when the note can show at all: the booking needs a card and late cancellations
+    /// are on.
+    let windowMinutes: Int?
+
+    init(policy: IzzyAPI.NoShowPolicy?, start: Date?) {
+        self.start = start
+        windowMinutes = policy?.required == true ? policy?.lateCancelWindowMinutes : nil
+    }
+
+    /// How long after the window starts the screen looks again: by then the time is inside it.
+    static let margin: TimeInterval = 0.25
+
+    /// How long to wait before the note shows, or `nil` when it already shows, or never will.
+    func wait(now: Date) -> TimeInterval? {
+        guard let start, let windowMinutes else { return nil }
+        let free = start.addingTimeInterval(-Double(windowMinutes) * 60).timeIntervalSince(now)
+        // Exactly the window away is still free: the note waits for the moment after.
+        return free >= 0 ? free + Self.margin : nil
+    }
+}
+
 /// Adds a card on Review: Stripe's page (a Checkout Session the shop's server makes in setup mode,
 /// so nothing is charged), then the shop's server keeps it under a new card token, and this iPhone
 /// keeps the token and "Visa •••• 4242" (`SavedCardStore`).

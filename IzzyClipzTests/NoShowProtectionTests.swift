@@ -399,6 +399,83 @@ final class NoShowWarningContentTests: XCTestCase {
     }
 }
 
+/// Pick a day and time and Review show "This time is less than 1 hour away…" from the moment the
+/// picked time comes inside the window, not a minute later.
+final class LateCancelNoticeTimerTests: XCTestCase {
+    private let policy = NoShowTestData.carlosPolicy
+    /// 1:30 PM on the test day.
+    private let start = TestData.now.addingTimeInterval(90 * 60)
+    /// 12:30 PM: exactly an hour before, the last moment cancelling 1:30 PM is free.
+    private var lastFreeMoment: Date { start.addingTimeInterval(-60 * 60) }
+    private let notice = "This time is less than 1 hour away, so cancelling it may be charged $45."
+
+    /// The minute a once-a-minute timeline got wrong: its moment for 12:30:00–12:30:59 is 12:30:00
+    /// sharp, which is still free, so a client booking 1:30 PM at 12:30:40 never saw the note.
+    func testTheMinuteTheTimeComesInsideTheWindow() throws {
+        let timer = LateCancelNoticeTimer(policy: policy, start: start)
+
+        // 12:30:00 sharp: still free, so no note yet. The screen looks again a moment later.
+        XCTAssertNil(NoShowWarningContent(policy: policy, start: start, now: lastFreeMoment)?.notice)
+        let wait = try XCTUnwrap(timer.wait(now: lastFreeMoment))
+        XCTAssertEqual(wait, LateCancelNoticeTimer.margin, accuracy: 0.001)
+        XCTAssertGreaterThan(wait, 0)
+        XCTAssertEqual(NoShowWarningContent(policy: policy, start: start, now: lastFreeMoment.addingTimeInterval(wait))?.notice, notice)
+
+        // 12:30:40: the note shows, worked out from the clock, and there's nothing left to wait for.
+        let booking = lastFreeMoment.addingTimeInterval(40)
+        XCTAssertEqual(NoShowWarningContent(policy: policy, start: start, now: booking)?.notice, notice)
+        XCTAssertEqual(policy.lateCancelNotice(start: start, now: booking), notice)
+        XCTAssertNil(timer.wait(now: booking))
+    }
+
+    /// Before the window, the screen waits until just after it starts, however long that is.
+    func testWaitsUntilJustAfterTheWindowStarts() throws {
+        let timer = LateCancelNoticeTimer(policy: policy, start: start)
+        XCTAssertEqual(try XCTUnwrap(timer.wait(now: TestData.now)), 30 * 60 + LateCancelNoticeTimer.margin, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(timer.wait(now: lastFreeMoment.addingTimeInterval(-1))), 1 + LateCancelNoticeTimer.margin, accuracy: 0.001)
+        XCTAssertNil(NoShowWarningContent(policy: policy, start: start, now: lastFreeMoment.addingTimeInterval(-1))?.notice)
+
+        // With a two-hour window, 1:30 PM is inside it already at noon: the note shows straight away.
+        var twoHours = policy
+        twoHours.lateCancelWindowMinutes = 120
+        XCTAssertNil(LateCancelNoticeTimer(policy: twoHours, start: start).wait(now: TestData.now))
+        XCTAssertEqual(
+            NoShowWarningContent(policy: twoHours, start: start, now: TestData.now)?.notice,
+            "This time is less than 2 hours away, so cancelling it may be charged $45."
+        )
+    }
+
+    /// Nothing to wait for without a note to show: no time picked, no card needed, or late
+    /// cancellations off.
+    func testNoWaitWithoutANote() {
+        XCTAssertNil(LateCancelNoticeTimer(policy: policy, start: nil).wait(now: TestData.now))
+        XCTAssertNil(LateCancelNoticeTimer(policy: nil, start: start).wait(now: TestData.now))
+        XCTAssertNil(LateCancelNoticeTimer(policy: .notRequired, start: start).wait(now: TestData.now))
+        var noLateCancel = policy
+        noLateCancel.lateCancelWindowMinutes = nil
+        XCTAssertNil(LateCancelNoticeTimer(policy: noLateCancel, start: start).wait(now: TestData.now))
+        // A policy that doesn't need a card has no window to wait for, whatever came with it.
+        var notRequired = policy
+        notRequired.required = false
+        XCTAssertNil(LateCancelNoticeTimer(policy: notRequired, start: start).windowMinutes)
+    }
+
+    /// The screens start waiting again when the picked time or the window changes, and only then.
+    func testATimerForEachTimeAndWindow() {
+        let timer = LateCancelNoticeTimer(policy: policy, start: start)
+        XCTAssertEqual(timer, LateCancelNoticeTimer(policy: policy, start: start))
+        XCTAssertNotEqual(timer, LateCancelNoticeTimer(policy: policy, start: start.addingTimeInterval(30 * 60)))
+        var twoHours = policy
+        twoHours.lateCancelWindowMinutes = 120
+        XCTAssertNotEqual(timer, LateCancelNoticeTimer(policy: twoHours, start: start))
+        // Another fee is the same wait (the note's words come from the policy on screen).
+        var otherFee = policy
+        otherFee.minFeeCents = 2_000
+        otherFee.maxFeeCents = 2_000
+        XCTAssertEqual(timer, LateCancelNoticeTimer(policy: otherFee, start: start))
+    }
+}
+
 // MARK: - Adding a card
 
 @MainActor
