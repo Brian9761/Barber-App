@@ -10,7 +10,16 @@ import './styles/pages.css';
 import './styles/app.css';
 import { App, ROUTER_FUTURE } from './App';
 import { CatalogProvider } from './data/catalog';
+import { openOtherSitesOutside } from './pwa/externalLinks';
+import { listenForInstallPrompt } from './pwa/installPrompt';
+import { markStandalone } from './pwa/platform';
 import { checkForUpdatesWhenShown, registerServiceWorker } from './pwa/register';
+
+// Before the page draws: the browser's offer to install can come at any moment, and the styles
+// and links need to know whether the site is open as the app.
+listenForInstallPrompt();
+markStandalone();
+openOtherSitesOutside();
 
 const root = document.getElementById('root');
 if (!root) throw new Error('The page has no #root element');

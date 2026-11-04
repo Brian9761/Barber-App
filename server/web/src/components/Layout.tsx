@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCatalog, useShopContact } from '../data/catalog';
+import { InstallHint } from '../pwa/InstallHint';
 import { OfflineNotice } from '../pwa/OfflineNotice';
+import { useStandalone } from '../pwa/platform';
 import { UpdateBar } from '../pwa/UpdateBar';
 import { hoursSummary } from '../lib/shopTime';
 import { Icon } from './Icon';
@@ -14,7 +16,14 @@ const NAV_LINKS = [
   { to: '/reviews', label: 'Reviews' },
   { to: '/visit', label: 'Visit' },
   { to: '/appointments', label: 'My appointments' },
+  { to: '/app', label: 'Get the app' },
 ];
+
+/** The nav's links. Opened as the app, "Get the app" has done its job. */
+function useNavLinks() {
+  const standalone = useStandalone();
+  return standalone ? NAV_LINKS.filter((link) => link.to !== '/app') : NAV_LINKS;
+}
 
 /** Every page: the global nav, the page, and the footer. */
 export function Layout() {
@@ -41,6 +50,7 @@ export function Layout() {
       <GlobalNav />
       <div className="app-ribbons">
         <OfflineNotice />
+        <InstallHint />
       </div>
       <main id="main" tabIndex={-1} ref={mainRef}>
         <Outlet />
@@ -53,6 +63,7 @@ export function Layout() {
 
 export function GlobalNav() {
   const { pathname } = useLocation();
+  const links = useNavLinks();
   // The page the menu was opened on: going to another page closes it in that same render, so the
   // page under it is reachable again (not inert) by the time Layout moves focus to the new page.
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -92,12 +103,13 @@ export function GlobalNav() {
   return (
     <nav className="globalnav" aria-label="Izzy Clipz">
       <div className="container globalnav__inner">
+        <AppBack />
         {/* As on apple.com, the logo is the link home, and its name, "Izzy Clipz", is the link's. */}
         <Link to="/" className="globalnav__logo">
           <Logo height={38} label="Izzy Clipz" />
         </Link>
         <ul className="globalnav__links">
-          {NAV_LINKS.map((link) => (
+          {links.map((link) => (
             <li key={link.to}>
               <NavLink to={link.to} className="globalnav__link">
                 {link.label}
@@ -131,7 +143,7 @@ export function GlobalNav() {
                   Home
                 </NavLink>
               </li>
-              {NAV_LINKS.map((link) => (
+              {links.map((link) => (
                 <li key={link.to}>
                   <NavLink to={link.to} className="globalnav__menu-link">
                     {link.label}
@@ -153,6 +165,24 @@ export function GlobalNav() {
         </div>
       ) : null}
     </nav>
+  );
+}
+
+/**
+ * Opened as the app there's no browser Back button, so the nav has one, on every page but Home
+ * and the booking steps (which have their own), once there's somewhere to go back to.
+ */
+function AppBack() {
+  const standalone = useStandalone();
+  const navigate = useNavigate();
+  const { pathname } = useLocation();
+  const index = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+  if (!standalone || index === 0 || pathname === '/' || pathname.startsWith('/book')) return null;
+  return (
+    <button type="button" className="globalnav__back" onClick={() => navigate(-1)}>
+      <Icon name="chevronLeft" />
+      <span>Back</span>
+    </button>
   );
 }
 
@@ -195,6 +225,9 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/appointments">My appointments</Link>
+              </li>
+              <li>
+                <Link to="/app">Get the app</Link>
               </li>
             </ul>
           </div>

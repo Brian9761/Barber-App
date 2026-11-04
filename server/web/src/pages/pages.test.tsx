@@ -45,6 +45,7 @@ describe('every page', () => {
       ['Reviews', '/reviews'],
       ['Visit', '/visit'],
       ['My appointments', '/appointments'],
+      ['Get the app', '/app'],
       ['Book an appointment', '/book'],
     ];
     expect(within(nav).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(links.map(([, href]) => href));

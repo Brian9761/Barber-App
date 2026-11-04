@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { AppointmentsPage } from './pages/AppointmentsPage';
 import { BarbersPage } from './pages/BarbersPage';
 import { BusinessPage } from './pages/BusinessPage';
+import { GetTheAppPage } from './pages/GetTheAppPage';
 import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ReviewsPage } from './pages/ReviewsPage';
@@ -30,6 +31,7 @@ export function App() {
         <Route path="visit" element={<VisitPage />} />
         <Route path="book/*" element={<BookingRoutes />} />
         <Route path="appointments" element={<AppointmentsPage />} />
+        <Route path="app" element={<GetTheAppPage />} />
         <Route path="business/*" element={<BusinessPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
