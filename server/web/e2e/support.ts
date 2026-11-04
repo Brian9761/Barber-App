@@ -1,7 +1,7 @@
 // What every end-to-end test shares: no console errors (checked after each
-// test), an address of its own (the server limits bookings per network) and a
-// phone number of its own (and per number), axe-core, screenshots, and the
-// switches serve.ts offers under /__e2e/.
+// test), an address and a phone number of its own (the server limits bookings
+// per network and per number), axe-core, screenshots that also check the page
+// fits the screen, and the switches serve.ts offers under /__e2e/.
 
 import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
@@ -14,7 +14,7 @@ export { expect };
 /** Where the screenshots go: E2E_SHOTS_DIR, or test-results/shots. */
 export const SHOTS_DIR = resolve(process.env.E2E_SHOTS_DIR || join('test-results', 'shots'));
 
-/** The phrases the browser logs as errors for answers a test expects (a 409 for a taken time, say). */
+/** What the browser logs as errors, less the lines a test expects (its own line for a 409 the page handles, say). */
 export class ConsoleWatch {
   readonly errors: string[] = [];
   private readonly allowed: RegExp[] = [];
