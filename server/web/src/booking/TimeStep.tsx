@@ -93,7 +93,15 @@ function TimePicker({ catalog, target }: { catalog: Catalog; target: BookingTarg
 
   const slots = selectedDay ? (availability.slotsByDay[selectedDay] ?? []) : [];
   const groups = groupByPart(slots, zone);
-  const picked = draft.start && slots.some((s) => s.start === draft.start) ? draft.start : null;
+  // The picked time stays picked while the client looks at other days and months; it's
+  // dropped (above) only once its own day has been checked and it isn't open any more.
+  const isStillOpen = (start: string): boolean => {
+    const day = localDate(new Date(start), zone);
+    const status = availability.statusOf(day);
+    if (status === 'notLoaded') return true;
+    return status === 'open' && (availability.slotsByDay[day] ?? []).some((slot) => slot.start === start);
+  };
+  const picked = draft.start && isStillOpen(draft.start) ? draft.start : null;
   const zoneNote = zoneOffsetMinutes(new Date(picked ?? now), zone) !== -new Date(picked ?? now).getTimezoneOffset();
 
   return (

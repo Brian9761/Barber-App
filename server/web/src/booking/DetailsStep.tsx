@@ -28,7 +28,7 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
   const [values, setValues] = useState<Details>(initial);
   const [showProblems, setShowProblems] = useState(false);
   const refs = { name: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null), email: useRef<HTMLInputElement>(null), note: useRef<HTMLTextAreaElement>(null) };
-  const ids = { name: useId(), phone: useId(), email: useId(), note: useId() };
+  const ids = { name: useId(), phone: useId(), email: useId(), note: useId(), remember: useId() };
 
   const problems: Record<FieldName, string | null> = {
     name: nameProblem(values.name),
@@ -131,13 +131,24 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
             aria-describedby={`${ids.note}-hint${problem('note') ? ` ${ids.note}-problem` : ''}`}
           />
         </Field>
-        <label className="checkbox">
-          <input type="checkbox" checked={values.remember} onChange={(e) => set('remember')(e.target.checked)} />
+        <div className="checkbox">
+          <input
+            id={ids.remember}
+            type="checkbox"
+            checked={values.remember}
+            onChange={(e) => set('remember')(e.target.checked)}
+            aria-describedby={`${ids.remember}-hint`}
+          />
           <span className="checkbox__text">
-            <span className="checkbox__label">Remember me on this computer</span>
-            <span className="secondary">Your name and number fill in next time you book here.</span>
+            {/* The label covers the whole box, so a click anywhere on it ticks the box. */}
+            <label className="checkbox__label" htmlFor={ids.remember}>
+              Remember me on this computer
+            </label>
+            <span id={`${ids.remember}-hint`} className="secondary">
+              Your name and number fill in next time you book here.
+            </span>
           </span>
-        </label>
+        </div>
         <p className="secondary">Your name and number are sent only to {catalog.shop.name}, to book and manage this appointment.</p>
         <div className="step-actions">
           <button type="submit" className="button button--primary button--large step-actions__continue">

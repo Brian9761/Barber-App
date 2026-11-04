@@ -7,15 +7,27 @@
   top: 0;
   z-index: 100;
   height: var(--nav-height);
-  background: var(--nav-bg);
-  -webkit-backdrop-filter: saturate(180%) blur(20px);
-  backdrop-filter: saturate(180%) blur(20px);
   color: var(--nav-text);
   --color-focus: var(--color-link-on-dark);
 }
 
+/*
+ * The see-through, blurred bar is painted by a layer under the nav's content, not by the
+ * nav itself: a backdrop-filter on the nav would make it the box the phone menu's fixed
+ * panel is placed in, and the panel would shrink to nothing.
+ */
+.globalnav::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--nav-bg);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
+}
+
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .globalnav {
+  .globalnav::before {
     background: rgba(22, 22, 23, 0.97);
   }
 }
@@ -783,6 +795,7 @@ textarea.field__input {
 }
 
 .checkbox {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
@@ -790,6 +803,15 @@ textarea.field__input {
   padding: var(--space-3) var(--space-4);
   border-radius: var(--radius-field);
   background: var(--color-bg-alt);
+  cursor: pointer;
+}
+
+/* The whole box is the label's click target. */
+.checkbox__label::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   cursor: pointer;
 }
 
@@ -1217,11 +1239,16 @@ textarea.field__input {
   display: grid;
 }
 
+/* One term and its details (<dt> then <dd>s, straight in the row, as <dl> needs), with "Change" at the right. */
 .summary-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-3);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'label action'
+    'value action'
+    'detail action';
+  column-gap: var(--space-3);
+  align-items: start;
   padding: var(--space-3) 0;
   border-top: 1px solid var(--color-line);
 }
@@ -1230,24 +1257,33 @@ textarea.field__input {
   border-top: 0;
 }
 
-.summary-row__text {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
 .summary-row__label {
+  grid-area: label;
+  margin-bottom: 2px;
   font-size: var(--text-small);
   color: var(--color-text-secondary);
 }
 
 .summary-row__value {
+  grid-area: value;
+  min-width: 0;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .summary-row__detail {
   color: var(--color-text-secondary);
+}
+
+.summary-row > .summary-row__detail {
+  grid-area: detail;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.summary-row__action {
+  grid-area: action;
+  align-self: center;
 }
 
 .summary-row__empty {

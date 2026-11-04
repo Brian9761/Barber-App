@@ -246,14 +246,14 @@ function ReviewRow({
 }) {
   return (
     <div className="summary-row">
-      <div className="summary-row__text">
-        <dt className="summary-row__label">{label}</dt>
-        <dd className="summary-row__value">{value}</dd>
-        {detail ? <dd className="summary-row__detail">{detail}</dd> : null}
-      </div>
-      <button type="button" className="text-button" onClick={onChange} aria-label={changeLabel}>
-        Change
-      </button>
+      <dt className="summary-row__label">{label}</dt>
+      <dd className="summary-row__value">{value}</dd>
+      {detail ? <dd className="summary-row__detail">{detail}</dd> : null}
+      <dd className="summary-row__action">
+        <button type="button" className="text-button" onClick={onChange} aria-label={changeLabel}>
+          Change
+        </button>
+      </dd>
     </div>
   );
 }

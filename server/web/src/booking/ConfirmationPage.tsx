@@ -83,11 +83,9 @@ export function ConfirmationPage({ catalog }: { catalog: Catalog }) {
 function ConfirmationRow({ label, value, detail }: { label: string; value: string; detail?: string }) {
   return (
     <div className="summary-row">
-      <div className="summary-row__text">
-        <dt className="summary-row__label">{label}</dt>
-        <dd className="summary-row__value">{value}</dd>
-        {detail ? <dd className="summary-row__detail">{detail}</dd> : null}
-      </div>
+      <dt className="summary-row__label">{label}</dt>
+      <dd className="summary-row__value">{value}</dd>
+      {detail ? <dd className="summary-row__detail">{detail}</dd> : null}
     </div>
   );
 }

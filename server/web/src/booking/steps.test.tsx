@@ -63,6 +63,28 @@ describe('booking, one question at a time', () => {
     expect(loadDraft()).toMatchObject({ serviceId: 'haircut', choice: { kind: 'any' }, start: '2026-11-03T19:00:00Z' });
   });
 
+  it('keeps the picked time while the client looks at other days', async () => {
+    mockApi([
+      ['GET /api/availability', { body: availability }],
+      ['GET /api/no-show-policy', { body: policyNotRequired }],
+    ]);
+    renderApp('/book');
+    await userEvent.click(screen.getByTestId('service-haircut'));
+    await userEvent.click(screen.getByTestId('any-barber'));
+    await userEvent.click(await screen.findByTestId('time-2026-11-03T19:00:00Z'));
+
+    // Another day's times show, and the time picked on Tuesday is still the one.
+    await userEvent.click(screen.getByTestId('day-2026-11-04'));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Wednesday, November 4' })).toBeTruthy();
+    expect(screen.getByTestId('time-2026-11-04T19:00:00Z').getAttribute('aria-pressed')).toBe('false');
+    const continueButton = screen.getByRole('button', { name: 'Continue' }) as HTMLButtonElement;
+    expect(continueButton.disabled).toBe(false);
+    expect(screen.getByText('Tue, Nov 3 at 11 AM', { selector: '.step-actions__note' })).toBeTruthy();
+    await userEvent.click(continueButton);
+    expect(title()).toBe('Your details');
+    expect(loadDraft()).toMatchObject({ start: '2026-11-03T19:00:00Z' });
+  });
+
   it('says what’s missing in the details, and puts the cursor there', async () => {
     mockApi([
       ['GET /api/availability', { body: availability }],

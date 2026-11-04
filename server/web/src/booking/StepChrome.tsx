@@ -59,37 +59,29 @@ function SummaryCard({ catalog }: { catalog: Catalog }) {
       </h2>
       <dl className="summary-list">
         <div className="summary-row">
-          <div className="summary-row__text">
-            <dt className="summary-row__label">Service</dt>
-            <dd className="summary-row__value">{summary.serviceName ?? notPicked}</dd>
-          </div>
+          <dt className="summary-row__label">Service</dt>
+          <dd className="summary-row__value">{summary.serviceName ?? notPicked}</dd>
         </div>
         <div className="summary-row">
-          <div className="summary-row__text">
-            <dt className="summary-row__label">Barber</dt>
-            <dd className="summary-row__value">{summary.barberName ?? notPicked}</dd>
-          </div>
+          <dt className="summary-row__label">Barber</dt>
+          <dd className="summary-row__value">{summary.barberName ?? notPicked}</dd>
         </div>
         <div className="summary-row">
-          <div className="summary-row__text">
-            <dt className="summary-row__label">Day and time</dt>
-            <dd className="summary-row__value">{draft.start ? dateTimeLabel(new Date(draft.start), catalog.timeZone) : notPicked}</dd>
-          </div>
+          <dt className="summary-row__label">Day and time</dt>
+          <dd className="summary-row__value">{draft.start ? dateTimeLabel(new Date(draft.start), catalog.timeZone) : notPicked}</dd>
         </div>
         <div className="summary-row">
-          <div className="summary-row__text">
-            <dt className="summary-row__label">Price</dt>
-            <dd className="summary-row__value">
-              {summary.priceLabel ? (
-                <>
-                  {summary.priceLabel}
-                  <span className="summary-row__detail"> · {summary.durationLabel}</span>
-                </>
-              ) : (
-                notPicked
-              )}
-            </dd>
-          </div>
+          <dt className="summary-row__label">Price</dt>
+          <dd className="summary-row__value">
+            {summary.priceLabel ? (
+              <>
+                {summary.priceLabel}
+                <span className="summary-row__detail"> · {summary.durationLabel}</span>
+              </>
+            ) : (
+              notPicked
+            )}
+          </dd>
         </div>
       </dl>
       <p className="summary-card__pay">No payment now. You pay at the shop.</p>
