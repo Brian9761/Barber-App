@@ -242,6 +242,12 @@ export async function phoneSafeArea(page: Page, insets = { top: 47, bottom: 34, 
   await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets });
 }
 
+/** The demo retired (serve-demo.ts): the retired site (`npm run build:retired`) at its address instead, or the demo back. */
+export async function setRetired(request: APIRequestContext, on: boolean): Promise<void> {
+  const response = await request.post('/__e2e/retire', { data: { on } });
+  expect(response.ok(), await response.text()).toBe(true);
+}
+
 /** A new version of the service worker on the server (or, with `reset`, the one the build made). */
 export async function newWorkerVersion(request: APIRequestContext, reset = false): Promise<void> {
   const response = await request.post('/__e2e/new-version', { data: { reset } });
@@ -309,9 +315,9 @@ export async function fillDetails(page: Page, client: Client): Promise<void> {
   if (client.note !== undefined) await fields.note.fill(client.note);
 }
 
-/** The appointments this browser keeps (id and manage token), as My appointments reads them. */
+/** The appointments this browser keeps (id and manage token), as My appointments reads them (the demo's under a key of its own). */
 export async function storedAppointments(page: Page): Promise<{ id: string; manageToken: string; appointment: { status: string; start: string; barberName: string } }[]> {
-  return page.evaluate(() => JSON.parse(window.localStorage.getItem('izzy.appointments.v1') ?? '[]'));
+  return page.evaluate(() => JSON.parse(window.localStorage.getItem('izzy.appointments.v1') ?? window.localStorage.getItem('izzy.demo.appointments.v1') ?? '[]'));
 }
 
 /** Presses Tab until `target` has focus (and checks the focus ring shows), like someone without a mouse. */

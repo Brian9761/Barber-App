@@ -109,6 +109,21 @@ test('a haircut with any barber: booked, in My appointments, and cancelled', asy
   await expectAccessible(page, 'My appointments');
   await screenshot(page, testInfo, '17-appointments-booked');
 
+  // In an app added to an iPhone's Home Screen, with website data of its own: only the cookies
+  // were copied from Safari. The booking's id and manage token came along in one (the server
+  // never reads it), and My appointments brings the appointment in from the shop.
+  const [booked] = await storedAppointments(page);
+  const carried = (await page.context().cookies()).find((cookie) => cookie.name === 'izzy_appointments');
+  expect(carried).toMatchObject({ path: '/', sameSite: 'Strict', httpOnly: false });
+  expect(carried!.value.startsWith(`${booked!.id}.${booked!.manageToken}.`)).toBe(true);
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.reload();
+  await expect(card.getByTestId('appointment-status')).toHaveText('Next appointment');
+  expect((await storedAppointments(page)).map((s) => [s.id, s.manageToken])).toEqual([[booked!.id, booked!.manageToken]]);
+
   // Cancel, after a question that puts "Keep appointment" first
   await card.getByRole('button', { name: 'Cancel appointment' }).click();
   const dialog = page.getByTestId('cancel-dialog');

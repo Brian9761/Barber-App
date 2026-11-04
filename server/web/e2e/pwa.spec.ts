@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Page } from '@playwright/test';
 import {
@@ -107,8 +108,13 @@ test('after one visit the app opens offline, and a page it doesn’t keep shows 
   await page.goto('/services');
   await expect(page.getByRole('heading', { level: 1, name: 'Services and prices' })).toBeVisible();
   // The menu still shows, from the copy the app keeps; booking needs the shop, and the bar says how to call.
+  // The demo answers in the browser, so it all still works, and the bar says that.
   await expect(page.getByRole('main').getByText('Haircut', { exact: true }).first()).toBeVisible();
-  await expect(page.getByTestId('offline-notice')).toHaveText("You're offline. To book, call the shop: (442) 341-3053");
+  await expect(page.getByTestId('offline-notice')).toHaveText(
+    isDemo(testInfo)
+      ? "You're offline. The demo still works. To book for real, call the shop: (442) 341-3053"
+      : "You're offline. To book, call the shop: (442) 341-3053",
+  );
   await expect(page.getByTestId('offline-notice').locator(PHONE_LINK)).toBeVisible();
   await expectAccessible(page, 'a page opened offline');
   await screenshot(page, testInfo, '30-offline-app');
@@ -159,9 +165,12 @@ test('a new version waits for a tap on Reload, and never reloads the page by its
   }
 });
 
+/** jsQR, to run in the page: from the test itself, so no page's content policy stands in its way. */
+const JSQR = readFileSync(require.resolve('jsqr/dist/jsQR.js'), 'utf8');
+
 /** Decodes the QR code on the page with jsQR, as a phone's camera would read it. */
 async function readQrCode(page: Page): Promise<string | null> {
-  await page.addScriptTag({ path: require.resolve('jsqr/dist/jsQR.js') });
+  await page.evaluate(JSQR);
   return page.evaluate(async () => {
     const svg = document.querySelector('svg.qr-code');
     if (!svg) return null;
@@ -244,6 +253,8 @@ test.describe('Get the app on Android', () => {
     await expect(page.getByTestId('installed')).toHaveText('Izzy Clipz is installed.Find it on your Home Screen.');
     expect(await page.evaluate(() => (window as Window & { asked?: boolean }).asked)).toBe(true);
     await expect(page.getByTestId('install-now')).toHaveCount(0);
+    // Installed: the Add to Home Screen bar has done its job in this browser, for good.
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('izzy.installHint.v1') ?? 'null'))).toMatchObject({ dismissed: true, installed: true });
   });
 });
 
@@ -254,6 +265,9 @@ test.describe('Get the app on a computer', () => {
     test.skip(isPhone(testInfo), 'A computer');
     await page.goto('/app');
     await expect(page.getByRole('radio', { name: 'Computer' })).toBeChecked();
+    await expect(page.getByTestId('get-app-lead')).toHaveText(
+      'Put Izzy Clipz with your other apps. It opens in its own window, with no App Store and nothing to pay.',
+    );
     await expect(page.getByTestId('computer-steps').locator('.install-step__text')).toHaveText([
       'Open this page in Chrome or Edge.',
       'Click the install button at the right end of the address bar.',
@@ -304,6 +318,25 @@ test.describe('the Add to Home Screen bar on phones', () => {
     await expect(third.getByRole('heading', { level: 1, name: 'Visit the shop' })).toBeVisible();
     await expect(third.getByTestId('install-hint')).toHaveCount(0);
   });
+
+  test('goes for good once Chrome says the app is installed', async ({ page, context }, testInfo) => {
+    test.skip(!isPhone(testInfo), 'Phones only');
+    await page.goto('/visit');
+    await expect(page.getByRole('heading', { level: 1, name: 'Visit the shop' })).toBeVisible();
+    await page.close();
+    const second = await context.newPage();
+    await second.goto('/visit');
+    await expect(second.getByTestId('install-hint')).toBeVisible();
+    // Chrome installs it (from its own menu, say), and says so.
+    await second.evaluate(() => window.dispatchEvent(new Event('appinstalled')));
+    await expect(second.getByTestId('install-hint')).toHaveCount(0);
+    await second.close();
+
+    const third = await context.newPage();
+    await third.goto('/visit');
+    await expect(third.getByRole('heading', { level: 1, name: 'Visit the shop' })).toBeVisible();
+    await expect(third.getByTestId('install-hint')).toHaveCount(0);
+  });
 });
 
 test.describe('opened as the app', () => {
@@ -325,6 +358,7 @@ test.describe('opened as the app', () => {
     expect(await nav.evaluate((element) => getComputedStyle(element).paddingTop)).toBe(phone ? '47px' : '0px');
     expect(await page.locator('.globalfooter').evaluate((element) => getComputedStyle(element).paddingBottom)).toBe(phone ? '66px' : '32px');
     await expect(nav.getByRole('link', { name: 'Get the app' })).toHaveCount(0);
+    await expect(page.getByRole('navigation', { name: 'Site directory' }).getByRole('link', { name: 'Get the app' })).toHaveCount(0);
     await expect(nav.getByRole('button', { name: 'Back' })).toHaveCount(0);
     await expectAccessible(page, 'Home, opened as the app');
     await screenshot(page, testInfo, '24-app-home', { fullPage: false });
