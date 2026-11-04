@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { MIN_OWNER_KEY_LENGTH, type Config } from './config.js';
 import type { Deps } from './deps.js';
 import { ApiError } from './http.js';
@@ -43,6 +43,32 @@ export type OwnerAuth = { kind: 'key' } | { kind: 'computer'; session: ComputerS
 /** A session's `last_used_at` is written at most this often, so every request isn't a write. */
 export const SESSION_TOUCH_MINUTES = 10;
 
+const SESSION_RANDOM_BYTES = 16;
+
+/** The owner key's seal on a session token's random half. */
+function sessionSeal(ownerKey: string, random: Uint8Array): Buffer {
+  return createHmac('sha256', ownerKey).update('izzy-clipz-computer-session:').update(random).digest().subarray(0, 32 - SESSION_RANDOM_BYTES);
+}
+
+/**
+ * A computer's session token: 16 random bytes (drawn from all of `random`, at least 16 random
+ * bytes) and 16 bytes of the owner key's HMAC of them, in base64url (43 characters, like a
+ * manage token). Only its SHA-256 is stored. Because the token carries the key's seal, setting a
+ * new OWNER_KEY (say, after it leaked) signs every computer out.
+ */
+export function newSessionToken(ownerKey: string, random: Uint8Array): string {
+  if (random.length < SESSION_RANDOM_BYTES) throw new Error(`A session token needs ${SESSION_RANDOM_BYTES} random bytes`);
+  const part = createHash('sha256').update(random).digest().subarray(0, SESSION_RANDOM_BYTES);
+  return Buffer.concat([part, sessionSeal(ownerKey, part)]).toString('base64url');
+}
+
+/** Whether `token` is a session token sealed with this owner key (checked before any database lookup). */
+export function sessionTokenSealed(ownerKey: string, token: string): boolean {
+  if (!isNewManageToken(token)) return false;
+  const bytes = Buffer.from(token, 'base64url');
+  return timingSafeEqual(bytes.subarray(SESSION_RANDOM_BYTES), sessionSeal(ownerKey, bytes.subarray(0, SESSION_RANDOM_BYTES)));
+}
+
 /** The live session (not revoked, not expired) for a computer's token, marked as used. */
 async function sessionForToken(deps: Pick<Deps, 'db' | 'now'>, token: string): Promise<ComputerSessionRow | null> {
   const now = deps.now();
@@ -74,7 +100,7 @@ export async function requireOwner(
   const header = ctx.request.headers.get('authorization');
   if (bearerMatches(header, config.ownerKey)) return { kind: 'key' };
   const token = bearerToken(header);
-  const session = token && isWellFormedManageToken(token) ? await sessionForToken(ctx.deps, token) : null;
+  const session = token && sessionTokenSealed(config.ownerKey, token) ? await sessionForToken(ctx.deps, token) : null;
   if (!session) {
     throw new ApiError('unauthorized', "That owner key isn't right. Check it and sign in again.", {
       headers: { 'www-authenticate': 'Bearer' },

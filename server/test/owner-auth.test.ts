@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createRouter } from '../src/app.js';
-import { hashManageToken } from '../src/auth.js';
+import { hashManageToken, newSessionToken } from '../src/auth.js';
 import { fixtureUuid, OWNER_KEY, useHarness } from './helpers/harness.js';
 
 // Monday Nov 2 2026, 11:10 AM PST.
@@ -90,7 +90,7 @@ describe('owner auth for every owner route (the router’s own list)', () => {
   let tokens = 0;
   async function insertSession(state: 'live' | 'revoked' | 'expired' = 'live'): Promise<string> {
     tokens += 1;
-    const token = `session-token-${String(tokens).padStart(4, '0')}`.padEnd(43, 'z');
+    const token = newSessionToken(OWNER_KEY, Buffer.alloc(16, tokens));
     const now = h.now.getTime();
     await h.database.pool.query(
       `INSERT INTO computer_sessions (id, token_hash, name, created_at, last_used_at, expires_at, revoked_at)

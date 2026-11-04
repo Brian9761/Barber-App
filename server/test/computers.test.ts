@@ -277,3 +277,38 @@ describe('computer sessions', () => {
     expect((await h.call('GET', '/api/owner/me', { headers: { authorization: mac.token } })).status).toBe(401);
   });
 });
+
+describe('a new owner key signs every computer out', () => {
+  it('session tokens are sealed with the owner key: after OWNER_KEY changes, they stop working', async () => {
+    const mac = await session();
+    expect((await h.call('GET', '/api/owner/me', as(mac.token))).status).toBe(200);
+    h.config.ownerKey = `${OWNER_KEY}-rotated`;
+    const res = await h.call('GET', '/api/owner/me', as(mac.token));
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe('unauthorized');
+    // A code made with the old key doesn't work with the new one either.
+    h.config.ownerKey = OWNER_KEY;
+    const code = await newCode();
+    const rotated = `${OWNER_KEY}-rotated`;
+    h.config.ownerKey = rotated;
+    expect((await signIn(code, 'Chrome on Mac', '198.51.100.70')).body.error).toEqual(wrongCode);
+    // With the new key, a new code signs in.
+    const minted = await h.call('POST', '/api/owner/computer-codes', { headers: { authorization: `Bearer ${rotated}` } });
+    expect(minted.status, minted.text).toBe(201);
+    const fresh = await signIn(minted.body.code, 'Chrome on Mac', '198.51.100.71');
+    expect(fresh.status).toBe(201);
+    expect((await h.call('GET', '/api/owner/me', as(fresh.body.token))).status).toBe(200);
+  });
+
+  it('a token that isn’t sealed with the key is turned down without looking in the database', async () => {
+    const forged = Buffer.alloc(32, 3).toString('base64url');
+    const { rows } = await h.database.pool.query('SELECT count(*)::int AS n FROM computer_sessions');
+    expect(rows[0].n).toBe(0);
+    await h.database.pool.query(
+      `INSERT INTO computer_sessions (id, token_hash, name, created_at, last_used_at, expires_at)
+       VALUES (gen_random_uuid(), $1, 'Forged', now(), now(), now() + interval '1 day')`,
+      [sha256(forged)],
+    );
+    expect((await h.call('GET', '/api/owner/me', as(forged))).status).toBe(401);
+  });
+});

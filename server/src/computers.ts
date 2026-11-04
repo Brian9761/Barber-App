@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
-import { hashManageToken, ownerKeyConfigured, ownerNotConfigured, requireOwner, type ComputerSessionRow } from './auth.js';
+import { hashManageToken, newSessionToken, ownerKeyConfigured, ownerNotConfigured, requireOwner, type ComputerSessionRow } from './auth.js';
 import { ApiError, json, noContent, readJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
@@ -14,10 +14,10 @@ import { parse, UUID_RE } from './validation.js';
 // - POST /api/owner/computer-codes (the owner key only, so a computer can't make codes): a new
 //   code, good once for 10 minutes. It replaces any code before it. Only an HMAC of it, keyed
 //   with the owner key, is stored, so the database alone can't tell the code.
-// - POST /api/computer-sessions { code, name } (public): the code buys a session token (32
-//   random bytes, base64url; only its SHA-256 is stored) that works like the owner key on most
-//   owner routes for 30 days (auth.ts). 10 tries per network per 10 minutes, and 5 wrong tries
-//   from anywhere burn the code.
+// - POST /api/computer-sessions { code, name } (public): the code buys a session token (43
+//   characters of base64url, sealed with the owner key; only its SHA-256 is stored) that works
+//   like the owner key on most owner routes for 30 days (auth.ts). 10 tries per network per 10
+//   minutes, and 5 wrong tries from anywhere burn the code. A new OWNER_KEY signs every computer out.
 // - GET /api/owner/computer-sessions lists the computers signed in; DELETE …/:id signs one out,
 //   DELETE … all of them, and DELETE …/current the computer asking (the website's Sign out).
 
@@ -135,7 +135,8 @@ export async function createComputerSession(ctx: Context): Promise<Response> {
     await tx.query('UPDATE computer_codes SET used_at = $2 WHERE id = $1', [active.id, now]);
     // Sessions that ended (signed out or expired) aren't kept.
     await tx.query('DELETE FROM computer_sessions WHERE revoked_at IS NOT NULL OR expires_at <= $1', [now]);
-    const token = deps.manageToken();
+    // 32 random bytes, like a manage token; the token is sealed with the owner key.
+    const token = newSessionToken(ownerKey, Buffer.from(deps.manageToken(), 'base64url'));
     const { rows: created } = await tx.query<ComputerSessionRow>(
       `INSERT INTO computer_sessions (id, token_hash, name, created_at, last_used_at, expires_at)
        VALUES ($1, $2, $3, $4, $4, $5)

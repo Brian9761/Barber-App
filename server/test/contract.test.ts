@@ -257,7 +257,8 @@ describe('contract fixtures (API v1)', () => {
     );
     h.advance(30);
     const second = (await h.call('POST', '/api/owner/computer-codes', owner)).body.code;
-    await h.call('POST', '/api/computer-sessions', { body: { code: second, name: 'Edge on Windows' }, ip: '198.51.100.20' });
+    const pc = await h.call('POST', '/api/computer-sessions', { body: { code: second, name: 'Edge on Windows' }, ip: '198.51.100.20' });
+    expect(pc.status, pc.text).toBe(201);
     h.advance(15);
     check('computer-sessions', await h.call('GET', '/api/owner/computer-sessions', { headers: { authorization: `Bearer ${mac.token}` } }));
   });
