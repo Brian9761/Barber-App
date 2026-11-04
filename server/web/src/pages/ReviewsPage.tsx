@@ -1,4 +1,4 @@
-import type { Review, ReviewSource } from '../api/types';
+import type { Review, Reviews, ReviewSource } from '../api/types';
 import { Icon } from '../components/Icon';
 import { ErrorState, Loading, PreferToCall, Stars } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
@@ -6,10 +6,15 @@ import { useCatalog } from '../data/catalog';
 import { FALLBACK_SHOP } from '../data/fallback';
 import { useReviews } from '../data/reviews';
 import { DemoNotice } from '../demo/DemoNotice';
+import { isDemo } from '../demo/mode';
 import { MONTH_SHORT, localDate, parseDate } from '../lib/shopTime';
 
 // Live reviews from Google and Yelp, each in its own section with its own
 // attribution, never mixed or averaged together (Google's and Yelp's terms).
+//
+// The demo has no reviews from Google or Yelp, only samples that say so: they're
+// shown as "Sample reviews", with none of Google's labels, attribution or terms,
+// and links to the shop's real reviews.
 
 const GOOGLE_TERMS = 'https://maps.google.com/help/terms_maps/';
 const GOOGLE_PRIVACY = 'https://policies.google.com/privacy';
@@ -21,17 +26,22 @@ export function ReviewsPage() {
   const googleMaps = catalog?.shop.googleMapsUrl ?? FALLBACK_SHOP.googleMapsUrl;
   const reviewUrl = catalog?.shop.googleReviewUrl;
   const zone = catalog?.timeZone ?? 'America/Los_Angeles';
+  const demo = isDemo();
 
   return (
     <>
       <header className="page-header container">
         <h1>Reviews</h1>
-        <p className="lead secondary">What clients say about Izzy Clipz on Google and Yelp, as they wrote it.</p>
+        <p className="lead secondary">
+          {demo
+            ? 'On the real site, this page shows what clients say about Izzy Clipz on Google and Yelp.'
+            : 'What clients say about Izzy Clipz on Google and Yelp, as they wrote it.'}
+        </p>
         <PreferToCall className="page-header__call" />
       </header>
       <div className="container container--narrow reviews">
         <DemoNotice about="reviews" />
-        {reviews.status === 'loading' ? <Loading text="Loading reviews from Google…" /> : null}
+        {reviews.status === 'loading' ? <Loading text={demo ? 'Loading the sample reviews…' : 'Loading reviews from Google…'} /> : null}
         {reviews.status === 'error' ? (
           <div className="reviews__error">
             <ErrorState title="Couldn't load the reviews" message={reviews.message} onRetry={reviews.retry} />
@@ -45,7 +55,8 @@ export function ReviewsPage() {
             </div>
           </div>
         ) : null}
-        {reviews.status === 'ready' ? (
+        {reviews.status === 'ready' && demo ? <SampleSection reviews={reviews.reviews} zone={zone} /> : null}
+        {reviews.status === 'ready' && !demo ? (
           <>
             {reviews.reviews.google.available ? <GoogleSection source={reviews.reviews.google} zone={zone} /> : null}
             {reviews.reviews.yelp.available ? <YelpSection source={reviews.reviews.yelp} zone={zone} /> : null}
@@ -91,7 +102,7 @@ export function ReviewsPage() {
         </div>
       </section>
 
-      {reviews.status === 'ready' && reviews.reviews.google.available ? (
+      {reviews.status === 'ready' && reviews.reviews.google.available && !demo ? (
         <div className="container container--narrow reviews__terms">
           <p className="secondary small">
             This site shows content from Google Maps. Using it is subject to Google's terms and privacy policy:{' '}
@@ -128,6 +139,33 @@ function GoogleSection({ source, zone }: { source: ReviewSource; zone: string })
         See all reviews on Google Maps <Icon name="external" className="button__icon" />
       </a>
       <p className="secondary small">Reviews aren't verified by Google, but Google checks for and removes fake content when it's identified.</p>
+    </section>
+  );
+}
+
+/** The demo's samples: not Google's or Yelp's, so under a heading of their own, with links to the real ones. */
+function SampleSection({ reviews, zone }: { reviews: Reviews; zone: string }) {
+  const samples = [...reviews.google.reviews, ...reviews.yelp.reviews];
+  return (
+    <section className="review-source" aria-labelledby="sample-reviews" data-testid="sample-reviews">
+      <h2 id="sample-reviews" className="review-source__title">
+        Sample reviews
+      </h2>
+      {samples.length > 0 ? (
+        <ol className="review-list">
+          {samples.map((review, index) => (
+            <ReviewItem key={`${review.author}-${index}`} review={review} zone={zone} />
+          ))}
+        </ol>
+      ) : null}
+      <div className="review-source__links">
+        <a className="button button--secondary" href={reviews.google.url}>
+          See our reviews on Google Maps <Icon name="external" className="button__icon" />
+        </a>
+        <a className="button button--secondary" href={reviews.yelp.url}>
+          Read our reviews on Yelp <Icon name="external" className="button__icon" />
+        </a>
+      </div>
     </section>
   );
 }
@@ -173,7 +211,8 @@ function publishedLabel(review: Review, zone: string): string | null {
   return `${MONTH_SHORT[month - 1]} ${day}, ${year}`;
 }
 
-function ReviewItem({ review, site, linkTitle, zone }: { review: Review; site: string; linkTitle: string; zone: string }) {
+/** One review; `site` and `linkTitle` name where its link goes ("Google Maps", "View on Google Maps"). Samples have neither. */
+function ReviewItem({ review, site, linkTitle, zone }: { review: Review; site?: string; linkTitle?: string; zone: string }) {
   const when = publishedLabel(review, zone);
   return (
     <li className="review">
@@ -200,7 +239,7 @@ function ReviewItem({ review, site, linkTitle, zone }: { review: Review; site: s
         </div>
       </div>
       {review.text ? <p className="review__text">{review.text}</p> : null}
-      {review.url ? (
+      {review.url && site && linkTitle ? (
         <a className="review__link" href={review.url} aria-label={`${linkTitle}: ${review.author}'s review on ${site}`}>
           {linkTitle} <Icon name="external" className="inline-icon" />
         </a>
