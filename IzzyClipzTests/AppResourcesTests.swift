@@ -21,10 +21,43 @@ final class AppResourcesTests: XCTestCase {
         }
     }
 
-    func testTheLogoIsTransparentSoItSitsOnAnyLightSurface() throws {
+    /// The shop's logo is white art on a transparent background, so it reads as is on the ink
+    /// canvas, the black sticker and the badge.
+    func testTheLogoIsWhiteOnTransparentSoItSitsOnTheDarkCanvas() throws {
         let logo = try XCTUnwrap(UIImage(named: Asset.logo)?.cgImage)
         let alpha = logo.alphaInfo
         XCTAssertTrue([.first, .last, .premultipliedFirst, .premultipliedLast].contains(alpha), "Logo has no alpha channel")
+
+        // Its pixels, drawn into a known layout: RGBA, 8 bits each, in sRGB.
+        let width = logo.width, height = logo.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let space = CGColorSpace(name: CGColorSpace.sRGB),
+                  let context = CGContext(
+                      data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8,
+                      bytesPerRow: width * 4, space: space, bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+                  )
+            else { return false }
+            context.draw(logo, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        XCTAssertTrue(drawn, "Couldn't read the logo's pixels")
+        var clear = 0, solid = 0, solidNotWhite = 0
+        for pixel in stride(from: 0, to: pixels.count, by: 4) {
+            switch pixels[pixel + 3] {
+            case 0:
+                clear += 1
+            case 255:
+                solid += 1
+                if min(pixels[pixel], pixels[pixel + 1], pixels[pixel + 2]) < 235 { solidNotWhite += 1 }
+            default:
+                break
+            }
+        }
+        let total = width * height
+        XCTAssertGreaterThan(clear, total / 3, "The logo should be on a transparent background")
+        XCTAssertGreaterThan(solid, total / 5, "The logo's art is missing")
+        XCTAssertEqual(solidNotWhite, 0, "The logo's art should be white")
     }
 
     func testBrandColorsExist() {

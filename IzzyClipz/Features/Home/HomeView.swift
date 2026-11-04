@@ -27,7 +27,7 @@ struct HomeView: View {
 }
 
 /// The scrolling page under a pinned header. Home has no back button to keep, so its navigation bar
-/// is hidden and the shop's own header (mascot, wordmark, reminders bell) takes its place. Every
+/// is hidden and the shop's own header (logo badge, wordmark, reminders bell) takes its place. Every
 /// screen pushed from here shows the native bar again, with its back button and swipe-back.
 private struct HomeScreen: View {
     @Environment(AppointmentStore.self) private var appointments
@@ -90,7 +90,7 @@ private struct HomeContent: View {
 
 // MARK: - Header
 
-/// The mascot sticker, "Izzy Clipz" and where the shop is, with the reminders bell on the right.
+/// The logo badge, "Izzy Clipz" and where the shop is, with the reminders bell on the right.
 /// Pinned over the content in frosted ink (solid ink2 with Reduce Transparency). It stops growing
 /// at xxLarge text so it never eats the screen; the bell shows the large content viewer above that.
 private struct HomeHeader: View {
@@ -98,7 +98,7 @@ private struct HomeHeader: View {
 
     var body: some View {
         HStack(spacing: Theme.Space.l) {
-            MascotSticker(size: 44)
+            LogoBadge(size: 44)
             VStack(alignment: .leading, spacing: 3) {
                 Wordmark()
                 Text("Barbershop · \(shop.address.city), \(shop.address.state)")

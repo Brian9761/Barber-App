@@ -1,9 +1,10 @@
 import SwiftUI
 
-// MARK: - Logo and mascot
+// MARK: - Logo
 
-/// The shop's official logo (barber-pole mascot and "Izzy Clipz" wordmark), with a transparent
-/// background. Its blue letters vanish on ink, so on the dark canvas use `LogoSticker`.
+/// The shop's official logo: "Izzy Clipz" in heavy western letters, a barber pole as the first I
+/// and a straight razor as the L, with drips. White art on a transparent background, so it reads
+/// on the dark canvas as is.
 struct LogoImage: View {
     var body: some View {
         Image(Asset.logo)
@@ -13,58 +14,49 @@ struct LogoImage: View {
     }
 }
 
-/// Just the barber-pole mascot from the logo, uncropped. Prefer `MascotSticker`: the cut-out has
-/// stray letter fragments along its right edge.
-struct MascotImage: View {
-    var body: some View {
-        Image(Asset.mascot)
-            .resizable()
-            .scaledToFit()
-            .accessibilityHidden(true)
-    }
-}
-
-/// The official logo on a white sticker, slapped on at a slight angle: on the dark canvas the
-/// logo always sits on white. Rounded corners, a few points of white around the art and the
-/// sticker shadow.
+/// The official logo as a sticker, slapped on at a slight angle: the shop's own look, white on a
+/// black rounded plate, with a hairline light edge so the plate stands out from the ink canvas
+/// and from photos, a few points of black around the art and the sticker shadow.
 ///
 ///     LogoSticker(width: 120)                       // Visit's hero, bottom-left
 ///     LogoSticker(width: 72, rotation: .degrees(7)) // the corner of a card
 struct LogoSticker: View {
-    /// The sticker's width, white border included.
+    /// The sticker's width, black border included.
     var width: CGFloat = 120
     var rotation: Angle = .degrees(-6)
 
     var body: some View {
-        let border = max(4, width * 0.045)
+        let border = max(5, width * 0.08)
+        let plate = RoundedRectangle(cornerRadius: Theme.Radius.sticker * width / 120, style: .continuous)
         LogoImage()
             .frame(width: width - 2 * border)
             .padding(border)
-            .background(Color.white, in: RoundedRectangle(cornerRadius: Theme.Radius.sticker * width / 120, style: .continuous))
+            .background(Color.black, in: plate)
+            .overlay(plate.strokeBorder(Color.white.opacity(0.25), lineWidth: 1))
             .rotationEffect(rotation)
             .shadow(color: .black.opacity(0.55), radius: 9, y: 8)
     }
 }
 
-/// The mascot's head in a bone circle with a white ring, tilted like a sticker (46 pt in the Home
-/// header, 32 pt in the compact one). Decorative: hidden from VoiceOver.
-struct MascotSticker: View {
-    var size: CGFloat = 46
+/// The logo in a black circle with a thin white ring, tilted slightly like a sticker (44 pt in
+/// the Home header, 40 pt in Visit's footer). Decorative: hidden from VoiceOver.
+struct LogoBadge: View {
+    /// The black circle's diameter, the white ring not included.
+    var size: CGFloat = 44
 
     var body: some View {
-        Image(Asset.mascot)
+        Image(Asset.logo)
             .resizable()
             .scaledToFit()
-            // The head crop from the spec: the art at 1.96 × the circle, nudged up and left so the
-            // stray letter fragments on the cut-out's right edge stay outside the circle.
-            .frame(width: size * 1.96)
-            .offset(x: -0.565 * size, y: -0.30 * size)
-            .frame(width: size, height: size, alignment: .topLeading)
-            .background(Theme.bone)
+            // As large as fits: at 72% of the circle's height, the logo's corners stay inside it,
+            // and its letters stay big enough to read.
+            .frame(height: size * 0.72)
+            .frame(width: size, height: size)
+            .background(Color.black)
             .clipShape(Circle())
             .padding(size > 40 ? 2.5 : 2)
             .background(Color.white, in: Circle())
-            .rotationEffect(.degrees(-8))
+            .rotationEffect(.degrees(-6))
             .shadow(color: .black.opacity(0.55), radius: size > 40 ? 7 : 5, y: size > 40 ? 6 : 4)
             .accessibilityHidden(true)
     }
