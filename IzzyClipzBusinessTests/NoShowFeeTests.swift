@@ -77,10 +77,134 @@ final class NoShowFeeTests: XCTestCase {
             message: "Late cancellation fee for Haircut with Flowxbori, Mon, Nov 2 at 11:30 AM: the client cancelled at 10:50 AM, less than 1 hour before. They agreed to it when booking.",
             button: "Charge $35"
         ))
+        XCTAssertEqual(FeePanel.reopenWarning(for: lee, now: TestClock.now), Self.reopenLateCancelWarning)
+    }
+
+    /// What Reopen says first for a late cancellation that can still be charged.
+    private static let reopenLateCancelWarning = "Once it's reopened, the $35 late cancellation fee can't be charged any more. "
+        + "The client cancelled in the app, so a no-show fee can't be charged either."
+    /// What Reopen says first for a booking the client cancelled in the app in time.
+    private static let reopenCancelledInAppWarning = "The client cancelled this booking in the app, so once it's reopened, it can't be charged a no-show fee. "
+        + "To keep a no-show fee, ask them to book again in the app instead."
+
+    func testALateCancellationOnAnotherDaySaysWhichDay() throws {
+        let harness = Harness(options: cardsOnFile())
+        var lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        // Booked with a 24-hour window: Lee's Monday 11:30 AM haircut, cancelled Sunday at 3 PM.
+        lee.noShowFee?.lateCancelWindowMinutes = 1_440
+        lee.noShowFee?.customerCancelledAt = TestClock.at(15, 0, on: TestClock.today.adding(days: -1))
+        XCTAssertTrue(lee.isCancelledLate)
         XCTAssertEqual(
-            FeePanel.reopenWarning(for: lee, now: TestClock.now),
-            "Once it's reopened, the $35 late cancellation fee can't be charged any more."
+            panel(lee)?.action?.confirmation?.message,
+            "Late cancellation fee for Haircut with Flowxbori, Mon, Nov 2 at 11:30 AM: the client cancelled on Sun, Nov 1 at 3 PM, "
+                + "less than 24 hours before. They agreed to it when booking."
         )
+        // Cancelled the same day: the time says it all.
+        lee.noShowFee?.customerCancelledAt = TestClock.at(9, 15)
+        XCTAssertEqual(
+            panel(lee)?.action?.confirmation?.message,
+            "Late cancellation fee for Haircut with Flowxbori, Mon, Nov 2 at 11:30 AM: the client cancelled at 9:15 AM, "
+                + "less than 24 hours before. They agreed to it when booking."
+        )
+    }
+
+    func testReopeningABookingTheClientCancelledSaysANoShowFeeIsGone() async throws {
+        let harness = Harness(options: cardsOnFile())
+        var lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        // Cancelled the day before, in time (free); then the client calls to have the time back.
+        lee.noShowFee?.customerCancelledAt = TestClock.at(10, 0, on: TestClock.today.adding(days: -1))
+        XCTAssertNil(lee.chargeableFee(at: TestClock.now))
+        XCTAssertEqual(FeePanel.reopenWarning(for: lee, now: TestClock.now), Self.reopenCancelledInAppWarning)
+        // Also once the shop cancelled it after the client did: the server still keeps that they did.
+        var shopToo = lee
+        shopToo.cancelledBy = .shop
+        XCTAssertEqual(FeePanel.reopenWarning(for: shopToo, now: TestClock.now), Self.reopenCancelledInAppWarning)
+        // Not for one only the shop cancelled: reopened, it can still be a no-show.
+        var shopOnly = shopToo
+        shopOnly.noShowFee?.customerCancelledAt = nil
+        XCTAssertNil(FeePanel.reopenWarning(for: shopOnly, now: TestClock.now))
+        // Nor without a card on file, nor for a visit that isn't cancelled (reopening it changes nothing).
+        var noCard = lee
+        noCard.card = nil
+        XCTAssertNil(FeePanel.reopenWarning(for: noCard, now: TestClock.now))
+        var completed = lee
+        completed.status = .completed
+        completed.cancelledBy = nil
+        XCTAssertNil(FeePanel.reopenWarning(for: completed, now: TestClock.now))
+
+        // What the warning says is what the sample server (like the server) does: Lee cancelled late,
+        // the owner reopens her booking, and she doesn't come.
+        let later = TestClock.at(11, 40)
+        let after = Harness(options: cardsOnFile(), now: later)
+        let lateCancel = try XCTUnwrap(after.appointment(named: "Lee Sample"))
+        XCTAssertEqual(FeePanel.reopenWarning(for: lateCancel, now: later), Self.reopenLateCancelWarning)
+        _ = try await after.api.setStatus(.booked, ofAppointment: lateCancel.id)
+        let noShow = try await after.api.setStatus(.noShow, ofAppointment: lateCancel.id)
+        XCTAssertNil(noShow.chargeableFee(at: later))
+        XCTAssertNil(panel(noShow, at: later)?.action)
+        do {
+            _ = try await after.api.chargeNoShowFee(appointmentId: lateCancel.id)
+            XCTFail("a client who cancelled in the app is never charged a no-show fee")
+        } catch {
+            XCTAssertEqual((error as? APIError)?.code, IzzyAPI.ErrorCode.notChargeable)
+        }
+    }
+
+    func testThePaymentRowSaysAChargedFeeApartFromTheService() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        var summary = PaymentSummary(appointment: andre)
+        XCTAssertEqual(summary.title, "Not paid yet")
+        XCTAssertEqual(summary.value, andre.priceLabel)
+        XCTAssertNil(summary.feeNote)
+        summary = PaymentSummary(appointment: try XCTUnwrap(harness.appointment(named: "Marcus Sample")))
+        XCTAssertEqual(summary.title, "Paid")
+        XCTAssertEqual(summary.value, "$40.00")
+        XCTAssertNil(summary.feeNote)
+
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        XCTAssertEqual(PaymentSummary(appointment: kim).title, "Not paid yet", "nothing charged yet")
+        // Charged: the service still isn't paid, and the fee is said apart, so it isn't taken again.
+        let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        summary = PaymentSummary(appointment: charged)
+        XCTAssertEqual(summary.title, "Service not paid")
+        XCTAssertEqual(summary.value, "$35")
+        XCTAssertEqual(summary.feeNote, "The $35 no-show fee was charged to the card on file.")
+        let lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        let lateFee = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
+        XCTAssertEqual(PaymentSummary(appointment: lateFee).feeNote, "The $35 late cancellation fee was charged to the card on file.")
+        // Only a fee Stripe charged counts.
+        for status in [IzzyAPI.NoShowFeeStatus.declined, .needsAction, .pending, .none] {
+            var other = charged
+            other.noShowFee?.status = status
+            XCTAssertEqual(PaymentSummary(appointment: other).title, "Not paid yet", "\(status)")
+            XCTAssertNil(PaymentSummary(appointment: other).feeNote, "\(status)")
+        }
+        // Paid for the service as well: Paid, and the fee still said apart.
+        var paidToo = charged
+        paidToo.payment = IzzyAPI.AppointmentPayment(status: .paid, amountCents: 3_500, paidAt: TestClock.now)
+        summary = PaymentSummary(appointment: paidToo)
+        XCTAssertEqual(summary.title, "Paid")
+        XCTAssertEqual(summary.value, "$35.00")
+        XCTAssertEqual(summary.feeNote, "The $35 no-show fee was charged to the card on file.")
+    }
+
+    func testTurningProtectionOffKeepsTheFeesOfBookingsMadeWithACard() async throws {
+        let harness = Harness(options: cardsOnFile())
+        XCTAssertTrue(harness.server.noShowSettings.enabled, "the sample clients booked with it on")
+        // Like the server, a fee follows the terms its booking was made with, never today's settings.
+        _ = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(enabled: false, lateCancelEnabled: false))
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        XCTAssertEqual(panel(kim)?.action?.title, "Charge no-show fee ($35)")
+        let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        XCTAssertEqual(charged.noShowFee?.status, .charged)
+        let lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        XCTAssertEqual(lee.noShowFee?.lateCancelWindowMinutes, 60, "the window it was booked with")
+        XCTAssertEqual(panel(lee)?.action?.title, "Charge late cancellation fee ($35)")
+        let lateFee = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
+        XCTAssertEqual(lateFee.noShowFee?.status, .charged)
+        XCTAssertEqual(lateFee.noShowFee?.reason, .lateCancel)
+        XCTAssertTrue(NoShowSettingsStore.offFooter.contains("you can still charge it"), "Settings says so")
     }
 
     func testWhenNoFeeCanBeChargedTheDetailsSayWhy() async throws {
@@ -119,13 +243,13 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(panel(shopCancelled)?.status, .notCharged(note: "The shop cancelled this booking, so there's no fee."))
         XCTAssertFalse(shopCancelled.isCancelledLate)
 
-        // Cancelled in time: free.
+        // Cancelled in time: free, and once reopened it can't be charged a no-show fee either.
         var early = lee
         early.noShowFee?.customerCancelledAt = TestClock.at(10, 30)
         XCTAssertFalse(early.isCancelledLate)
         XCTAssertEqual(panel(early)?.status, .notCharged(note: "The client cancelled at least 1 hour before, so there's no fee."))
         XCTAssertNil(panel(early)?.action)
-        XCTAssertNil(FeePanel.reopenWarning(for: early, now: TestClock.now))
+        XCTAssertEqual(FeePanel.reopenWarning(for: early, now: TestClock.now), Self.reopenCancelledInAppWarning)
 
         // Marked a no-show before it started (before the server refused that).
         XCTAssertEqual(panel(kim, at: TestClock.at(9, 30))?.status, .notCharged(note: "The appointment hasn't started yet, so it can't be a no-show."))
@@ -158,9 +282,80 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(panel.status, .pending(FeePanel.pendingMessage))
         XCTAssertEqual(panel.action, FeePanel.Action(title: "Check again", confirmation: nil))
         XCTAssertEqual(panel.action?.checksAgain, true, "it only finishes the try that was confirmed")
-        // Even once the visit is marked completed: Check again settles it with the server.
+        // Even once the visit is marked completed: Check again settles it with the server, and
+        // then it only asks Stripe, so it says so.
         kim.status = .completed
         XCTAssertEqual(self.panel(kim)?.action?.title, "Check again")
+        XCTAssertEqual(self.panel(kim)?.status, .pending(FeePanel.pendingCheckOnlyMessage))
+    }
+
+    func testCheckAgainSaysItCanStillSendTheChargeUntilTheAppointmentIsReopened() throws {
+        // It finishes the try: Stripe first, then the same charge again if Stripe never got it.
+        XCTAssertEqual(
+            FeePanel.pendingMessage,
+            "Stripe hasn't confirmed this charge yet. Check again finishes it: if it went through, it shows as charged, "
+                + "and if Stripe never got it, it's sent now. To not charge it, reopen the appointment first."
+        )
+        XCTAssertFalse(FeePanel.pendingMessage.contains("to see if"), "it's not only a look")
+        XCTAssertEqual(
+            FeePanel.pendingCheckOnlyMessage,
+            "Stripe hasn't confirmed this charge yet. Check again asks Stripe how it went: if it went through, it shows as charged, and if not, nothing is charged."
+        )
+        let harness = Harness(options: cardsOnFile())
+        for name in ["Kim Sample", "Lee Sample"] {
+            var appointment = try XCTUnwrap(harness.appointment(named: name))
+            let reason = appointment.chargeableFee(at: TestClock.now)
+            appointment.noShowFee?.status = .pending
+            appointment.noShowFee?.reason = reason
+            XCTAssertEqual(panel(appointment)?.status, .pending(FeePanel.pendingMessage), "\(name) can still be charged")
+            // Reopened: nothing more can be charged, so Check again only asks.
+            appointment.status = .booked
+            appointment.cancelledBy = nil
+            XCTAssertEqual(panel(appointment)?.status, .pending(FeePanel.pendingCheckOnlyMessage), "\(name) reopened")
+            XCTAssertEqual(panel(appointment)?.action?.title, "Check again")
+        }
+    }
+
+    func testADeclinedFeeThatCantBeTriedAgainSaysWhyAndOffersNoTry() async throws {
+        var options = cardsOnFile()
+        options.nextFeeAnswer = .declined
+        let harness = Harness(options: options)
+        let tryAgain = "You can try the card again later, or ask the client to pay at the shop."
+
+        // Lee's late cancellation is declined: it can be tried again while it stays cancelled...
+        let lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        let declined = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
+        XCTAssertEqual(panel(declined)?.footer, tryAgain)
+        XCTAssertEqual(panel(declined)?.action?.title, "Charge again ($35)")
+        // ...but not once the shop reopens it: no button, and no "try again".
+        let reopened = try await harness.api.setStatus(.booked, ofAppointment: lee.id)
+        let shown = try XCTUnwrap(panel(reopened))
+        XCTAssertEqual(shown.status, .declined(FakeServer.insufficientFundsMessage), "what Stripe said stays")
+        XCTAssertNil(shown.action)
+        XCTAssertEqual(shown.footer, "The client cancelled this booking in the app, so there's no fee.")
+
+        // Kim's no-show is declined, then she comes after all and the visit is completed.
+        harness.server.options.nextFeeAnswer = .declined
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        _ = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        let booked = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+        // Reopened after the start: marking a no-show again makes it chargeable again.
+        XCTAssertNil(panel(booked)?.action)
+        XCTAssertEqual(panel(booked)?.footer, "If the client didn't come, mark a no-show. Then you can charge the fee.")
+        let completed = try await harness.api.setStatus(.completed, ofAppointment: kim.id)
+        XCTAssertNil(panel(completed)?.action)
+        XCTAssertEqual(panel(completed)?.footer, "The appointment is marked completed, so there's no fee to charge.")
+
+        // The same for a fee the client's bank wanted them to approve.
+        var needsClient = reopened
+        needsClient.noShowFee?.status = .needsAction
+        needsClient.noShowFee?.message = FakeServer.authenticationMessage
+        XCTAssertNil(panel(needsClient)?.action)
+        XCTAssertEqual(panel(needsClient)?.footer, "The client cancelled this booking in the app, so there's no fee.")
+        var stillCancelled = declined
+        stillCancelled.noShowFee?.status = .needsAction
+        XCTAssertNil(panel(stillCancelled)?.footer, "it can be tried again: the status says what to do")
+        XCTAssertEqual(panel(stillCancelled)?.action?.title, "Charge again ($35)")
     }
 
     func testAChargedFeeSaysWhenAndWhereRefundsAreMade() throws {
@@ -218,12 +413,16 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(try badges("Jay Sample"), ["No-show"])
         XCTAssertEqual(try badges("Sam Sample"), ["Cancelled"])
         XCTAssertEqual(try badges("Andre Sample"), ["Booked"])
-        XCTAssertEqual(try badges("Kim Sample"), ["No-show", "Card on file"])
-        XCTAssertEqual(try badges("Lee Sample"), ["Cancelled late", "Card on file"])
-        XCTAssertEqual(try badges("Nia Sample"), ["Booked", "Card on file"])
+        // VoiceOver hears "ending in", not each dot.
+        XCTAssertEqual(try badges("Kim Sample"), ["No-show", "Card on file, Visa ending in 4242"])
+        XCTAssertEqual(try badges("Lee Sample"), ["Cancelled late", "Card on file, Visa ending in 4242"])
+        XCTAssertEqual(try badges("Nia Sample"), ["Booked", "Card on file, Visa ending in 4242"])
 
         let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
         XCTAssertEqual(AppointmentBadges(appointment: kim).items.map(\.tone), [.status(.noShow), .card])
+        // On screen, the card as the spec words it: "Card on file · Visa •••• 4242".
+        XCTAssertEqual(AppointmentBadges(appointment: kim).items.map(\.text), ["No-show", "Card on file · Visa •••• 4242"])
+        XCTAssertEqual(FeePanel.spokenCard(IzzyAPI.CardOnFile(brand: "amex", last4: "0005")), "American Express ending in 0005")
         _ = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
         XCTAssertEqual(try badges("Kim Sample"), ["No-show", "No-show fee $35 charged"])
         XCTAssertEqual(AppointmentBadges(appointment: try XCTUnwrap(harness.appointment(named: "Kim Sample"))).items.last?.tone, .feeCharged)
@@ -242,7 +441,13 @@ final class NoShowFeeTests: XCTestCase {
         }
         // A card without a fee (never sent by the server) still says it's on file.
         other.noShowFee = nil
-        XCTAssertEqual(AppointmentBadges(appointment: other).spoken, ["No-show", "Card on file"])
+        XCTAssertEqual(AppointmentBadges(appointment: other).spoken, ["No-show", "Card on file, Visa ending in 4242"])
+        XCTAssertEqual(AppointmentBadges(appointment: other).items.last?.text, "Card on file · Visa •••• 4242")
+        // A fee without the card's details (never sent either): just "Card on file".
+        var bare = kim
+        bare.card = nil
+        XCTAssertEqual(AppointmentBadges(appointment: bare).items.last, AppointmentBadges.Item(text: "Card on file", tone: .card))
+        XCTAssertEqual(AppointmentBadges(appointment: bare).spoken, ["No-show", "Card on file"])
     }
 
     func testPaymentsTodayLabelsTheFees() {
@@ -426,11 +631,16 @@ final class NoShowFeeTests: XCTestCase {
         // Kim's try never reached Stripe, then Kim came after all: Check again settles it as not charged.
         let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
         _ = await store.chargeFee(for: kim)
-        _ = await store.setStatus(.booked, for: kim)
+        let pending = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(panel(pending)?.status, .pending(FeePanel.pendingMessage), "Check again would send it now")
+        _ = await store.setStatus(.booked, for: pending)
         let came = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertNil(store.feeError(for: came), "about the no-show as it stood")
+        XCTAssertEqual(panel(came)?.status, .pending(FeePanel.pendingCheckOnlyMessage), "reopened: it only asks Stripe now")
         _ = await store.setStatus(.completed, for: came)
         let completed = try XCTUnwrap(store.appointment(withID: kim.id))
         XCTAssertEqual(panel(completed)?.action?.title, "Check again")
+        XCTAssertEqual(panel(completed)?.status, .pending(FeePanel.pendingCheckOnlyMessage))
         _ = await store.chargeFee(for: completed)
         let settled = try XCTUnwrap(store.appointment(withID: kim.id))
         XCTAssertEqual(store.feeError(for: settled), "Nothing was charged. Mark the appointment as a no-show first.")
@@ -467,6 +677,116 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: jay.id))))
     }
 
+    func testAFeeErrorGoesWithAStatusChangeAndDoesntComeBack() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let store = makeStore(harness.api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        // Charged while offline: nobody knows yet whether it went through.
+        harness.server.options.offline = true
+        _ = await store.chargeFee(for: kim)
+        XCTAssertNotNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))))
+        harness.server.options.offline = false
+
+        // Kim walks in late: the owner reopens her appointment...
+        let reopened = await store.setStatus(.booked, for: try XCTUnwrap(store.appointment(withID: kim.id)))
+        XCTAssertTrue(reopened)
+        XCTAssertNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))))
+        // ...then she leaves before her cut, and the owner marks a no-show again. Nothing was tried
+        // since, so the old "we don't know yet" isn't shown again.
+        let marked = await store.setStatus(.noShow, for: try XCTUnwrap(store.appointment(withID: kim.id)))
+        XCTAssertTrue(marked)
+        let again = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(again.status, .noShow)
+        XCTAssertEqual(again.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none, "stands as it did when the message was said")
+        XCTAssertNil(store.feeError(for: again))
+        await store.refresh()
+        XCTAssertNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))), "nor after a refresh")
+        XCTAssertEqual(panel(again)?.action?.title, "Charge no-show fee ($35)")
+
+        // A status change that doesn't go through changes nothing: the message stays.
+        harness.server.options.offline = true
+        _ = await store.chargeFee(for: again)
+        let failedChange = await store.setStatus(.booked, for: again)
+        XCTAssertFalse(failedChange)
+        XCTAssertNotNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))))
+    }
+
+    func testAFeeErrorGoesOnceARefreshShowsTheAppointmentChangedElsewhere() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let store = makeStore(harness.api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        harness.server.options.offline = true
+        _ = await store.chargeFee(for: kim)
+        harness.server.options.offline = false
+        XCTAssertNotNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))))
+        // On another iPhone, reopened (seen here by a refresh), then a no-show again.
+        _ = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+        await store.refresh()
+        XCTAssertNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))))
+        _ = try await harness.api.setStatus(.noShow, ofAppointment: kim.id)
+        await store.refresh()
+        let again = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(again.status, .noShow)
+        XCTAssertNil(store.feeError(for: again), "gone for good once it no longer applied")
+    }
+
+    func testNoChargeWhileTheStatusIsChanging() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let api = ScriptedAPI(base: harness.api)
+        let gate = AsyncGate()
+        api.setStatusHandler = { [base = api.base] status, id in
+            await gate.wait()
+            return try await base.setStatus(status, ofAppointment: id)
+        }
+        let store = makeStore(api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        // Kim walks in late: the owner reopens her no-show on a slow connection...
+        let reopening = Task { await store.setStatus(.booked, for: kim) }
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(store.updating.contains(kim.id))
+        XCTAssertEqual(store.appointment(withID: kim.id)?.status, .noShow, "still shown as a no-show")
+        // ...and taps Charge (or confirms it) before the answer comes: nothing is sent.
+        let charged = await store.chargeFee(for: kim)
+        XCTAssertNil(charged)
+        XCTAssertTrue(api.charges.isEmpty)
+        XCTAssertTrue(store.chargingFee.isEmpty)
+        await gate.open()
+        let reopened = await reopening.value
+        XCTAssertTrue(reopened)
+        let booked = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(booked.status, .booked)
+        XCTAssertEqual(booked.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none, "not charged")
+        XCTAssertFalse(harness.server.payments.contains { $0.payment.kind.isFee })
+        XCTAssertNil(store.feeError(for: booked))
+    }
+
+    func testNoStatusChangeWhileTheFeeIsCharging() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let api = ScriptedAPI(base: harness.api)
+        let gate = AsyncGate()
+        api.chargeHandler = { [base = api.base] id in
+            await gate.wait()
+            return try await base.chargeNoShowFee(appointmentId: id)
+        }
+        let store = makeStore(api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        let charging = Task { await store.chargeFee(for: kim) }
+        try await Task.sleep(for: .milliseconds(50))
+        XCTAssertTrue(store.chargingFee.contains(kim.id))
+        let changed = await store.setStatus(.booked, for: kim)
+        XCTAssertFalse(changed, "the server decides the fee by the status: no change meanwhile")
+        XCTAssertFalse(harness.server.calls.contains("setStatus"))
+        XCTAssertTrue(store.updating.isEmpty)
+        await gate.open()
+        let charged = await charging.value
+        XCTAssertEqual(charged?.noShowFee?.status, .charged)
+        XCTAssertEqual(store.appointment(withID: kim.id)?.status, .noShow)
+    }
+
     func testReopeningAFeeStripeHasntConfirmedSaysItMayHaveGoneThrough() throws {
         let harness = Harness(options: cardsOnFile())
         var kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
@@ -485,15 +805,9 @@ final class NoShowFeeTests: XCTestCase {
         )
         // A declined late cancellation can still be charged until it's reopened.
         lee.noShowFee?.status = .declined
-        XCTAssertEqual(
-            FeePanel.reopenWarning(for: lee, now: TestClock.now),
-            "Once it's reopened, the $35 late cancellation fee can't be charged any more."
-        )
+        XCTAssertEqual(FeePanel.reopenWarning(for: lee, now: TestClock.now), Self.reopenLateCancelWarning)
         lee.noShowFee?.status = .needsAction
-        XCTAssertEqual(
-            FeePanel.reopenWarning(for: lee, now: TestClock.now),
-            "Once it's reopened, the $35 late cancellation fee can't be charged any more."
-        )
+        XCTAssertEqual(FeePanel.reopenWarning(for: lee, now: TestClock.now), Self.reopenLateCancelWarning)
         // A declined no-show can be marked again after reopening: nothing to say.
         kim.noShowFee?.status = .declined
         XCTAssertNil(FeePanel.reopenWarning(for: kim, now: TestClock.now))
@@ -619,6 +933,7 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(nia.noShowFee, IzzyAPI.NoShowFee(amountCents: 3_500, fullPrice: true, lateCancelWindowMinutes: 60, reason: nil))
         XCTAssertNil(nia.chargeableFee(at: TestClock.now))
         XCTAssertNil(harness.appointment(named: "Kim Sample"), "only the option asked for")
+        XCTAssertTrue(harness.server.noShowSettings.enabled, "booked with protection on, and it's still on")
     }
 
     func testFeeDescriptionsAreWordedLikeTheServers() throws {
@@ -647,10 +962,12 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertNil(plain.options.nextFeeAnswer)
         XCTAssertFalse(plain.options.nextFeeChargeFails)
         XCTAssertTrue(plain.appointments.allSatisfy { $0.card == nil }, "the usual day has no cards on file")
+        XCTAssertEqual(plain.noShowSettings, .default, "protection off, as the server starts")
 
         let cards = try server([LaunchArgument.cardsOnFile])
         XCTAssertTrue(cards.options.noShowWithCard && cards.options.lateCancelWithCard && cards.options.upcomingWithCard)
         XCTAssertEqual(Set(cards.appointments.filter { $0.card != nil }.map(\.customer.name)), ["Kim Sample", "Lee Sample", "Nia Sample"])
+        XCTAssertEqual(cards.noShowSettings, IzzyAPI.NoShowSettings(enabled: true), "on: Settings reads the same as those bookings")
 
         XCTAssertEqual(try server([LaunchArgument.cardsOnFile, LaunchArgument.noShowDeclined]).options.nextFeeAnswer, .declined)
         XCTAssertEqual(try server([LaunchArgument.noShowNeedsAction]).options.nextFeeAnswer, .needsAction)

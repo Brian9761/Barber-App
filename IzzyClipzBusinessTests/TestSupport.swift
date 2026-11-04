@@ -53,6 +53,7 @@ final class ScriptedAPI: OwnerAPI {
     var uploadHandler: ((String, Data) async throws -> IzzyAPI.Product)?
     var paymentsHandler: ((LocalDate) async throws -> [IzzyAPI.Payment])?
     var chargeHandler: ((String) async throws -> IzzyAPI.Appointment)?
+    var setStatusHandler: ((IzzyAPI.AppointmentStatus, String) async throws -> IzzyAPI.Appointment)?
     var noShowSettingsHandler: (() async throws -> IzzyAPI.NoShowSettings)?
     var updateNoShowSettingsHandler: ((IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings)?
     private(set) var createdPayments = 0
@@ -78,7 +79,8 @@ final class ScriptedAPI: OwnerAPI {
         try await base.createAppointment(appointment, idempotencyKey: idempotencyKey)
     }
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {
-        try await base.setStatus(status, ofAppointment: id)
+        if let setStatusHandler { return try await setStatusHandler(status, id) }
+        return try await base.setStatus(status, ofAppointment: id)
     }
     func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment {
         charges.append(appointmentId)

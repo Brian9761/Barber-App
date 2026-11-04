@@ -34,7 +34,8 @@ final class ScheduleStore {
     private(set) var chargingFee: Set<String> = []
     /// Why the last try at an appointment's fee got no answer (or was refused), by appointment ID,
     /// with how the appointment stood then. Its details show it until the next try, and only while
-    /// the appointment stands the same (`feeError(for:)`).
+    /// the appointment stands the same (`feeError(for:)`): a status change here, or a refresh that
+    /// shows the appointment changed (on another iPhone, say), forgets it for good.
     private var feeErrorNotes: [String: FeeErrorNote] = [:]
     /// Called when Stripe charged a fee, with the appointment as it is now (Payments today changed).
     @ObservationIgnored var onFeeCharged: ((IzzyAPI.Appointment) -> Void)?
@@ -128,6 +129,7 @@ final class ScheduleStore {
             let (loadedAppointments, loadedTimeOff) = try await (appointments, timeOff)
             guard requested == generation, day == self.day else { return }
             self.appointments = loadedAppointments.sorted(by: Self.inScheduleOrder)
+            dropOutdatedFeeErrors()
             self.timeOff = loadedTimeOff.sorted { $0.start < $1.start }
             lastUpdated = clock()
             refreshError = nil
@@ -195,15 +197,21 @@ final class ScheduleStore {
 
     /// Marks an appointment completed, no-show, cancelled (by the shop) or
     /// booked again. `true` when it worked.
+    ///
+    /// One change at a time, and none while its fee is being charged (`chargeFee(for:)`): the
+    /// server decides the fee by the status.
     @discardableResult
     func setStatus(_ status: IzzyAPI.AppointmentStatus, for appointment: IzzyAPI.Appointment) async -> Bool {
-        guard !updating.contains(appointment.id) else { return false }
+        guard !updating.contains(appointment.id), !chargingFee.contains(appointment.id) else { return false }
         updating.insert(appointment.id)
         defer { updating.remove(appointment.id) }
         do {
             let updated = try await api.setStatus(status, ofAppointment: appointment.id)
             // A refresh that started before this change would bring the old status back.
             generation += 1
+            // What the last try at its fee said was about the appointment as it stood then. Marked
+            // the same again later (reopened, then a no-show again), nothing has been tried since.
+            feeErrorNotes[appointment.id] = nil
             replace(updated)
             return true
         } catch is CancellationError {
@@ -228,9 +236,12 @@ final class ScheduleStore {
     /// server charges each one at most once, and a tap while one is running is ignored. When no
     /// answer comes back, the day is loaded again so the details show the fee as the server has it
     /// (say, waiting for Stripe, with Check again). Returns the updated appointment, or `nil`.
+    ///
+    /// Nothing is sent while the appointment's status is changing (`setStatus(_:for:)`): a charge
+    /// that reached the server first could charge a no-show the owner is reopening.
     @discardableResult
     func chargeFee(for appointment: IzzyAPI.Appointment) async -> IzzyAPI.Appointment? {
-        guard !chargingFee.contains(appointment.id) else { return nil }
+        guard !chargingFee.contains(appointment.id), !updating.contains(appointment.id) else { return nil }
         chargingFee.insert(appointment.id)
         defer { chargingFee.remove(appointment.id) }
         feeErrorNotes[appointment.id] = nil
@@ -255,11 +266,10 @@ final class ScheduleStore {
 
     /// Why the last try at this appointment's fee got no answer or was refused, while it still
     /// applies: once the appointment's status or its fee's status changes (a refresh shows the fee
-    /// charged after all, say, or the owner reopens it), the details say what's true now instead.
+    /// charged after all, say, or the owner reopens it), the details say what's true now instead,
+    /// and the message is gone for good, even if the appointment is marked the same way again.
     func feeError(for appointment: IzzyAPI.Appointment) -> String? {
-        guard let note = feeErrorNotes[appointment.id],
-              note.status == appointment.status, note.feeStatus == appointment.noShowFee?.status
-        else { return nil }
+        guard let note = feeErrorNotes[appointment.id], note.applies(to: appointment) else { return nil }
         return note.message
     }
 
@@ -268,6 +278,21 @@ final class ScheduleStore {
         let message: String
         let status: IzzyAPI.AppointmentStatus
         let feeStatus: IzzyAPI.NoShowFeeStatus?
+
+        /// The appointment still stands as it did when this was said.
+        func applies(to appointment: IzzyAPI.Appointment) -> Bool {
+            status == appointment.status && feeStatus == appointment.noShowFee?.status
+        }
+    }
+
+    /// Forgets the fee errors of appointments that stand differently now (changed here, or on
+    /// another iPhone and seen by a refresh): they were about the appointment as it was then.
+    private func dropOutdatedFeeErrors() {
+        for (id, note) in feeErrorNotes {
+            if let appointment = appointment(withID: id), !note.applies(to: appointment) {
+                feeErrorNotes[id] = nil
+            }
+        }
     }
 
     /// Why a fee charge got no answer, with what to do. A 409 from the server says in its own words
@@ -299,6 +324,7 @@ final class ScheduleStore {
             appointments.append(appointment)
         }
         appointments.sort(by: Self.inScheduleOrder)
+        dropOutdatedFeeErrors()
     }
 
     /// Blocks time for a barber (or the whole shop). Throws a plain message.

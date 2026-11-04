@@ -161,16 +161,20 @@ struct AppointmentDetailView: View {
 
     @ViewBuilder
     private func paymentSection(_ appointment: IzzyAPI.Appointment) -> some View {
+        let summary = PaymentSummary(appointment: appointment)
         Section("Payment") {
-            if appointment.payment.status == .paid {
-                LabeledContent("Paid", value: appointment.payment.amountCents.map(Money.amount) ?? "Yes")
-                    .accessibilityIdentifier("detailPayment")
-                if let paidAt = appointment.payment.paidAt {
-                    LabeledContent("When", value: store.shopTime.dayAndTime(paidAt))
-                }
-            } else {
-                LabeledContent("Not paid yet", value: appointment.priceLabel)
-                    .accessibilityIdentifier("detailPayment")
+            LabeledContent(summary.title, value: summary.value)
+                .accessibilityIdentifier("detailPayment")
+            if appointment.payment.status == .paid, let paidAt = appointment.payment.paidAt {
+                LabeledContent("When", value: store.shopTime.dayAndTime(paidAt))
+            }
+            if let feeNote = summary.feeNote {
+                // A charged fee isn't the service's payment: said here, so it isn't taken again.
+                Text(feeNote)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("detailPaymentFeeNote")
             }
             if appointment.status != .cancelled {
                 Button {

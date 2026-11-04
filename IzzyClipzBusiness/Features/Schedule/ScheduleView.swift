@@ -307,9 +307,11 @@ struct AppointmentBadgeRow: View {
         ForEach(Array(badges.items.enumerated()), id: \.offset) { index, item in
             if index == 0, let statusIdentifier {
                 Badge(text: item.text, color: item.tone.color)
+                    .accessibilityLabel(item.spoken)
                     .accessibilityIdentifier(statusIdentifier)
             } else {
                 Badge(text: item.text, color: item.tone.color)
+                    .accessibilityLabel(item.spoken)
             }
         }
     }

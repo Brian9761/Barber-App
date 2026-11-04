@@ -85,6 +85,8 @@ struct NoShowFeeSection: View {
 
     private func actionButton(_ action: FeePanel.Action) -> some View {
         let isCharging = store.chargingFee.contains(appointment.id)
+        // Not while the status is changing either (Reopen, say): the server decides the fee by it.
+        let isUpdating = store.updating.contains(appointment.id)
         return Button {
             if let confirmation = action.confirmation {
                 self.confirmation = confirmation
@@ -102,7 +104,7 @@ struct NoShowFeeSection: View {
             }
             .frame(minHeight: BusinessTheme.minimumTapSize)
         }
-        .disabled(isCharging)
+        .disabled(isCharging || isUpdating)
         .accessibilityIdentifier("chargeFee")
         .confirmationDialog(
             confirmation?.title ?? "",

@@ -40,7 +40,8 @@ struct FeePanel: Equatable {
         /// "Charge no-show fee ($35)", "Charge late cancellation fee ($35)", "Charge again ($35)" or "Check again".
         let title: String
         /// Asked before every new charge. `nil` for Check again: it only finishes the try the owner
-        /// already confirmed (the server never charges a fee twice).
+        /// already confirmed (the server never charges a fee twice). Finishing it can still send that
+        /// charge, if Stripe never got it, which the panel says (`pendingMessage`).
         let confirmation: Confirmation?
 
         var checksAgain: Bool { confirmation == nil }
@@ -54,7 +55,13 @@ struct FeePanel: Equatable {
         let button: String
     }
 
-    static let pendingMessage = "Stripe hasn't confirmed this charge yet. Check again to see if it went through. The fee is never charged twice."
+    /// An earlier try has no final answer from Stripe, and the booking can still be charged. Check
+    /// again finishes that try, as the server does: it asks Stripe first, and sends the same charge
+    /// (still at most once) only if Stripe never got it. Reopening first makes it only ask.
+    static let pendingMessage = "Stripe hasn't confirmed this charge yet. Check again finishes it: if it went through, it shows as charged, and if Stripe never got it, it's sent now. To not charge it, reopen the appointment first."
+    /// The same, once the booking can't be charged any more (reopened, or the visit completed):
+    /// Check again only asks Stripe how that try went, and nothing more is charged.
+    static let pendingCheckOnlyMessage = "Stripe hasn't confirmed this charge yet. Check again asks Stripe how it went: if it went through, it shows as charged, and if not, nothing is charged."
 
     /// `nil` when the appointment has no card on file (booked at the shop, by phone, or before
     /// no-show protection was on).
@@ -68,6 +75,7 @@ struct FeePanel: Equatable {
         } else {
             agreement = "For not showing up. Cancelling in the app before the start is free."
         }
+        let chargeable = appointment.chargeableFee(at: now)
 
         switch fee.status {
         case .charged:
@@ -76,23 +84,30 @@ struct FeePanel: Equatable {
             footer = "Refunds are made in the Stripe Dashboard. Reopening the appointment doesn't refund the fee."
         case .declined:
             status = .declined(Self.text(fee.message, or: "The bank declined the card."))
-            footer = "You can try the card again later, or ask the client to pay at the shop."
+            // Trying again only while it can be: once it's reopened, say, the footer says why not.
+            footer = chargeable != nil
+                ? "You can try the card again later, or ask the client to pay at the shop."
+                : Self.whyNotAgain(for: appointment, now: now)
         case .needsAction:
             status = .needsClient(Self.text(fee.message, or: "The client's bank wants them to approve this charge. Ask them to pay at the shop."))
-            footer = nil
+            footer = chargeable != nil ? nil : Self.whyNotAgain(for: appointment, now: now)
         case .pending:
-            status = .pending(Self.pendingMessage)
+            if case .chargeable = appointment.feeCase(at: now) {
+                status = .pending(Self.pendingMessage)
+            } else {
+                status = .pending(Self.pendingCheckOnlyMessage)
+            }
             footer = nil
         case .none:
             status = .notCharged(note: Self.note(for: appointment, now: now))
-            footer = appointment.chargeableFee(at: now) == nil
+            footer = chargeable == nil
                 ? nil
                 : "Nothing is charged until you confirm, and a fee is only ever charged once."
         }
 
         if appointment.isFeePending {
             action = Action(title: "Check again", confirmation: nil)
-        } else if let reason = appointment.chargeableFee(at: now) {
+        } else if let reason = chargeable {
             let amount = fee.amountLabel
             let title = fee.status == .declined || fee.status == .needsAction
                 ? "Charge again (\(amount))"
@@ -125,6 +140,14 @@ struct FeePanel: Equatable {
         }
     }
 
+    /// Why a fee Stripe said no to can't be tried again now, under the "Declined" (or "needs the
+    /// client") it still shows: the reason it gives when nothing was tried, or, for a visit marked
+    /// completed, that there's nothing to charge.
+    private static func whyNotAgain(for appointment: IzzyAPI.Appointment, now: Date) -> String? {
+        if let note = note(for: appointment, now: now) { return note }
+        return appointment.status == .completed ? "The appointment is marked completed, so there's no fee to charge." : nil
+    }
+
     private static func confirmationMessage(
         for appointment: IzzyAPI.Appointment,
         fee: IzzyAPI.NoShowFee,
@@ -138,7 +161,12 @@ struct FeePanel: Equatable {
         case .lateCancel:
             var message = "Late cancellation fee for \(what)"
             if let cancelled = fee.customerCancelledAt {
-                message += ": the client cancelled at \(shopTime.time(cancelled))"
+                // With its day when that's not the appointment's (a 24-hour window, say), so "3 PM"
+                // isn't read as 3 PM on the appointment's day, after it.
+                let sameDay = shopTime.day(containing: cancelled) == shopTime.day(containing: appointment.start)
+                message += sameDay
+                    ? ": the client cancelled at \(shopTime.time(cancelled))"
+                    : ": the client cancelled on \(shopTime.dayAndTime(cancelled))"
                 if let window = fee.lateCancelWindowMinutes {
                     message += ", less than \(IzzyAPI.NoShowRule.windowLabel(minutes: window)) before"
                 }
@@ -156,8 +184,9 @@ struct FeePanel: Equatable {
 
     /// What Reopen says first, when reopening changes something about the fee: a charged fee isn't
     /// refunded (refunds are made in the Stripe Dashboard), one Stripe hasn't confirmed yet may
-    /// have gone through, and a late cancellation that's reopened can't be charged any more. `nil`
-    /// when there's nothing to say.
+    /// have gone through, a late cancellation that's reopened can't be charged any more, and a
+    /// booking the client cancelled in the app can't be charged a no-show fee once it's reopened
+    /// (the server keeps that they cancelled). `nil` when there's nothing to say.
     static func reopenWarning(for appointment: IzzyAPI.Appointment, now: Date) -> String? {
         guard let fee = appointment.noShowFee else { return nil }
         switch fee.status {
@@ -167,7 +196,13 @@ struct FeePanel: Equatable {
             return "Stripe hasn't confirmed the \(fee.amountLabel) \(fee.title.lowercased()) yet. If it went through, reopening doesn't refund it. Refunds are made in the Stripe Dashboard."
         case .none, .declined, .needsAction:
             if appointment.chargeableFee(at: now) == .lateCancel {
-                return "Once it's reopened, the \(fee.amountLabel) late cancellation fee can't be charged any more."
+                return "Once it's reopened, the \(fee.amountLabel) late cancellation fee can't be charged any more. "
+                    + "The client cancelled in the app, so a no-show fee can't be charged either."
+            }
+            // Cancelled in time (or by the shop after the client): free, and a no-show fee is gone too.
+            if appointment.status == .cancelled, appointment.card != nil, fee.customerCancelledAt != nil {
+                return "The client cancelled this booking in the app, so once it's reopened, it can't be charged a no-show fee. "
+                    + "To keep a no-show fee, ask them to book again in the app instead."
             }
             return nil
         }
@@ -204,9 +239,16 @@ extension IzzyAPI.Appointment {
     }
 }
 
+extension FeePanel {
+    /// "Visa ending in 4242": what VoiceOver says for "Visa •••• 4242" (it would read each dot).
+    static func spokenCard(_ card: IzzyAPI.CardOnFile) -> String {
+        "\(card.brandName) ending in \(card.last4)"
+    }
+}
+
 /// The short labels on a schedule row and at the top of an appointment's details: the status
-/// ("Cancelled late" for a late cancellation), Paid, and the card on file or what happened to its
-/// fee ("No-show fee $35 charged").
+/// ("Cancelled late" for a late cancellation), Paid, and the card on file ("Card on file · Visa
+/// •••• 4242") or what happened to its fee ("No-show fee $35 charged").
 struct AppointmentBadges: Equatable {
     enum Tone: Equatable {
         case status(IzzyAPI.AppointmentStatus)
@@ -224,6 +266,10 @@ struct AppointmentBadges: Equatable {
     struct Item: Equatable {
         let text: String
         let tone: Tone
+        /// What VoiceOver says, when it isn't `text` ("Card on file, Visa ending in 4242").
+        var spokenText: String?
+
+        var spoken: String { spokenText ?? text }
     }
 
     let items: [Item]
@@ -242,16 +288,51 @@ struct AppointmentBadges: Equatable {
             case .declined: items.append(Item(text: "Fee declined", tone: .feeDeclined))
             case .needsAction: items.append(Item(text: "Fee needs the client", tone: .feeWaiting))
             case .pending: items.append(Item(text: "Fee not confirmed", tone: .feeWaiting))
-            case .none: items.append(Item(text: "Card on file", tone: .card))
+            case .none: items.append(Self.cardOnFile(appointment.card))
             }
         } else if appointment.card != nil {
-            items.append(Item(text: "Card on file", tone: .card))
+            items.append(Self.cardOnFile(appointment.card))
         }
         self.items = items
     }
 
+    /// "Card on file · Visa •••• 4242", or "Card on file" without the card's details.
+    private static func cardOnFile(_ card: IzzyAPI.CardOnFile?) -> Item {
+        guard let card else { return Item(text: "Card on file", tone: .card) }
+        return Item(text: "Card on file · \(card.label)", tone: .card, spokenText: "Card on file, \(FeePanel.spokenCard(card))")
+    }
+
     /// What VoiceOver reads for them, in order.
-    var spoken: [String] { items.map(\.text) }
+    var spoken: [String] { items.map(\.spoken) }
+}
+
+/// The Payment section of an appointment's details: the service's payment, and a fee charged to the
+/// card on file said apart from it. "Not paid yet $35" right under "No-show fee charged: $35" could
+/// be read as the fee not having gone through, or as the price still owed and taken at the counter.
+struct PaymentSummary: Equatable {
+    /// "Paid", "Not paid yet", or "Service not paid" once a fee was charged.
+    let title: String
+    /// What was paid ("$40.00"), or the service's price ("$35").
+    let value: String
+    /// "The $35 no-show fee was charged to the card on file." once Stripe charged it.
+    let feeNote: String?
+
+    init(appointment: IzzyAPI.Appointment) {
+        let fee = appointment.noShowFee
+        let feeCharged = fee?.status == .charged
+        if appointment.payment.status == .paid {
+            title = "Paid"
+            value = appointment.payment.amountCents.map(Money.amount) ?? "Yes"
+        } else {
+            title = feeCharged ? "Service not paid" : "Not paid yet"
+            value = appointment.priceLabel
+        }
+        if let fee, feeCharged {
+            feeNote = "The \(fee.amountLabel) \(fee.title.lowercased()) was charged to the card on file."
+        } else {
+            feeNote = nil
+        }
+    }
 }
 
 extension IzzyAPI.Payment {
