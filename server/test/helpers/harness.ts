@@ -36,12 +36,32 @@ export function stripeError(type: string, fields: Record<string, unknown> = {}, 
   return Object.assign(new Error(message), { type, ...fields });
 }
 
-/** A fake of the Stripe calls the server makes, with Stripe-shaped objects. */
+/** What a connected account looks like to the platform, as a test sets it (see `FakeStripe.setAccount`). */
+export interface FakeAccountState {
+  charges_enabled?: boolean;
+  payouts_enabled?: boolean;
+  details_submitted?: boolean;
+  currently_due?: string[];
+  disabled_reason?: string | null;
+  name?: string | null;
+}
+
+/**
+ * A fake of the Stripe calls the server makes, with Stripe-shaped objects. Like Stripe, every
+ * object lives on the account it was made on (the `stripeAccount` request option, or the key's
+ * own account without one) and can only be found there.
+ */
 export class FakeStripe implements StripeClient {
   readonly intents = new Map<string, Stripe.PaymentIntent>();
   readonly sessions = new Map<string, Stripe.Checkout.Session>();
   readonly customerIds: string[] = [];
-  readonly calls: { method: string; params: unknown; options?: unknown }[] = [];
+  /** Connected accounts of the platform (connect mode), by id. */
+  readonly connectedAccounts = new Map<string, Stripe.Account>();
+  /** Terminal locations, by id. */
+  readonly locations = new Map<string, Stripe.Terminal.Location>();
+  /** The connected account each object was made on (null: the key's own account). */
+  readonly accountOf = new Map<string, string | null>();
+  readonly calls: { method: string; params: unknown; options?: Stripe.RequestOptions }[] = [];
   readonly keys: string[] = [];
   nextError: unknown = null;
   /** The next off-session charge's outcome; then back to 'succeed'. */
@@ -71,12 +91,124 @@ export class FakeStripe implements StripeClient {
     }
   }
 
+  /** The account a request is made on: its Stripe-Account header, or null for the key's own account. */
+  private on(options?: Stripe.RequestOptions): string | null {
+    return options?.stripeAccount ?? null;
+  }
+
+  /** Whether an object can be seen from a request on `options`' account (only from the one it was made on). */
+  private visible(id: string, options?: Stripe.RequestOptions): boolean {
+    return (this.accountOf.get(id) ?? null) === this.on(options);
+  }
+
+  private nextId(prefix: string): string {
+    this.counter += 1;
+    return `${prefix}${String(this.counter).padStart(6, '0')}`;
+  }
+
+  // Stripe Connect: the platform's own calls about the shop's account.
+
+  readonly accounts = {
+    create: async (params: Stripe.AccountCreateParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'accounts.create', params, options });
+      this.maybeFail();
+      const id = this.nextId('acct_TestFixture');
+      const account = {
+        id,
+        object: 'account',
+        type: 'standard',
+        country: params.country ?? 'US',
+        email: null,
+        charges_enabled: false,
+        payouts_enabled: false,
+        details_submitted: false,
+        business_profile: { name: params.business_profile?.name ?? null, mcc: params.business_profile?.mcc ?? null },
+        controller: { type: 'application', is_controller: true, ...params.controller },
+        capabilities: { card_payments: 'inactive', transfers: 'inactive' },
+        requirements: {
+          currently_due: ['business_type', 'external_account', 'tos_acceptance.date'],
+          past_due: ['business_type', 'external_account', 'tos_acceptance.date'],
+          eventually_due: ['business_type', 'external_account', 'tos_acceptance.date'],
+          pending_verification: [],
+          disabled_reason: 'requirements.past_due',
+          current_deadline: null,
+          errors: [],
+          alternatives: [],
+        },
+        settings: { dashboard: { display_name: null, timezone: null } },
+        metadata: params.metadata ?? {},
+      } as unknown as Stripe.Account;
+      this.connectedAccounts.set(id, account);
+      return structuredClone(account);
+    },
+    retrieve: async (id: string, params?: Stripe.AccountRetrieveParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'accounts.retrieve', params: { id, ...params }, options });
+      this.maybeFail();
+      const account = this.connectedAccounts.get(id);
+      if (!account) {
+        throw stripeError('StripePermissionError', { statusCode: 403 }, `The provided key does not have access to account '${id}' (or that account does not exist).`);
+      }
+      return structuredClone(account);
+    },
+  };
+
+  readonly accountLinks = {
+    create: async (params: Stripe.AccountLinkCreateParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'accountLinks.create', params, options });
+      this.maybeFail();
+      if (!this.connectedAccounts.has(params.account)) {
+        throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'account', statusCode: 400 }, `No such account: '${params.account}'`);
+      }
+      const created = Math.floor(this.clock().getTime() / 1000);
+      const n = this.nextId('');
+      return { object: 'account_link', created, expires_at: created + 300, url: `https://connect.stripe.com/setup/s/${params.account}/fixture${n}` } as Stripe.AccountLink;
+    },
+  };
+
+  /**
+   * What happens on Stripe's side of onboarding: the owner submits details, Stripe checks them
+   * and enables the account (or not). Undefined fields stay as they are.
+   */
+  setAccount(id: string, state: FakeAccountState): Stripe.Account {
+    const account = this.connectedAccounts.get(id) as unknown as Record<string, any> | undefined;
+    if (!account) throw new Error(`unknown ${id}`);
+    for (const key of ['charges_enabled', 'payouts_enabled', 'details_submitted'] as const) {
+      if (state[key] !== undefined) account[key] = state[key];
+    }
+    if (state.currently_due !== undefined) {
+      account.requirements.currently_due = state.currently_due;
+      account.requirements.past_due = state.disabled_reason === 'requirements.past_due' ? state.currently_due : [];
+    }
+    if (state.disabled_reason !== undefined) account.requirements.disabled_reason = state.disabled_reason;
+    if (state.name !== undefined) account.business_profile.name = state.name;
+    return account as unknown as Stripe.Account;
+  }
+
+  /** The owner finished onboarding and Stripe turned card payments and payouts on. */
+  activateAccount(id: string, name = 'Izzy Clipz Barbershop'): Stripe.Account {
+    return this.setAccount(id, { details_submitted: true, charges_enabled: true, payouts_enabled: true, currently_due: [], disabled_reason: null, name });
+  }
+
   readonly terminal = {
     connectionTokens: {
-      create: async (params?: Stripe.Terminal.ConnectionTokenCreateParams) => {
-        this.calls.push({ method: 'terminal.connectionTokens.create', params });
+      create: async (params?: Stripe.Terminal.ConnectionTokenCreateParams, options?: Stripe.RequestOptions) => {
+        this.calls.push({ method: 'terminal.connectionTokens.create', params, options });
         this.maybeFail();
+        if (params?.location && this.locations.has(params.location) && !this.visible(params.location, options)) {
+          throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'location', statusCode: 400 }, `No such location: '${params.location}'`);
+        }
         return { object: 'terminal.connection_token', secret: 'pst_test_YWNjdF8xRml4dHVyZUNvbm5lY3Rpb25Ub2tlbg' };
+      },
+    },
+    locations: {
+      create: async (params: Stripe.Terminal.LocationCreateParams, options?: Stripe.RequestOptions) => {
+        this.calls.push({ method: 'terminal.locations.create', params, options });
+        this.maybeFail();
+        const id = this.nextId('tml_TestFixture');
+        const location = { id, object: 'terminal.location', display_name: params.display_name, address: params.address, livemode: false, metadata: {} } as unknown as Stripe.Terminal.Location;
+        this.locations.set(id, location);
+        this.accountOf.set(id, this.on(options));
+        return location;
       },
     },
   };
@@ -85,7 +217,8 @@ export class FakeStripe implements StripeClient {
     create: async (params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions) => {
       this.calls.push({ method: 'paymentIntents.create', params, options });
       this.maybeFail();
-      const key = options?.idempotencyKey;
+      // Stripe keeps idempotency keys per account.
+      const key = options?.idempotencyKey ? `${this.on(options) ?? ''}:${options.idempotencyKey}` : undefined;
       if (key) {
         const seen = this.idempotent.get(key);
         if (seen) {
@@ -97,7 +230,7 @@ export class FakeStripe implements StripeClient {
         }
       }
       try {
-        const intent = this.makeIntent(params);
+        const intent = this.makeIntent(params, options);
         if (key) this.idempotent.set(key, { params: JSON.stringify(params), intent });
         if (params.confirm && this.loseNextChargeAnswer) {
           this.loseNextChargeAnswer = false;
@@ -111,11 +244,12 @@ export class FakeStripe implements StripeClient {
       }
     },
     // Like Stripe: newest first, filtered by customer and `created`, `limit` per page, `starting_after` for the next.
-    list: async (params: Stripe.PaymentIntentListParams) => {
-      this.calls.push({ method: 'paymentIntents.list', params: structuredClone(params) });
+    list: async (params: Stripe.PaymentIntentListParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'paymentIntents.list', params: structuredClone(params), options });
       this.maybeFail();
       const created = typeof params.created === 'number' ? { gte: params.created, lte: params.created } : (params.created ?? {});
       let all = [...this.intents.values()]
+        .filter((pi) => this.visible(pi.id, options))
         .filter((pi) => params.customer === undefined || pi.customer === params.customer)
         .filter((pi) => (created.gte === undefined || pi.created >= created.gte) && (created.gt === undefined || pi.created > created.gt))
         .filter((pi) => (created.lte === undefined || pi.created <= created.lte) && (created.lt === undefined || pi.created < created.lt))
@@ -124,11 +258,11 @@ export class FakeStripe implements StripeClient {
       const limit = params.limit ?? 10;
       return { object: 'list', url: '/v1/payment_intents', data: all.slice(0, limit), has_more: all.length > limit } as Stripe.ApiList<Stripe.PaymentIntent>;
     },
-    retrieve: async (id: string) => {
-      this.calls.push({ method: 'paymentIntents.retrieve', params: id });
+    retrieve: async (id: string, _params?: Stripe.PaymentIntentRetrieveParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'paymentIntents.retrieve', params: id, options });
       this.maybeFail();
       const intent = this.intents.get(id);
-      if (!intent) {
+      if (!intent || !this.visible(id, options)) {
         throw Object.assign(new Error(`No such payment_intent: '${id}'`), {
           type: 'StripeInvalidRequestError',
           code: 'resource_missing',
@@ -139,7 +273,7 @@ export class FakeStripe implements StripeClient {
     },
   };
 
-  private makeIntent(params: Stripe.PaymentIntentCreateParams): Stripe.PaymentIntent {
+  private makeIntent(params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions): Stripe.PaymentIntent {
     {
       this.counter += 1;
       const id = `pi_3TestFixture${String(this.counter).padStart(6, '0')}`;
@@ -163,15 +297,17 @@ export class FakeStripe implements StripeClient {
         last_payment_error: null,
       } as unknown as Stripe.PaymentIntent;
       this.intents.set(id, intent);
+      this.accountOf.set(id, this.on(options));
       if (!(params.confirm && params.off_session)) return intent;
       // An off-session charge of a saved card: Stripe answers at once.
       const outcome = this.nextCharge;
       this.nextCharge = 'succeed';
       const pm = typeof params.payment_method === 'string' ? params.payment_method : '';
+      // The saved card is only there on the account it was saved on.
       const known = [...this.sessions.values()].some((session) => {
         const setup = session.setup_intent as Stripe.SetupIntent | null;
         const method = setup?.payment_method as Stripe.PaymentMethod | null | undefined;
-        return method?.id === pm && method.customer === params.customer;
+        return method?.id === pm && method.customer === params.customer && this.visible(session.id, options);
       });
       if (outcome === 'card_removed' || !known) {
         throw stripeError(
@@ -200,20 +336,21 @@ export class FakeStripe implements StripeClient {
   }
 
   readonly customers = {
-    create: async (params: Stripe.CustomerCreateParams) => {
-      this.calls.push({ method: 'customers.create', params });
+    create: async (params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'customers.create', params, options });
       this.maybeFail();
       this.counter += 1;
       const id = `cus_TestFixture${String(this.counter).padStart(6, '0')}`;
       this.customerIds.push(id);
+      this.accountOf.set(id, this.on(options));
       return { id, object: 'customer', description: params.description ?? null, metadata: params.metadata ?? {} } as unknown as Stripe.Customer;
     },
   };
 
   readonly checkout = {
     sessions: {
-      create: async (params: Stripe.Checkout.SessionCreateParams) => {
-        this.calls.push({ method: 'checkout.sessions.create', params });
+      create: async (params: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions) => {
+        this.calls.push({ method: 'checkout.sessions.create', params, options });
         this.maybeFail();
         this.counter += 1;
         const id = `cs_test_Fixture${String(this.counter).padStart(6, '0')}`;
@@ -231,13 +368,14 @@ export class FakeStripe implements StripeClient {
           cancel_url: params.cancel_url,
         } as unknown as Stripe.Checkout.Session;
         this.sessions.set(id, session);
+        this.accountOf.set(id, this.on(options));
         return session;
       },
-      retrieve: async (id: string, params?: Stripe.Checkout.SessionRetrieveParams) => {
-        this.calls.push({ method: 'checkout.sessions.retrieve', params: { id, ...params } });
+      retrieve: async (id: string, params?: Stripe.Checkout.SessionRetrieveParams, options?: Stripe.RequestOptions) => {
+        this.calls.push({ method: 'checkout.sessions.retrieve', params: { id, ...params }, options });
         this.maybeFail();
         const session = this.sessions.get(id);
-        if (!session) {
+        if (!session || !this.visible(id, options)) {
           throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'session', statusCode: 404 }, `No such checkout.session: '${id}'`);
         }
         // Expanded like the server asks: setup_intent.payment_method.
@@ -367,6 +505,32 @@ export async function protectionOn(h: Harness, key = 'sk_test_fixture'): Promise
   if (res.status !== 200) throw new Error(`Couldn't turn no-show protection on: ${res.text}`);
 }
 
+/** The app developer's Connect platform key in tests (STRIPE_CONNECT=on). */
+export const PLATFORM_KEY = 'sk_test_platform';
+export const PUBLIC_BASE_URL = 'https://izzy-clipz-api.test';
+
+/** Connect mode (the platform's key, STRIPE_CONNECT=on, PUBLIC_BASE_URL) with no account connected yet. */
+export function connectMode(h: Harness): void {
+  h.config.stripeSecretKey = PLATFORM_KEY;
+  h.config.stripeConnect = true;
+  h.config.publicBaseUrl = PUBLIC_BASE_URL;
+}
+
+/**
+ * Connect mode with the shop's own Stripe account connected and taking card payments, as after
+ * the owner finished Stripe's onboarding. Returns the account's id.
+ */
+export async function connectedShop(h: Harness): Promise<string> {
+  connectMode(h);
+  const link = await h.call('POST', '/api/owner/stripe/connect', { owner: true, body: { returnTo: 'app' } });
+  if (link.status !== 201) throw new Error(`Couldn't start connecting Stripe: ${link.text}`);
+  const params = h.stripe.calls.filter((c) => c.method === 'accountLinks.create').at(-1)?.params as { account: string };
+  h.stripe.activateAccount(params.account);
+  const status = await h.call('GET', '/api/owner/stripe', { owner: true });
+  if (status.body.status !== 'active') throw new Error(`Stripe isn't active: ${status.text}`);
+  return params.account;
+}
+
 /** Deterministic UUIDs: 00000000-0000-4000-8000-000000000001, …002, … */
 export function fixtureUuid(n: number): string {
   return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
@@ -377,6 +541,7 @@ export function useHarness(options: HarnessOptions = {}): Harness {
   const h = {} as Harness;
   let uuidCounter = 0;
   let tokenCounter = 0;
+  let codeCounter = 0;
 
   beforeAll(async () => {
     h.database = await startTestDatabase();
@@ -390,6 +555,7 @@ export function useHarness(options: HarnessOptions = {}): Harness {
     await h.database.reset();
     uuidCounter = 0;
     tokenCounter = 0;
+    codeCounter = 0;
     h.catalog = loadCatalog();
     h.config = {
       ...configFromEnv({}),
@@ -412,6 +578,8 @@ export function useHarness(options: HarnessOptions = {}): Harness {
       now: () => new Date(h.now.getTime()),
       uuid: () => fixtureUuid(++uuidCounter),
       manageToken: () => `fixture-manage-token-${String(++tokenCounter).padStart(4, '0')}`.padEnd(43, 'x').slice(0, 43),
+      // 483920 first, then a fixed sequence of other 6-digit codes.
+      computerCode: () => String((483920 + codeCounter++ * 271_829) % 1_000_000).padStart(6, '0'),
       stripe: (key: string) => {
         stripe.keys.push(key);
         return stripe;

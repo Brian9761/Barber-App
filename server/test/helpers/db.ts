@@ -24,7 +24,20 @@ export interface TestDatabase {
   close(): Promise<void>;
 }
 
-const TABLES = ['payments', 'appointments', 'saved_cards', 'settings', 'time_off', 'products', 'rate_limits', 'api_usage', 'yelp_cache'];
+const TABLES = [
+  'payments',
+  'appointments',
+  'saved_cards',
+  'settings',
+  'time_off',
+  'products',
+  'rate_limits',
+  'api_usage',
+  'yelp_cache',
+  'stripe_connect_states',
+  'computer_codes',
+  'computer_sessions',
+];
 
 async function prepare(pool: pg.Pool): Promise<void> {
   const client = await pool.connect();

@@ -17,6 +17,13 @@ export const ERROR_STATUS = {
   not_started: 409,
   stripe_not_configured: 503,
   owner_not_configured: 503,
+  // The shop's own Stripe account (Stripe Connect) and computer sign-in
+  /** Connecting a Stripe account, on a server that uses its own Stripe key (or none). */
+  stripe_connect_off: 409,
+  /** A computer sign-in code that isn't right, was used, ran out or was burned. */
+  wrong_code: 400,
+  /** Signed in on a computer, asking for something only the Business app on the iPhone may do. */
+  forbidden: 403,
   server_error: 500,
 } as const;
 
@@ -49,24 +56,43 @@ export function json(body: unknown, status = 200, headers: Record<string, string
   return new Response(JSON.stringify(body), { status, headers: { ...BASE_HEADERS, ...headers } });
 }
 
+/** Text made safe to put in HTML, inside an element or a double-quoted attribute (the only kind used here). */
+export function escapeHtml(text: string): string {
+  const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+  return text.replace(/[&<>"]/g, (c) => entities[c] ?? c);
+}
+
+const PAGE_HEADERS = {
+  'content-type': 'text/html; charset=utf-8',
+  'cache-control': 'no-store',
+  'x-content-type-options': 'nosniff',
+  // These pages carry one-time states and session ids in their address: never pass them on.
+  'referrer-policy': 'no-referrer',
+};
+
 /**
- * A 302 to `location` (the apps' own `izzyclipz://` links after Stripe Checkout),
- * with a tiny page linking to it for a browser that doesn't follow it by itself.
- * `location` must already be safe to put in HTML (the callers only use fixed
- * text and Stripe ids).
+ * A 302 to `location` (the apps' own `izzyclipz://` links after Stripe Checkout,
+ * a page of the website, or Stripe's own onboarding), with a tiny page linking to
+ * it for a browser that doesn't follow it by itself.
  */
 export function redirect(location: string): Response {
-  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Izzy Clipz</title><p><a href="${location}">Back to Izzy Clipz</a></p>`;
-  return new Response(page, {
-    status: 302,
-    headers: {
-      location,
-      'content-type': 'text/html; charset=utf-8',
-      'cache-control': 'no-store',
-      'x-content-type-options': 'nosniff',
-      'referrer-policy': 'no-referrer',
-    },
-  });
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Izzy Clipz</title><p><a href="${escapeHtml(location)}">Back to Izzy Clipz</a></p>`;
+  return new Response(page, { status: 302, headers: { location, ...PAGE_HEADERS } });
+}
+
+/**
+ * A small, friendly page for a browser that landed on one of the API's own
+ * addresses (Stripe's way back after onboarding) when something isn't right:
+ * one sentence saying what to do. Nothing on it can be cached.
+ */
+export function htmlPage(message: string, status: number, headers: Record<string, string> = {}): Response {
+  const page =
+    '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>Izzy Clipz</title>' +
+    '<style>body{margin:0;padding:48px 24px;font:17px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;color:#1d1d1f;background:#fff}' +
+    'main{max-width:34em;margin:0 auto}h1{font-size:28px;line-height:1.2;margin:0 0 16px}</style>' +
+    `<main><h1>Izzy Clipz</h1><p>${escapeHtml(message)}</p></main></html>`;
+  return new Response(page, { status, headers: { ...PAGE_HEADERS, ...headers } });
 }
 
 export function noContent(): Response {

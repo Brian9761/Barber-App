@@ -219,6 +219,49 @@ describe('contract fixtures (API v1)', () => {
     check('payments-with-fees', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
   });
 
+  it('the shop’s own Stripe account (connect mode) and signing in on a computer', async () => {
+    const owner = { owner: true } as const;
+    // Settings before Stripe is set up, and with the server's own key.
+    check('stripe-connection-off', await h.call('GET', '/api/owner/stripe', owner));
+    h.config.stripeSecretKey = 'sk_test_fixture';
+    check('stripe-connection-direct', await h.call('GET', '/api/owner/stripe', owner));
+
+    // The app developer's platform key: the owner connects the shop's own account.
+    h.config.stripeConnect = true;
+    h.config.publicBaseUrl = 'https://izzy-clipz-api.test';
+    check('stripe-connection-not-connected', await h.call('GET', '/api/owner/stripe', owner));
+    const link = check('stripe-connect-link', await h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'app' } }), 201);
+    const account = [...h.stripe.connectedAccounts.keys()][0]!;
+    expect(link.url).toContain(account);
+    h.advance(2);
+    check('stripe-connection-needs-info', await h.call('GET', '/api/owner/stripe', owner));
+    h.stripe.setAccount(account, { details_submitted: true, currently_due: [], disabled_reason: 'requirements.pending_verification', name: 'Izzy Clipz Barbershop' });
+    h.advance(3);
+    check('stripe-connection-pending', await h.call('GET', '/api/owner/stripe', owner));
+    h.stripe.activateAccount(account);
+    h.advance(5);
+    check('stripe-connection-active', await h.call('GET', '/api/owner/stripe', owner));
+    check('owner-me-connected', await h.call('GET', '/api/owner/me', owner));
+    h.stripe.setAccount(account, { charges_enabled: false, payouts_enabled: false, disabled_reason: 'under_review' });
+    h.advance(60);
+    check('stripe-connection-restricted', await h.call('GET', '/api/owner/stripe', owner));
+    check('stripe-connection-disconnected', await h.call('DELETE', '/api/owner/stripe/connect', owner));
+
+    // A code from the Business app, typed on two computers in turn.
+    h.setNow('2026-11-02T18:00:00Z');
+    const code = check('computer-code', await h.call('POST', '/api/owner/computer-codes', owner), 201);
+    const mac = check(
+      'computer-session-created',
+      await h.call('POST', '/api/computer-sessions', { body: { code: code.code, name: 'Chrome on Mac' } }),
+      201,
+    );
+    h.advance(30);
+    const second = (await h.call('POST', '/api/owner/computer-codes', owner)).body.code;
+    await h.call('POST', '/api/computer-sessions', { body: { code: second, name: 'Edge on Windows' }, ip: '198.51.100.20' });
+    h.advance(15);
+    check('computer-sessions', await h.call('GET', '/api/owner/computer-sessions', { headers: { authorization: `Bearer ${mac.token}` } }));
+  });
+
   it('one example error for every error code', async () => {
     const examples: Record<string, CallResult> = {};
     const book = (body: Record<string, unknown>, ip = '203.0.113.1') =>
@@ -268,6 +311,13 @@ describe('contract fixtures (API v1)', () => {
       owner: true,
       body: { status: 'noShow' },
     });
+    // The shop's own Stripe account and computer sign-in.
+    examples.stripe_connect_off = await h.call('POST', '/api/owner/stripe/connect', { owner: true, body: { returnTo: 'app' } });
+    await h.call('POST', '/api/owner/computer-codes', { owner: true });
+    examples.wrong_code = await h.call('POST', '/api/computer-sessions', { body: { code: '000000', name: 'Chrome on Mac' } });
+    const code = (await h.call('POST', '/api/owner/computer-codes', { owner: true })).body.code;
+    const computer = await h.call('POST', '/api/computer-sessions', { body: { code, name: 'Chrome on Mac' } });
+    examples.forbidden = await h.call('POST', '/api/owner/computer-codes', { headers: { authorization: `Bearer ${computer.body.token}` } });
     h.config.stripeSecretKey = undefined;
     examples.stripe_not_configured = await h.call('POST', '/api/owner/terminal/connection-token', { owner: true });
     h.config.ownerKey = undefined;
@@ -303,6 +353,9 @@ describe('contract fixtures (API v1)', () => {
       not_started: 409,
       stripe_not_configured: 503,
       owner_not_configured: 503,
+      stripe_connect_off: 409,
+      wrong_code: 400,
+      forbidden: 403,
       server_error: 500,
     };
     expect(Object.keys(examples).sort()).toEqual(Object.keys(status).sort());

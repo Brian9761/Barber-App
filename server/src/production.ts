@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { del, put } from '@vercel/blob';
 import { attachDatabasePool, ipAddress } from '@vercel/functions';
 import type pg from 'pg';
@@ -47,6 +47,7 @@ export function productionDeps(env: NodeJS.ProcessEnv = process.env): Deps {
     now: () => new Date(),
     uuid: randomUUID,
     manageToken: newManageToken,
+    computerCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
     stripe(secretKey) {
       let client = stripeClients.get(secretKey);
       if (!client) {

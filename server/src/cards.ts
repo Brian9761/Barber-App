@@ -6,10 +6,10 @@ import { resolveTarget, type Target } from './booking.js';
 import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
 import { ApiError, json, readJsonObject, redirect } from './http.js';
-import { loadNoShowSettings, protectionFor, stripeConfigured } from './noshow.js';
-import { stripeClient, stripeFailure, stripeMode } from './payments.js';
+import { loadNoShowSettings, protectionFor } from './noshow.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
+import { accountMatch, requestOptions, shopAccount, shopStripe, stripeFailure } from './stripeaccount.js';
 import { localDate } from './time.js';
 import { parse, shortId } from './validation.js';
 
@@ -22,9 +22,14 @@ import { parse, shortId } from './validation.js';
 //    the phone that holds the token can save that session's card.
 // 2. The app opens the URL in ASWebAuthenticationSession; Stripe returns to
 //    GET /api/cards/return (https, as Checkout needs), which redirects to
-//    izzyclipz://card-saved?session_id=… (or izzyclipz://card-cancelled).
+//    izzyclipz://card-saved?session_id=… (or izzyclipz://card-cancelled). For the
+//    website (returnTo "web") it's the website's own page instead:
+//    /book/card-return?status=saved&session_id=… (or status=cancelled).
 // 3. POST /api/cards { sessionId } with the same X-Card-Token → the card's brand,
 //    last 4 and expiry, stored under that token. Doing it again answers the same.
+//
+// With Stripe Connect, the Customer, the Checkout Session and so the card live on the
+// shop's connected account (stripe_account_id), and only work while the shop keeps it.
 
 export const CARD_CHECKOUTS_PER_IP_PER_HOUR = 10;
 export const CARD_SAVES_PER_IP_PER_HOUR = 10;
@@ -73,6 +78,8 @@ export interface SavedCardRow {
   exp_year: number;
   livemode: boolean;
   created_at: Date;
+  /** The connected account the card is saved on (migrations/005); null when saved with the server's own key. */
+  stripe_account_id: string | null;
 }
 
 export function savedCardJSON(row: Pick<SavedCardRow, 'brand' | 'last4' | 'exp_month' | 'exp_year'>) {
@@ -118,19 +125,21 @@ export function publicBase(configured: string | undefined, requestOrigin: string
   return `${base.origin}${base.pathname.replace(/\/+$/, '')}`;
 }
 
-// POST /api/cards/checkout { offeringId? | serviceId + barberId: "any" } (X-Card-Token)
+// POST /api/cards/checkout { offeringId? | serviceId + barberId: "any", returnTo?: "app" | "web" } (X-Card-Token)
 
-const targetBody = z.object({
+const checkoutBody = z.object({
   offeringId: shortId.optional(),
   serviceId: shortId.optional(),
   barberId: shortId.optional(),
+  /** Where Stripe's page sends the client back to: the app (the default) or the website. */
+  returnTo: z.enum(['app', 'web'], { error: 'returnTo must be "app" or "web".' }).optional(),
 });
 
 export async function createCardCheckout(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
-  const stripe = stripeClient(deps);
+  const shop = await shopStripe(deps);
   const token = requiredCardToken(request);
-  const body = parse(targetBody, await readJsonObject(request));
+  const body = parse(checkoutBody, await readJsonObject(request));
   const target = resolveTarget(deps.catalog, body);
   const { policy } = protectionFor(target, await loadNoShowSettings(deps.db), true);
   if (!policy.required || !policy.policyText) {
@@ -139,34 +148,41 @@ export async function createCardCheckout(ctx: Context): Promise<Response> {
   await limit(deps, request, 'card-checkout', CARD_CHECKOUTS_PER_IP_PER_HOUR);
 
   const base = publicBase(deps.config.publicBaseUrl, ctx.url.origin);
+  const toWeb = body.returnTo === 'web' ? '&to=web' : '';
   let customer: Stripe.Customer;
   try {
     // The card is saved to a Customer of its own: Checkout attaches it there, so it can be charged later.
-    customer = await stripe.customers.create({
-      description: 'Izzy Clipz client (card for no-show protection)',
-      metadata: { source: 'izzy-clipz-api', purpose: CHECKOUT_PURPOSE },
-    });
+    customer = await shop.stripe.customers.create(
+      {
+        description: 'Izzy Clipz client (card for no-show protection)',
+        metadata: { source: 'izzy-clipz-api', purpose: CHECKOUT_PURPOSE },
+      },
+      requestOptions(shop),
+    );
   } catch (error) {
     throw stripeFailure(deps, error, 'create customer');
   }
   let session: Stripe.Checkout.Session;
   try {
-    session = await stripe.checkout.sessions.create({
-      mode: 'setup',
-      currency: 'usd',
-      // Cards only (Apple Pay counts as a card); not payment_method_types, which API 2026-10-28.endive doesn't have.
-      allowed_payment_method_types: ['card'],
-      customer: customer.id,
-      success_url: `${base}/api/cards/return?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${base}/api/cards/cancel`,
-      custom_text: { submit: { message: policy.policyText } },
-      setup_intent_data: {
-        description: 'Izzy Clipz no-show protection',
-        metadata: { source: 'izzy-clipz-api', purpose: CHECKOUT_PURPOSE },
+    session = await shop.stripe.checkout.sessions.create(
+      {
+        mode: 'setup',
+        currency: 'usd',
+        // Cards only (Apple Pay counts as a card); not payment_method_types, which API 2026-10-28.endive doesn't have.
+        allowed_payment_method_types: ['card'],
+        customer: customer.id,
+        success_url: `${base}/api/cards/return?session_id={CHECKOUT_SESSION_ID}${toWeb}`,
+        cancel_url: `${base}/api/cards/cancel${toWeb ? '?to=web' : ''}`,
+        custom_text: { submit: { message: policy.policyText } },
+        setup_intent_data: {
+          description: 'Izzy Clipz no-show protection',
+          metadata: { source: 'izzy-clipz-api', purpose: CHECKOUT_PURPOSE },
+        },
+        metadata: { source: 'izzy-clipz-api', purpose: CHECKOUT_PURPOSE, card_token_sha256: hashManageToken(token) },
+        expires_at: Math.floor(deps.now().getTime() / 1000) + CHECKOUT_MINUTES * 60,
       },
-      metadata: { source: 'izzy-clipz-api', purpose: CHECKOUT_PURPOSE, card_token_sha256: hashManageToken(token) },
-      expires_at: Math.floor(deps.now().getTime() / 1000) + CHECKOUT_MINUTES * 60,
-    });
+      requestOptions(shop),
+    );
   } catch (error) {
     throw stripeFailure(deps, error, 'create card checkout');
   }
@@ -174,15 +190,26 @@ export async function createCardCheckout(ctx: Context): Promise<Response> {
   return json({ url: session.url, sessionId: session.id }, 201);
 }
 
-// GET /api/cards/return?session_id=cs_… and GET /api/cards/cancel: Stripe's way back to the app.
+// GET /api/cards/return?session_id=cs_…[&to=web] and GET /api/cards/cancel[?to=web]: Stripe's way
+// back to the app, or (to=web) to the website's own page, which then saves the card.
+
+/** The website's page that takes the client back to their booking: /book/card-return?status=… */
+function webCardReturn(ctx: Context, query: string): string {
+  return `${publicBase(ctx.deps.config.publicBaseUrl, ctx.url.origin)}/book/card-return?${query}`;
+}
+
+const toWebsite = (ctx: Context) => ctx.url.searchParams.get('to') === 'web';
 
 export async function cardCheckoutReturn(ctx: Context): Promise<Response> {
   const sessionId = ctx.url.searchParams.get('session_id') ?? '';
-  if (!SESSION_ID_RE.test(sessionId)) return redirect(CARD_FAILED_URL);
+  const valid = SESSION_ID_RE.test(sessionId);
+  if (toWebsite(ctx)) return redirect(webCardReturn(ctx, valid ? `status=saved&session_id=${sessionId}` : 'status=failed'));
+  if (!valid) return redirect(CARD_FAILED_URL);
   return redirect(`${CARD_SAVED_URL}?session_id=${sessionId}`);
 }
 
-export async function cardCheckoutCancel(): Promise<Response> {
+export async function cardCheckoutCancel(ctx: Context): Promise<Response> {
+  if (toWebsite(ctx)) return redirect(webCardReturn(ctx, 'status=cancelled'));
   return redirect(CARD_CANCELLED_URL);
 }
 
@@ -214,7 +241,7 @@ function repeat(existing: SavedCardRow, sessionId: string): Response {
 
 export async function saveCard(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
-  const stripe = stripeClient(deps);
+  const shop = await shopStripe(deps);
   const token = requiredCardToken(request);
   const { sessionId } = parse(saveBody, await readJsonObject(request));
   const tokenHash = hashManageToken(token);
@@ -227,7 +254,7 @@ export async function saveCard(ctx: Context): Promise<Response> {
 
   let session: Stripe.Checkout.Session;
   try {
-    session = await stripe.checkout.sessions.retrieve(sessionId, { expand: ['setup_intent.payment_method'] });
+    session = await shop.stripe.checkout.sessions.retrieve(sessionId, { expand: ['setup_intent.payment_method'] }, requestOptions(shop));
   } catch (error) {
     throw stripeFailure(deps, error, 'retrieve card checkout');
   }
@@ -250,8 +277,8 @@ export async function saveCard(ctx: Context): Promise<Response> {
 
   const { rows } = await deps.db.query<SavedCardRow>(
     `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id,
-                              brand, last4, exp_month, exp_year, livemode, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                              brand, last4, exp_month, exp_year, livemode, created_at, stripe_account_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT DO NOTHING
      RETURNING *`,
     [
@@ -266,6 +293,7 @@ export async function saveCard(ctx: Context): Promise<Response> {
       card.exp_year,
       session.livemode,
       deps.now(),
+      shop.stripeAccount ?? null,
     ],
   );
   const saved = rows[0];
@@ -295,10 +323,12 @@ export interface NoShowTerms {
 
 /**
  * The no-show terms for a customer booking, or null when it isn't protected
- * (Stripe not set up, protection off, or no fee for this booking): then no card
- * is needed and any card token is ignored. When it is protected, the booking
- * needs a saved card that's good through the appointment's month, and the
- * policy text the client agreed to must be today's policy for this booking.
+ * (Stripe not set up, or in connect mode no account that can take card payments;
+ * protection off; or no fee for this booking): then no card is needed and any
+ * card token is ignored. When it is protected, the booking needs a saved card
+ * that's on the shop's current Stripe account, in the same mode (test or live),
+ * and good through the appointment's month, and the policy text the client
+ * agreed to must be today's policy for this booking.
  */
 export async function noShowTermsForBooking(
   deps: Deps,
@@ -307,14 +337,17 @@ export async function noShowTermsForBooking(
   cardToken: string | undefined,
   agreedPolicy: string | undefined,
 ): Promise<NoShowTerms | null> {
-  if (!stripeConfigured(deps.config)) return null;
+  const shop = await shopAccount(deps);
+  if (!shop) return null;
   const { policy, fees } = protectionFor(target, await loadNoShowSettings(deps.db), true);
   if (!policy.required || !policy.policyText) return null;
   if (!cardToken) throw new ApiError('card_required', "Add a card to book this time. You won't be charged now.");
   const card = await findCardByToken(deps.db, cardToken);
-  const mode = stripeMode(deps.config);
+  const match = card ? accountMatch(card, shop) : null;
+  // A card saved with the shop's earlier Stripe account can't be charged with this one.
+  if (match === 'otherAccount') throw new ApiError('card_required', 'Add your card again: the shop changed its payment account.');
   // A card saved while the shop was in test mode can't be charged with a live key (or the other way round).
-  if (!card || (mode !== null && card.livemode !== (mode === 'live'))) {
+  if (!card || match !== 'same') {
     throw new ApiError('card_required', "We couldn't find your saved card. Add it again.");
   }
   if (!cardValidAt(card, start, deps.catalog.timeZone)) {

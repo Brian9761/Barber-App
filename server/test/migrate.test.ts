@@ -24,6 +24,7 @@ describe('npm run migrate', () => {
       '002_manage_token_unique.sql',
       '003_owner_idempotency_key.sql',
       '004_no_show_protection.sql',
+      '005_stripe_connect_and_computers.sql',
     ]);
   });
 
@@ -109,6 +110,8 @@ describe('npm run migrate', () => {
       'id',
       'last4',
       'livemode',
+      // 005: the connected Stripe account the card is saved on.
+      'stripe_account_id',
       'stripe_customer_id',
       'stripe_payment_method_id',
       'token_hash',
@@ -154,6 +157,84 @@ describe('npm run migrate', () => {
         `INSERT INTO saved_cards VALUES (gen_random_uuid(), 'not-a-hash', 'cs_test_x', 'cus_x', 'pm_x', 'visa', '4242424242424242', 1, 2030, false, now())`,
       ),
     ).rejects.toThrow();
+  });
+
+  it('005 adds the Stripe Connect states, the accounts cards and payments live on, and computer sign-in (hashes only)', async () => {
+    const columns = async (table: string) =>
+      (
+        await db.pool.query(
+          `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY column_name`,
+          [table],
+        )
+      ).rows.map((r) => `${r.column_name} ${r.data_type}${r.is_nullable === 'YES' ? ' null' : ''}`);
+    expect(await columns('stripe_connect_states')).toEqual([
+      'created_at timestamp with time zone',
+      'expires_at timestamp with time zone',
+      'return_to text',
+      'state_hash text',
+    ]);
+    expect(await columns('computer_codes')).toEqual([
+      'code_hash text',
+      'created_at timestamp with time zone',
+      'expires_at timestamp with time zone',
+      'failed_attempts integer',
+      'id uuid',
+      'used_at timestamp with time zone null',
+    ]);
+    expect(await columns('computer_sessions')).toEqual([
+      'created_at timestamp with time zone',
+      'expires_at timestamp with time zone',
+      'id uuid',
+      'last_used_at timestamp with time zone',
+      'name text',
+      'revoked_at timestamp with time zone null',
+      'token_hash text',
+    ]);
+    for (const table of ['saved_cards', 'payments']) {
+      expect(await columns(table), table).toContain('stripe_account_id text null');
+    }
+    const client = await db.pool.connect();
+    const rejects = async (sql: string) => {
+      await client.query('SAVEPOINT probe');
+      await expect(client.query(sql), sql).rejects.toThrow();
+      await client.query('ROLLBACK TO SAVEPOINT probe');
+    };
+    try {
+      await client.query('BEGIN');
+      const hash = 'a'.repeat(64);
+      // Rows from before 005 stay valid: no account means the server's own key.
+      await client.query(
+        `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id, brand, last4, exp_month, exp_year, livemode, created_at)
+         VALUES (gen_random_uuid(), $1, 'cs_test_old', 'cus_old', 'pm_old', 'visa', '4242', 1, 2030, false, now())`,
+        [hash],
+      );
+      await client.query(`INSERT INTO payments (id, amount_cents, status, created_at, updated_at) VALUES ('pi_old', 500, 'succeeded', now(), now())`);
+      expect((await client.query(`SELECT stripe_account_id FROM payments WHERE id = 'pi_old'`)).rows).toEqual([{ stripe_account_id: null }]);
+      await client.query(`UPDATE payments SET stripe_account_id = 'acct_1Shop' WHERE id = 'pi_old'`);
+      await rejects(`UPDATE payments SET stripe_account_id = 'not-an-account' WHERE id = 'pi_old'`);
+      await rejects(`UPDATE saved_cards SET stripe_account_id = 'acct_' WHERE checkout_session_id = 'cs_test_old'`);
+      // States: hashes only, a known way back, and an expiry after they were made.
+      await client.query(`INSERT INTO stripe_connect_states VALUES ($1, 'web', now(), now() + interval '1 hour')`, [hash]);
+      await rejects(`INSERT INTO stripe_connect_states VALUES ('raw-state', 'app', now(), now() + interval '1 hour')`);
+      await rejects(`INSERT INTO stripe_connect_states VALUES ('${'b'.repeat(64)}', 'email', now(), now() + interval '1 hour')`);
+      await rejects(`INSERT INTO stripe_connect_states VALUES ('${'c'.repeat(64)}', 'app', now(), now())`);
+      // Codes: a hash, never the 6 digits.
+      await client.query(`INSERT INTO computer_codes (id, code_hash, created_at, expires_at) VALUES (gen_random_uuid(), $1, now(), now() + interval '10 minutes')`, [hash]);
+      expect((await client.query('SELECT failed_attempts, used_at FROM computer_codes')).rows).toEqual([{ failed_attempts: 0, used_at: null }]);
+      await rejects(`INSERT INTO computer_codes (id, code_hash, created_at, expires_at) VALUES (gen_random_uuid(), '483920', now(), now() + interval '10 minutes')`);
+      // Sessions: a unique token hash and a name of 1–80 characters.
+      const session = (token: string, name: string) =>
+        `INSERT INTO computer_sessions (id, token_hash, name, created_at, last_used_at, expires_at)
+         VALUES (gen_random_uuid(), '${token}', '${name}', now(), now(), now() + interval '30 days')`;
+      await client.query(session(hash, 'Chrome on Mac'));
+      await rejects(session(hash, 'Another computer'));
+      await rejects(session('d'.repeat(64), ''));
+      await rejects(session('e'.repeat(64), 'x'.repeat(81)));
+      await rejects(session('fixture-session-token', 'Chrome on Mac'));
+    } finally {
+      await client.query('ROLLBACK');
+      client.release();
+    }
   });
 
   it('the schema has the exclusion constraint and btree_gist', async () => {

@@ -42,7 +42,7 @@ export async function getAvailability(ctx: Context): Promise<Response> {
 // for the next slot that hasn't started yet.
 
 export async function getOwnerAvailability(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   return availabilityResponse(ctx, { leadTimeMinutes: 0 });
 }
 
@@ -304,7 +304,7 @@ export function dayRange(ctx: Context, maxDays = MAX_OWNER_RANGE_DAYS): { from: 
 }
 
 export async function listOwnerAppointments(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const { from, to } = dayRange(ctx);
   const zone = ctx.deps.catalog.timeZone;
   const { rows } = await ctx.deps.db.query<AppointmentRow>(
@@ -373,7 +373,7 @@ async function ownerReplay(db: Queryable, key: string, body: OwnerBooking, start
 }
 
 export async function postOwnerAppointment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   // The owner app's key for this booking, so Book again after a lost answer can't book twice.
   const key = appMadeKey(ctx.request, 'Idempotency-Key');
   const body = parse(ownerBooking, await readJsonObject(ctx.request));
@@ -416,7 +416,7 @@ const statusPatch = z.object({
 });
 
 export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const id = ctx.params.id ?? '';
   if (!UUID_RE.test(id)) throw notFound();
   const { status } = parse(statusPatch, await readJsonObject(ctx.request));
