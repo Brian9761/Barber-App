@@ -101,6 +101,32 @@ export const NoShowPolicy = z.strictObject({
   lateCancelWindowMinutes: int.min(30).max(2880).nullable(),
   warning: z.strictObject({ title: z.string().min(1), message: z.string().min(1) }).nullable(),
 });
+// The shop's own Stripe account (STRIPE_CONNECT) and computer sign-in
+const SETUP_MODE = z.enum(['connect', 'direct', 'off']);
+const CONNECTION_STATUS = z.enum(['notConnected', 'needsInfo', 'pending', 'active', 'restricted', 'direct', 'off']);
+export const StripeConnection = z.strictObject({
+  mode: SETUP_MODE,
+  status: CONNECTION_STATUS,
+  accountId: z.string().regex(/^acct_[A-Za-z0-9]+$/).nullable(),
+  businessName: z.string().min(1).nullable(),
+  livemode: z.boolean().nullable(),
+  chargesEnabled: z.boolean(),
+  payoutsEnabled: z.boolean(),
+  detailsSubmitted: z.boolean(),
+  requirementsDue: int.min(0),
+  message: z.string().min(1),
+  dashboardUrl: z.string().regex(/^https:\/\//),
+  checkedAt: instant.nullable(),
+});
+export const ComputerSession = z.strictObject({
+  id,
+  name: z.string().min(1).max(80),
+  createdAt: instant,
+  lastUsedAt: instant,
+  expiresAt: instant,
+  current: z.boolean(),
+});
+
 export const ErrorBody = z.strictObject({
   error: z.strictObject({
     code: z.enum([
@@ -120,6 +146,9 @@ export const ErrorBody = z.strictObject({
       'late_cancel_fee',
       'stripe_not_configured',
       'owner_not_configured',
+      'stripe_connect_off',
+      'wrong_code',
+      'forbidden',
       'server_error',
     ]),
     message: z.string().min(1),
@@ -139,6 +168,7 @@ export const RESPONSES = {
   'owner-me': z.strictObject({
     ok: z.literal(true),
     stripe: z.strictObject({ configured: z.boolean(), mode: z.enum(['test', 'live']).nullable(), locationId: z.string().nullable() }),
+    connection: z.strictObject({ mode: SETUP_MODE, status: CONNECTION_STATUS, businessName: z.string().min(1).nullable() }),
   }),
   'owner-appointments': z.strictObject({ appointments: z.array(Appointment) }),
   'owner-appointment-created': z.strictObject({ appointment: Appointment }),
@@ -165,6 +195,25 @@ export const RESPONSES = {
   'no-show-fee-declined': z.strictObject({ appointment: Appointment }),
   'appointment-cancelled-late': z.strictObject({ appointment: Appointment }),
   'late-cancel-fee-charged': z.strictObject({ appointment: Appointment }),
+  // The shop's own Stripe account (STRIPE_CONNECT=on): GET /api/owner/stripe and the connect routes
+  'owner-me-connected': z.strictObject({
+    ok: z.literal(true),
+    stripe: z.strictObject({ configured: z.boolean(), mode: z.enum(['test', 'live']).nullable(), locationId: z.string().nullable() }),
+    connection: z.strictObject({ mode: SETUP_MODE, status: CONNECTION_STATUS, businessName: z.string().min(1).nullable() }),
+  }),
+  'stripe-connection-off': StripeConnection,
+  'stripe-connection-direct': StripeConnection,
+  'stripe-connection-not-connected': StripeConnection,
+  'stripe-connection-needs-info': StripeConnection,
+  'stripe-connection-pending': StripeConnection,
+  'stripe-connection-active': StripeConnection,
+  'stripe-connection-restricted': StripeConnection,
+  'stripe-connection-disconnected': StripeConnection,
+  'stripe-connect-link': z.strictObject({ url: z.string().regex(/^https:\/\/connect\.stripe\.com\//), expiresAt: instant }),
+  // Signing in on a computer
+  'computer-code': z.strictObject({ code: z.string().regex(/^\d{6}$/), expiresAt: instant, expiresInSeconds: int.positive() }),
+  'computer-session-created': z.strictObject({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/), session: ComputerSession }),
+  'computer-sessions': z.strictObject({ sessions: z.array(ComputerSession) }),
 } as const;
 
 export type ResponseName = keyof typeof RESPONSES;

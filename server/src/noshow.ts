@@ -3,10 +3,11 @@ import { requireOwner } from './auth.js';
 import { resolveTarget, targetOfferings, type Target } from './booking.js';
 import type { Offering } from './catalog.js';
 import type { Queryable } from './db.js';
-import type { Config } from './config.js';
+import type { Deps } from './deps.js';
 import { MAX_LATE_CANCEL_WINDOW_MINUTES, MIN_LATE_CANCEL_WINDOW_MINUTES, money, windowLabel } from './feecase.js';
 import { json, readJsonObject } from './http.js';
 import type { Context } from './router.js';
+import { shopAccount } from './stripeaccount.js';
 import { parse, shortId } from './validation.js';
 
 // No-show protection: the owner's settings, the fee rule, the policy clients
@@ -223,9 +224,12 @@ export async function loadNoShowSettings(db: Queryable): Promise<NoShowSettings>
   return settings;
 }
 
-/** Whether Stripe is set up, so a card could be saved and charged. */
-export function stripeConfigured(config: Config): boolean {
-  return Boolean(config.stripeSecretKey);
+/**
+ * Whether a card could be saved and charged: Stripe is set up (the server's own key, or in
+ * connect mode a connected account that can take card payments). Until then no booking needs a card.
+ */
+export async function stripeReady(deps: Pick<Deps, 'config' | 'db'>): Promise<boolean> {
+  return (await shopAccount(deps)) !== null;
 }
 
 // GET /api/no-show-policy?offeringId=… | serviceId=…&barberId=any
@@ -239,7 +243,7 @@ const targetQuery = z.object({
 export async function getNoShowPolicy(ctx: Context): Promise<Response> {
   const query = parse(targetQuery, Object.fromEntries(ctx.url.searchParams));
   const target = resolveTarget(ctx.deps.catalog, query);
-  if (!stripeConfigured(ctx.deps.config)) return json(NOT_REQUIRED);
+  if (!(await stripeReady(ctx.deps))) return json(NOT_REQUIRED);
   const settings = await loadNoShowSettings(ctx.deps.db);
   return json(protectionFor(target, settings, true).policy);
 }
@@ -247,14 +251,14 @@ export async function getNoShowPolicy(ctx: Context): Promise<Response> {
 // GET /api/owner/no-show-settings and PATCH /api/owner/no-show-settings (partial)
 
 export async function getNoShowSettings(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   return json({ noShowSettings: await loadNoShowSettings(ctx.deps.db) });
 }
 
 const settingsPatch = settingsShape.partial().strict();
 
 export async function patchNoShowSettings(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const patch = parse(settingsPatch, await readJsonObject(ctx.request));
   const changes = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
   if (Object.keys(changes).length > 0) {

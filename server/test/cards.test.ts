@@ -297,3 +297,38 @@ describe('POST /api/cards', () => {
     expect((await save(newManageToken(), 'cs_test_abc')).status).toBe(503);
   });
 });
+
+describe('a card saved from the website (returnTo: "web")', () => {
+  it('Stripe sends the client back through the API to the website’s own page', async () => {
+    await protectionOn(h);
+    const res = await checkout(newManageToken(), { offeringId: FLOW45, returnTo: 'web' });
+    expect(res.status, res.text).toBe(201);
+    const params = h.stripe.calls[1]!.params as Record<string, unknown>;
+    expect(params.success_url).toBe('https://izzy-clipz-api.test/api/cards/return?session_id={CHECKOUT_SESSION_ID}&to=web');
+    expect(params.cancel_url).toBe('https://izzy-clipz-api.test/api/cards/cancel?to=web');
+    // "app" (or nothing) is the app's way back, exactly as before.
+    await checkout(newManageToken(), { offeringId: FLOW45, returnTo: 'app' });
+    expect((h.stripe.calls[3]!.params as Record<string, unknown>).success_url).toBe('https://izzy-clipz-api.test/api/cards/return?session_id={CHECKOUT_SESSION_ID}');
+    expect((h.stripe.calls[3]!.params as Record<string, unknown>).cancel_url).toBe('https://izzy-clipz-api.test/api/cards/cancel');
+    const bad = await checkout(newManageToken(), { offeringId: FLOW45, returnTo: 'email' });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.message).toBe('returnTo must be "app" or "web".');
+  });
+
+  it('the return and cancel pages go on to /book/card-return on the website', async () => {
+    const saved = await h.call('GET', '/api/cards/return?session_id=cs_test_a1B2c3&to=web');
+    expect(saved.status).toBe(302);
+    expect(saved.headers.get('location')).toBe('https://izzy-clipz-api.test/book/card-return?status=saved&session_id=cs_test_a1B2c3');
+    expect(saved.text).toContain('href="https://izzy-clipz-api.test/book/card-return?status=saved&amp;session_id=cs_test_a1B2c3"');
+    const cancelled = await h.call('GET', '/api/cards/cancel?to=web');
+    expect(cancelled.status).toBe(302);
+    expect(cancelled.headers.get('location')).toBe('https://izzy-clipz-api.test/book/card-return?status=cancelled');
+    const failed = await h.call('GET', '/api/cards/return?session_id=nope&to=web');
+    expect(failed.headers.get('location')).toBe('https://izzy-clipz-api.test/book/card-return?status=failed');
+    // PUBLIC_BASE_URL, when set.
+    h.config.publicBaseUrl = 'https://izzyclipz.example/';
+    expect((await h.call('GET', '/api/cards/cancel?to=web')).headers.get('location')).toBe('https://izzyclipz.example/book/card-return?status=cancelled');
+    // Anything but to=web keeps the app's links.
+    expect((await h.call('GET', '/api/cards/cancel?to=app')).headers.get('location')).toBe('izzyclipz://card-cancelled');
+  });
+});

@@ -83,6 +83,45 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
    it on in Settings → No-show protection only with the live key, once the
    customer app version with the card screen is in the App Store.
 
+## The shop's own Stripe account (Stripe Connect)
+
+Instead of putting the shop's own Stripe key on the server (step 2 above),
+the server can run on the app developer's Stripe Connect platform: then the
+owner connects the shop's **own** Stripe account from Settings, and Tap to
+Pay, saved cards and no-show or late-cancellation fees all go to it (he
+pays Stripe's fees and sees everything in his own Stripe Dashboard).
+
+- **Server** (the developer, once): turn on Connect and set its branding in
+  the developer's Stripe Dashboard, then set `STRIPE_SECRET_KEY` to the
+  platform's key, `STRIPE_CONNECT=on`, `PUBLIC_BASE_URL` (the server's https
+  address) and `STRIPE_CONNECT_WEBHOOK_SECRET` (from a Connect webhook
+  endpoint). `STRIPE_TERMINAL_LOCATION_ID` isn't needed: the server makes
+  the shop's Terminal location on his account as soon as it can take card
+  payments. The steps are in `server/README.md` (Stripe Connect).
+- **The owner**: Settings → **Connect Stripe** opens Stripe's own window,
+  where he signs in or signs up and finishes setting up. Back in the app,
+  Settings shows what Stripe says: "Connected. Card payments are on.", or
+  what's left to do ("Finish setting up Stripe to take card payments.",
+  "Stripe is checking your details…", "Stripe paused card payments: open
+  Stripe to fix it."). Until it's connected, Tap to Pay, saving cards and
+  no-show protection stay off ("Connect Stripe in Settings to take card
+  payments."). Disconnecting only forgets the account in the app; it stays
+  open at Stripe.
+- **Tap to Pay after connecting**: the first time the app connects Tap to
+  Pay with his own account, Apple asks him to accept its Tap to Pay terms
+  again (with the shop's Apple ID), because each Stripe account that takes
+  its own payments accepts them for itself. It's once per account, on any
+  iPhone.
+
+## Using the Business area on a computer
+
+The website's Business area signs in with a code, never the owner key:
+Settings → **Use on a computer** shows a 6-digit code for 10 minutes, and
+the owner types it on the website. The computer stays signed in for 30
+days; Settings can sign any computer (or all of them) out, and so can the
+website's Sign out. Tap to Pay, new codes and disconnecting Stripe stay in
+the app on the iPhone. A new `OWNER_KEY` signs every computer out.
+
 ## Test mode
 
 When the iPhone can't do Tap to Pay (or the server has no Stripe key yet

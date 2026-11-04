@@ -12,6 +12,7 @@ export type Handler = (ctx: Context) => Promise<Response>;
 
 interface Route {
   method: string;
+  path: string;
   pattern: RegExp;
   keys: string[];
   handler: Handler;
@@ -33,8 +34,13 @@ export class Router {
         return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       })
       .join('/');
-    this.routes.push({ method, pattern: new RegExp(`^${source}$`), keys, handler });
+    this.routes.push({ method, path, pattern: new RegExp(`^${source}$`), keys, handler });
     return this;
+  }
+
+  /** Every route, in the order they're matched (tests check that each owner route asks for the owner). */
+  list(): { method: string; path: string }[] {
+    return this.routes.map(({ method, path }) => ({ method, path }));
   }
 
   async handle(request: Request, deps: Deps): Promise<Response> {

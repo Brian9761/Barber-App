@@ -1,0 +1,14 @@
+{
+  "mode": "direct",
+  "status": "direct",
+  "accountId": null,
+  "businessName": null,
+  "livemode": false,
+  "chargesEnabled": false,
+  "payoutsEnabled": false,
+  "detailsSubmitted": false,
+  "requirementsDue": 0,
+  "message": "Card payments use this server's own Stripe key.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": null
+}
