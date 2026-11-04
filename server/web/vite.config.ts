@@ -10,9 +10,9 @@ const API_DEV_SERVER = 'http://localhost:3000';
 
 /**
  * The site's public address, for the few links that must be absolute in the
- * HTML itself (the Open Graph image that link previews show). It's the API's
- * PUBLIC_BASE_URL, since the site and the API share one origin. Unset: the
- * links stay relative.
+ * HTML itself (the share image that link previews show, og:image and
+ * twitter:image). It's the API's PUBLIC_BASE_URL, since the site and the API
+ * share one origin. Unset: the links stay relative.
  */
 function siteOrigin(): string {
   const configured = process.env.PUBLIC_BASE_URL?.trim();
@@ -30,7 +30,7 @@ function absoluteSocialLinks(): Plugin {
     name: 'izzy-absolute-social-links',
     transformIndexHtml(html) {
       const origin = siteOrigin();
-      return origin ? html.replaceAll('content="/og-image.jpg"', `content="${origin}/og-image.jpg"`) : html;
+      return origin ? html.replaceAll('content="/og-image.png"', `content="${origin}/og-image.png"`) : html;
     },
   };
 }

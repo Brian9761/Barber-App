@@ -1,4 +1,4 @@
-import { expectAccessible, expect, expectFits, isPhone, screenshot, setLiveReviews, test } from './support.js';
+import { expectAccessible, expect, expectFits, expectLogosStandOut, isPhone, screenshot, setLiveReviews, test } from './support.js';
 
 // Every page opens with its own heading and title, works from the nav on a
 // desktop and a phone, logs nothing as an error and has no serious
@@ -42,6 +42,7 @@ test.describe('every page', () => {
         await expect(tab.getByTestId('yelp-reviews')).toContainText('Reviews from Yelp');
       }
       await expectAccessible(tab, page.path);
+      await expectLogosStandOut(tab, page.path);
       await screenshot(tab, testInfo, page.shot);
     });
   }
@@ -125,7 +126,7 @@ test('the nav goes to every page and back home', async ({ page }, testInfo) => {
   }
   await nav.getByRole('link', { name: 'Book an appointment' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Pick a service' })).toBeVisible();
-  await nav.getByRole('link', { name: 'Izzy Clipz home' }).click();
+  await nav.getByRole('link', { name: 'Izzy Clipz', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Fresh cuts. Booked in seconds.' })).toBeVisible();
 
   // The footer's "For the shop".
@@ -158,4 +159,33 @@ test('the site’s files are served as they are, and every other address opens t
   const catalog = await request.get('/api/catalog');
   expect(catalog.headers()['cache-control']).toBe('public, max-age=300');
   expect((await catalog.json()).shop.phone.display).toBe('(442) 341-3053');
+});
+
+test('the icons, the home-screen icon and the share image are the logo’s, at the sizes the page says', async ({ page, request }) => {
+  await page.goto('/');
+  const head = page.locator('head');
+  const pictures = [
+    ...(await head.locator('link[rel="icon"], link[rel="apple-touch-icon"]').evaluateAll((links) =>
+      links.map((link) => ({ href: link.getAttribute('href')!, size: link.getAttribute('sizes')! })),
+    )),
+    {
+      href: (await head.locator('meta[property="og:image"]').getAttribute('content'))!,
+      size: `${await head.locator('meta[property="og:image:width"]').getAttribute('content')}x${await head.locator('meta[property="og:image:height"]').getAttribute('content')}`,
+    },
+  ];
+  expect(pictures.map((picture) => picture.href)).toEqual(['/favicon-32.png', '/favicon-48.png', '/apple-touch-icon.png', '/og-image.png']);
+  await expect(head.locator('meta[name="twitter:image"]')).toHaveAttribute('content', '/og-image.png');
+  const manifestHref = (await head.locator('link[rel="manifest"]').getAttribute('href'))!;
+  const manifest = await request.get(manifestHref);
+  expect(manifest.headers()['content-type']).toBe('application/manifest+json');
+  const { icons } = (await manifest.json()) as { icons: { src: string; sizes: string }[] };
+  pictures.push(...icons.map((icon) => ({ href: icon.src, size: icon.sizes })));
+  for (const { href, size } of pictures) {
+    const response = await request.get(href);
+    expect(response.status(), href).toBe(200);
+    expect(response.headers()['content-type'], href).toBe('image/png');
+    // A PNG's width and height are in its first chunk, after the 8-byte signature and the chunk's 8-byte head.
+    const png = await response.body();
+    expect(`${png.readUInt32BE(16)}x${png.readUInt32BE(20)}`, href).toBe(size);
+  }
 });

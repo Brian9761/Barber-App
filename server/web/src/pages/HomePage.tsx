@@ -1,8 +1,9 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import type { Catalog } from '../api/types';
-import { GALLERY, LOGO, STOREFRONT } from '../assets/images';
+import { GALLERY, STOREFRONT } from '../assets/images';
 import { useNearScreen, useNow } from '../components/hooks';
+import { Logo } from '../components/Logo';
 import { CallLink, Monogram, MoreLink, Photo, Stars } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { useCatalog } from '../data/catalog';
@@ -25,6 +26,8 @@ export function HomePage() {
     <>
       <section className="hero on-dark" aria-labelledby="hero-title">
         <div className="container hero__inner">
+          {/* The shop's logo, white on the black hero. The headline and the line under it name the shop. */}
+          <Logo height={132} className="hero__logo" />
           {/* While the hours load (or if they can't), the line keeps its place without showing an empty pill. */}
           {catalog ? <OpenToday catalog={catalog} /> : <p className="hero__status hero__status--waiting" aria-hidden="true">&nbsp;</p>}
           <h1 id="hero-title" className="hero__title">
@@ -207,9 +210,7 @@ function HomeTiles({ catalog }: { catalog: Catalog }) {
                 <li key={line}>{line}</li>
               ))}
             </ul>
-            <span className="sticker visit-tile__sticker">
-              <img src={LOGO.src} width={220} height={175} alt="Izzy Clipz logo: the barber-pole mascot with scissors and clippers" loading="lazy" />
-            </span>
+            <Logo height={120} className="visit-tile__logo" />
           </div>
         </article>
       </div>

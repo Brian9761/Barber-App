@@ -160,7 +160,7 @@ Collected October 16, 28 and 30, 2026 from the shop's website ([izzyclipzbarbers
 
 Please confirm these with the shop before publishing.
 
-The logo and photos are the shop's own, from its website; the logo file there has a faint stock-art watermark on the mascot, so ask the shop for a clean copy before publishing. The team has no headshots online, so barbers appear as monograms.
+The logo is the official one the shop sent, and the photos are the shop's own, from its website. The team has no headshots online, so barbers appear as monograms.
 
 ## Publishing to the App Store
 

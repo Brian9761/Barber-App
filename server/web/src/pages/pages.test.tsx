@@ -39,7 +39,7 @@ describe('every page', () => {
     renderApp('/visit');
     const nav = screen.getByRole('navigation', { name: 'Izzy Clipz' });
     const links = [
-      ['Izzy Clipz home', '/'],
+      ['Izzy Clipz', '/'],
       ['Services', '/services'],
       ['Barbers', '/barbers'],
       ['Reviews', '/reviews'],
@@ -175,6 +175,30 @@ describe('Home’s photos', () => {
       expect(figure.querySelector('img')!.getAttribute('alt')).toBe('');
       expect(figure.querySelector('figcaption')!.textContent).not.toBe('');
     }
+  });
+});
+
+describe('the logo', () => {
+  it.each([
+    ['/', 4], // the nav, the hero, the Visit tile and the footer
+    ['/visit', 3], // the nav, the sticker on the storefront photo and the footer
+    ['/business', 3], // the nav, over the heading, and the footer
+    ['/services', 2], // the nav and the footer
+  ])('on %s, is the nav’s link home, named “Izzy Clipz”, and decoration everywhere else', (path, count) => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp(path);
+    const nav = screen.getByRole('navigation', { name: 'Izzy Clipz' });
+    const home = within(nav).getByRole('link', { name: 'Izzy Clipz' });
+    expect(home.getAttribute('href')).toBe('/');
+    expect(within(home).getByRole('img', { name: 'Izzy Clipz' }).matches('svg.logo')).toBe(true);
+    // Screen readers hear the shop's name once, from the link; every other logo is decoration.
+    expect(screen.getAllByRole('img', { name: 'Izzy Clipz' })).toHaveLength(1);
+    const logos = Array.from(document.querySelectorAll('svg.logo'));
+    expect(logos).toHaveLength(count);
+    for (const logo of logos.filter((logo) => !nav.contains(logo))) expect(logo.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByRole('contentinfo').querySelector('svg.logo')).not.toBeNull();
+    // The old logo pictures (the mascot, the logo on a white sticker) are gone; only photos are pictures.
+    for (const image of Array.from(document.images)) expect(image.getAttribute('src')).not.toMatch(/logo|mascot/i);
   });
 });
 

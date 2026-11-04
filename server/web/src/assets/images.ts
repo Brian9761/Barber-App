@@ -12,8 +12,6 @@ import gallery5At400 from './images/gallery-5-400.webp';
 import gallery5At750 from './images/gallery-5-750.webp';
 import gallery6At400 from './images/gallery-6-400.webp';
 import gallery6At750 from './images/gallery-6-750.webp';
-import logo600 from './images/logo-600.webp';
-import mascotHead from './images/mascot-head-128.webp';
 import storefront640 from './images/storefront-640.webp';
 import storefront1000 from './images/storefront-1000.webp';
 import type { PhotoSource } from '../components/ui';
@@ -55,9 +53,3 @@ export const STOREFRONT = {
   height: 750,
   alt: "The Izzy Clipz storefront at 1919 Mission Ave, with the shop's sign over the windows",
 };
-
-/** The full logo (mascot and wordmark), transparent: it always sits on a white sticker. */
-export const LOGO = { src: logo600, width: 600, height: 477 };
-
-/** The mascot's head, for the round sticker in the nav. */
-export const MASCOT_HEAD = mascotHead;

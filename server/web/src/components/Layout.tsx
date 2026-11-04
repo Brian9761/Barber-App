@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
-import { MASCOT_HEAD } from '../assets/images';
 import { useCatalog, useShopContact } from '../data/catalog';
 import { hoursSummary } from '../lib/shopTime';
 import { Icon } from './Icon';
+import { Logo } from './Logo';
 import { CallLink } from './ui';
 
 const NAV_LINKS = [
@@ -45,14 +45,6 @@ export function Layout() {
   );
 }
 
-function Wordmark() {
-  return (
-    <span className="wordmark" aria-hidden="true">
-      Izzy <span className="wordmark__clipz">Clipz</span>
-    </span>
-  );
-}
-
 export function GlobalNav() {
   const { pathname } = useLocation();
   // The page the menu was opened on: going to another page closes it in that same render, so the
@@ -88,11 +80,9 @@ export function GlobalNav() {
   return (
     <nav className="globalnav" aria-label="Izzy Clipz">
       <div className="container globalnav__inner">
-        <Link to="/" className="globalnav__logo" aria-label="Izzy Clipz home">
-          <span className="mascot" aria-hidden="true">
-            <img src={MASCOT_HEAD} alt="" width={30} height={30} />
-          </span>
-          <Wordmark />
+        {/* As on apple.com, the logo is the link home, and its name, "Izzy Clipz", is the link's. */}
+        <Link to="/" className="globalnav__logo">
+          <Logo height={38} label="Izzy Clipz" />
         </Link>
         <ul className="globalnav__links">
           {NAV_LINKS.map((link) => (
@@ -161,9 +151,12 @@ export function Footer() {
   return (
     <footer className="globalfooter">
       <div className="container">
-        <p className="globalfooter__call">
-          Prefer to call? <CallLink /> · Walk-ins welcome.
-        </p>
+        <div className="globalfooter__top">
+          <Logo height={48} className="globalfooter__logo" />
+          <p className="globalfooter__call">
+            Prefer to call? <CallLink /> · Walk-ins welcome.
+          </p>
+        </div>
         <nav className="globalfooter__directory" aria-label="Site directory">
           <div>
             <h2 className="globalfooter__heading">Explore</h2>

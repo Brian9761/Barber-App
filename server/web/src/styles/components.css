@@ -1,5 +1,14 @@
 /* Components shared by the pages. */
 
+/* ---------------------------------------------------------------------- Logo */
+
+/* The shop's logo (Logo.tsx), in the text color. A rule that sizes it sets the height; the width follows. */
+.logo {
+  display: block;
+  flex: none;
+  width: auto;
+}
+
 /* ---------------------------------------------------------------- Global nav */
 
 .globalnav {
@@ -39,46 +48,13 @@
   gap: var(--space-2);
 }
 
+/* The logo, white on the dark bar, is the link home. */
 .globalnav__logo {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
   height: var(--nav-height);
   padding-right: var(--space-2);
-  color: #f5f5f7;
-  text-decoration: none;
-  white-space: nowrap;
-}
-
-.globalnav__logo:hover {
-  text-decoration: none;
-}
-
-.mascot {
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  border: 2px solid #fff;
-  background: var(--color-bone);
-  overflow: hidden;
-  transform: rotate(-8deg);
-}
-
-.mascot img {
-  width: 100%;
-  height: 100%;
-}
-
-.wordmark {
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
-  color: var(--color-bone);
-}
-
-.wordmark__clipz {
-  color: #ff4545;
+  color: #fff;
 }
 
 .globalnav__links {
@@ -242,9 +218,20 @@
   color: var(--color-text);
 }
 
-.globalfooter__call {
+/* The logo, near-black on the footer's light gray, and the shop's number next to it. */
+.globalfooter__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4) var(--space-5);
   padding-bottom: var(--space-6);
   border-bottom: 1px solid var(--color-line);
+}
+
+.globalfooter__logo {
+  color: var(--color-text);
+}
+
+.globalfooter__call {
   font-size: var(--text-body);
   line-height: 1.47;
   color: var(--color-text);
@@ -587,12 +574,20 @@
   object-fit: cover;
 }
 
+/*
+ * The logo as a sticker, slapped on a photo at a slight angle, as in the apps: the shop's own
+ * look, white on a black rounded plate. A hairline light edge sets the plate apart from dark
+ * parts of the photo.
+ */
 .sticker {
   display: inline-block;
-  padding: 10px;
+  padding: 12px;
   border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+  background: #000;
+  color: #fff;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.25),
+    0 10px 28px rgba(0, 0, 0, 0.35);
   transform: rotate(-6deg);
 }
 

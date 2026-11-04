@@ -34,6 +34,13 @@
   gap: var(--space-4);
 }
 
+/* The shop's logo, white on black as the shop sent it, over the open hours and the headline. */
+.hero__logo {
+  height: clamp(104px, 9.2vw, 132px);
+  margin-bottom: var(--space-3);
+  color: #fff;
+}
+
 .hero__status {
   display: inline-flex;
   align-items: center;
@@ -275,12 +282,10 @@
   color: var(--color-text-secondary);
 }
 
-.visit-tile__sticker {
-  margin-top: var(--space-4);
-}
-
-.visit-tile__sticker img {
-  width: 200px;
+/* The logo, near-black on the light gray tile. */
+.visit-tile__logo {
+  margin-top: var(--space-6);
+  color: var(--color-text);
 }
 
 .gallery {
@@ -746,12 +751,6 @@
   bottom: var(--space-5);
 }
 
-.visit__sticker img {
-  position: static;
-  width: 130px;
-  height: auto;
-}
-
 .visit__details {
   display: grid;
   grid-template-columns: 1fr;
@@ -1108,8 +1107,10 @@
   text-align: center;
 }
 
-.business__sticker {
-  margin-bottom: var(--space-4);
+/* The logo, near-black on white. */
+.business__logo {
+  margin-bottom: var(--space-2);
+  color: var(--color-text);
 }
 
 .business h1 {

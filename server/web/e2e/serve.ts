@@ -287,6 +287,7 @@ const TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
   '.json': 'application/json',
+  '.webmanifest': 'application/manifest+json',
 };
 
 /** A file of the built site, or null (never outside it). */

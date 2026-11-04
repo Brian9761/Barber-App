@@ -71,18 +71,55 @@ export const test = base.extend<Fixtures>({
   },
 });
 
-/**
- * Fails on any serious or critical accessibility problem axe-core finds on the page as it is now.
- * The nav's "Izzy Clipz" wordmark is left out: it's the shop's logotype (aria-hidden; the link is
- * named "Izzy Clipz home"), which WCAG 1.4.3 exempts from contrast, in the app's own red for ink
- * (Theme.hotRed). axe measures it against whatever happens to be scrolled under the see-through nav.
- */
+/** Fails on any serious or critical accessibility problem axe-core finds on the page as it is now. */
 export async function expectAccessible(page: Page, what: string): Promise<void> {
-  const results = await new AxeBuilder({ page }).exclude('.wordmark').analyze();
+  const results = await new AxeBuilder({ page }).analyze();
   const serious = results.violations
     .filter((v) => v.impact === 'serious' || v.impact === 'critical')
     .map((v) => `${v.id} (${v.impact}): ${v.help} at ${v.nodes.map((n) => n.target.join(' ')).slice(0, 4).join(' | ')}`);
   expect(serious, `axe-core on ${what}`).toEqual([]);
+}
+
+/**
+ * Every logo on the page stands out from what's behind it: white on the black bands, the nav and
+ * the black sticker, near-black on the white and light gray ones, never white on light. Behind a
+ * logo is each box's background down to the page, the nav's see-through bar included (over white,
+ * the worst case for its white logo).
+ */
+export async function expectLogosStandOut(page: Page, what: string): Promise<void> {
+  const logos = await page.locator('svg.logo').evaluateAll((svgs) => {
+    type Rgb = [number, number, number];
+    const rgba = (css: string): [...Rgb, number] => {
+      const [r = 0, g = 0, b = 0, a = 1] = css.match(/[\d.]+/g)?.map(Number) ?? [0, 0, 0, 0];
+      return [r, g, b, a];
+    };
+    // WCAG's relative luminance and contrast ratio.
+    const luminance = ([r, g, b]: Rgb): number => {
+      const linear = (c: number) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
+    };
+    return svgs.map((svg) => {
+      const layers: string[] = [];
+      for (let box: Element | null = svg; box; box = box.parentElement) {
+        layers.push(getComputedStyle(box).backgroundColor);
+        if (box.classList.contains('globalnav')) layers.push(getComputedStyle(box, '::before').backgroundColor);
+      }
+      // From the page up to the logo, each see-through layer over the ones under it.
+      let behind: Rgb = [255, 255, 255];
+      for (const layer of layers.reverse()) {
+        const [r, g, b, a] = rgba(layer);
+        behind = [behind[0] * (1 - a) + r * a, behind[1] * (1 - a) + g * a, behind[2] * (1 - a) + b * a];
+      }
+      const [r, g, b] = rgba(getComputedStyle(svg).color);
+      const [ink, back] = [luminance([r, g, b]), luminance(behind)];
+      const ratio = (Math.max(ink, back) + 0.05) / (Math.min(ink, back) + 0.05);
+      const where = svg.closest('[class]:not(svg)')?.className ?? '';
+      return { where: `${where} ${svg.getAttribute('class')}`, ratio: Math.round(ratio * 10) / 10 };
+    });
+  });
+  expect(logos.length, `${what}: the logo is on the page`).toBeGreaterThan(0);
+  const faint = logos.filter((logo) => logo.ratio < 4.5).map((logo) => `${logo.where} at ${logo.ratio}:1`);
+  expect(faint, `${what}: every logo stands out from its background`).toEqual([]);
 }
 
 /** Loads every photo now (they're lazy below the fold) and waits for them and the fonts. */

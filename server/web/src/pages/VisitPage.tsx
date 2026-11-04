@@ -1,8 +1,9 @@
 import type { Catalog } from '../api/types';
-import { LOGO, STOREFRONT } from '../assets/images';
+import { STOREFRONT } from '../assets/images';
 import { CatalogGate } from '../components/CatalogGate';
 import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
+import { Logo } from '../components/Logo';
 import { Photo } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { openStatus, wallClock, weekRows } from '../lib/shopTime';
@@ -61,8 +62,8 @@ function VisitDetails({ catalog }: { catalog: Catalog }) {
             sizes="(min-width: 960px) 55vw, 100vw"
             eager
           />
-          <span className="sticker visit__sticker" aria-hidden="true">
-            <img src={LOGO.src} alt="" width={150} height={119} />
+          <span className="sticker visit__sticker">
+            <Logo height={112} />
           </span>
         </div>
       </div>

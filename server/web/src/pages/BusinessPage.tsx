@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { LOGO } from '../assets/images';
+import { Logo } from '../components/Logo';
 import { usePageMeta } from '../components/usePageMeta';
 
 /** The shop's own area. A later step builds it here; for now it says what's coming. */
@@ -8,9 +8,7 @@ export function BusinessPage() {
   return (
     <section className="band business" aria-labelledby="business-title">
       <div className="container container--narrow business__inner">
-        <span className="sticker business__sticker" aria-hidden="true">
-          <img src={LOGO.src} alt="" width={180} height={143} />
-        </span>
+        <Logo height={128} className="business__logo" />
         <p className="eyebrow">For the shop</p>
         <h1 id="business-title">Izzy Clipz Business on your computer — coming next</h1>
         <p className="lead secondary">
