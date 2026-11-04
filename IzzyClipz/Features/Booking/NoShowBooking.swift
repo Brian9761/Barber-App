@@ -336,6 +336,6 @@ enum NoShowCopy {
 
     /// Under "Remember me on this iPhone" on the details step.
     static func rememberNote(cardNeeded: Bool) -> String {
-        cardNeeded ? "Your name, number and card fill in next time." : "Your name and number fill in next time."
+        cardNeeded ? "Your name and number fill in next time, and your card stays saved." : "Your name and number fill in next time."
     }
 }

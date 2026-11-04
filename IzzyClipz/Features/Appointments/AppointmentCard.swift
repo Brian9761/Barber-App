@@ -218,15 +218,9 @@ struct AppointmentCard: View {
     private func cancel(_ question: CancelQuestion) {
         guard let cancelling else { return }
         Task {
-            switch await cancelling.confirm(question) {
-            case .cancelled:
+            // Asked again (the server's warning), VoiceOver reads the new question as it opens.
+            if await cancelling.confirm(question) == .cancelled {
                 UIAccessibility.post(notification: .announcement, argument: "Appointment cancelled.")
-            case .askedAgain:
-                if let message = cancelling.question?.message {
-                    UIAccessibility.post(notification: .announcement, argument: message)
-                }
-            case .failed, .ignored:
-                break
             }
         }
     }

@@ -998,7 +998,7 @@ final class NoShowCopyTests: XCTestCase {
 
     func testRememberMe() {
         XCTAssertEqual(NoShowCopy.rememberNote(cardNeeded: false), "Your name and number fill in next time.")
-        XCTAssertEqual(NoShowCopy.rememberNote(cardNeeded: true), "Your name, number and card fill in next time.")
+        XCTAssertEqual(NoShowCopy.rememberNote(cardNeeded: true), "Your name and number fill in next time, and your card stays saved.")
     }
 }
 
