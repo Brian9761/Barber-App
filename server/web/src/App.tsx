@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router-dom';
 import { BookingRoutes } from './booking/BookingRoutes';
 import { Layout } from './components/Layout';
+import { AppointmentsPage } from './pages/AppointmentsPage';
 import { BarbersPage } from './pages/BarbersPage';
 import { BusinessPage } from './pages/BusinessPage';
 import { HomePage } from './pages/HomePage';
@@ -28,6 +29,7 @@ export function App() {
         <Route path="reviews" element={<ReviewsPage />} />
         <Route path="visit" element={<VisitPage />} />
         <Route path="book/*" element={<BookingRoutes />} />
+        <Route path="appointments" element={<AppointmentsPage />} />
         <Route path="business/*" element={<BusinessPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
