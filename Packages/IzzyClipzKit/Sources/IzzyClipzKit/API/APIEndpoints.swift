@@ -176,7 +176,7 @@ extension IzzyAPI {
         // MARK: No-show protection
 
         /// `GET /api/no-show-policy?offeringId=…|serviceId=…&barberId=any` → `{ required,
-        /// minFeeCents, maxFeeCents, policyText }`.
+        /// minFeeCents, maxFeeCents, policyText, lateCancelWindowMinutes, warning }`.
         public static func noShowPolicy(for target: BookingTarget) -> Endpoint<NoShowPolicy> {
             Endpoint(.get, "/api/no-show-policy", query: target.fields.map { QueryItem($0.name, $0.value) })
         }
@@ -234,7 +234,8 @@ extension IzzyAPI {
             Endpoint(.patch, "/api/owner/appointments/" + segment(id), body: try json(StatusChange(status: status)), credential: .ownerKey)
         }
 
-        /// `POST /api/owner/appointments/:id/no-show-fee` → `{ appointment }`: see its `noShowFee`.
+        /// `POST /api/owner/appointments/:id/no-show-fee` (a no-show or a late cancellation) →
+        /// `{ appointment }`: see its `noShowFee`.
         public static func chargeNoShowFee(appointmentId: String) -> Endpoint<AppointmentResponse> {
             Endpoint(.post, "/api/owner/appointments/" + segment(appointmentId) + "/no-show-fee", credential: .ownerKey)
         }

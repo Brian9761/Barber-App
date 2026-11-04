@@ -1,8 +1,10 @@
 import Foundation
 
 // No-show protection: a card saved before booking (Stripe Checkout in setup
-// mode), charged only if the client doesn't come. Models field for field as the
-// server writes them (server/README.md, "No-show protection").
+// mode), charged only if the client doesn't come or cancels late (less than the
+// agreed window before the start), and only when the owner decides to. Models
+// field for field as the server writes them (server/README.md, "No-show
+// protection").
 
 // MARK: - The card on an appointment
 
@@ -65,7 +67,24 @@ extension IzzyAPI {
         }
     }
 
-    /// An appointment's no-show fee: `{ amountCents, status, chargedAt, message }`.
+    /// What a fee charged to the card on file is for.
+    public enum NoShowFeeReason: String, Codable, CaseIterable, Hashable, Sendable {
+        /// The client didn't come.
+        case noShow
+        /// The client cancelled in the app less than the agreed window before the start.
+        case lateCancel
+
+        /// "No-show fee", "Late cancellation fee".
+        public var title: String {
+            switch self {
+            case .noShow: return "No-show fee"
+            case .lateCancel: return "Late cancellation fee"
+            }
+        }
+    }
+
+    /// An appointment's fee (for a no-show or a late cancellation): `{ amountCents, status,
+    /// chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason }`.
     public struct NoShowFee: Codable, Hashable, Sendable {
         /// The fee agreed at booking, in cents. Changing the settings later doesn't change it.
         public var amountCents: Int
@@ -74,12 +93,32 @@ extension IzzyAPI {
         public var chargedAt: Date?
         /// Why it was declined or needs the client, in plain words for the owner.
         public var message: String?
+        /// When the client cancelled in the app (or asked to) before the start. Then there's no
+        /// no-show fee; inside `lateCancelWindowMinutes` of the start it's a late cancellation.
+        public var customerCancelledAt: Date?
+        /// The late-cancellation window in the policy the client agreed to, in minutes; `nil` when
+        /// it had none (cancelling in the app before the start is free then).
+        public var lateCancelWindowMinutes: Int?
+        /// What the fee is (or would be) for, in the server's words: once the shop tried to charge
+        /// it, what that charge was for; before, the case that applies now; `nil` when neither does.
+        public var reason: NoShowFeeReason?
 
-        public init(amountCents: Int, status: NoShowFeeStatus = .none, chargedAt: Date? = nil, message: String? = nil) {
+        public init(
+            amountCents: Int,
+            status: NoShowFeeStatus = .none,
+            chargedAt: Date? = nil,
+            message: String? = nil,
+            customerCancelledAt: Date? = nil,
+            lateCancelWindowMinutes: Int? = nil,
+            reason: NoShowFeeReason? = nil
+        ) {
             self.amountCents = amountCents
             self.status = status
             self.chargedAt = chargedAt
             self.message = message
+            self.customerCancelledAt = customerCancelledAt
+            self.lateCancelWindowMinutes = lateCancelWindowMinutes
+            self.reason = reason
         }
 
         /// "$20", "$17.50".
@@ -87,8 +126,30 @@ extension IzzyAPI {
 
         public var isCharged: Bool { status == .charged }
 
+        /// "Late cancellation fee", or "No-show fee" (also when the case isn't known yet).
+        public var title: String { (reason ?? .noShow).title }
+
+        /// From when cancelling an appointment starting at `start` may be charged; `nil` when
+        /// cancelling in the app is free until the start.
+        public func lateCancelStarts(before start: Date) -> Date? {
+            lateCancelWindowMinutes.map { start.addingTimeInterval(-Double($0) * 60) }
+        }
+
         private enum CodingKeys: String, CodingKey {
-            case amountCents, status, chargedAt, message
+            case amountCents, status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            amountCents = try container.decode(Int.self, forKey: .amountCents)
+            status = try container.decode(NoShowFeeStatus.self, forKey: .status)
+            chargedAt = try container.decodeIfPresent(Date.self, forKey: .chargedAt)
+            message = try container.decodeIfPresent(String.self, forKey: .message)
+            // Missing on a server from before late cancellations; a reason this version doesn't
+            // know reads as none, so the app never offers to charge something it can't name.
+            customerCancelledAt = try container.decodeIfPresent(Date.self, forKey: .customerCancelledAt)
+            lateCancelWindowMinutes = try container.decodeIfPresent(Int.self, forKey: .lateCancelWindowMinutes)
+            reason = try container.decodeIfPresent(String.self, forKey: .reason).flatMap(NoShowFeeReason.init(rawValue:))
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -97,30 +158,103 @@ extension IzzyAPI {
             try container.encode(status, forKey: .status)
             try container.encode(chargedAt, forKey: .chargedAt)
             try container.encode(message, forKey: .message)
+            try container.encode(customerCancelledAt, forKey: .customerCancelledAt)
+            try container.encode(lateCancelWindowMinutes, forKey: .lateCancelWindowMinutes)
+            try container.encode(reason, forKey: .reason)
         }
+    }
+}
+
+// MARK: - Which fee an appointment can be charged
+
+extension IzzyAPI.Appointment {
+    /// Which fee the server lets the owner charge now, or why not, mirroring the server
+    /// (`server/src/feecase.ts`, checked against `server/test/fixtures/fee-cases.json`). It
+    /// doesn't look at whether the fee is charged already: the server answers that as it is.
+    public func feeCase(at now: Date) -> IzzyAPI.NoShowRule.FeeCase {
+        guard card != nil, let noShowFee else { return .refused(IzzyAPI.NoShowRule.noCardMessage) }
+        let found = IzzyAPI.NoShowRule.feeCase(
+            status: status, cancelledBy: cancelledBy, start: start,
+            customerCancelledAt: noShowFee.customerCancelledAt, lateCancelWindowMinutes: noShowFee.lateCancelWindowMinutes
+        )
+        if found == .chargeable(.noShow), start > now { return .refused(IzzyAPI.NoShowRule.notStartedMessage) }
+        return found
+    }
+
+    /// The fee the owner can charge now ("Charge no-show fee" or "Charge late cancellation fee"),
+    /// or `nil`: a no-show whose start has passed, or a late cancellation by the client, with a
+    /// card on file and a fee that isn't charged yet. `pending` counts: charging again only asks
+    /// Stripe how the earlier try went (it never charges twice).
+    public func chargeableFee(at now: Date) -> IzzyAPI.NoShowFeeReason? {
+        guard let noShowFee, noShowFee.status != .charged, case .chargeable(let reason) = feeCase(at: now) else { return nil }
+        return reason
+    }
+
+    /// Whether the owner can charge the fee now, for a no-show or a late cancellation (`chargeableFee(at:)`).
+    public func canChargeNoShowFee(at now: Date) -> Bool {
+        chargeableFee(at: now) != nil
+    }
+
+    /// For the client's "Cancel appointment" confirmation: "Cancelling now, less than 1 hour
+    /// before your appointment, may be charged $40." when cancelling now would be a late
+    /// cancellation under the policy they agreed to; `nil` when it's free.
+    public func lateCancelWarning(at now: Date) -> String? {
+        guard isCancellable(at: now), card != nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
+              let starts = noShowFee.lateCancelStarts(before: start), now > starts
+        else { return nil }
+        return "Cancelling now, less than \(IzzyAPI.NoShowRule.windowLabel(minutes: window)) before your appointment, may be charged \(noShowFee.amountLabel)."
     }
 }
 
 // MARK: - The policy before booking
 
 extension IzzyAPI {
-    /// `GET /api/no-show-policy` → `{ required, minFeeCents, maxFeeCents, policyText }`.
+    /// The notice clients see while booking (on Pick a day and time, and on Review): `{ title, message }`,
+    /// e.g. "Full Service Cancellation & No-Show Fee" and "Cancelling less than 1 hour before your
+    /// appointment, or not showing up, is charged the full service price ($40). Cancelling in the
+    /// app more than 1 hour before is free."
+    public struct NoShowWarning: Codable, Hashable, Sendable {
+        public var title: String
+        public var message: String
+
+        public init(title: String, message: String) {
+            self.title = title
+            self.message = message
+        }
+    }
+
+    /// `GET /api/no-show-policy` → `{ required, minFeeCents, maxFeeCents, policyText,
+    /// lateCancelWindowMinutes, warning }`.
     ///
-    /// When `required`, booking needs a saved card, and the booking sends `policyText` back
-    /// exactly as shown (`NoShowAgreement`). Otherwise the other fields are `nil` and booking
-    /// works without a card.
+    /// When `required`, booking needs a saved card, the app shows `warning`, and the booking sends
+    /// `policyText` back exactly as shown (`NoShowAgreement`). Otherwise the other fields are
+    /// `nil` and booking works without a card.
     public struct NoShowPolicy: Codable, Hashable, Sendable {
         public var required: Bool
         public var minFeeCents: Int?
         public var maxFeeCents: Int?
-        /// What to show above "Book appointment", in the server's words.
+        /// What the client agrees to, above "Book appointment", in the server's words.
         public var policyText: String?
+        /// Cancelling less than this many minutes before the start may be charged; `nil`:
+        /// cancelling in the app before the start is free.
+        public var lateCancelWindowMinutes: Int?
+        /// The notice to show on Pick a day and time and on Review.
+        public var warning: NoShowWarning?
 
-        public init(required: Bool, minFeeCents: Int? = nil, maxFeeCents: Int? = nil, policyText: String? = nil) {
+        public init(
+            required: Bool,
+            minFeeCents: Int? = nil,
+            maxFeeCents: Int? = nil,
+            policyText: String? = nil,
+            lateCancelWindowMinutes: Int? = nil,
+            warning: NoShowWarning? = nil
+        ) {
             self.required = required
             self.minFeeCents = minFeeCents
             self.maxFeeCents = maxFeeCents
             self.policyText = policyText
+            self.lateCancelWindowMinutes = lateCancelWindowMinutes
+            self.warning = warning
         }
 
         /// No card needed.
@@ -133,7 +267,18 @@ extension IzzyAPI {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case required, minFeeCents, maxFeeCents, policyText
+            case required, minFeeCents, maxFeeCents, policyText, lateCancelWindowMinutes, warning
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            required = try container.decode(Bool.self, forKey: .required)
+            minFeeCents = try container.decodeIfPresent(Int.self, forKey: .minFeeCents)
+            maxFeeCents = try container.decodeIfPresent(Int.self, forKey: .maxFeeCents)
+            policyText = try container.decodeIfPresent(String.self, forKey: .policyText)
+            // Missing on a server from before late cancellations and the warning.
+            lateCancelWindowMinutes = try container.decodeIfPresent(Int.self, forKey: .lateCancelWindowMinutes)
+            warning = try container.decodeIfPresent(NoShowWarning.self, forKey: .warning)
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -142,6 +287,8 @@ extension IzzyAPI {
             try container.encode(minFeeCents, forKey: .minFeeCents)
             try container.encode(maxFeeCents, forKey: .maxFeeCents)
             try container.encode(policyText, forKey: .policyText)
+            try container.encode(lateCancelWindowMinutes, forKey: .lateCancelWindowMinutes)
+            try container.encode(warning, forKey: .warning)
         }
     }
 
@@ -323,25 +470,56 @@ extension IzzyAPI {
         case flat
     }
 
-    /// `{ enabled, feeMode, percent, flatCents }`.
+    /// `{ enabled, feeMode, percent, flatCents, lateCancelEnabled, lateCancelWindowMinutes }`.
     public struct NoShowSettings: Codable, Hashable, Sendable {
-        /// Whether online bookings need a card (and Stripe has to be set up too).
+        /// Whether online bookings need a card (and Stripe has to be set up too). Off until the
+        /// owner turns it on.
         public var enabled: Bool
         public var feeMode: NoShowFeeMode
         /// 1–100 (`NoShowRule.percentRange`), used in percent mode.
         public var percent: Int
         /// 50–50,000 cents (`NoShowRule.flatCentsRange`), used in flat mode.
         public var flatCents: Int
+        /// Whether a cancellation less than `lateCancelWindowMinutes` before the start may be
+        /// charged the fee too. Off: cancelling in the app before the start is free.
+        public var lateCancelEnabled: Bool
+        /// 30 minutes to 48 hours (`NoShowRule.lateCancelWindowRange`).
+        public var lateCancelWindowMinutes: Int
 
-        public init(enabled: Bool = true, feeMode: NoShowFeeMode = .percent, percent: Int = 50, flatCents: Int = 2_000) {
+        public init(
+            enabled: Bool = false,
+            feeMode: NoShowFeeMode = .percent,
+            percent: Int = 100,
+            flatCents: Int = 2_000,
+            lateCancelEnabled: Bool = true,
+            lateCancelWindowMinutes: Int = 60
+        ) {
             self.enabled = enabled
             self.feeMode = feeMode
             self.percent = percent
             self.flatCents = flatCents
+            self.lateCancelEnabled = lateCancelEnabled
+            self.lateCancelWindowMinutes = lateCancelWindowMinutes
         }
 
-        /// What the server starts with: on, 50% of the service, $20 ready for flat mode.
+        /// What the server starts with: off; once on, the full service price (100%) for a
+        /// no-show or a cancellation less than 1 hour before; $20 ready for flat mode.
         public static let `default` = NoShowSettings()
+
+        private enum CodingKeys: String, CodingKey {
+            case enabled, feeMode, percent, flatCents, lateCancelEnabled, lateCancelWindowMinutes
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            enabled = try container.decode(Bool.self, forKey: .enabled)
+            feeMode = try container.decode(NoShowFeeMode.self, forKey: .feeMode)
+            percent = try container.decode(Int.self, forKey: .percent)
+            flatCents = try container.decode(Int.self, forKey: .flatCents)
+            // A server from before late cancellations never charges them.
+            lateCancelEnabled = try container.decodeIfPresent(Bool.self, forKey: .lateCancelEnabled) ?? false
+            lateCancelWindowMinutes = try container.decodeIfPresent(Int.self, forKey: .lateCancelWindowMinutes) ?? 60
+        }
 
         /// The fee for an item at `price` under these settings (`nil`: none), as the server
         /// works it out: for the preview, "A $40 haircut: $20".
@@ -365,28 +543,58 @@ extension IzzyAPI {
         public var feeMode: NoShowFeeMode?
         public var percent: Int?
         public var flatCents: Int?
+        public var lateCancelEnabled: Bool?
+        public var lateCancelWindowMinutes: Int?
 
-        public init(enabled: Bool? = nil, feeMode: NoShowFeeMode? = nil, percent: Int? = nil, flatCents: Int? = nil) {
+        public init(
+            enabled: Bool? = nil,
+            feeMode: NoShowFeeMode? = nil,
+            percent: Int? = nil,
+            flatCents: Int? = nil,
+            lateCancelEnabled: Bool? = nil,
+            lateCancelWindowMinutes: Int? = nil
+        ) {
             self.enabled = enabled
             self.feeMode = feeMode
             self.percent = percent
             self.flatCents = flatCents
+            self.lateCancelEnabled = lateCancelEnabled
+            self.lateCancelWindowMinutes = lateCancelWindowMinutes
         }
 
         /// Everything the settings screen shows.
         public static func replacing(with settings: NoShowSettings) -> NoShowSettingsUpdate {
-            NoShowSettingsUpdate(enabled: settings.enabled, feeMode: settings.feeMode, percent: settings.percent, flatCents: settings.flatCents)
+            NoShowSettingsUpdate(
+                enabled: settings.enabled, feeMode: settings.feeMode, percent: settings.percent, flatCents: settings.flatCents,
+                lateCancelEnabled: settings.lateCancelEnabled, lateCancelWindowMinutes: settings.lateCancelWindowMinutes
+            )
         }
 
-        public var isEmpty: Bool { enabled == nil && feeMode == nil && percent == nil && flatCents == nil }
+        public var isEmpty: Bool {
+            enabled == nil && feeMode == nil && percent == nil && flatCents == nil && lateCancelEnabled == nil && lateCancelWindowMinutes == nil
+        }
 
         /// Whether the server will take every field that's set.
         public var isValid: Bool {
-            (percent.map(NoShowRule.percentRange.contains) ?? true) && (flatCents.map(NoShowRule.flatCentsRange.contains) ?? true)
+            (percent.map(NoShowRule.percentRange.contains) ?? true)
+                && (flatCents.map(NoShowRule.flatCentsRange.contains) ?? true)
+                && (lateCancelWindowMinutes.map(NoShowRule.lateCancelWindowRange.contains) ?? true)
+        }
+
+        /// `settings` with the fields that are set changed, as the server merges them.
+        public func applied(to settings: NoShowSettings) -> NoShowSettings {
+            var changed = settings
+            if let enabled { changed.enabled = enabled }
+            if let feeMode { changed.feeMode = feeMode }
+            if let percent { changed.percent = percent }
+            if let flatCents { changed.flatCents = flatCents }
+            if let lateCancelEnabled { changed.lateCancelEnabled = lateCancelEnabled }
+            if let lateCancelWindowMinutes { changed.lateCancelWindowMinutes = lateCancelWindowMinutes }
+            return changed
         }
 
         private enum CodingKeys: String, CodingKey {
-            case enabled, feeMode, percent, flatCents
+            case enabled, feeMode, percent, flatCents, lateCancelEnabled, lateCancelWindowMinutes
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -395,6 +603,8 @@ extension IzzyAPI {
             try container.encodeIfPresent(feeMode, forKey: .feeMode)
             try container.encodeIfPresent(percent, forKey: .percent)
             try container.encodeIfPresent(flatCents, forKey: .flatCents)
+            try container.encodeIfPresent(lateCancelEnabled, forKey: .lateCancelEnabled)
+            try container.encodeIfPresent(lateCancelWindowMinutes, forKey: .lateCancelWindowMinutes)
         }
     }
 }
@@ -402,14 +612,25 @@ extension IzzyAPI {
 // MARK: - The fee rule (a mirror of the server's, for previews)
 
 extension IzzyAPI {
-    /// The server's no-show fee rule and policy wording (`server/src/noshow.ts`), for the owner
-    /// app's settings preview. The server decides the real fee at booking; the Kit's tests check
-    /// this mirror against `server/test/fixtures/no-show-rule.json`, which the server writes.
+    /// The server's fee rule, policy wording and clients' warning (`server/src/noshow.ts`), for
+    /// the owner app's settings preview, and which fee a booking can be charged
+    /// (`server/src/feecase.ts`). The server decides the real fee at booking; the Kit's tests check
+    /// this mirror against `server/test/fixtures/no-show-rule.json` and `fee-cases.json`, which the
+    /// server writes.
     public enum NoShowRule {
         /// Stripe's smallest US card charge: a smaller fee means no fee.
         public static let minimumFeeCents = 50
         public static let percentRange: ClosedRange<Int> = 1...100
         public static let flatCentsRange: ClosedRange<Int> = 50...50_000
+        /// How long before the start cancelling stops being free, in minutes: 30 minutes to 48 hours.
+        public static let lateCancelWindowRange: ClosedRange<Int> = 30...2_880
+
+        /// "30 minutes", "1 hour", "90 minutes", "2 hours", "48 hours".
+        public static func windowLabel(minutes: Int) -> String {
+            guard minutes % 60 == 0 else { return "\(minutes) minutes" }
+            let hours = minutes / 60
+            return hours == 1 ? "1 hour" : "\(hours) hours"
+        }
 
         /// The fee in cents for an item priced `priceCents` (`nil`: no fee): none for items
         /// included with a cut, free items or a fee under 50¢; percent mode rounds half up to
@@ -437,12 +658,84 @@ extension IzzyAPI {
                 : Price.currencyString(cents: minCents) + "–" + Price.currencyString(cents: maxCents)
         }
 
-        /// The policy clients see, as the server words it.
+        /// The policy clients agree to, as the server words it.
         public static func policyText(minFeeCents: Int, maxFeeCents: Int, settings: NoShowSettings) -> String {
             let share = settings.feeMode == .percent ? " (\(settings.percent)% of the service)" : ""
+            let fee = feeLabel(minCents: minFeeCents, maxCents: maxFeeCents) + share
+            if settings.lateCancelEnabled {
+                let window = windowLabel(minutes: settings.lateCancelWindowMinutes)
+                return "No payment now. If you cancel less than \(window) before your appointment, or don't come, Izzy Clipz may charge "
+                    + fee + " to this card. Cancelling in the app more than \(window) before is free."
+            }
             return "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge "
-                + feeLabel(minCents: minFeeCents, maxCents: maxFeeCents) + share + " to this card. "
-                + "Cancelling in the app before your appointment is free."
+                + fee + " to this card. Cancelling in the app before your appointment is free."
+        }
+
+        /// The warning clients see while booking, as the server words it: "Full Service
+        /// Cancellation & No-Show Fee" only when the fee is 100% of the service.
+        public static func warning(minFeeCents: Int, maxFeeCents: Int, settings: NoShowSettings) -> NoShowWarning {
+            let fee = feeLabel(minCents: minFeeCents, maxCents: maxFeeCents)
+            let fullPrice = settings.feeMode == .percent && settings.percent == 100
+            let amount = fullPrice
+                ? "the full service price (\(fee))"
+                : settings.feeMode == .percent ? "\(fee) (\(settings.percent)% of the service)" : fee
+            if settings.lateCancelEnabled {
+                let window = windowLabel(minutes: settings.lateCancelWindowMinutes)
+                return NoShowWarning(
+                    title: fullPrice ? "Full Service Cancellation & No-Show Fee" : "Late Cancellation & No-Show Fee",
+                    message: "Cancelling less than \(window) before your appointment, or not showing up, is charged \(amount). "
+                        + "Cancelling in the app more than \(window) before is free."
+                )
+            }
+            return NoShowWarning(
+                title: "No-Show Fee",
+                message: "Not showing up is charged \(amount). Cancelling in the app before your appointment is free."
+            )
+        }
+
+        /// Which fee a booking with a card on file can be charged, or why not (the owner's words).
+        public enum FeeCase: Hashable, Sendable {
+            case chargeable(NoShowFeeReason)
+            case refused(String)
+        }
+
+        public static let noCardMessage = "This booking has no card on file, so there's no fee to charge."
+        public static let notStartedMessage = "The appointment hasn't started yet, so it can't be a no-show."
+        static let cancelledInAppMessage = "The client cancelled this booking in the app, so there's no fee."
+        static let shopCancelledMessage = "The shop cancelled this booking, so there's no fee."
+        static let markNoShowMessage = "Mark the appointment as a no-show first."
+
+        /// Whether the client cancelled less than the agreed window before the start (exactly that
+        /// long before is still free), whatever happened since.
+        public static func cancelledLate(start: Date, customerCancelledAt: Date?, lateCancelWindowMinutes: Int?) -> Bool {
+            guard let customerCancelledAt, let lateCancelWindowMinutes else { return false }
+            return start.timeIntervalSince(customerCancelledAt) < Double(lateCancelWindowMinutes) * 60
+        }
+
+        /// The server's rule, ignoring the clock: a late cancellation (cancelled by the client
+        /// inside the agreed window, still cancelled), or a no-show (marked, and the client never
+        /// cancelled nor asked to). A no-show also needs its start to have passed
+        /// (`IzzyAPI.Appointment.feeCase(at:)` checks that).
+        public static func feeCase(
+            status: AppointmentStatus,
+            cancelledBy: CancelledBy?,
+            start: Date,
+            customerCancelledAt: Date?,
+            lateCancelWindowMinutes: Int?
+        ) -> FeeCase {
+            if status == .cancelled {
+                guard cancelledBy == .customer else { return .refused(shopCancelledMessage) }
+                if cancelledLate(start: start, customerCancelledAt: customerCancelledAt, lateCancelWindowMinutes: lateCancelWindowMinutes) {
+                    return .chargeable(.lateCancel)
+                }
+                if let lateCancelWindowMinutes, customerCancelledAt != nil {
+                    return .refused("The client cancelled at least \(windowLabel(minutes: lateCancelWindowMinutes)) before, so there's no fee.")
+                }
+                return .refused(cancelledInAppMessage)
+            }
+            if customerCancelledAt != nil { return .refused(cancelledInAppMessage) }
+            guard status == .noShow else { return .refused(markNoShowMessage) }
+            return .chargeable(.noShow)
         }
     }
 }
@@ -456,13 +749,24 @@ extension IzzyAPI {
         case inPerson
         /// A no-show fee charged to the card on file.
         case noShowFee
+        /// A late-cancellation fee charged to the card on file.
+        case lateCancelFee
 
-        /// "Card payment", "No-show fee".
+        /// "Card payment", "No-show fee", "Late cancellation fee".
         public var title: String {
             switch self {
             case .inPerson: return "Card payment"
             case .noShowFee: return "No-show fee"
+            case .lateCancelFee: return "Late cancellation fee"
             }
+        }
+
+        /// A fee charged to the card on file, not a payment for the service.
+        public var isFee: Bool { self != .inPerson }
+
+        /// The payment kind of a fee for `reason`.
+        public init(feeReason reason: NoShowFeeReason) {
+            self = reason == .lateCancel ? .lateCancelFee : .noShowFee
         }
 
         /// A kind this version doesn't know reads as an in-person payment.

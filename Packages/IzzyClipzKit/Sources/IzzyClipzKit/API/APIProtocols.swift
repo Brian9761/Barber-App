@@ -42,8 +42,9 @@ public protocol ShopAPI: Sendable {
     // MARK: No-show protection
 
     /// `GET /api/no-show-policy`: whether booking `target` needs a saved card, the fee (a range
-    /// for "any barber" when the barbers' fees differ) and the policy to show. Not required when
-    /// Stripe isn't set up, the shop turned protection off, or the item has no fee.
+    /// for "any barber" when the barbers' fees differ), the late-cancellation window, the policy to
+    /// agree to and the warning to show while booking. Not required when Stripe isn't set up, the
+    /// shop hasn't turned protection on, or the item has no fee.
     func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy
 
     /// `POST /api/cards/checkout`: Stripe's card page for saving a card under `token` (a new
@@ -97,7 +98,8 @@ public protocol OwnerAPI: Sendable {
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment
 
     /// `POST /api/owner/appointments/:id/no-show-fee`: charges the fee agreed at booking to the
-    /// card on file, for a no-show whose start has passed (`Appointment.canChargeNoShowFee(at:)`).
+    /// card on file, for a no-show whose start has passed or a late cancellation by the client
+    /// (`Appointment.chargeableFee(at:)`; `noShowFee.reason` says which it was charged for).
     /// Returns the appointment as it is now: its `noShowFee.status` says whether it was charged,
     /// declined (`message` says why), needs the client, or is still pending. Charged at most once:
     /// calling again after a lost answer or a pending charge never charges twice.

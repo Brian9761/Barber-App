@@ -36,9 +36,13 @@ final class FakeServer {
         var completeStatusOverride: String?
         /// Start with nothing booked, no time off and no products.
         var empty = false
-        /// Also start with a client who booked online with a card on file for no-shows (Visa 4242,
-        /// a $17.50 fee) and didn't come: a 10 AM haircut with Flowxbori, marked no-show.
+        /// Also start with a client who booked online with a card on file (Visa 4242, the fee the
+        /// settings give a $35 haircut) and didn't come: a 10 AM haircut with Flowxbori, marked no-show.
         var noShowWithCard = false
+        /// Also start with a client who booked online with a card on file (Visa 4242) and cancelled
+        /// in the app at 10:50 AM, less than 1 hour before their 11:30 AM haircut with Flowxbori:
+        /// a late cancellation the owner may charge.
+        var lateCancelWithCard = false
         /// How long each call takes, so loading states are visible.
         var latency: Duration = .zero
     }
@@ -52,7 +56,8 @@ final class FakeServer {
     private(set) var timeOff: [IzzyAPI.TimeOff] = []
     private(set) var products: [IzzyAPI.Product] = []
     private(set) var payments: [StoredPayment] = []
-    /// The no-show protection settings, starting where the server does (on, 50% of the service).
+    /// The no-show protection settings, starting where the server does (off; once on, the full
+    /// service price for a no-show or a cancellation less than 1 hour before).
     private(set) var noShowSettings = IzzyAPI.NoShowSettings.default
     /// Every call, in order ("ownerStatus", "createPayment", …), for tests.
     private(set) var calls: [String] = []
@@ -291,6 +296,11 @@ final class FakeServer {
            !isFree(barberID: appointment.barberId, from: appointment.start, to: appointment.end, ignoring: id) {
             throw APIError.slotTaken
         }
+        // Like the server: a booking with a card on file is a no-show only once it has started,
+        // so until then the client can still cancel it in the app.
+        if status == .noShow, appointment.card != nil, appointment.start > now() {
+            throw APIError.server(code: IzzyAPI.ErrorCode.notStarted, message: "You can mark a no-show once the appointment has started.", status: 409)
+        }
         let previous = appointment.status
         appointment.status = status
         if status == .cancelled {
@@ -299,8 +309,21 @@ final class FakeServer {
         } else {
             appointment.cancelledBy = nil
         }
+        Self.refreshFeeReason(&appointment)
         appointments[index] = appointment
         return appointment
+    }
+
+    /// The fee's `reason` as the server writes it: what the charge was for once the shop tried,
+    /// otherwise the case that applies now (a late cancellation, a no-show) or none.
+    static func refreshFeeReason(_ appointment: inout IzzyAPI.Appointment) {
+        guard var fee = appointment.noShowFee, fee.status == .none else { return }
+        let found = IzzyAPI.NoShowRule.feeCase(
+            status: appointment.status, cancelledBy: appointment.cancelledBy, start: appointment.start,
+            customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes
+        )
+        if case .chargeable(let reason) = found { fee.reason = reason } else { fee.reason = nil }
+        appointment.noShowFee = fee
     }
 
     // MARK: No-show protection
@@ -313,17 +336,21 @@ final class FakeServer {
         if let flatCents = update.flatCents, !IzzyAPI.NoShowRule.flatCentsRange.contains(flatCents) {
             throw APIError.server(code: IzzyAPI.ErrorCode.invalidRequest, message: "Pick a flat fee from $0.50 to $500.", status: 400)
         }
-        if let enabled = update.enabled { noShowSettings.enabled = enabled }
-        if let feeMode = update.feeMode { noShowSettings.feeMode = feeMode }
-        if let percent = update.percent { noShowSettings.percent = percent }
-        if let flatCents = update.flatCents { noShowSettings.flatCents = flatCents }
+        if let window = update.lateCancelWindowMinutes, !IzzyAPI.NoShowRule.lateCancelWindowRange.contains(window) {
+            throw APIError.server(
+                code: IzzyAPI.ErrorCode.invalidRequest, message: "Pick a late-cancellation window from 30 minutes to 48 hours.", status: 400
+            )
+        }
+        noShowSettings = update.applied(to: noShowSettings)
         return noShowSettings
     }
 
-    /// Charges a no-show fee like the server: Stripe set up, the appointment known, already
-    /// charged answers as it is, then a card on file, a no-show, and a start that has passed. The
-    /// sample appointments have no card on file (customer bookings with one come from the
-    /// customer app), so for them this is the server's "no card on file" answer.
+    /// Charges the fee like the server, for a no-show or a late cancellation: Stripe set up, the
+    /// appointment known, already charged answers as it is, then a card on file, then the
+    /// server's rule (`Appointment.feeCase(at:)`) with its words. The usual sample appointments
+    /// have no card on file (customer bookings with one come from the customer app), so for them
+    /// this is the server's "no card on file" answer; `Options.noShowWithCard` and
+    /// `lateCancelWithCard` add ones that have.
     func chargeNoShowFee(appointmentId id: String) throws -> IzzyAPI.Appointment {
         guard options.stripeConfigured else { throw APIError.notConfigured(APIError.Feature.stripe) }
         guard let index = appointments.firstIndex(where: { $0.id == id }) else {
@@ -331,32 +358,26 @@ final class FakeServer {
         }
         var appointment = appointments[index]
         if appointment.noShowFee?.status == .charged { return appointment }
-        guard appointment.card != nil, var fee = appointment.noShowFee else {
-            throw APIError.server(
-                code: IzzyAPI.ErrorCode.notChargeable, message: "This booking has no card on file, so there's no fee to charge.", status: 409
-            )
+        let reason: IzzyAPI.NoShowFeeReason
+        switch appointment.feeCase(at: now()) {
+        case .chargeable(let found): reason = found
+        case .refused(let message): throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: message, status: 409)
         }
-        guard appointment.status == .noShow else {
-            throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: "Mark the appointment as a no-show first.", status: 409)
-        }
-        guard appointment.start <= now() else {
-            throw APIError.server(
-                code: IzzyAPI.ErrorCode.notChargeable, message: "The appointment hasn't started yet, so it can't be a no-show.", status: 409
-            )
-        }
+        guard var fee = appointment.noShowFee else { return appointment }
         // The simulated card is approved, like Stripe's test card 4242.
         counter += 1
         let paymentID = "pi_sample_\(counter)"
         fee.status = .charged
         fee.chargedAt = now()
         fee.message = nil
+        fee.reason = reason
         appointment.noShowFee = fee
         appointments[index] = appointment
         payments.append(StoredPayment(
             payment: IzzyAPI.Payment(
                 id: paymentID, amountCents: fee.amountCents,
-                description: "No-show fee: \(appointment.serviceName) with \(appointment.barberName)",
-                appointmentId: id, status: "succeeded", createdAt: now(), kind: .noShowFee
+                description: "\(reason.title): \(appointment.serviceName) with \(appointment.barberName)",
+                appointmentId: id, status: "succeeded", createdAt: now(), kind: IzzyAPI.PaymentKind(feeReason: reason)
             ),
             clientSecret: "\(paymentID)_secret_sample", receiptEmail: nil
         ))
@@ -590,13 +611,28 @@ final class FakeServer {
                 status: sample.6, cancelledBy: sample.7, payment: payment, note: sample.9
             ))
         }
-        if options.noShowWithCard, let haircut = offering("haircut", "flowxbori") {
-            var appointment = makeAppointment(
-                offering: haircut, start: at(10), customer: IzzyAPI.Customer(name: "Kim Sample", phone: "+14425550108"), status: .noShow
-            )
+        // Booked online with a card on file under the settings' policy, like the server keeps it.
+        func protected(_ appointment: IzzyAPI.Appointment, price: Price, customerCancelledAt: Date? = nil) -> IzzyAPI.Appointment {
+            var appointment = appointment
             appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
-            appointment.noShowFee = IzzyAPI.NoShowFee(amountCents: IzzyAPI.NoShowRule.feeCents(for: haircut.price, settings: noShowSettings) ?? 0)
-            appointments.append(appointment)
+            appointment.noShowFee = IzzyAPI.NoShowFee(
+                amountCents: IzzyAPI.NoShowRule.feeCents(for: price, settings: noShowSettings) ?? 0,
+                customerCancelledAt: customerCancelledAt,
+                lateCancelWindowMinutes: noShowSettings.lateCancelEnabled ? noShowSettings.lateCancelWindowMinutes : nil
+            )
+            Self.refreshFeeReason(&appointment)
+            return appointment
+        }
+        if options.noShowWithCard, let haircut = offering("haircut", "flowxbori") {
+            appointments.append(protected(makeAppointment(
+                offering: haircut, start: at(10), customer: IzzyAPI.Customer(name: "Kim Sample", phone: "+14425550108"), status: .noShow
+            ), price: haircut.price))
+        }
+        if options.lateCancelWithCard, let haircut = offering("haircut", "flowxbori") {
+            appointments.append(protected(makeAppointment(
+                offering: haircut, start: at(11, 30), customer: IzzyAPI.Customer(name: "Lee Sample", phone: "+14425550109"),
+                status: .cancelled, cancelledBy: .customer
+            ), price: haircut.price, customerCancelledAt: at(10, 50)))
         }
         timeOff.append(IzzyAPI.TimeOff(id: nextUUID(), barberId: "flowxbori", start: at(13), end: at(14), reason: "Lunch"))
         products = [

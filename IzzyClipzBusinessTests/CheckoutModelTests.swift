@@ -603,17 +603,29 @@ final class CheckoutModelTests: XCTestCase {
 /// The sample server's no-show protection answers like the real server's.
 @MainActor
 final class SampleServerNoShowTests: XCTestCase {
-    func testSettingsStartAtHalfTheServiceAndChangeOnlyWhatIsSent() async throws {
+    func testSettingsStartOffAtTheFullPriceAndChangeOnlyWhatIsSent() async throws {
         let harness = Harness()
         let settings = try await harness.api.noShowSettings()
         XCTAssertEqual(settings, .default)
+        XCTAssertEqual(settings, IzzyAPI.NoShowSettings(
+            enabled: false, feeMode: .percent, percent: 100, flatCents: 2_000, lateCancelEnabled: true, lateCancelWindowMinutes: 60
+        ), "off until the owner turns it on")
+        let on = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(enabled: true))
+        XCTAssertTrue(on.enabled)
         let flat = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(feeMode: .flat, flatCents: 2_500))
-        XCTAssertEqual(flat, IzzyAPI.NoShowSettings(enabled: true, feeMode: .flat, percent: 50, flatCents: 2_500))
+        XCTAssertEqual(flat, IzzyAPI.NoShowSettings(
+            enabled: true, feeMode: .flat, percent: 100, flatCents: 2_500, lateCancelEnabled: true, lateCancelWindowMinutes: 60
+        ))
+        let window = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(lateCancelWindowMinutes: 120))
+        XCTAssertEqual(window.lateCancelWindowMinutes, 120)
+        let noLateFee = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(lateCancelEnabled: false))
+        XCTAssertFalse(noLateFee.lateCancelEnabled)
+        XCTAssertEqual(noLateFee.lateCancelWindowMinutes, 120, "kept for when late cancellations are back on")
         let off = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(enabled: false))
         XCTAssertFalse(off.enabled)
         let reread = try await harness.api.noShowSettings()
         XCTAssertEqual(reread, off)
-        XCTAssertEqual(harness.server.calls.suffix(4), ["noShowSettings", "updateNoShowSettings", "updateNoShowSettings", "noShowSettings"])
+        XCTAssertEqual(harness.server.calls.suffix(3), ["updateNoShowSettings", "updateNoShowSettings", "noShowSettings"])
     }
 
     func testSettingsTurnDownWhatTheServerTurnsDown() async {
@@ -623,6 +635,8 @@ final class SampleServerNoShowTests: XCTestCase {
             (IzzyAPI.NoShowSettingsUpdate(percent: 101), "Pick a percentage from 1% to 100%."),
             (IzzyAPI.NoShowSettingsUpdate(flatCents: 49), "Pick a flat fee from $0.50 to $500."),
             (IzzyAPI.NoShowSettingsUpdate(enabled: false, flatCents: 50_001), "Pick a flat fee from $0.50 to $500."),
+            (IzzyAPI.NoShowSettingsUpdate(lateCancelWindowMinutes: 29), "Pick a late-cancellation window from 30 minutes to 48 hours."),
+            (IzzyAPI.NoShowSettingsUpdate(lateCancelEnabled: true, lateCancelWindowMinutes: 2_881), "Pick a late-cancellation window from 30 minutes to 48 hours."),
         ] {
             do {
                 _ = try await harness.api.updateNoShowSettings(update)
@@ -646,17 +660,21 @@ final class SampleServerNoShowTests: XCTestCase {
         let harness = Harness(options: options)
         let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
         XCTAssertEqual(kim.card?.label, "Visa •••• 4242")
-        XCTAssertEqual(kim.noShowFee, IzzyAPI.NoShowFee(amountCents: 1_750))
+        // The full price of the $35 haircut, and the 1-hour window the policy had.
+        XCTAssertEqual(kim.noShowFee, IzzyAPI.NoShowFee(amountCents: 3_500, lateCancelWindowMinutes: 60, reason: .noShow))
         XCTAssertTrue(kim.canChargeNoShowFee(at: TestClock.now))
+        XCTAssertEqual(kim.chargeableFee(at: TestClock.now), .noShow)
 
         let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
         XCTAssertEqual(charged.noShowFee?.status, .charged)
+        XCTAssertEqual(charged.noShowFee?.reason, .noShow)
         XCTAssertEqual(charged.noShowFee?.chargedAt, TestClock.now)
         XCTAssertEqual(charged.payment, .unpaid, "a no-show fee isn't a payment for the service")
         XCTAssertFalse(charged.canChargeNoShowFee(at: TestClock.now))
         let payments = try await harness.api.payments(on: TestClock.today)
         let fee = try XCTUnwrap(payments.first { $0.kind == .noShowFee })
-        XCTAssertEqual(fee.amountCents, 1_750)
+        XCTAssertEqual(fee.amountCents, 3_500)
+        XCTAssertEqual(fee.description, "No-show fee: Haircut with Flowxbori")
         XCTAssertEqual(fee.appointmentId, kim.id)
         XCTAssertTrue(fee.isSucceeded)
 
@@ -693,10 +711,13 @@ final class SampleServerNoShowTests: XCTestCase {
         await expect(jay.id, .server(code: IzzyAPI.ErrorCode.notChargeable, message: "This booking has no card on file, so there's no fee to charge.", status: 409))
         await expect("00000000-0000-4000-8000-0000000000ff", .server(code: IzzyAPI.ErrorCode.notFound, message: "We couldn't find that appointment.", status: 404))
         let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
-        _ = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+        let reopened = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+        XCTAssertNil(reopened.noShowFee?.reason)
         await expect(kim.id, .server(code: IzzyAPI.ErrorCode.notChargeable, message: "Mark the appointment as a no-show first.", status: 409))
+        let markedAgain = try await harness.api.setStatus(.noShow, ofAppointment: kim.id)
+        XCTAssertEqual(markedAgain.noShowFee?.reason, .noShow, "it has started, so it can be a no-show again")
 
-        // Marked a no-show before it started.
+        // Marked a no-show before it started (from before that was refused).
         let early = Harness(options: options, now: TestClock.at(9, 30))
         let kimEarly = try XCTUnwrap(early.appointment(named: "Kim Sample"))
         do {
@@ -707,6 +728,21 @@ final class SampleServerNoShowTests: XCTestCase {
                 code: IzzyAPI.ErrorCode.notChargeable, message: "The appointment hasn't started yet, so it can't be a no-show.", status: 409
             ))
         }
+        // Now a booking with a card on file can't be marked a no-show before it starts, so the client can still cancel.
+        _ = try await early.api.setStatus(.booked, ofAppointment: kimEarly.id)
+        do {
+            _ = try await early.api.setStatus(.noShow, ofAppointment: kimEarly.id)
+            XCTFail("Expected not_started")
+        } catch {
+            XCTAssertEqual(error as? APIError, .server(
+                code: IzzyAPI.ErrorCode.notStarted, message: "You can mark a no-show once the appointment has started.", status: 409
+            ))
+        }
+        XCTAssertEqual(early.appointment(named: "Kim Sample")?.status, .booked)
+        // A booking without a card can still be marked early, as before.
+        let andre = try XCTUnwrap(early.appointment(named: "Andre Sample"))
+        let andreNoShow = try await early.api.setStatus(.noShow, ofAppointment: andre.id)
+        XCTAssertEqual(andreNoShow.status, .noShow)
 
         // Without Stripe on the server: 503, before anything else.
         options.stripeConfigured = false
@@ -719,9 +755,69 @@ final class SampleServerNoShowTests: XCTestCase {
         }
     }
 
+    func testChargingALateCancellationRightAwayOnceAndLabelled() async throws {
+        var options = FakeServer.Options()
+        options.lateCancelWithCard = true
+        let harness = Harness(options: options)
+        // Lee cancelled in the app at 10:50, 40 minutes before the 11:30 haircut.
+        let lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        XCTAssertEqual(lee.status, .cancelled)
+        XCTAssertEqual(lee.cancelledBy, .customer)
+        XCTAssertEqual(lee.noShowFee, IzzyAPI.NoShowFee(
+            amountCents: 3_500, customerCancelledAt: TestClock.at(10, 50), lateCancelWindowMinutes: 60, reason: .lateCancel
+        ))
+        // 11:05: before the start, and already chargeable.
+        XCTAssertEqual(lee.chargeableFee(at: TestClock.now), .lateCancel)
+
+        let charged = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
+        XCTAssertEqual(charged.noShowFee?.status, .charged)
+        XCTAssertEqual(charged.noShowFee?.reason, .lateCancel)
+        XCTAssertEqual(charged.status, .cancelled)
+        XCTAssertNil(charged.chargeableFee(at: TestClock.now))
+        let payments = try await harness.api.payments(on: TestClock.today)
+        let fee = try XCTUnwrap(payments.first { $0.kind == .lateCancelFee })
+        XCTAssertEqual(fee.amountCents, 3_500)
+        XCTAssertEqual(fee.description, "Late cancellation fee: Haircut with Flowxbori")
+        XCTAssertEqual(fee.kind.title, "Late cancellation fee")
+        XCTAssertEqual(payments.filter(\.kind.isFee).count, 1)
+        // Again: the same answer, no second charge; reopening doesn't refund.
+        let again = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
+        XCTAssertEqual(again, charged)
+        let reopened = try await harness.api.setStatus(.booked, ofAppointment: lee.id)
+        XCTAssertEqual(reopened.noShowFee?.status, .charged)
+        XCTAssertEqual(reopened.noShowFee?.reason, .lateCancel)
+        let paymentsAfter = try await harness.api.payments(on: TestClock.today)
+        XCTAssertEqual(paymentsAfter.filter(\.kind.isFee).count, 1)
+    }
+
+    func testALateCancellationTheShopReopenedOrCancelledIsNeverCharged() async throws {
+        var options = FakeServer.Options()
+        options.lateCancelWithCard = true
+        let harness = Harness(options: options)
+        let lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        func expect(_ message: String, line: UInt = #line) async {
+            do {
+                _ = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
+                XCTFail("Expected not_chargeable", line: line)
+            } catch {
+                XCTAssertEqual(error as? APIError, .server(code: IzzyAPI.ErrorCode.notChargeable, message: message, status: 409), line: line)
+            }
+        }
+        let reopened = try await harness.api.setStatus(.booked, ofAppointment: lee.id)
+        XCTAssertNil(reopened.noShowFee?.reason)
+        XCTAssertEqual(reopened.noShowFee?.customerCancelledAt, TestClock.at(10, 50), "when the client cancelled is kept")
+        await expect("The client cancelled this booking in the app, so there's no fee.")
+        let cancelled = try await harness.api.setStatus(.cancelled, ofAppointment: lee.id)
+        XCTAssertEqual(cancelled.cancelledBy, .shop)
+        await expect("The shop cancelled this booking, so there's no fee.")
+        let payments = try await harness.api.payments(on: TestClock.today)
+        XCTAssertTrue(payments.allSatisfy { !$0.kind.isFee })
+    }
+
     func testTheUsualSampleDayHasNoCardsOnFile() {
         let harness = Harness()
         XCTAssertTrue(harness.server.appointments.allSatisfy { $0.card == nil && $0.noShowFee == nil })
         XCTAssertNil(harness.appointment(named: "Kim Sample"))
+        XCTAssertNil(harness.appointment(named: "Lee Sample"))
     }
 }

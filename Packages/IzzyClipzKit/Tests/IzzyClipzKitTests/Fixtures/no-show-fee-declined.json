@@ -21,7 +21,10 @@
       "amountCents": 1750,
       "status": "declined",
       "chargedAt": null,
-      "message": "The card was declined: there isn't enough money on it."
+      "message": "The card was declined: there isn't enough money on it.",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": "noShow"
     }
   }
 }

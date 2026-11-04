@@ -105,9 +105,10 @@ extension IzzyAPI {
         public var customer: Customer
         public var note: String?
         public var createdAt: Date
-        /// The card on file for no-shows (no-show protection), or `nil` when the booking has none.
+        /// The card on file (no-show protection), or `nil` when the booking has none.
         public var card: CardOnFile?
-        /// The no-show fee agreed at booking and what happened to it, or `nil` without a card on file.
+        /// The fee agreed at booking (for a no-show or a late cancellation) and what happened to it,
+        /// or `nil` without a card on file. See `chargeableFee(at:)` and `lateCancelWarning(at:)`.
         public var noShowFee: NoShowFee?
 
         public init(
@@ -148,14 +149,6 @@ extension IzzyAPI {
             self.createdAt = createdAt
             self.card = card
             self.noShowFee = noShowFee
-        }
-
-        /// What the server lets the owner charge as a no-show fee now: a no-show whose start has
-        /// passed, with a card on file and a fee that isn't charged yet. `pending` counts: charging
-        /// again only asks Stripe how the earlier try went (it never charges twice).
-        public func canChargeNoShowFee(at now: Date) -> Bool {
-            guard status == .noShow, start <= now, card != nil, let noShowFee else { return false }
-            return noShowFee.status != .charged
         }
 
         /// Hasn't finished yet: it's later, or happening right now.
@@ -804,8 +797,10 @@ extension IzzyAPI {
         public static let cardRequired = "card_required"
         /// 409: the no-show policy sent with a booking isn't the current one; show the new one.
         public static let policyChanged = "policy_changed"
-        /// 409: no no-show fee can be charged for this appointment (now).
+        /// 409: no fee (no-show or late cancellation) can be charged for this appointment (now).
         public static let notChargeable = "not_chargeable"
+        /// 409: a booking with a card on file can be marked a no-show only once it has started.
+        public static let notStarted = "not_started"
         public static let stripeNotConfigured = "stripe_not_configured"
         public static let ownerNotConfigured = "owner_not_configured"
         public static let serverError = "server_error"

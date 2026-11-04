@@ -314,9 +314,10 @@ final class FakeShopAPI: ShopAPI {
 
     // MARK: No-show protection
 
-    // The sample server has no-show protection off, as the real one is while the shop's Stripe
-    // isn't set up or the owner turned it off: no card is needed to book, a card token sent with
-    // a booking is ignored, and there's no card page to open.
+    // The sample server has no-show protection off, as the real one is until the owner turns it
+    // on (and while the shop's Stripe isn't set up): no card is needed to book, there's no
+    // warning about late cancellations or no-shows, a card token sent with a booking is ignored,
+    // cancelling is always free, and there's no card page to open.
 
     func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy {
         try await respond()

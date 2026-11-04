@@ -38,7 +38,15 @@
       "note": null,
       "createdAt": "2026-10-30T22:41:17Z",
       "card": { "brand": "mastercard", "last4": "4444" },
-      "noShowFee": { "amountCents": 2750, "status": "charged", "chargedAt": "2026-11-02T19:05:00Z", "message": null }
+      "noShowFee": {
+        "amountCents": 4500,
+        "status": "charged",
+        "chargedAt": "2026-11-02T19:05:00Z",
+        "message": null,
+        "customerCancelledAt": null,
+        "lateCancelWindowMinutes": 60,
+        "reason": "noShow"
+      }
     },
     {
       "id": "2c3d4e5f-6a7b-4c8d-ae9f-1a2b3c4d5e6f",
@@ -59,6 +67,34 @@
       "createdAt": "2026-10-29T15:03:44Z",
       "card": null,
       "noShowFee": null
+    },
+    {
+      "id": "3d4e5f6a-7b8c-4d9e-8fa0-2b3c4d5e6f7a",
+      "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "flowxbori",
+      "barberName": "Flowxbori",
+      "start": "2026-11-02T23:00:00Z",
+      "end": "2026-11-02T23:45:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$35",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
+      "customer": { "name": "Test Customer Four", "phone": "+17605550190", "email": null },
+      "note": null,
+      "createdAt": "2026-10-31T16:12:40Z",
+      "card": { "brand": "visa", "last4": "4242" },
+      "noShowFee": {
+        "amountCents": 3500,
+        "status": "none",
+        "chargedAt": null,
+        "message": null,
+        "customerCancelledAt": "2026-11-02T22:30:00Z",
+        "lateCancelWindowMinutes": 60,
+        "reason": "lateCancel"
+      }
     }
   ]
 }
