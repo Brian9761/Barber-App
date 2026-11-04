@@ -21,13 +21,20 @@ final class NoShowSettingsStore {
 
     /// What the server has, once loaded.
     private(set) var saved: IzzyAPI.NoShowSettings?
-    /// What's on screen.
-    var draft = NoShowSettingsDraft()
+    /// What's on screen. A change to it puts away the last save's error: that error was about what
+    /// was on screen then (a flat fee of $600 fixed to $25 no longer says "Pick a flat fee from $0.50
+    /// to $500."), and Save says again what's wrong, if anything.
+    var draft = NoShowSettingsDraft() {
+        didSet {
+            if draft != oldValue { saveError = nil }
+        }
+    }
     private(set) var loadState: LoadState = .idle
     /// The latest refresh failed while the settings are on screen.
     private(set) var refreshError: String?
     private(set) var isSaving = false
-    /// Why the last save didn't work, in plain words, until the next save or Cancel.
+    /// Why the last save didn't work, in plain words, until what's on screen changes, the next
+    /// save, or Cancel.
     private(set) var saveError: String?
     /// What the last save stored, to say "Saved" until something changes.
     private(set) var lastSaved: NoShowSettingsDraft?
@@ -61,6 +68,9 @@ final class NoShowSettingsStore {
             let keepsChanges = hasChanges
             saved = settings
             if !keepsChanges { draft = NoShowSettingsDraft(settings) }
+            // Nothing on screen waits to be saved (the same change was made on another iPhone,
+            // say), so no save error applies any more.
+            if !hasChanges { saveError = nil }
             refreshError = nil
             loadState = .loaded
         } catch is CancellationError {
@@ -159,6 +169,30 @@ final class NoShowSettingsStore {
     /// "100% of the service (the full price)", "50% of the service".
     var percentLabel: String {
         draft.percent == 100 ? "100% of the service (the full price)" : "\(draft.percent)% of the service"
+    }
+
+    // MARK: What the switches mean
+
+    /// Under the No-show protection switch, while it's on.
+    static let onFooter = "Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation."
+    /// While it's off. Each booking keeps the terms it was booked with (the server never reads
+    /// today's settings to charge one), so a booking made with a card can still be charged.
+    static let offFooter = "Off: new online bookings don't need a card. Bookings already made with a card keep their fee, and you can still charge it."
+
+    /// Under the Fee picker.
+    static let feeFooter = "The same fee for a no-show and a late cancellation. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings."
+
+    /// Under the Late cancellations switch: "A client who cancels in the app less than 1 hour before
+    /// the start can be charged the fee. Cancelling earlier is free, and there's never a fee when the
+    /// shop cancels." Off, only for new bookings: those made before keep their window.
+    var lateCancellationFooter: String {
+        guard draft.lateCancelEnabled else {
+            return "Off: new bookings can be cancelled in the app for free until the start, and only no-shows can be charged. "
+                + "Bookings already made keep the window they were booked with."
+        }
+        let window = IzzyAPI.NoShowRule.windowLabel(minutes: draft.lateCancelWindowMinutes)
+        return "A client who cancels in the app less than \(window) before the start can be charged the fee. "
+            + "Cancelling earlier is free, and there's never a fee when the shop cancels."
     }
 
     /// The windows to pick from, with the one on screen (set elsewhere, say 90 minutes) among them.

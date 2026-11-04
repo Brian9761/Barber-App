@@ -23,7 +23,8 @@ enum LaunchArgument {
     static let slow = "-fake-slow"
     /// Also clients who booked online with a card on file: Kim Sample (10 AM, a no-show), Lee
     /// Sample (11:30 AM, cancelled in the app at 10:50 AM: a late cancellation) and Nia Sample
-    /// (2:30 PM, booked). All with Flowxbori, $35 haircuts, the full price as the fee.
+    /// (2:30 PM, booked). All with Flowxbori, $35 haircuts, the full price as the fee. No-show
+    /// protection starts on, as they booked with it on.
     static let cardsOnFile = "-fake-cards-on-file"
     /// The next fee charged to a card on file is declined (not enough money on the card).
     static let noShowDeclined = "-fake-no-show-declined"

@@ -124,9 +124,7 @@ struct NoShowSettingsView: View {
                 InlineMessage(text: "Couldn't refresh: \(refreshError)")
             }
         } footer: {
-            Text(store.draft.enabled
-                ? "Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation."
-                : "Off: clients book online without a card, and no fee can be charged.")
+            Text(store.draft.enabled ? NoShowSettingsStore.onFooter : NoShowSettingsStore.offFooter)
         }
     }
 
@@ -170,7 +168,7 @@ struct NoShowSettingsView: View {
         } header: {
             Text("Fee")
         } footer: {
-            Text("The same fee for a no-show and a late cancellation. Each booking keeps the fee it was booked with, so a change only affects new bookings.")
+            Text(NoShowSettingsStore.feeFooter)
         }
     }
 
@@ -191,9 +189,7 @@ struct NoShowSettingsView: View {
         } header: {
             Text("Late cancellations")
         } footer: {
-            Text(store.draft.lateCancelEnabled
-                ? "A client who cancels in the app less than \(IzzyAPI.NoShowRule.windowLabel(minutes: store.draft.lateCancelWindowMinutes)) before the start can be charged the fee. Cancelling earlier is free, and the shop cancelling never is."
-                : "Off: cancelling in the app before the start is always free. Only no-shows can be charged.")
+            Text(store.lateCancellationFooter)
         }
     }
 

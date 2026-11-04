@@ -379,6 +379,102 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.draft.flatText, "20")
     }
 
+    func testASaveErrorGoesOnceWhatsOnScreenChanges() async {
+        let store = await loadedStore()
+        store.draft.feeMode = .flat
+        store.draft.flatText = "600"
+        let refused = await store.save()
+        XCTAssertFalse(refused)
+        XCTAssertEqual(store.saveError, "Pick a flat fee from $0.50 to $500.")
+        // Fixed: the old error goes as soon as the amount changes, before Save.
+        store.draft.flatText = "25"
+        XCTAssertNil(store.saveError)
+        XCTAssertNil(store.problem)
+        XCTAssertEqual(store.examples.first, "A $40 haircut: $25")
+        let saved = await store.save()
+        XCTAssertTrue(saved)
+        XCTAssertTrue(store.justSaved, "Saved can show")
+
+        // The same for the server's answer: a change on screen puts it away...
+        store.draft.lateCancelEnabled = false
+        harness.server.options.offline = true
+        let offline = await store.save()
+        XCTAssertFalse(offline)
+        XCTAssertEqual(store.saveError, APIError.offline.userMessage)
+        // ...but not a field set to what it already shows.
+        store.draft.lateCancelEnabled = false
+        XCTAssertEqual(store.saveError, APIError.offline.userMessage)
+        store.draft.lateCancelWindowMinutes = 120
+        XCTAssertNil(store.saveError)
+        // Save says again what's wrong, while it still is.
+        let again = await store.save()
+        XCTAssertFalse(again)
+        XCTAssertEqual(store.saveError, APIError.offline.userMessage)
+        XCTAssertTrue(store.hasChanges, "what's on screen stays, to save later")
+    }
+
+    func testASaveErrorGoesWhenARefreshLeavesNothingToSave() async throws {
+        let store = await loadedStore()
+        store.draft.enabled = true
+        harness.server.options.offline = true
+        _ = await store.save()
+        XCTAssertEqual(store.saveError, APIError.offline.userMessage)
+        harness.server.options.offline = false
+        // Turned on from another iPhone meanwhile: what's on screen is what the server has.
+        _ = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(enabled: true))
+        await store.refresh()
+        XCTAssertFalse(store.hasChanges)
+        XCTAssertNil(store.saveError)
+
+        // Changes that still aren't saved keep it through a refresh.
+        store.draft.percent = 50
+        harness.server.options.offline = true
+        _ = await store.save()
+        harness.server.options.offline = false
+        await store.refresh()
+        XCTAssertTrue(store.hasChanges)
+        XCTAssertEqual(store.saveError, APIError.offline.userMessage)
+    }
+
+    func testWhatTheSwitchesMean() async {
+        let store = await loadedStore()
+        XCTAssertEqual(
+            NoShowSettingsStore.onFooter,
+            "Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation."
+        )
+        // Off only changes new bookings: the server charges each booking by the terms it was made with.
+        XCTAssertEqual(
+            NoShowSettingsStore.offFooter,
+            "Off: new online bookings don't need a card. Bookings already made with a card keep their fee, and you can still charge it."
+        )
+        XCTAssertEqual(
+            NoShowSettingsStore.feeFooter,
+            "The same fee for a no-show and a late cancellation. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings."
+        )
+        XCTAssertEqual(
+            store.lateCancellationFooter,
+            "A client who cancels in the app less than 1 hour before the start can be charged the fee. Cancelling earlier is free, and there's never a fee when the shop cancels."
+        )
+        store.draft.lateCancelWindowMinutes = 1_440
+        XCTAssertTrue(store.lateCancellationFooter.hasPrefix("A client who cancels in the app less than 24 hours before the start"))
+        store.draft.lateCancelEnabled = false
+        XCTAssertEqual(
+            store.lateCancellationFooter,
+            "Off: new bookings can be cancelled in the app for free until the start, and only no-shows can be charged. Bookings already made keep the window they were booked with."
+        )
+    }
+
+    func testTheSampleDayWithCardsOnFileStartsWithProtectionOn() async {
+        var options = FakeServer.Options()
+        options.upcomingWithCard = true
+        let sample = Harness(options: options)
+        let store = NoShowSettingsStore(api: sample.api, catalog: .izzyClipz)
+        await store.refresh()
+        XCTAssertEqual(store.saved?.enabled, true, "those clients booked with it on")
+        XCTAssertEqual(store.summary, "On: the full service price for no-shows and cancellations less than 1 hour before")
+        XCTAssertEqual(store.saved, IzzyAPI.NoShowSettings(enabled: true), "the rest as the server starts")
+    }
+
     func testAnAmountTypedForAFeeNotInUseIsntSent() async {
         let store = await loadedStore()
         store.draft.feeMode = .flat

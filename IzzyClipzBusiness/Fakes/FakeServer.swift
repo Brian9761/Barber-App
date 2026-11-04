@@ -38,6 +38,7 @@ final class FakeServer {
         var empty = false
         /// Also start with a client who booked online with a card on file (Visa 4242, the fee the
         /// settings give a $35 haircut) and didn't come: a 10 AM haircut with Flowxbori, marked no-show.
+        /// With any of these three, no-show protection starts on: those clients booked with it on.
         var noShowWithCard = false
         /// Also start with a client who booked online with a card on file (Visa 4242) and cancelled
         /// in the app at 10:50 AM, less than 1 hour before their 11:30 AM haircut with Flowxbori:
@@ -81,7 +82,8 @@ final class FakeServer {
     private(set) var products: [IzzyAPI.Product] = []
     private(set) var payments: [StoredPayment] = []
     /// The no-show protection settings, starting where the server does (off; once on, the full
-    /// service price for a no-show or a cancellation less than 1 hour before).
+    /// service price for a no-show or a cancellation less than 1 hour before). On from the start
+    /// when the sample day has bookings made with a card on file, as they were booked with it on.
     private(set) var noShowSettings = IzzyAPI.NoShowSettings.default
     /// Every call, in order ("ownerStatus", "createPayment", …), for tests.
     private(set) var calls: [String] = []
@@ -686,6 +688,11 @@ final class FakeServer {
                 customer: IzzyAPI.Customer(name: sample.4, phone: sample.5),
                 status: sample.6, cancelledBy: sample.7, payment: payment, note: sample.9
             ))
+        }
+        // Clients booked these with a card because protection was on, and it still is: Settings
+        // then reads the same as the bookings (it starts off otherwise, as on the server).
+        if options.noShowWithCard || options.lateCancelWithCard || options.upcomingWithCard {
+            noShowSettings.enabled = true
         }
         // Booked online with a card on file under the settings' policy, like the server keeps it.
         func protected(_ appointment: IzzyAPI.Appointment, price: Price, customerCancelledAt: Date? = nil) -> IzzyAPI.Appointment {
