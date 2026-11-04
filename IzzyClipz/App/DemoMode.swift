@@ -11,7 +11,8 @@ import UserNotifications
 /// and when booking (`DemoNotice`).
 ///
 /// Like that server, the demo forgets everything when the app closes: settings and appointments
-/// start empty on every launch, booking tokens are kept in memory, and reminders scheduled by an
+/// start empty on every launch, booking tokens and a card added for no-show protection are kept in
+/// memory (the card is "added" without opening Stripe's page), and reminders scheduled by an
 /// earlier launch are dropped.
 enum DemoMode {
     /// The Info.plist key: `$(IZZY_DEMO_MODE)`, so "YES" in the demo version and "NO" in every

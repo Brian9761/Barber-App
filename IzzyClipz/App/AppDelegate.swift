@@ -32,9 +32,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         (LaunchOptions.isUITesting || DemoMode.isOn) ? InMemorySecretStore() : KeychainSecretStore(service: "com.izzyclipz.app.manage-tokens")
     }
 
-    /// The saved card's token, like the manage tokens: the Keychain, or memory while UI testing.
+    /// The saved card's token, like the manage tokens: the Keychain, or memory while UI testing and
+    /// in the demo version (whose in-memory server forgets its cards when the app closes).
     private static func makeCardStore() -> SecretStore {
-        LaunchOptions.isUITesting ? InMemorySecretStore() : KeychainSecretStore.savedCard()
+        (LaunchOptions.isUITesting || DemoMode.isOn) ? InMemorySecretStore() : KeychainSecretStore.savedCard()
     }
 
     private func makeAppointments() -> AppointmentStore {

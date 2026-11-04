@@ -155,12 +155,16 @@ private final class CardPage: @unchecked Sendable {
 }
 
 extension APIConfiguration {
-    /// Stripe's card page: the real one, or while UI testing a stand-in that saves Stripe's test
-    /// card on the in-memory server without opening a page (`FakeCardSaver`).
+    /// Stripe's card page: the real one, or on the in-memory server (UI tests and the demo version) a
+    /// stand-in that saves Stripe's test card there without opening a page (`FakeCardSaver`). Only the
+    /// UI tests' launch arguments make it close or fail.
     @MainActor
-    static func makeCardSaver(api: any ShopAPI) -> any CardSaver {
-        if LaunchOptions.isUITesting, let fake = api as? FakeShopAPI {
+    static func makeCardSaver(api: any ShopAPI, demo: Bool = DemoMode.isOn, uiTesting: Bool = LaunchOptions.isUITesting) -> any CardSaver {
+        if uiTesting, let fake = api as? FakeShopAPI {
             return FakeCardSaver(api: fake, options: FakeCardSaver.Options(arguments: ProcessInfo.processInfo.arguments))
+        }
+        if demo, let fake = api as? FakeShopAPI {
+            return FakeCardSaver(api: fake)
         }
         return WebCardSaver()
     }

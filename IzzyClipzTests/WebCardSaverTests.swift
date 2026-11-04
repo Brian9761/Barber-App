@@ -33,4 +33,17 @@ final class WebCardSaverTests: XCTestCase {
         // An error wins over an address.
         XCTAssertEqual(result("izzyclipz://card-saved?session_id=cs_test_a1", error: URLError(.cancelled)), .failed)
     }
+
+    /// On the in-memory server (the UI tests and the demo version) a stand-in saves Stripe's test card
+    /// without opening a page: Stripe's real page couldn't know the in-memory server's card checkout.
+    /// Every build that talks to the shop's server opens Stripe's page.
+    @MainActor
+    func testOnlyTheInMemoryServerSkipsStripesPage() throws {
+        let fake = FakeShopAPI()
+        XCTAssertTrue(APIConfiguration.makeCardSaver(api: fake, demo: true, uiTesting: false) is FakeCardSaver, "The demo never opens Stripe's page")
+        XCTAssertTrue(APIConfiguration.makeCardSaver(api: fake, demo: false, uiTesting: true) is FakeCardSaver)
+        let server = IzzyAPIClient(baseURL: try XCTUnwrap(URL(string: "https://example.com")))
+        XCTAssertTrue(APIConfiguration.makeCardSaver(api: server, demo: false, uiTesting: false) is WebCardSaver)
+        XCTAssertTrue(APIConfiguration.makeCardSaver(api: server, demo: true, uiTesting: false) is WebCardSaver, "Only the in-memory server has a stand-in")
+    }
 }
