@@ -20,7 +20,8 @@ TypeScript on Vercel Functions (Node 24), Postgres on Neon, region `pdx1`. One f
 | `src/db.ts`, `src/migrate.ts`, `migrations/*.sql`, `scripts/migrate.ts` | Postgres pool, migrations and the barber seed. |
 | `src/production.ts` | Real dependencies (pg pool, Stripe, Blob, fetch). Tests swap in fakes. |
 | `scripts/dev.ts`, `scripts/smoke.ts` | A local server without Vercel, and the end-to-end check to run after a deploy. |
-| `public/` | A placeholder page. Keep it: without `public/`, Vercel publishes the source files as static files. |
+| `web/` | The shop's website (Vite, React, TypeScript): the pages and online booking, on the same origin as the API. See [`web/README.md`](web/README.md). |
+| `public/` | The website's build (`npm run build:web`), which Vercel serves next to the API. Build output only: it's in `.gitignore`, and the API works without it. |
 | `test/` | Vitest suites, fixtures and the contract fixtures the Swift Kit decodes. |
 
 ## Environment variables
@@ -65,6 +66,27 @@ DATABASE_URL=postgres://… OWNER_KEY=… npm run dev       # http://localhost:3
 
 `npm run dev` (`scripts/dev.ts`) serves the same app with the production dependencies over plain Node HTTP and reads `.env.local` if it exists, so it needs no Vercel login. `vercel dev` works too once the project is linked.
 
+## Website
+
+The shop's website lives in `web/` (Vite 6, React 18.3, TypeScript, React Router 6, every version pinned in `web/package-lock.json`): Home, Services, Barbers, Reviews, Visit, booking in five steps (with the card on file when the shop's no-show protection needs one), My appointments, and a placeholder for the Business area. It reads the same API as the apps, from the same origin, so it needs no settings of its own. [`web/README.md`](web/README.md) has the details.
+
+```sh
+cd server
+npm run build:web     # npm ci and build in web/: the site lands in public/
+```
+
+To work on it, run the API and the site's dev server side by side:
+
+```sh
+npm run dev                    # the API on http://localhost:3000 (above)
+npm --prefix web ci            # once
+npm --prefix web run dev       # the site on http://localhost:5173, /api proxied to :3000
+```
+
+To try the whole thing without a database or any keys, `npm --prefix web run build && npm --prefix web run serve:local` serves the built site and the real API on an in-memory PGlite (a new, empty database every start) at http://127.0.0.1:4173. That's also what the website's end-to-end tests run against (`npm --prefix web run e2e`).
+
+On Vercel, `vercel.json` builds it (`buildCommand: npm run build:web`, `outputDirectory: public`) next to the API function in `api/`. Files on disk always win over rewrites, so `/assets/…`, `/robots.txt` and the icons are served as they are; `/api/*` goes to the function; every other path that isn't a file gets `/index.html`, so `/book/time` or `/appointments` open the site at that page. A missing `/assets/…` file is a real 404. The hashed files under `/assets/` are cached for a year, and every page gets `X-Content-Type-Options: nosniff`, a referrer policy and `X-Frame-Options: DENY`. If `PUBLIC_BASE_URL` is set when the site is built, the share image in the Open Graph tags gets that absolute address.
+
 ## Tests
 
 `npm test` runs every suite against **PGlite** (Postgres 18 compiled to WASM, with `btree_gist`), served over the Postgres wire protocol by `@electric-sql/pglite-socket`, so the production `pg` pool code runs unchanged. PGlite has one session, so the test pool has one connection and concurrent requests queue for it; the race tests still fire requests at the same moment.
@@ -75,7 +97,7 @@ To run the same tests against a **real Postgres** (true concurrency, pool of 5),
 TEST_DATABASE_URL=postgres://postgres@127.0.0.1:5432/postgres npm test
 ```
 
-CI (`.github/workflows/server.yml`) does both, on Ubuntu: PGlite on Node 22 and 24, and Postgres 17 on Node 24.
+CI (`.github/workflows/server.yml`) does both, on Ubuntu: PGlite on Node 22 and 24, and Postgres 17 on Node 24. A third job checks the website: type checks, unit tests, the build, and Playwright end to end against the real API on PGlite at desktop and phone sizes (screenshots are uploaded as the `website-screenshots` artifact).
 
 What's covered (no-show protection too, below): availability against fixtures exported from the Kit's `BookingCalendar` (both 2026 DST changes, Sundays, the 60-day edge, past days, late "today"), booking (happy path, overlaps rejected by the exclusion constraint, back to back, cancellation frees the slot, any-barber assignment, time off, lead time, window, hours, validation), races (2 and 10 bookings for one slot at once, two any-barber bookings, two bookings for one phone), rate limits, manage tokens, safe retries with the app's own token (a retry after success, the same token for another booking, malformed tokens, copies of one request racing, retries and the rate limits), every owner endpoint including 401/503, products with a fake Blob, Stripe with a fake client and real webhook signatures, Google and Yelp normalization from recorded fixtures, "nothing from Google is stored", the Yelp 12/24-hour rules, the cron job, the router's 404/405, migrations, and the server's own time zone not mattering.
 
@@ -110,12 +132,12 @@ Run it once when the database is created, after every new migration, and after e
 
 ## Deploy
 
-1. **Project**: a Vercel project on this repo with **Root Directory = `server`** and framework **Other**. `vercel.json` sets the region (`pdx1`), the `/api/*` rewrite to the one function, its 30 s limit and the daily cron. `package.json` `engines` selects Node 24.
+1. **Project**: a Vercel project on this repo with **Root Directory = `server`** and framework **Other**. `vercel.json` sets the region (`pdx1`), the build of the website into `public/` (`npm run build:web`), the `/api/*` rewrite to the one function and the website's fallback to `/index.html`, the function's 30 s limit and the daily cron. `package.json` `engines` selects Node 24.
 2. **Database**: add **Neon** from the Vercel Marketplace in region **`pdx1`** (it can't be changed later), with Neon Auth off, connected to Production, Preview and Development. Leave preview branching off at first. Then run `npm run migrate` with the new `DATABASE_URL_UNPOOLED`.
 3. **Photos**: create a **public** Blob store in `pdx1` and connect it to the project.
 4. **Secrets**: add `OWNER_KEY`, `CRON_SECRET` and, when ready, the Google, Yelp and Stripe variables above. Redeploy after changing variables.
 5. **Stripe** (when the shop's account is connected): create a Terminal Location for the shop and set `STRIPE_TERMINAL_LOCATION_ID`. Add a webhook endpoint at `https://<domain>/api/stripe/webhook` with API version `2026-10-28.endive` (stripe-node 23's) for `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.canceled`, `payment_intent.processing` and `payment_intent.requires_action`, and set `STRIPE_WEBHOOK_SECRET` (the same events keep no-show fees right). For no-show protection, keep **Cards** turned on under Settings → Payment methods (Apple Pay comes with it on Stripe's page), and check the shop's public business details and statement descriptor in the Dashboard's settings, since that's what clients see on Stripe's card page and on their statement. No-show protection stays off until the owner turns it on in the Business app; do that only with a live key, and once the app versions with the card screen are in the App Store (older ones can't add a card, so their clients couldn't book online).
-6. **Check**: `GET https://<domain>/api/health` → `{ "ok": true, "version": "4.0.0" }`, then `npm run smoke -- https://<domain>`. Point the apps at the production domain, not at a per-deployment URL (those are behind Deployment Protection).
+6. **Check**: `GET https://<domain>/api/health` → `{ "ok": true, "version": "4.0.0" }`, then `npm run smoke -- https://<domain>`, and open `https://<domain>/` for the website. Point the apps at the production domain, not at a per-deployment URL (those are behind Deployment Protection).
 
 Vercel's Hobby plan is for non-commercial use only; a shop taking bookings and payments needs Pro. Pro also allows an hourly cron (see the Yelp note below).
 
