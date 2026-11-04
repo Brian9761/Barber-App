@@ -1,4 +1,4 @@
-import { DateTime } from 'luxon';
+import { DateTime, IANAZone } from 'luxon';
 
 // Time helpers. Instants are JS Dates (UTC). Shop-local calendar days are plain
 // "YYYY-MM-DD" strings, and wall-clock times are minutes since midnight. All
@@ -72,13 +72,16 @@ export function wallClock(date: string, minutes: number, zone: string): Date | n
   const day = utcDay(date);
   const hour = Math.floor(minutes / 60);
   const minute = minutes % 60;
-  if (hour > 23) return null;
-  const dt = DateTime.fromObject({ year: day.year, month: day.month, day: day.day, hour, minute }, { zone });
-  if (!dt.isValid) return null;
-  if (dt.year !== day.year || dt.month !== day.month || dt.day !== day.day || dt.hour !== hour || dt.minute !== minute) {
-    return null;
-  }
-  return dt.toJSDate();
+  if (hour > 23 || !IANAZone.isValidZone(zone)) return null;
+  // Not DateTime.fromObject: for a time that happens twice, Luxon picks by today's offset,
+  // so the answer would change with the season the server runs in. Each offset the zone
+  // has around that day is tried instead, and the earliest instant that shows this
+  // wall-clock time wins; none means the time was skipped.
+  const tz = IANAZone.create(zone);
+  const local = Date.UTC(day.year, day.month - 1, day.day, hour, minute);
+  const offsets = new Set([tz.offset(local - 86_400_000), tz.offset(local), tz.offset(local + 86_400_000)]);
+  const matches = [...offsets].map((offset) => local - offset * 60_000).filter((ts) => tz.offset(ts) === (local - ts) / 60_000);
+  return matches.length > 0 ? new Date(Math.min(...matches)) : null;
 }
 
 /** Local midnight at the start of `date` until local midnight after it: 23, 24 or 25 hours. */
