@@ -9,6 +9,18 @@
   width: auto;
 }
 
+/*
+ * Windows High Contrast keeps a color set on an SVG itself (forced-color-adjust:
+ * preserve-parent-color), so a logo made near-black for a light band would vanish on a black
+ * screen, or a white one on a white screen. There it takes the system's color of the text or
+ * link it sits in.
+ */
+@media (forced-colors: active) {
+  svg.logo {
+    color: inherit;
+  }
+}
+
 /* ---------------------------------------------------------------- Global nav */
 
 .globalnav {

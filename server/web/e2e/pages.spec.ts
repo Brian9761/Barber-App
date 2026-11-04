@@ -161,6 +161,18 @@ test('the site’s files are served as they are, and every other address opens t
   expect((await catalog.json()).shop.phone.display).toBe('(442) 341-3053');
 });
 
+test('in Windows High Contrast, light or dark, every logo takes the system’s colors', async ({ page }, testInfo) => {
+  test.skip(isPhone(testInfo), 'High Contrast is a Windows computer setting');
+  for (const colorScheme of ['dark', 'light'] as const) {
+    await page.emulateMedia({ forcedColors: 'active', colorScheme });
+    for (const path of ['/', '/visit', '/business']) {
+      await page.goto(path);
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+      await expectLogosStandOut(page, `${path} in High Contrast, ${colorScheme}`);
+    }
+  }
+});
+
 test('the icons, the home-screen icon and the share image are the logo’s, at the sizes the page says', async ({ page, request }) => {
   await page.goto('/');
   const head = page.locator('head');
