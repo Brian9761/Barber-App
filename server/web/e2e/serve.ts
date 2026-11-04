@@ -11,8 +11,8 @@
 // the port.
 //
 // Test plumbing under /__e2e/ (never part of the real server): turn the live
-// reviews and no-show protection on and off, and a stand-in for Stripe's card
-// page. Like Stripe, its Save and Back go to the success_url and cancel_url the
+// reviews and no-show protection on and off, a stand-in for Stripe's card page,
+// and a new version of the service worker (for the "A new version is ready" bar). Like Stripe, its Save and Back go to the success_url and cancel_url the
 // server gave the Checkout Session, so the server's own way back to the website
 // (/api/cards/return and /api/cards/cancel with to=web) is part of the test.
 // There's no Stripe key: nothing leaves this machine.
@@ -231,8 +231,16 @@ function stripePage(id: string): string {
 <form method="post" action="/__e2e/stripe/${escapeHtml(id)}/back" style="margin-top:12px"><button type="submit">Back</button></form></main></body></html>`;
 }
 
+/** Above 0, /sw.js is a new version (a line added at its end), so the browser finds an update. */
+let workerVersion = 0;
+
 async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const parts = url.pathname.split('/').filter(Boolean); // ['__e2e', …]
+  if (parts[1] === 'new-version' && req.method === 'POST') {
+    const { reset } = await readBody(req);
+    workerVersion = reset ? 0 : workerVersion + 1;
+    return send(res, 200, JSON.stringify({ version: workerVersion }));
+  }
   if (parts[1] === 'reviews' && req.method === 'POST') {
     const { live } = await readBody(req);
     config.googlePlacesApiKey = live ? 'e2e-google-key' : undefined;
@@ -305,12 +313,16 @@ function siteFile(pathname: string): string | null {
 
 function serveFile(res: ServerResponse, file: string, status = 200): void {
   const immutable = file.includes(`${sep}assets${sep}`);
+  let body = readFileSync(file);
+  if (file === join(PUBLIC_DIR, 'sw.js') && workerVersion > 0) {
+    body = Buffer.concat([body, Buffer.from(`\n// New version ${workerVersion}, for the end-to-end tests.\n`)]);
+  }
   res.writeHead(status, {
     'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
     'cache-control': immutable ? 'public, max-age=31536000, immutable' : 'public, max-age=0, must-revalidate',
     'x-content-type-options': 'nosniff',
   });
-  res.end(readFileSync(file));
+  res.end(body);
 }
 
 async function api(req: IncomingMessage, res: ServerResponse): Promise<void> {

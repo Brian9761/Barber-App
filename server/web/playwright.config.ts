@@ -6,12 +6,15 @@ import { defineConfig } from '@playwright/test';
 // (default test-results/shots).
 //
 // The tests share one server and one database, so they run one at a time.
+// The demo version has its own config (playwright.demo.config.ts), where the web
+// app's tests (pwa.spec.ts) run too.
 
 const PORT = Number(process.env.E2E_PORT) || 4173;
 const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: ['demo.spec.ts'],
   outputDir: process.env.E2E_OUTPUT_DIR || 'test-results',
   fullyParallel: false,
   workers: 1,

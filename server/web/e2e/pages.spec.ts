@@ -12,6 +12,7 @@ const PAGES = [
   { path: '/visit', shot: '05-visit', heading: 'Visit the shop', title: 'Visit · Izzy Clipz Barbershop' },
   { path: '/book', shot: '06-book', heading: 'Pick a service', title: 'Step 1 of 5: Pick a service · Izzy Clipz Barbershop' },
   { path: '/appointments', shot: '07-appointments-empty', heading: 'My appointments', title: 'My appointments · Izzy Clipz Barbershop' },
+  { path: '/app', shot: '20-get-the-app', heading: 'Get the app.', title: 'Get the app · Izzy Clipz Barbershop' },
   { path: '/business', shot: '08-business', heading: 'Izzy Clipz Business on your computer — coming next', title: 'Izzy Clipz Business · Izzy Clipz Barbershop' },
   { path: '/no-such-page', shot: '09-not-found', heading: "This page isn't here.", title: 'Page not found · Izzy Clipz Barbershop' },
 ] as const;
@@ -60,7 +61,7 @@ test('every page fits a small phone, 375 pixels wide', async ({ page }, testInfo
 
 test('the phone number is on the first screen of every page and booking step', async ({ page }, testInfo) => {
   // "Prefer to call?" near the top, so nobody has to scroll past the whole menu to find it.
-  for (const path of ['/', '/services', '/barbers', '/reviews', '/visit', '/appointments', '/book', '/book?barber=carlos-rafael&service=haircut']) {
+  for (const path of ['/', '/services', '/barbers', '/reviews', '/visit', '/appointments', '/app', '/book', '/book?barber=carlos-rafael&service=haircut']) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     const top = await page

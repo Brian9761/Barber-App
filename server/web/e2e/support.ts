@@ -7,7 +7,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import AxeBuilder from '@axe-core/playwright';
-import { test as base, expect, type APIRequestContext, type Locator, type Page, type TestInfo } from '@playwright/test';
+import { test as base, expect, type APIRequestContext, type BrowserContext, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 export { expect };
 
@@ -181,7 +181,65 @@ export async function screenshot(page: Page, testInfo: TestInfo, name: string, o
 }
 
 export function isPhone(testInfo: TestInfo): boolean {
-  return testInfo.project.name === 'phone';
+  return testInfo.project.name.endsWith('phone');
+}
+
+/** Whether these tests run on the demo version (playwright.demo.config.ts), which has no API. */
+export function isDemo(testInfo: TestInfo): boolean {
+  return testInfo.project.name.startsWith('demo-');
+}
+
+// ------------------------------------------------------------------ The app
+
+/** What browsers on each kind of device say they are. */
+export const USER_AGENTS = {
+  iphone:
+    'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+  android: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36',
+  computer: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36',
+} as const;
+
+/** Waits until the service worker controls the page. */
+export async function controlledByWorker(page: Page): Promise<void> {
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker?.controller), null, { timeout: 30_000 });
+}
+
+/**
+ * The site as if opened from the Home Screen. Chromium can't be asked for that display mode,
+ * so the page is told so where it asks: matchMedia's "(display-mode: standalone)", and Safari's
+ * navigator.standalone.
+ */
+export async function emulateStandalone(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    const real = window.matchMedia.bind(window);
+    window.matchMedia = (query: string): MediaQueryList => {
+      if (!query.includes('display-mode')) return real(query);
+      const matches = /display-mode:\s*standalone/.test(query);
+      return {
+        matches,
+        media: query,
+        onchange: null,
+        addEventListener: () => undefined,
+        removeEventListener: () => undefined,
+        addListener: () => undefined,
+        removeListener: () => undefined,
+        dispatchEvent: () => false,
+      } as MediaQueryList;
+    };
+    Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => true });
+  });
+}
+
+/** A notched phone opened from the Home Screen: the status bar's and the home bar's room at the screen's edges. */
+export async function phoneSafeArea(page: Page, insets = { top: 47, bottom: 34, left: 0, right: 0 }): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets });
+}
+
+/** A new version of the service worker on the server (or, with `reset`, the one the build made). */
+export async function newWorkerVersion(request: APIRequestContext, reset = false): Promise<void> {
+  const response = await request.post('/__e2e/new-version', { data: { reset } });
+  expect(response.ok()).toBe(true);
 }
 
 // ------------------------------------------------------------ serve.ts switches
