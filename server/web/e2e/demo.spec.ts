@@ -86,6 +86,13 @@ test('books and cancels with no request to /api, saying it’s a demo', async ({
   await page.getByRole('button', { name: 'Continue' }).click();
 
   await expectStep(page, 4, 'Your details');
+  // In the demo the details stay on this device, and Remember me says nothing of a saved card.
+  await expect(page.getByText(/^This is the demo: your details stay on this (phone|computer) and aren't sent anywhere\.$/)).toBeVisible();
+  await expect(page.getByTestId('details-privacy')).toHaveText(
+    /^Demo version: your name and number stay on this (phone|computer)\. Nothing is sent to Izzy Clipz or anywhere else\.$/,
+  );
+  await expect(page.getByText('Your name and number fill in next time you book here. Leave it off on a shared', { exact: false })).toBeVisible();
+  await expect(page.getByRole('main')).not.toContainText('a card you add');
   await fillDetails(page, { name: 'Demo Client', phone });
   await screenshot(page, testInfo, '05-book-4-details');
   await page.getByRole('button', { name: 'Continue' }).click();

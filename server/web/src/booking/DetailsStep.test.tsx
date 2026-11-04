@@ -38,6 +38,9 @@ describe('Remember me on this computer', () => {
     expect(field('Name').value).toBe('');
     expect(screen.getByText(/a card you add stays saved\. Leave it off on a shared computer\./)).toBeTruthy();
     expect(screen.queryByTestId('remembered-note')).toBeNull();
+    // The real site sends the details to the shop, and says so (the demo says they stay here).
+    expect(screen.getByText("So the shop knows who's coming and can reach you if anything changes.")).toBeTruthy();
+    expect(screen.getByTestId('details-privacy').textContent).toBe('Your name and number are sent only to Izzy Clipz, to book and manage this appointment.');
   });
 
   it('names the device it’s on: on a phone, this phone', async () => {

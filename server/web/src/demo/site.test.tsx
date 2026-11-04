@@ -85,3 +85,21 @@ describe('My appointments in the demo', () => {
     for (const detail of ['Private Person', '7605558271', 'private.person', 'gate code']) expect(everything, detail).not.toContain(detail);
   });
 });
+
+describe('Your details in the demo', () => {
+  it('says the details stay on this device and go nowhere, and Remember me says nothing of a card', async () => {
+    const { EMPTY_DRAFT, saveDraft } = await import('../booking/flow');
+    const { days } = await api.availability({ offeringId: FLOW45 }, '2026-11-06', 1);
+    saveDraft({ ...EMPTY_DRAFT, serviceId: 'haircut', choice: { kind: 'offering', offeringId: FLOW45 }, start: days[0]!.slots[0]!.start });
+    renderApp('/book/details');
+    await screen.findByRole('heading', { level: 1, name: 'Your details' });
+    expect(screen.getByText("This is the demo: your details stay on this computer and aren't sent anywhere.")).toBeTruthy();
+    expect(screen.getByTestId('details-privacy').textContent).toBe(
+      'Demo version: your name and number stay on this computer. Nothing is sent to Izzy Clipz or anywhere else.',
+    );
+    const remember = screen.getByRole('checkbox', { name: 'Remember me on this computer' });
+    const hint = document.getElementById(remember.getAttribute('aria-describedby')!)!;
+    expect(hint.textContent).toBe('Your name and number fill in next time you book here. Leave it off on a shared computer.');
+    expect(document.body.textContent).not.toMatch(/card you add|sent only to/);
+  });
+});

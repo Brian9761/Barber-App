@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Catalog } from '../api/types';
 import { Icon } from '../components/Icon';
+import { isDemo } from '../demo/mode';
 import { displayPhone, emailProblem, MAX_NOTE_LENGTH, charLength, nameProblem, noteProblem, parseUSPhone, phoneProblem, toE164 } from '../lib/phone';
 import { forgetClient, forgetDetails, keepCardFor, loadRememberedDetails, rememberDetails } from '../lib/storage';
 import { thisDevice } from '../pwa/platform';
@@ -21,9 +22,13 @@ const EMPTY_DETAILS: Details = { name: '', phone: '', email: '', note: '', remem
  * A computer can be shared, so "Remember me" starts off, unless this computer
  * already remembers the client (they ticked it last time); then "Not you? Forget
  * me on this computer" clears it for whoever is booking now.
+ *
+ * In the demo nothing reaches the shop, so the step says the details stay on this
+ * device, and "Remember me" says nothing of a saved card (the demo never asks for one).
  */
 export function DetailsStep({ catalog }: { catalog: Catalog }) {
   const device = thisDevice();
+  const demo = isDemo();
   const { draft, dispatch } = useBooking();
   const { goTo } = useStepNavigation('details');
   const [remembered, setRemembered] = useState(() => loadRememberedDetails());
@@ -88,7 +93,15 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
 
   return (
     <BookingLayout catalog={catalog}>
-      <StepHeader step="details" title="Your details" subtitle="So the shop knows who's coming and can reach you if anything changes." />
+      <StepHeader
+        step="details"
+        title="Your details"
+        subtitle={
+          demo
+            ? `This is the demo: your details stay on this ${device} and aren't sent anywhere.`
+            : "So the shop knows who's coming and can reach you if anything changes."
+        }
+      />
       {remembered ? (
         <p className="remembered-note" data-testid="remembered-note">
           <span>
@@ -178,12 +191,17 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
               Remember me on this {device}
             </label>
             <span id={`${ids.remember}-hint`} className="secondary">
-              Your name and number fill in next time you book here, and a card you add stays saved. Leave it off on a shared{' '}
-              {device}.
+              {demo
+                ? `Your name and number fill in next time you book here. Leave it off on a shared ${device}.`
+                : `Your name and number fill in next time you book here, and a card you add stays saved. Leave it off on a shared ${device}.`}
             </span>
           </span>
         </div>
-        <p className="secondary">Your name and number are sent only to {catalog.shop.name}, to book and manage this appointment.</p>
+        <p className="secondary" data-testid="details-privacy">
+          {demo
+            ? `Demo version: your name and number stay on this ${device}. Nothing is sent to ${catalog.shop.name} or anywhere else.`
+            : `Your name and number are sent only to ${catalog.shop.name}, to book and manage this appointment.`}
+        </p>
         <div className="step-actions">
           <button type="submit" className="button button--primary button--large step-actions__continue">
             Continue
