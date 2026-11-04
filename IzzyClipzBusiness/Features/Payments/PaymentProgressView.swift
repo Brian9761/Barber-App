@@ -268,7 +268,8 @@ struct SimulatedTapPanel: View {
     }
 }
 
-/// Today's card payments that went through, newest first, with the total.
+/// Today's card payments that went through, newest first, with the total: the ones taken in the
+/// shop, and no-show and late cancellation fees charged to cards on file (labelled as such).
 struct PaymentsTodayView: View {
     let checkout: CheckoutModel
 
@@ -278,6 +279,11 @@ struct PaymentsTodayView: View {
                 LabeledContent("Total", value: Money.amount(checkout.todaysTotalCents))
                     .font(.headline)
                     .accessibilityIdentifier("paymentsTotal")
+                if checkout.todaysFeesCents > 0 {
+                    LabeledContent("No-show and late cancellation fees", value: Money.amount(checkout.todaysFeesCents))
+                        .font(.subheadline)
+                        .accessibilityIdentifier("paymentsFees")
+                }
             } footer: {
                 Text("Only payments that went through. Refunds and disputes are in the Stripe Dashboard.")
             }
@@ -308,8 +314,11 @@ private struct PaymentRow: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(payment.description ?? "Card payment")
+            VStack(alignment: .leading, spacing: 4) {
+                if let fee = payment.feeLabel {
+                    Badge(text: fee, color: .purple)
+                }
+                Text(payment.listTitle)
                     .font(.body)
                 Text(checkout.shopTime.time(payment.createdAt))
                     .font(.caption)
@@ -321,5 +330,6 @@ private struct PaymentRow: View {
         }
         .frame(minHeight: BusinessTheme.minimumTapSize)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(payment.kind.isFee ? "feePayment" : "cardPayment")
     }
 }

@@ -39,6 +39,8 @@ final class Workspace {
     let booking: NewBookingStore
     let checkout: CheckoutModel
     let products: ProductsStore
+    /// Settings → No-show protection.
+    let noShow: NoShowSettingsStore
 
     private static let setUpKey = "hasSetUpTapToPay"
     fileprivate static let educationKey = "hasSeenHowToTap"
@@ -64,9 +66,14 @@ final class Workspace {
             deviceSupportsTapToPay: environment.deviceSupportsTapToPay
         )
         self.products = ProductsStore(api: api)
+        self.noShow = NoShowSettingsStore(api: api, catalog: environment.catalog)
         checkout.update(stripe: status?.stripe)
         checkout.onPaid = { [weak schedule] _ in
             Task { await schedule?.refresh() }
+        }
+        // A no-show or late cancellation fee Stripe charged is money in: Payments today lists it.
+        schedule.onFeeCharged = { [weak checkout = self.checkout] _ in
+            Task { await checkout?.loadPayments() }
         }
         booking.onBooked = { [weak schedule] appointment in
             schedule?.didBook(appointment)

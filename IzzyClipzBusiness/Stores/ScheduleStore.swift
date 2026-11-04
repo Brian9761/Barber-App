@@ -30,6 +30,13 @@ final class ScheduleStore {
     private(set) var removingTimeOff: Set<String> = []
     /// A change that didn't work, for an alert.
     var actionError: String?
+    /// Appointments whose fee (a no-show or a late cancellation) is being charged right now.
+    private(set) var chargingFee: Set<String> = []
+    /// Why the last try at an appointment's fee got no answer, by appointment ID, shown in its
+    /// details until the next try.
+    private(set) var feeErrors: [String: String] = [:]
+    /// Called when Stripe charged a fee, with the appointment as it is now (Payments today changed).
+    @ObservationIgnored var onFeeCharged: ((IzzyAPI.Appointment) -> Void)?
 
     let shopTime: ShopTime
     let catalog: Catalog
@@ -206,6 +213,55 @@ final class ScheduleStore {
         } catch {
             actionError = ErrorText.message(for: error)
             return false
+        }
+    }
+
+    // MARK: No-show protection
+
+    /// Charges the fee agreed at booking to the card on file (for a no-show whose start has passed,
+    /// or a late cancellation by the client), or checks again on a try Stripe hasn't answered. Only
+    /// after the owner confirmed it (`FeePanel.Action`).
+    ///
+    /// The appointment comes back as it is now, and its `noShowFee` says what happened: charged,
+    /// declined (and why), needing the client, or still pending. A fee is never charged twice: the
+    /// server charges each one at most once, and a tap while one is running is ignored. When no
+    /// answer comes back, the day is loaded again so the details show the fee as the server has it
+    /// (say, waiting for Stripe, with Check again). Returns the updated appointment, or `nil`.
+    @discardableResult
+    func chargeFee(for appointment: IzzyAPI.Appointment) async -> IzzyAPI.Appointment? {
+        guard !chargingFee.contains(appointment.id) else { return nil }
+        chargingFee.insert(appointment.id)
+        defer { chargingFee.remove(appointment.id) }
+        feeErrors[appointment.id] = nil
+        do {
+            let updated = try await api.chargeNoShowFee(appointmentId: appointment.id)
+            // A refresh that started before this would bring the old fee back.
+            generation += 1
+            replace(updated)
+            if updated.noShowFee?.status == .charged { onFeeCharged?(updated) }
+            return updated
+        } catch is CancellationError {
+            return nil
+        } catch {
+            feeErrors[appointment.id] = Self.feeErrorMessage(for: error)
+            await refresh()
+            return nil
+        }
+    }
+
+    /// Why a fee charge got no answer, with what to do. A 409 from the server says in its own words
+    /// why there's nothing to charge ("Nothing was charged. Mark the appointment as a no-show
+    /// first."); otherwise nobody knows yet whether Stripe charged the card, and checking again is
+    /// always safe.
+    static func feeErrorMessage(for error: Error) -> String {
+        let unknown = "We don't know yet if the card was charged. Check again in a moment: the fee is never charged twice."
+        switch error as? APIError {
+        case .offline?:
+            return "We couldn't reach the server. \(unknown)"
+        case .server(let code, _, let status)? where code == APIError.networkErrorCode || status == 0 || status >= 500:
+            return "\(ErrorText.message(for: error)) \(unknown)"
+        default:
+            return ErrorText.message(for: error)
         }
     }
 
