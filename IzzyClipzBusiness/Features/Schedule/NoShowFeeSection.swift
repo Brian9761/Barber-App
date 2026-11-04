@@ -26,7 +26,7 @@ struct NoShowFeeSection: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("detailFee")
                 status(panel.status)
-                if let error = store.feeErrors[appointment.id] {
+                if let error = store.feeError(for: appointment) {
                     InlineMessage(text: error, systemImage: "exclamationmark.octagon.fill", color: .red)
                         .accessibilityIdentifier("feeError")
                 }

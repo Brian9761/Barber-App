@@ -304,7 +304,7 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(updated.noShowFee?.status, .charged)
         XCTAssertEqual(store.appointment(withID: kim.id)?.noShowFee?.status, .charged, "the details show it at once")
         XCTAssertTrue(store.chargingFee.isEmpty)
-        XCTAssertNil(store.feeErrors[kim.id])
+        XCTAssertNil(store.feeError(for: updated))
         XCTAssertEqual(charged, ["Kim Sample"])
         XCTAssertEqual(api.charges, [kim.id])
         XCTAssertNil(panel(try XCTUnwrap(store.appointment(withID: kim.id)))?.action, "no second charge offered")
@@ -346,7 +346,7 @@ final class NoShowFeeTests: XCTestCase {
         let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
         let declined = try await XCTUnwrapAsync(await store.chargeFee(for: kim))
         XCTAssertEqual(declined.noShowFee?.status, .declined)
-        XCTAssertNil(store.feeErrors[kim.id], "a decline isn't an error: Stripe answered")
+        XCTAssertNil(store.feeError(for: declined), "a decline isn't an error: Stripe answered")
         XCTAssertEqual(charged, 0)
         let shown = try XCTUnwrap(panel(declined))
         XCTAssertEqual(shown.status, .declined(FakeServer.insufficientFundsMessage))
@@ -380,19 +380,20 @@ final class NoShowFeeTests: XCTestCase {
         let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
         let none = await store.chargeFee(for: kim)
         XCTAssertNil(none)
-        XCTAssertEqual(
-            store.feeErrors[kim.id],
-            "We couldn't reach Stripe. Please try again. We don't know yet if the card was charged. Check again in a moment: the fee is never charged twice."
-        )
         // The day was loaded again: the fee waits for Stripe, with Check again.
         let waiting = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(
+            store.feeError(for: waiting),
+            "We couldn't reach Stripe. Please try again. We don't know yet if the card was charged. Try again in a moment: the fee is never charged twice."
+        )
         XCTAssertEqual(waiting.noShowFee?.status, .pending)
         XCTAssertEqual(panel(waiting)?.action?.title, "Check again")
         XCTAssertEqual(AppointmentBadges(appointment: waiting).spoken.last, "Fee not confirmed")
 
         let charged = try await XCTUnwrapAsync(await store.chargeFee(for: waiting))
         XCTAssertEqual(charged.noShowFee?.status, .charged)
-        XCTAssertNil(store.feeErrors[kim.id], "the error goes with the next try")
+        XCTAssertNil(store.feeError(for: charged), "the error goes with the next try")
+        XCTAssertNil(store.feeError(for: waiting), "even for the appointment as it was")
         XCTAssertEqual(harness.server.payments.filter { $0.payment.kind.isFee }.count, 1)
     }
 
@@ -405,8 +406,8 @@ final class NoShowFeeTests: XCTestCase {
         let none = await store.chargeFee(for: kim)
         XCTAssertNil(none)
         XCTAssertEqual(
-            store.feeErrors[kim.id],
-            "We couldn't reach the server. We don't know yet if the card was charged. Check again in a moment: the fee is never charged twice."
+            store.feeError(for: try XCTUnwrap(store.appointment(withID: kim.id))),
+            "We couldn't reach the server. We don't know yet if the card was charged. Try again in a moment: the fee is never charged twice."
         )
         XCTAssertEqual(store.refreshError, APIError.offline.userMessage, "it tried to load the day again")
         XCTAssertEqual(store.appointment(withID: kim.id)?.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none, "what was shown stays")
@@ -420,7 +421,7 @@ final class NoShowFeeTests: XCTestCase {
         await store.refresh()
         let jay = try XCTUnwrap(store.appointments.first { $0.customer.name == "Jay Sample" })
         _ = await store.chargeFee(for: jay)
-        XCTAssertEqual(store.feeErrors[jay.id], "This booking has no card on file, so there's no fee to charge.")
+        XCTAssertEqual(store.feeError(for: jay), "This booking has no card on file, so there's no fee to charge.")
 
         // Kim's try never reached Stripe, then Kim came after all: Check again settles it as not charged.
         let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
@@ -431,15 +432,94 @@ final class NoShowFeeTests: XCTestCase {
         let completed = try XCTUnwrap(store.appointment(withID: kim.id))
         XCTAssertEqual(panel(completed)?.action?.title, "Check again")
         _ = await store.chargeFee(for: completed)
-        XCTAssertEqual(store.feeErrors[kim.id], "Nothing was charged. Mark the appointment as a no-show first.")
         let settled = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(store.feeError(for: settled), "Nothing was charged. Mark the appointment as a no-show first.")
         XCTAssertEqual(settled.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none, "loaded again: settled as not charged")
         XCTAssertNil(panel(settled)?.action)
         XCTAssertFalse(harness.server.payments.contains { $0.payment.kind.isFee })
     }
 
+    func testAnErrorShowsOnlyWhileTheAppointmentStandsTheSame() async throws {
+        var options = cardsOnFile()
+        options.nextFeeChargeFails = true
+        let harness = Harness(options: options)
+        let store = makeStore(harness.api)
+        await store.refresh()
+        let kim = try XCTUnwrap(store.appointments.first { $0.customer.name == "Kim Sample" })
+        _ = await store.chargeFee(for: kim)
+        let waiting = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertNotNil(store.feeError(for: waiting))
+        // Stripe's answer arrives some other way (the webhook, or Check again on another iPhone).
+        _ = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        await store.refresh()
+        let charged = try XCTUnwrap(store.appointment(withID: kim.id))
+        XCTAssertEqual(charged.noShowFee?.status, .charged)
+        XCTAssertNil(store.feeError(for: charged), "no old \"we don't know yet\" under \"charged\"")
+        XCTAssertEqual(panel(charged)?.status, .charged(title: "No-show fee charged", detail: "$35 to Visa •••• 4242, Mon, Nov 2 at 11:05 AM."))
+
+        // A refusal stays until the appointment changes: here, the owner reopens Jay's appointment.
+        let jay = try XCTUnwrap(store.appointments.first { $0.customer.name == "Jay Sample" })
+        _ = await store.chargeFee(for: jay)
+        XCTAssertNotNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: jay.id))))
+        await store.refresh()
+        XCTAssertNotNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: jay.id))), "a refresh changes nothing")
+        _ = await store.setStatus(.booked, for: jay)
+        XCTAssertNil(store.feeError(for: try XCTUnwrap(store.appointment(withID: jay.id))))
+    }
+
+    func testReopeningAFeeStripeHasntConfirmedSaysItMayHaveGoneThrough() throws {
+        let harness = Harness(options: cardsOnFile())
+        var kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        kim.noShowFee?.status = .pending
+        kim.noShowFee?.reason = .noShow
+        XCTAssertEqual(
+            FeePanel.reopenWarning(for: kim, now: TestClock.now),
+            "Stripe hasn't confirmed the $35 no-show fee yet. If it went through, reopening doesn't refund it. Refunds are made in the Stripe Dashboard."
+        )
+        var lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        lee.noShowFee?.status = .pending
+        lee.noShowFee?.reason = .lateCancel
+        XCTAssertEqual(
+            FeePanel.reopenWarning(for: lee, now: TestClock.now),
+            "Stripe hasn't confirmed the $35 late cancellation fee yet. If it went through, reopening doesn't refund it. Refunds are made in the Stripe Dashboard."
+        )
+        // A declined late cancellation can still be charged until it's reopened.
+        lee.noShowFee?.status = .declined
+        XCTAssertEqual(
+            FeePanel.reopenWarning(for: lee, now: TestClock.now),
+            "Once it's reopened, the $35 late cancellation fee can't be charged any more."
+        )
+        lee.noShowFee?.status = .needsAction
+        XCTAssertEqual(
+            FeePanel.reopenWarning(for: lee, now: TestClock.now),
+            "Once it's reopened, the $35 late cancellation fee can't be charged any more."
+        )
+        // A declined no-show can be marked again after reopening: nothing to say.
+        kim.noShowFee?.status = .declined
+        XCTAssertNil(FeePanel.reopenWarning(for: kim, now: TestClock.now))
+    }
+
+    func testTheNoShowHintSaysTheDayForAnotherDay() throws {
+        let harness = Harness(options: cardsOnFile())
+        var nia = try XCTUnwrap(harness.appointment(named: "Nia Sample"))
+        let tomorrow = TestClock.today.adding(days: 1)
+        nia.start = TestClock.at(14, 30, on: tomorrow)
+        nia.end = TestClock.at(15, 15, on: tomorrow)
+        XCTAssertEqual(
+            FeePanel.noShowHint(for: nia, now: TestClock.now, shopTime: TestClock.shopTime),
+            "You can mark a no-show once the appointment starts on Tue, Nov 3 at 2:30 PM. Until then, the client can still cancel in the app."
+        )
+        // Not for a booking without a card, nor once it's not booked.
+        var walkIn = nia
+        walkIn.card = nil
+        walkIn.noShowFee = nil
+        XCTAssertNil(FeePanel.noShowHint(for: walkIn, now: TestClock.now, shopTime: TestClock.shopTime))
+        nia.status = .completed
+        XCTAssertNil(FeePanel.noShowHint(for: nia, now: TestClock.now, shopTime: TestClock.shopTime))
+    }
+
     func testFeeErrorMessages() {
-        let unknown = "We don't know yet if the card was charged. Check again in a moment: the fee is never charged twice."
+        let unknown = "We don't know yet if the card was charged. Try again in a moment: the fee is never charged twice."
         XCTAssertEqual(ScheduleStore.feeErrorMessage(for: APIError.offline), "We couldn't reach the server. \(unknown)")
         XCTAssertEqual(
             ScheduleStore.feeErrorMessage(for: APIError.server(code: IzzyAPI.ErrorCode.serverError, message: "Stripe is busy.", status: 502)),

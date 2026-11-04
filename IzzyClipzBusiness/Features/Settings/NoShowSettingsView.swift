@@ -8,6 +8,8 @@ struct NoShowSettingsView: View {
     @Bindable var store: NoShowSettingsStore
     let stripe: IzzyAPI.StripeStatus?
     @State private var confirmsDiscard = false
+    /// The flat fee's field: its decimal pad has no return key, so Done above it closes it.
+    @FocusState private var flatAmountFocused: Bool
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -29,11 +31,19 @@ struct NoShowSettingsView: View {
                         ProgressView()
                             .accessibilityLabel("Saving")
                     } else {
-                        Button("Save") { Task { await store.save() } }
-                            .fontWeight(.semibold)
-                            .disabled(!store.hasChanges)
-                            .accessibilityIdentifier("saveNoShowSettings")
+                        Button("Save") {
+                            flatAmountFocused = false
+                            Task { await store.save() }
+                        }
+                        .fontWeight(.semibold)
+                        .disabled(!store.hasChanges)
+                        .accessibilityIdentifier("saveNoShowSettings")
                     }
+                }
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("Done") { flatAmountFocused = false }
+                        .accessibilityIdentifier("flatAmountDone")
                 }
             }
             .confirmationDialog("Discard your changes?", isPresented: $confirmsDiscard, titleVisibility: .visible) {
@@ -95,6 +105,7 @@ struct NoShowSettingsView: View {
             }
             costsSection
         }
+        .scrollDismissesKeyboard(.interactively)
         .refreshable { await store.refresh() }
     }
 
@@ -146,6 +157,7 @@ struct NoShowSettingsView: View {
                     Text("$").foregroundStyle(.secondary).accessibilityHidden(true)
                     TextField("Amount", text: $store.draft.flatText)
                         .keyboardType(.decimalPad)
+                        .focused($flatAmountFocused)
                         .accessibilityLabel("Flat fee in dollars")
                         .accessibilityIdentifier("noShowFlatAmount")
                 }

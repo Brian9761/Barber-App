@@ -196,7 +196,12 @@ final class NoShowSettingsStoreTests: XCTestCase {
             store.clientPolicy,
             "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $40 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free."
         )
-        XCTAssertEqual(store.costsText, "Each fee is a card payment at Stripe's online rate, 2.9% + 30¢ in the US (about $1.46 of a $40 fee). If a client disputes a fee, Stripe charges $15, refunded if you win. Refunds are made in the Stripe Dashboard.")
+        XCTAssertEqual(
+            store.costsText,
+            "Each fee is a card payment at Stripe's online rate, 2.9% + 30¢ in the US (about $1.46 of a $40 fee). "
+                + "If a client disputes a fee, Stripe charges $15, and $15 more if you fight it, which comes back if you win. "
+                + "Refunds are made in the Stripe Dashboard, and Stripe keeps its fee on a refund."
+        )
     }
 
     func testTheExampleFollowsWhatsOnScreenBeforeItsSaved() async {

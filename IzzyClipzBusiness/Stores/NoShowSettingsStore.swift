@@ -114,7 +114,8 @@ final class NoShowSettingsStore {
             loadState = .loaded
             return true
         } catch is CancellationError {
-            saveError = "Saving was interrupted. Nothing changed. Try again."
+            // The change may or may not have reached the server; saving again sends the same fields.
+            saveError = "Saving was interrupted. Try again."
             return false
         } catch {
             saveError = ErrorText.message(for: error)
@@ -232,13 +233,16 @@ final class NoShowSettingsStore {
         (cents * 29 + 500) / 1_000 + 30
     }
 
-    /// Stripe's costs, with the example haircut's fee when there is one.
+    /// Stripe's costs (US standard pricing, stripe.com/pricing), with the example haircut's fee when
+    /// there is one. A dispute costs $15 that Stripe keeps either way; fighting it costs $15 more,
+    /// which comes back only if the shop wins. Refunds are free, but Stripe keeps its fee.
     var costsText: String {
         var rate = "Each fee is a card payment at Stripe's online rate, 2.9% + 30¢ in the US"
         if let fee = exampleFeeCents {
             rate += " (about \(Price.currencyString(cents: Self.stripeCostCents(ofFee: fee))) of a \(Price.currencyString(cents: fee)) fee)"
         }
-        return rate + ". If a client disputes a fee, Stripe charges $15, refunded if you win. Refunds are made in the Stripe Dashboard."
+        return rate + ". If a client disputes a fee, Stripe charges $15, and $15 more if you fight it, which comes back if you win. "
+            + "Refunds are made in the Stripe Dashboard, and Stripe keeps its fee on a refund."
     }
 
     /// The Settings row: "Off", or "On: the full service price for no-shows and cancellations

@@ -155,24 +155,31 @@ struct FeePanel: Equatable {
     // MARK: Status changes
 
     /// What Reopen says first, when reopening changes something about the fee: a charged fee isn't
-    /// refunded (refunds are made in the Stripe Dashboard), and a late cancellation that's
-    /// reopened can't be charged any more. `nil` when there's nothing to say.
+    /// refunded (refunds are made in the Stripe Dashboard), one Stripe hasn't confirmed yet may
+    /// have gone through, and a late cancellation that's reopened can't be charged any more. `nil`
+    /// when there's nothing to say.
     static func reopenWarning(for appointment: IzzyAPI.Appointment, now: Date) -> String? {
         guard let fee = appointment.noShowFee else { return nil }
-        if fee.status == .charged {
+        switch fee.status {
+        case .charged:
             return "The \(fee.amountLabel) \(fee.title.lowercased()) stays charged: reopening doesn't refund it. Refunds are made in the Stripe Dashboard."
+        case .pending:
+            return "Stripe hasn't confirmed the \(fee.amountLabel) \(fee.title.lowercased()) yet. If it went through, reopening doesn't refund it. Refunds are made in the Stripe Dashboard."
+        case .none, .declined, .needsAction:
+            if appointment.chargeableFee(at: now) == .lateCancel {
+                return "Once it's reopened, the \(fee.amountLabel) late cancellation fee can't be charged any more."
+            }
+            return nil
         }
-        if fee.status != .pending, appointment.chargeableFee(at: now) == .lateCancel {
-            return "Once it's reopened, the \(fee.amountLabel) late cancellation fee can't be charged any more."
-        }
-        return nil
     }
 
     /// Under the status buttons of a booking with a card on file that hasn't started: "Mark no-show"
     /// isn't offered yet, because the client can still cancel in the app until then.
     static func noShowHint(for appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime) -> String? {
         guard appointment.status == .booked, !appointment.canMarkNoShow(at: now) else { return nil }
-        return "You can mark a no-show once the appointment starts at \(shopTime.time(appointment.start)). Until then, the client can still cancel in the app."
+        let today = shopTime.day(containing: now) == shopTime.day(containing: appointment.start)
+        let when = today ? "at \(shopTime.time(appointment.start))" : "on \(shopTime.dayAndTime(appointment.start))"
+        return "You can mark a no-show once the appointment starts \(when). Until then, the client can still cancel in the app."
     }
 
     /// Added to "Cancel appointment"'s question for a booking with a card on file.
