@@ -15,8 +15,8 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
   no-show, cancel it (the app asks first), reopen it, or take payment.
   An online booking with a card on file shows the card and its fee, and
   lets you charge a no-show or a late cancellation (see
-  [No-show protection](#no-show-protection)). Rows say "Card on file",
-  "Cancelled late" and "No-show fee $35 charged".
+  [No-show protection](#no-show-protection)). Rows say "Card on file ·
+  Visa •••• 4242", "Cancelled late" and "No-show fee $35 charged".
   **Block time** blocks a barber or the whole shop; swipe a block to remove it.
   A block over several days shows its dates, and removing it removes all of
   it (the app says so first).
@@ -93,9 +93,10 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
 When it's on (Settings → **No-show protection**), clients who book online
 add a card (or Apple Pay) on Stripe's card page before they book. Nothing
 is charged then. While booking, on Pick a day and time and again on
-Review, they see a "Full Service Cancellation & No-Show Fee" notice with
-the shop's numbers, and they agree to the policy above Book appointment.
-Walk-ins and phone bookings made in this app never have a card on file.
+Review, they see a notice such as "Full Service Cancellation & No-Show
+Fee" (its title and amounts follow your settings), and they agree to the
+policy above Book appointment. Walk-ins and phone bookings made in this
+app never have a card on file.
 
 **What can be charged.** The same fee, for two cases, and you decide each
 time:
@@ -103,14 +104,18 @@ time:
 - **A no-show**: the appointment is marked No-show, it has started, and
   the client never cancelled. **Mark no-show** shows only once a booking
   with a card on file has started: until then the client can still cancel
-  in the app for free.
+  in the app (free until the late-cancellation window starts).
 - **A late cancellation**: the client cancelled in the app less than the
   window before the start (1 hour to begin with). Cancelling earlier is
   free. The shop cancelling is never charged, and neither is a booking
-  the client cancelled that you reopened.
+  the client cancelled that you reopened: once it's reopened, it can't be
+  charged a no-show fee either (Reopen says so first). To keep a fee for
+  a client who wants their time back, ask them to book again in the app.
 
 Each booking keeps the fee and window it was booked with, so a change in
-Settings only affects new bookings.
+Settings only affects new bookings. Turning protection off works the same
+way: new online bookings don't need a card, and bookings already made with
+one keep their fee, which you can still charge.
 
 **Charging.** Open the appointment. The **Card on file** section shows the
 card, the fee agreed at booking and what it covers. **Charge no-show fee
@@ -121,13 +126,23 @@ to Kim Sample's Visa •••• 4242?"), then shows Stripe's answer:
   charge Stripe confirms counts as charged.
 - **Declined**, with the bank's reason in plain words. **Charge again**
   tries once more (it asks first), or ask the client to pay at the shop.
+  Once the fee can't be charged any more (you reopened the appointment,
+  say), the section says why instead.
 - **The card needs the client to approve it**: their bank wants them to
   confirm the charge, which they can't do from here. Ask them to pay at
   the shop.
 - **Not confirmed yet** (the answer got lost on the way): **Check again**
-  asks Stripe how it went.
+  finishes that charge. If it went through, it shows as charged; if it
+  never reached Stripe, it's sent now (still only once). To not charge it,
+  reopen the appointment first: then Check again only asks Stripe how it
+  went, and nothing more is charged.
 
 A fee is charged at most once per appointment, however many times you tap.
+While a status change is on its way (Reopen, say), the fee can't be
+charged, and while a fee is being charged, the status can't change. Once a
+fee is charged, the **Payment** section says **Service not paid** with a
+line that the fee was charged to the card on file, so the fee isn't taken
+again at the counter.
 
 **Refunds and disputes.** Reopening an appointment never refunds a fee
 (the app says so before it reopens one). To give money back, refund it in

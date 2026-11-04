@@ -421,19 +421,30 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     // MARK: No-show protection
 
     /// Kim Sample booked online with a card on file (Visa 4242) for a $35 haircut at 10 AM and
-    /// didn't come (`-fake-cards-on-file`). The fee is charged once, after a question that names
-    /// the amount and the card, and Payments today lists it as a no-show fee.
+    /// didn't come (`-fake-cards-on-file`). The owner marks the no-show (her start has passed), and
+    /// the fee is charged once, after a question that names the amount and the card. Payments today
+    /// lists it as a no-show fee, and the Payment section says the service itself isn't paid.
     func testChargeANoShowFeeToTheCardOnFile() {
         launch("-fake-cards-on-file")
         let row = reveal("appointment-Kim Sample")
         XCTAssertTrue(row.label.contains("No-show"), "Got: \(row.label)")
-        XCTAssertTrue(row.label.contains("Card on file"), "Got: \(row.label)")
+        XCTAssertTrue(row.label.contains("Card on file, Visa ending in 4242"), "Got: \(row.label)")
         row.tap()
         XCTAssertTrue(waitForLabel(element("detailClientName"), containing: "Kim Sample"))
         XCTAssertTrue(waitForLabel(reveal("detailCard"), containing: "Visa •••• 4242"))
         XCTAssertTrue(reveal("detailFee").label.contains("$35 (the full service price)"), "Got: \(element("detailFee").label)")
+
+        // Mark no-show → charge → charged: reopened first (an uncharged no-show reopens without a
+        // question), then marked a no-show, which her 10 AM start allows at 11:05.
+        tap("reopenAppointment")
+        XCTAssertTrue(statusShows("Booked"))
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "If the client didn't come, mark a no-show."))
+        XCTAssertFalse(element("chargeFee").exists, "Nothing to charge while it's booked")
+        tap("markNoShow")
+        XCTAssertTrue(statusShows("No-show"))
         let charge = reveal("chargeFee")
         XCTAssertTrue(waitForLabel(charge, containing: "Charge no-show fee ($35)"), "Got: \(charge.label)")
+        XCTAssertTrue(reveal("detailPayment").label.contains("Not paid yet"), "Got: \(element("detailPayment").label)")
         screenshot("O23-No-Show-Fee")
 
         charge.tap()
@@ -444,6 +455,10 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(status, containing: "No-show fee charged"), "Got: \(status.label)")
         XCTAssertTrue(status.label.contains("$35 to Visa •••• 4242"), "Got: \(status.label)")
         XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        // The service itself isn't paid, and the fee is said apart, so it isn't taken again.
+        let payment = reveal("detailPayment")
+        XCTAssertTrue(waitForLabel(payment, containing: "Service not paid"), "Got: \(payment.label)")
+        XCTAssertTrue(waitForLabel(reveal("detailPaymentFeeNote"), containing: "The $35 no-show fee was charged to the card on file."))
         screenshot("O25-No-Show-Fee-Charged")
 
         // Reopening doesn't refund it, and says so first.
@@ -537,6 +552,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tapDialogButton("Charge $35", identifier: "confirmChargeFee")
         XCTAssertTrue(waitForLabel(reveal("feeError"), containing: "We don't know yet if the card was charged"))
         XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "Not confirmed yet"))
+        // It says what Check again does: if Stripe never got the charge, it's sent now.
+        XCTAssertTrue(element("feeStatus").label.contains("if Stripe never got it, it's sent now"), "Got: \(element("feeStatus").label)")
         let check = reveal("chargeFee")
         XCTAssertTrue(waitForLabel(check, containing: "Check again"), "Got: \(check.label)")
         // No second question: it only finishes the try that was confirmed.
@@ -573,14 +590,18 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("noShowClientWarning"), containing: "Full Service Cancellation & No-Show Fee"))
         screenshot("O31-No-Show-Settings")
 
-        // A flat amount the server wouldn't take is explained.
+        // A flat amount the server wouldn't take is explained, and Save says so too.
         reveal("noShowFeeMode", searchingFirst: .up)
         tapButton("Flat amount")
         replaceText(in: "noShowFlatAmount", with: "600")
         XCTAssertTrue(waitForLabel(reveal("noShowSettingsProblem"), containing: "Pick a flat fee from $0.50 to $500."))
-        // $25 for every booking.
+        tap("saveNoShowSettings")
+        XCTAssertTrue(waitForLabel(reveal("noShowSaveError"), containing: "Pick a flat fee from $0.50 to $500."))
+        // $25 for every booking: both messages go as soon as it's fixed.
+        reveal("noShowFlatAmount", searchingFirst: .up)
         replaceText(in: "noShowFlatAmount", with: "25")
         XCTAssertTrue(waitForDisappearance(of: element("noShowSettingsProblem")))
+        XCTAssertTrue(waitForDisappearance(of: element("noShowSaveError")), "The old Save message goes with the fix")
         closeKeyboard()
         XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $25"))
         let warning = reveal("noShowClientWarning")
@@ -612,6 +633,25 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(reveal("noShowSaved").exists)
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForLabel(reveal("noShowSettingsLink"), containing: "On: the full service price for no-shows"))
+    }
+
+    /// The sample clients with a card on file booked with protection on, so it's on. Turning it off
+    /// says plainly that their fees stay: each booking keeps the terms it was made with.
+    func testTurningProtectionOffSaysBookingsWithACardKeepTheirFee() {
+        launch("-fake-cards-on-file")
+        openTab("Settings")
+        let link = reveal("noShowSettingsLink")
+        XCTAssertTrue(waitForLabel(link, containing: "On: the full service price for no-shows and cancellations less than 1 hour before"), "Got: \(link.label)")
+        link.tap()
+        flipSwitch(reveal("noShowEnabled"))
+        XCTAssertTrue(
+            text(containing: "Bookings already made with a card keep their fee, and you can still charge it.").waitForExistence(timeout: 10),
+            "Off doesn't take away the fees already agreed"
+        )
+        XCTAssertFalse(text(containing: "no fee can be charged").exists)
+        tap("cancelNoShowSettings")
+        tapDialogButton("Discard changes", identifier: "confirmDiscardNoShowSettings")
+        XCTAssertTrue(waitForLabel(reveal("noShowSettingsLink"), containing: "On:"), "Nothing was saved")
     }
 
     func testUnsavedNoShowChangesAskBeforeTheyreDiscarded() {

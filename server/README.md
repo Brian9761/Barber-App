@@ -155,7 +155,7 @@ The client's rules: when protection is on, every online booking needs a card, an
 - **Refunds and disputes**: reopening a charged appointment doesn't refund it; refunds are made in the Stripe Dashboard. The stored policy text (with its window) and consent time are the evidence if a client disputes a fee.
 - **Privacy**: only the card's brand, last 4 digits, expiry and Stripe ids are stored. Saved cards stay as long as the client keeps the token (Remember me); expired cards are simply refused at booking.
 
-**Costs** (Stripe, US): a no-show or late-cancellation fee is a card-not-present charge at Stripe's online rate, 2.9% + 30¢ (a $40 fee nets about $38.54). Saving a card costs nothing. A dispute costs $15, refunded if the shop wins it.
+**Costs** (Stripe, US): a no-show or late-cancellation fee is a card-not-present charge at Stripe's online rate, 2.9% + 30¢ (a $40 fee nets about $38.54). Saving a card costs nothing. A dispute costs $15, which Stripe keeps either way; countering it costs another $15, returned if the shop wins.
 
 ### Contract details worth knowing
 
