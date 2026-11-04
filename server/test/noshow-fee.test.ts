@@ -128,6 +128,7 @@ describe('cancelling in the app before the start is always free', () => {
     expect(cancelled.body.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'customer' });
     expect(cancelled.body.appointment.noShowFee).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'none',
       chargedAt: null,
       message: null,
@@ -231,6 +232,7 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect(late.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'customer' });
     expect(late.appointment.noShowFee).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'none',
       chargedAt: null,
       message: null,
@@ -246,6 +248,7 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect(res.body.appointment).toMatchObject({ status: 'cancelled', payment: { status: 'unpaid', amountCents: null, paidAt: null } });
     expect(res.body.appointment.noShowFee).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'charged',
       chargedAt: '2026-11-03T17:31:00Z',
       message: null,
@@ -308,6 +311,30 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect((await charge(later.id)).body.appointment.noShowFee.status).toBe('charged');
     // And turning late cancellations off later doesn't undo what they agreed to (the owner still decides).
     expect((await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { lateCancelEnabled: false } })).status).toBe(200);
+  });
+
+  it('the client’s first cancel time decides: cancelled early, reopened, then cancelled inside the window stays free', async () => {
+    const booking = await protectedBooking();
+    // Monday 9:00 AM: the client cancels Tuesday's 10 AM, for free.
+    const early = await cancelInApp(booking);
+    expect(early.body.appointment.noShowFee).toMatchObject({ customerCancelledAt: '2026-11-02T17:00:00Z', reason: null });
+    // The shop reopens it (say the client called), and on Tuesday at 9:30 the client cancels again.
+    expect((await setStatus(booking.id, 'booked')).body.appointment.status).toBe('booked');
+    h.setNow('2026-11-03T17:30:00Z');
+    const again = await cancelInApp(booking);
+    expect(again.status, again.text).toBe(200);
+    expect(again.body.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'customer' });
+    expect(again.body.appointment.noShowFee).toMatchObject({ customerCancelledAt: '2026-11-02T17:00:00Z', reason: null });
+    expect((await feeRow(booking.id)).customer_cancelled_at.toISOString()).toBe('2026-11-02T17:00:00.000Z');
+    const res = await charge(booking.id);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toEqual({ code: 'not_chargeable', message: "The client cancelled at least 1 hour before, so there's no fee." });
+    // Nor is it a no-show later.
+    h.setNow('2026-11-03T18:20:00Z');
+    expect((await setStatus(booking.id, 'booked')).status).toBe(200);
+    expect((await markNoShow(booking.id)).status).toBe(200);
+    expect((await charge(booking.id)).body.error.message).toBe("The client cancelled this booking in the app, so there's no fee.");
+    expect(creates()).toHaveLength(0);
   });
 
   it('booked while late cancellations were off: cancelling in the app is free, however late', async () => {
@@ -406,6 +433,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(RESPONSES['no-show-fee-charged'].safeParse(res.body).success).toBe(true);
     expect(res.body.appointment.noShowFee).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'charged',
       chargedAt: '2026-11-03T18:20:00Z',
       message: null,
@@ -481,6 +509,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(declined.status).toBe(200);
     expect(declined.body.appointment.noShowFee).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'declined',
       chargedAt: null,
       message: "The card was declined: there isn't enough money on it.",
@@ -527,6 +556,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(res.status).toBe(200);
     expect(res.body.appointment.noShowFee).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'needsAction',
       chargedAt: null,
       message: "The client's bank wants them to approve this charge, so it can't go through from here. Ask them to pay at the shop.",
@@ -848,6 +878,7 @@ describe('POST /api/stripe/webhook for no-show fees', () => {
     );
     expect(await fee(id)).toEqual({
       amountCents: 3500,
+      fullPrice: true,
       status: 'needsAction',
       chargedAt: null,
       message: AUTHENTICATION_MESSAGE,

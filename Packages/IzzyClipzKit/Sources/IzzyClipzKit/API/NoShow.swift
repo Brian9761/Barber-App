@@ -83,11 +83,14 @@ extension IzzyAPI {
         }
     }
 
-    /// An appointment's fee (for a no-show or a late cancellation): `{ amountCents, status,
-    /// chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason }`.
+    /// An appointment's fee (for a no-show or a late cancellation): `{ amountCents, fullPrice,
+    /// status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason }`.
     public struct NoShowFee: Codable, Hashable, Sendable {
         /// The fee agreed at booking, in cents. Changing the settings later doesn't change it.
         public var amountCents: Int
+        /// Whether the fee is the booked service's whole price (it is at 100%), so the warnings
+        /// say "the full service price". `false` from a server before it said so.
+        public var fullPrice: Bool
         public var status: NoShowFeeStatus
         /// When Stripe reported it charged; `nil` otherwise.
         public var chargedAt: Date?
@@ -105,6 +108,7 @@ extension IzzyAPI {
 
         public init(
             amountCents: Int,
+            fullPrice: Bool = false,
             status: NoShowFeeStatus = .none,
             chargedAt: Date? = nil,
             message: String? = nil,
@@ -113,6 +117,7 @@ extension IzzyAPI {
             reason: NoShowFeeReason? = nil
         ) {
             self.amountCents = amountCents
+            self.fullPrice = fullPrice
             self.status = status
             self.chargedAt = chargedAt
             self.message = message
@@ -136,12 +141,14 @@ extension IzzyAPI {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case amountCents, status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason
+            case amountCents, fullPrice, status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason
         }
 
         public init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodingKeys.self)
             amountCents = try container.decode(Int.self, forKey: .amountCents)
+            // Missing on a server from before it said so: then the warnings just give the amount.
+            fullPrice = try container.decodeIfPresent(Bool.self, forKey: .fullPrice) ?? false
             status = try container.decode(NoShowFeeStatus.self, forKey: .status)
             chargedAt = try container.decodeIfPresent(Date.self, forKey: .chargedAt)
             message = try container.decodeIfPresent(String.self, forKey: .message)
@@ -155,6 +162,7 @@ extension IzzyAPI {
         public func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodingKeys.self)
             try container.encode(amountCents, forKey: .amountCents)
+            try container.encode(fullPrice, forKey: .fullPrice)
             try container.encode(status, forKey: .status)
             try container.encode(chargedAt, forKey: .chargedAt)
             try container.encode(message, forKey: .message)
@@ -196,13 +204,19 @@ extension IzzyAPI.Appointment {
     }
 
     /// For the client's "Cancel appointment" confirmation: "Cancelling now, less than 1 hour
-    /// before your appointment, may be charged $40." when cancelling now would be a late
-    /// cancellation under the policy they agreed to; `nil` when it's free.
+    /// before your appointment, may be charged $40, the full service price." when cancelling now
+    /// would be a late cancellation under the policy they agreed to; `nil` when it's free.
+    ///
+    /// Like the server, the time that counts is the first time the client cancelled (or asked to),
+    /// if there was one: a booking they cancelled early, which the shop then reopened, stays free.
+    /// Work it out again when the client taps the button, not only when the dialog opens.
     public func lateCancelWarning(at now: Date) -> String? {
         guard isCancellable(at: now), card != nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
-              let starts = noShowFee.lateCancelStarts(before: start), now > starts
+              IzzyAPI.NoShowRule.cancelledLate(
+                  start: start, customerCancelledAt: noShowFee.customerCancelledAt ?? now, lateCancelWindowMinutes: window
+              )
         else { return nil }
-        return "Cancelling now, less than \(IzzyAPI.NoShowRule.windowLabel(minutes: window)) before your appointment, may be charged \(noShowFee.amountLabel)."
+        return IzzyAPI.NoShowRule.lateCancelWarning(windowMinutes: window, feeCents: noShowFee.amountCents, fullPrice: noShowFee.fullPrice)
     }
 }
 
@@ -710,6 +724,14 @@ extension IzzyAPI {
         public static func cancelledLate(start: Date, customerCancelledAt: Date?, lateCancelWindowMinutes: Int?) -> Bool {
             guard let customerCancelledAt, let lateCancelWindowMinutes else { return false }
             return start.timeIntervalSince(customerCancelledAt) < Double(lateCancelWindowMinutes) * 60
+        }
+
+        /// What the client is told before cancelling inside the agreed window, as the server words
+        /// it (also its 409 `late_cancel_fee`): "Cancelling now, less than 1 hour before your
+        /// appointment, may be charged $35, the full service price."
+        public static func lateCancelWarning(windowMinutes: Int, feeCents: Int, fullPrice: Bool) -> String {
+            let amount = Price.currencyString(cents: feeCents) + (fullPrice ? ", the full service price" : "")
+            return "Cancelling now, less than \(windowLabel(minutes: windowMinutes)) before your appointment, may be charged \(amount)."
         }
 
         /// The server's rule, ignoring the clock: a late cancellation (cancelled by the client

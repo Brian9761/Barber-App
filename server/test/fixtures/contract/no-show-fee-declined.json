@@ -30,6 +30,7 @@
     },
     "noShowFee": {
       "amountCents": 2500,
+      "fullPrice": false,
       "status": "declined",
       "chargedAt": null,
       "message": "The card was declined: there isn't enough money on it.",

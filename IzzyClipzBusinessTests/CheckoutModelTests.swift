@@ -661,7 +661,7 @@ final class SampleServerNoShowTests: XCTestCase {
         let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
         XCTAssertEqual(kim.card?.label, "Visa •••• 4242")
         // The full price of the $35 haircut, and the 1-hour window the policy had.
-        XCTAssertEqual(kim.noShowFee, IzzyAPI.NoShowFee(amountCents: 3_500, lateCancelWindowMinutes: 60, reason: .noShow))
+        XCTAssertEqual(kim.noShowFee, IzzyAPI.NoShowFee(amountCents: 3_500, fullPrice: true, lateCancelWindowMinutes: 60, reason: .noShow))
         XCTAssertTrue(kim.canChargeNoShowFee(at: TestClock.now))
         XCTAssertEqual(kim.chargeableFee(at: TestClock.now), .noShow)
 
@@ -764,7 +764,7 @@ final class SampleServerNoShowTests: XCTestCase {
         XCTAssertEqual(lee.status, .cancelled)
         XCTAssertEqual(lee.cancelledBy, .customer)
         XCTAssertEqual(lee.noShowFee, IzzyAPI.NoShowFee(
-            amountCents: 3_500, customerCancelledAt: TestClock.at(10, 50), lateCancelWindowMinutes: 60, reason: .lateCancel
+            amountCents: 3_500, fullPrice: true, customerCancelledAt: TestClock.at(10, 50), lateCancelWindowMinutes: 60, reason: .lateCancel
         ))
         // 11:05: before the start, and already chargeable.
         XCTAssertEqual(lee.chargeableFee(at: TestClock.now), .lateCancel)

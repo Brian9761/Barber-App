@@ -30,6 +30,7 @@ export const Appointment = z.strictObject({
   noShowFee: z
     .strictObject({
       amountCents: int.min(50),
+      fullPrice: z.boolean(),
       status: z.enum(['none', 'pending', 'charged', 'declined', 'needsAction']),
       chargedAt: instant.nullable(),
       message: z.string().min(1).nullable(),

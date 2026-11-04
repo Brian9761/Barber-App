@@ -614,9 +614,12 @@ final class FakeServer {
         // Booked online with a card on file under the settings' policy, like the server keeps it.
         func protected(_ appointment: IzzyAPI.Appointment, price: Price, customerCancelledAt: Date? = nil) -> IzzyAPI.Appointment {
             var appointment = appointment
+            let fee = IzzyAPI.NoShowRule.feeCents(for: price, settings: noShowSettings) ?? 0
             appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
             appointment.noShowFee = IzzyAPI.NoShowFee(
-                amountCents: IzzyAPI.NoShowRule.feeCents(for: price, settings: noShowSettings) ?? 0,
+                amountCents: fee,
+                // As the server says it: the fee is the service's whole price.
+                fullPrice: fee == price.cents,
                 customerCancelledAt: customerCancelledAt,
                 lateCancelWindowMinutes: noShowSettings.lateCancelEnabled ? noShowSettings.lateCancelWindowMinutes : nil
             )

@@ -8,7 +8,8 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "Mark the appointment as a no-show first."
+      "refusal": "Mark the appointment as a no-show first.",
+      "cancelledLate": false
     },
     {
       "name": "completed",
@@ -18,7 +19,8 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "Mark the appointment as a no-show first."
+      "refusal": "Mark the appointment as a no-show first.",
+      "cancelledLate": false
     },
     {
       "name": "a no-show",
@@ -28,7 +30,8 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
       "reason": "noShow",
-      "refusal": null
+      "refusal": null,
+      "cancelledLate": false
     },
     {
       "name": "a no-show, booked without late cancellations",
@@ -38,7 +41,8 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": null,
       "reason": "noShow",
-      "refusal": null
+      "refusal": null,
+      "cancelledLate": false
     },
     {
       "name": "cancelled 30 minutes before",
@@ -48,7 +52,8 @@
       "customerCancelledAt": "2026-11-03T17:30:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": "lateCancel",
-      "refusal": null
+      "refusal": null,
+      "cancelledLate": true
     },
     {
       "name": "cancelled 1 minute before",
@@ -58,7 +63,8 @@
       "customerCancelledAt": "2026-11-03T17:59:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": "lateCancel",
-      "refusal": null
+      "refusal": null,
+      "cancelledLate": true
     },
     {
       "name": "cancelled 59 minutes before",
@@ -68,7 +74,8 @@
       "customerCancelledAt": "2026-11-03T17:01:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": "lateCancel",
-      "refusal": null
+      "refusal": null,
+      "cancelledLate": true
     },
     {
       "name": "cancelled exactly 1 hour before",
@@ -78,7 +85,8 @@
       "customerCancelledAt": "2026-11-03T17:00:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The client cancelled at least 1 hour before, so there's no fee."
+      "refusal": "The client cancelled at least 1 hour before, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "cancelled 2 hours before",
@@ -88,7 +96,8 @@
       "customerCancelledAt": "2026-11-03T16:00:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The client cancelled at least 1 hour before, so there's no fee."
+      "refusal": "The client cancelled at least 1 hour before, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "cancelled 2 hours before, with a 3-hour window",
@@ -98,7 +107,8 @@
       "customerCancelledAt": "2026-11-03T16:00:00Z",
       "lateCancelWindowMinutes": 180,
       "reason": "lateCancel",
-      "refusal": null
+      "refusal": null,
+      "cancelledLate": true
     },
     {
       "name": "cancelled 45 minutes before, with a 30-minute window",
@@ -108,7 +118,8 @@
       "customerCancelledAt": "2026-11-03T17:15:00Z",
       "lateCancelWindowMinutes": 30,
       "reason": null,
-      "refusal": "The client cancelled at least 30 minutes before, so there's no fee."
+      "refusal": "The client cancelled at least 30 minutes before, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "cancelled 90 minutes before, with a 90-minute window",
@@ -118,7 +129,8 @@
       "customerCancelledAt": "2026-11-03T16:30:00Z",
       "lateCancelWindowMinutes": 90,
       "reason": null,
-      "refusal": "The client cancelled at least 90 minutes before, so there's no fee."
+      "refusal": "The client cancelled at least 90 minutes before, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "cancelled 5 minutes before, booked without late cancellations",
@@ -128,7 +140,8 @@
       "customerCancelledAt": "2026-11-03T17:55:00Z",
       "lateCancelWindowMinutes": null,
       "reason": null,
-      "refusal": "The client cancelled this booking in the app, so there's no fee."
+      "refusal": "The client cancelled this booking in the app, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "cancelled late, then reopened by the shop",
@@ -138,7 +151,8 @@
       "customerCancelledAt": "2026-11-03T17:50:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The client cancelled this booking in the app, so there's no fee."
+      "refusal": "The client cancelled this booking in the app, so there's no fee.",
+      "cancelledLate": true
     },
     {
       "name": "cancelled late, reopened, then marked a no-show",
@@ -148,7 +162,8 @@
       "customerCancelledAt": "2026-11-03T17:50:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The client cancelled this booking in the app, so there's no fee."
+      "refusal": "The client cancelled this booking in the app, so there's no fee.",
+      "cancelledLate": true
     },
     {
       "name": "cancelled early, reopened, then marked a no-show",
@@ -158,7 +173,8 @@
       "customerCancelledAt": "2026-11-03T08:00:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The client cancelled this booking in the app, so there's no fee."
+      "refusal": "The client cancelled this booking in the app, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "cancelled by the shop",
@@ -168,7 +184,8 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The shop cancelled this booking, so there's no fee."
+      "refusal": "The shop cancelled this booking, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "cancelled late by the client, then again by the shop",
@@ -178,7 +195,8 @@
       "customerCancelledAt": "2026-11-03T17:50:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The shop cancelled this booking, so there's no fee."
+      "refusal": "The shop cancelled this booking, so there's no fee.",
+      "cancelledLate": true
     },
     {
       "name": "cancelled by the client with no time kept",
@@ -188,7 +206,8 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The client cancelled this booking in the app, so there's no fee."
+      "refusal": "The client cancelled this booking in the app, so there's no fee.",
+      "cancelledLate": false
     },
     {
       "name": "completed after the client asked to cancel",
@@ -198,8 +217,59 @@
       "customerCancelledAt": "2026-11-03T17:55:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": null,
-      "refusal": "The client cancelled this booking in the app, so there's no fee."
+      "refusal": "The client cancelled this booking in the app, so there's no fee.",
+      "cancelledLate": true
     }
   ],
-  "notStarted": "The appointment hasn't started yet, so it can't be a no-show."
+  "notStarted": "The appointment hasn't started yet, so it can't be a no-show.",
+  "cancelWarnings": [
+    {
+      "lateCancelWindowMinutes": 30,
+      "amountCents": 3500,
+      "fullPrice": true,
+      "warning": "Cancelling now, less than 30 minutes before your appointment, may be charged $35, the full service price."
+    },
+    {
+      "lateCancelWindowMinutes": 60,
+      "amountCents": 3500,
+      "fullPrice": true,
+      "warning": "Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price."
+    },
+    {
+      "lateCancelWindowMinutes": 60,
+      "amountCents": 1750,
+      "fullPrice": false,
+      "warning": "Cancelling now, less than 1 hour before your appointment, may be charged $17.50."
+    },
+    {
+      "lateCancelWindowMinutes": 60,
+      "amountCents": 2005,
+      "fullPrice": false,
+      "warning": "Cancelling now, less than 1 hour before your appointment, may be charged $20.05."
+    },
+    {
+      "lateCancelWindowMinutes": 90,
+      "amountCents": 2500,
+      "fullPrice": false,
+      "warning": "Cancelling now, less than 90 minutes before your appointment, may be charged $25."
+    },
+    {
+      "lateCancelWindowMinutes": 120,
+      "amountCents": 4000,
+      "fullPrice": true,
+      "warning": "Cancelling now, less than 2 hours before your appointment, may be charged $40, the full service price."
+    },
+    {
+      "lateCancelWindowMinutes": 180,
+      "amountCents": 50,
+      "fullPrice": false,
+      "warning": "Cancelling now, less than 3 hours before your appointment, may be charged $0.50."
+    },
+    {
+      "lateCancelWindowMinutes": 2880,
+      "amountCents": 8000,
+      "fullPrice": true,
+      "warning": "Cancelling now, less than 48 hours before your appointment, may be charged $80, the full service price."
+    }
+  ]
 }
