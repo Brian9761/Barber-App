@@ -75,9 +75,60 @@ final class NoShowSettingsStoreTests: XCTestCase {
         _ = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(percent: 80))
         await store.refresh()
         XCTAssertTrue(store.draft.enabled, "the owner's change stays")
-        XCTAssertEqual(store.draft.percent, 100, "what's on screen isn't replaced while it has changes")
+        XCTAssertEqual(store.draft.percent, 80, "a field the owner didn't change shows the server's new value")
         XCTAssertEqual(store.saved?.percent, 80)
+        XCTAssertEqual(store.examples.first, "A $40 haircut: $32", "and the example follows it")
         XCTAssertTrue(store.hasChanges)
+        XCTAssertEqual(store.draft.update(from: try XCTUnwrap(store.saved)), IzzyAPI.NoShowSettingsUpdate(enabled: true), "only the owner's change is left to save")
+    }
+
+    func testASaveErrorStaysThroughARefreshThatShowsAnotherIPhonesChange() async throws {
+        let store = await loadedStore()
+        store.draft.feeMode = .flat
+        store.draft.flatText = "600"
+        _ = await store.save()
+        XCTAssertEqual(store.saveError, "Pick a flat fee from $0.50 to $500.")
+        _ = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(lateCancelWindowMinutes: 120))
+        await store.refresh()
+        XCTAssertEqual(store.draft.lateCancelWindowMinutes, 120, "the other iPhone's change shows")
+        XCTAssertEqual(store.draft.flatText, "600", "the owner's change stays, to fix it")
+        XCTAssertEqual(store.draft.feeMode, .flat)
+        XCTAssertEqual(store.saveError, "Pick a flat fee from $0.50 to $500.", "and so does what's wrong with it")
+    }
+
+    func testMovingChangesOntoTheServersNewSettingsKeepsOnlyWhatTheOwnerChanged() {
+        let base = NoShowSettingsDraft(.default)
+        let newer = NoShowSettingsDraft(IzzyAPI.NoShowSettings(percent: 80, flatCents: 2_500, lateCancelWindowMinutes: 120))
+        var mine = base
+        mine.enabled = true
+        mine.flatText = "20.00"
+        let moved = mine.rebased(from: base, onto: newer)
+        XCTAssertTrue(moved.enabled, "the owner's change")
+        XCTAssertEqual(moved.feeMode, .percent)
+        XCTAssertEqual(moved.percent, 80, "changed on another iPhone")
+        XCTAssertEqual(moved.flatText, "25", "$20 written another way isn't a change")
+        XCTAssertTrue(moved.lateCancelEnabled)
+        XCTAssertEqual(moved.lateCancelWindowMinutes, 120)
+
+        // What's typed that isn't an amount yet stays, to fix it.
+        var typing = base
+        typing.feeMode = .flat
+        typing.flatText = "abc"
+        let kept = typing.rebased(from: base, onto: newer)
+        XCTAssertEqual(kept.feeMode, .flat)
+        XCTAssertEqual(kept.flatText, "abc")
+        XCTAssertEqual(kept.percent, 80)
+
+        // Every field the owner changed stays; with none, it's the server's settings as they are.
+        var all = base
+        all.enabled = true
+        all.feeMode = .flat
+        all.percent = 50
+        all.flatText = "30"
+        all.lateCancelEnabled = false
+        all.lateCancelWindowMinutes = 240
+        XCTAssertEqual(all.rebased(from: base, onto: newer), all)
+        XCTAssertEqual(base.rebased(from: base, onto: newer), newer)
     }
 
     func testASlowLoadNeverReplacesWhatASaveStored() async throws {
@@ -362,6 +413,53 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertEqual(harness.server.noShowSettings.lateCancelWindowMinutes, 180)
         XCTAssertEqual(store.draft.lateCancelWindowMinutes, 180, "the server's answer shows both changes")
         XCTAssertEqual(store.draft.percent, 50)
+
+        // Loaded again while a change waits on screen, then saved: here the owner turns protection on,
+        // another iPhone sets the fee to 80% meanwhile, then this screen loads again (pull to refresh,
+        // or coming back to it). It shows the 80%, and Save sends only the switch.
+        store.draft.enabled = true
+        _ = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(percent: 80))
+        await store.refresh()
+        XCTAssertEqual(store.draft.percent, 80, "the screen shows the other iPhone's fee")
+        XCTAssertTrue(store.draft.enabled)
+        let savedAgain = await store.save()
+        XCTAssertTrue(savedAgain)
+        XCTAssertEqual(api.noShowUpdates.last, IzzyAPI.NoShowSettingsUpdate(enabled: true))
+        XCTAssertEqual(harness.server.noShowSettings.percent, 80, "not put back to 50%")
+        XCTAssertTrue(harness.server.noShowSettings.enabled)
+        XCTAssertEqual(harness.server.noShowSettings.lateCancelWindowMinutes, 180)
+        XCTAssertFalse(store.hasChanges)
+        XCTAssertTrue(store.justSaved)
+    }
+
+    func testASaveShowsAnotherIPhonesChangeAndKeepsOneMadeWhileSaving() async throws {
+        let store = await loadedStore()
+        let gate = AsyncGate()
+        api.updateNoShowSettingsHandler = { [base = api.base] update in
+            await gate.wait()
+            return try await base.updateNoShowSettings(update)
+        }
+        store.draft.enabled = true
+        let saving = Task { await store.save() }
+        try await Task.sleep(for: .milliseconds(50))
+        // While it saves, another iPhone sets the fee to 70%, and the owner picks a 4-hour window here.
+        _ = try await harness.api.updateNoShowSettings(IzzyAPI.NoShowSettingsUpdate(percent: 70))
+        store.draft.lateCancelWindowMinutes = 240
+        await gate.open()
+        let saved = await saving.value
+        XCTAssertTrue(saved)
+        XCTAssertTrue(store.draft.enabled)
+        XCTAssertEqual(store.draft.percent, 70, "the owner didn't touch the fee: the server's shows")
+        XCTAssertEqual(store.draft.lateCancelWindowMinutes, 240, "the change made while saving stays")
+        XCTAssertTrue(store.hasChanges)
+
+        api.updateNoShowSettingsHandler = nil
+        let again = await store.save()
+        XCTAssertTrue(again)
+        XCTAssertEqual(api.noShowUpdates.last, IzzyAPI.NoShowSettingsUpdate(lateCancelWindowMinutes: 240), "only what's left to save")
+        XCTAssertEqual(harness.server.noShowSettings.percent, 70, "the other iPhone's fee stays")
+        XCTAssertEqual(harness.server.noShowSettings.lateCancelWindowMinutes, 240)
+        XCTAssertTrue(harness.server.noShowSettings.enabled)
     }
 
     func testSomethingTheServerWouldTurnDownIsExplainedAndNotSent() async {

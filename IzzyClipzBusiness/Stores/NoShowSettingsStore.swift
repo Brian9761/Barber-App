@@ -7,8 +7,9 @@ import Observation
 /// can be charged too and from how long before the start, an example, and the words clients see.
 ///
 /// Changes stay on screen (`draft`) until Save sends them to the server, which only gets the
-/// fields that changed, so a change made on another iPhone meanwhile stays. Each booking keeps
-/// the fee and terms it was booked with: a change only affects new bookings.
+/// fields the owner changed, so a change made on another iPhone meanwhile stays: a refresh (or a
+/// save's answer) shows it in every field the owner didn't change. Each booking keeps the fee and
+/// terms it was booked with: a change only affects new bookings.
 @MainActor
 @Observable
 final class NoShowSettingsStore {
@@ -57,7 +58,8 @@ final class NoShowSettingsStore {
 
     // MARK: Loading and saving
 
-    /// Loads the settings. Changes on screen that aren't saved yet stay as they are.
+    /// Loads the settings. Changes on screen that aren't saved yet stay as they are, and every
+    /// field the owner didn't change shows what the server has now (changed on another iPhone, say).
     func refresh() async {
         generation += 1
         let requested = generation
@@ -66,8 +68,17 @@ final class NoShowSettingsStore {
             let settings = try await api.noShowSettings()
             guard requested == generation else { return }
             let keepsChanges = hasChanges
+            let startedFrom = saved.map(NoShowSettingsDraft.init)
             saved = settings
-            if !keepsChanges { draft = NoShowSettingsDraft(settings) }
+            if keepsChanges, let startedFrom {
+                // Moved onto the server's settings, so Save sends only what the owner changed. A save
+                // error was about those changes, which stay, so it stays too.
+                let error = saveError
+                draft = draft.rebased(from: startedFrom, onto: NoShowSettingsDraft(settings))
+                saveError = error
+            } else {
+                draft = NoShowSettingsDraft(settings)
+            }
             // Nothing on screen waits to be saved (the same change was made on another iPhone,
             // say), so no save error applies any more.
             if !hasChanges { saveError = nil }
@@ -119,8 +130,9 @@ final class NoShowSettingsStore {
             // ...nor one that started while saving: the server may have answered it before the change.
             generation += 1
             self.saved = result
-            // What's on screen becomes what the server has now, unless the owner changed it meanwhile.
-            if draft == sent { draft = NoShowSettingsDraft(result) }
+            // What's on screen becomes what the server has now (with a change made on another iPhone
+            // meanwhile), except the fields the owner changed while it saved.
+            draft = draft.rebased(from: sent, onto: NoShowSettingsDraft(result))
             lastSaved = NoShowSettingsDraft(result)
             refreshError = nil
             loadState = .loaded
@@ -377,6 +389,21 @@ struct NoShowSettingsDraft: Equatable {
         settings.lateCancelEnabled = lateCancelEnabled
         settings.lateCancelWindowMinutes = lateCancelWindowMinutes
         return settings
+    }
+
+    /// This draft moved onto newer settings from the server (`newer`): every field the owner changed
+    /// from `base` (what they started from) keeps their value, and every other field takes the
+    /// server's, which may have been changed on another iPhone. A flat amount counts as changed only
+    /// when it's another amount ("20.00" for $20 isn't), or isn't an amount at all.
+    func rebased(from base: NoShowSettingsDraft, onto newer: NoShowSettingsDraft) -> NoShowSettingsDraft {
+        var result = newer
+        if enabled != base.enabled { result.enabled = enabled }
+        if feeMode != base.feeMode { result.feeMode = feeMode }
+        if percent != base.percent { result.percent = percent }
+        if normalized.flatText != base.normalized.flatText { result.flatText = flatText }
+        if lateCancelEnabled != base.lateCancelEnabled { result.lateCancelEnabled = lateCancelEnabled }
+        if lateCancelWindowMinutes != base.lateCancelWindowMinutes { result.lateCancelWindowMinutes = lateCancelWindowMinutes }
+        return result
     }
 
     /// Only the fields that differ from `saved`; `nil` when nothing does (or there's a problem).

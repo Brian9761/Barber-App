@@ -164,9 +164,11 @@ service price, to begin with) or a flat amount ($0.50 to $500); **Charge
 late cancellations** on or off, and the window (30 minutes to 48 hours);
 an example ("A $40 haircut: $40"); and what clients see, for the example
 haircut. **Save** sends only what you changed, so a change made on another
-iPhone meanwhile stays; Cancel asks before it throws changes away. If
-Stripe isn't set up on the server, clients aren't asked for a card, even
-with this on.
+iPhone meanwhile stays: loading the screen again (pull to refresh, or
+coming back to it) keeps your unsaved changes and shows the other
+iPhone's change everywhere else. Cancel asks before it throws changes
+away. If Stripe isn't set up on the server, clients aren't asked for a
+card, even with this on.
 
 **Costs** (Stripe's US standard pricing):
 
