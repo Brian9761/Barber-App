@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join, relative, sep } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { build as viteBuild, type Plugin, type Rollup } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { precacheEntries, precacheVersion } from './tools/precache.js';
 
 // The website builds into ../public, which Vercel serves next to the API (one
 // project, one origin). In development, `npm run dev` here proxies /api to the
@@ -69,51 +69,23 @@ function demoBackend(): Plugin {
 }
 
 /**
- * Files the service worker doesn't keep: the picture link previews show, the file for search
- * engines, the hosting settings and the worker itself; and Inter's alphabets other than Latin,
- * which the site's own words never use (a browser downloads them only if a page needs them).
- */
-function precached(name: string): boolean {
-  if (['og-image.png', 'robots.txt', 'vercel.json', 'sw.js'].includes(name) || name.endsWith('.map')) return false;
-  return !/^assets\/inter-(?!latin)/.test(name);
-}
-
-function sha256(content: string | Buffer): string {
-  return createHash('sha256').update(content).digest('hex');
-}
-
-/** Every file of the build, by its address: "/index.html", "/assets/index-DN70w0ok.js". */
-function builtFiles(outDir: string): string[] {
-  const names: string[] = [];
-  const walk = (dir: string) => {
-    for (const name of readdirSync(dir)) {
-      const path = join(dir, name);
-      if (statSync(path).isDirectory()) walk(path);
-      else names.push(relative(outDir, path).split(sep).join('/'));
-    }
-  };
-  walk(outDir);
-  return names.sort();
-}
-
-/**
  * The service worker, built last (once everything else is written): src/sw/sw.ts in one plain
  * script, /sw.js, with this version's files and a version number made from them written in, and
  * whether it may ask the shop's server for its catalog (never in the demo, which has no /api).
  * Files under /assets/ change their names when they change; every other file (the page, the
- * icons, the manifest, the offline page) is listed with a hash of what's in it.
+ * icons, the manifest, the offline page) is listed with a hash of what's in it and of the
+ * hosting settings (`hosting`, the vercel.json the build is served with), so new headers make
+ * a new version too (tools/precache.ts).
  */
-function serviceWorker({ api }: { api: boolean }): Plugin {
+function serviceWorker({ api, hosting }: { api: boolean; hosting: string }): Plugin {
   return {
     name: 'izzy-service-worker',
     apply: 'build',
     async writeBundle(options) {
       const outDir = options.dir;
       if (!outDir) throw new Error('The service worker needs the build folder');
-      const entries = builtFiles(outDir)
-        .filter(precached)
-        .map((name) => ({ url: `/${name}`, revision: name.startsWith('assets/') ? null : sha256(readFileSync(join(outDir, name))).slice(0, 16) }));
-      const version = sha256(JSON.stringify(entries)).slice(0, 12);
+      const entries = precacheEntries(outDir, readFileSync(hosting, 'utf8'));
+      const version = precacheVersion(entries);
       const built = await viteBuild({
         configFile: false,
         envFile: false,
@@ -136,13 +108,29 @@ function serviceWorker({ api }: { api: boolean }): Plugin {
   };
 }
 
-/** The demo's hosting settings (vercel.demo.json), as dist-demo/vercel.json. */
+/**
+ * The demo's robots.txt. Search engines may read its pages, which all answer with
+ * X-Robots-Tag: noindex, so none is listed: a page they weren't allowed to read could still be
+ * listed from links elsewhere, since they'd never see its noindex.
+ */
+const DEMO_ROBOTS = `# The demo version of the Izzy Clipz website, not the shop's own site.
+# Every page answers with X-Robots-Tag: noindex (vercel.json), so none of it is listed in
+# search results. Reading stays allowed, so search engines see that noindex.
+User-agent: *
+Allow: /
+`;
+
+/** The demo's hosting settings (vercel.demo.json) as dist-demo/vercel.json, and its own robots.txt. */
 function demoHosting(): Plugin {
   return {
     name: 'izzy-demo-hosting',
     apply: 'build',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: 'vercel.json', source: readFileSync(here('./vercel.demo.json'), 'utf8') });
+    },
+    writeBundle(options) {
+      // public/robots.txt is the shop's own site's; the demo's replaces it.
+      if (options.dir) writeFileSync(join(options.dir, 'robots.txt'), DEMO_ROBOTS);
     },
   };
 }
@@ -154,7 +142,12 @@ export default defineConfig(({ mode }) => {
   // The demo has no API to reach: it answers in the browser.
   const proxy: Record<string, string> = demo ? {} : { '/api': API_DEV_SERVER };
   return {
-    plugins: [react(), absoluteSocialLinks(), ...(demo ? [demoBackend(), demoHosting()] : []), serviceWorker({ api: !demo })],
+    plugins: [
+      react(),
+      absoluteSocialLinks(),
+      ...(demo ? [demoBackend(), demoHosting()] : []),
+      serviceWorker({ api: !demo, hosting: here(demo ? './vercel.demo.json' : '../vercel.json') }),
+    ],
     build: {
       outDir: demo ? 'dist-demo' : '../public',
       // ../public is outside this folder, so Vite only clears it when asked.
@@ -168,7 +161,8 @@ export default defineConfig(({ mode }) => {
     preview: { proxy },
     test: {
       environment: 'jsdom',
-      include: ['src/**/*.test.{ts,tsx}'],
+      // tools/: the build's own helpers, which run in Node (their tests say so).
+      include: ['src/**/*.test.{ts,tsx}', 'tools/**/*.test.ts'],
       setupFiles: ['src/test/setup.ts'],
       restoreMocks: true,
       unstubGlobals: true,
