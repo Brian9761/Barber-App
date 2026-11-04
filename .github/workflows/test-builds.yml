@@ -1,0 +1,273 @@
+name: Test builds
+
+# Demo builds of both apps, for trying them before the App Store: each app runs on its built-in
+# sample data (IZZY_DEMO_MODE=YES; see IzzyClipz/App/DemoMode.swift and
+# IzzyClipzBusiness/App/DemoMode.swift), never the shop's server and never real money.
+#
+# One artifact, izzy-clipz-demo-builds, holds:
+#   IzzyClipz-Demo.ipa, IzzyClipzBusiness-Demo.ipa
+#       The iPhone apps, unsigned: Sideloadly or AltStore signs them with the tester's Apple ID.
+#   IzzyClipz-Demo-Simulator.zip, IzzyClipzBusiness-Demo-Simulator.zip
+#       The apps for the iOS Simulator in Xcode on a Mac. The customer app runs on Apple silicon
+#       and Intel Macs; the owner app on Apple silicon only (see "Package").
+#   SHA256SUMS.txt
+# Screenshots of each Simulator build just after it launched are in demo-screenshots.
+on:
+  push:
+    branches: [test-builds, v4, "v5/**"]
+    paths:
+      - "project.yml"
+      - "IzzyClipz/**"
+      - "IzzyClipzBusiness/**"
+      - "Packages/**"
+      - ".github/workflows/test-builds.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: test-builds-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Demo builds
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      # Swift packages (Stripe Terminal's 34 MB download) are fetched once and shared by every build.
+      PACKAGES: build/SourcePackages
+      DERIVED: build/DerivedData
+      OUT: build/demo-builds
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Show toolchain
+        run: |
+          xcodebuild -version
+          swift --version
+
+      # The committed IzzyClipz.xcodeproj can lag project.yml (it's regenerated on v4 only).
+      - name: Generate the Xcode project from project.yml
+        run: |
+          brew install xcodegen
+          xcodegen --version
+          xcodegen generate
+
+      - uses: actions/cache@v4
+        with:
+          path: build/SourcePackages
+          key: spm-test-builds-${{ hashFiles('project.yml') }}
+
+      - name: Resolve Swift packages (Stripe Terminal 6.0.0)
+        run: |
+          for attempt in 1 2 3; do
+            xcodebuild -resolvePackageDependencies \
+              -project IzzyClipz.xcodeproj \
+              -scheme IzzyClipzBusiness \
+              -clonedSourcePackagesDirPath "$PACKAGES" && exit 0
+            echo "Resolving failed (attempt $attempt); retrying"
+            sleep 10
+          done
+          exit 1
+
+      # Release, stripped (DEPLOYMENT_POSTPROCESSING), no dSYMs or preview dylibs, not signed.
+      - name: Build for the iOS Simulator
+        run: |
+          mkdir -p build/logs
+          build() { # $1 = scheme, $2 = architectures
+            set +e
+            xcodebuild build \
+              -project IzzyClipz.xcodeproj \
+              -scheme "$1" \
+              -configuration Release \
+              -sdk iphonesimulator \
+              -destination "generic/platform=iOS Simulator" \
+              -derivedDataPath "$DERIVED" \
+              -clonedSourcePackagesDirPath "$PACKAGES" \
+              ARCHS="$2" ONLY_ACTIVE_ARCH=NO \
+              IZZY_DEMO_MODE=YES \
+              DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES \
+              DEBUG_INFORMATION_FORMAT=dwarf ENABLE_PREVIEWS=NO ENABLE_DEBUG_DYLIB=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              > "build/logs/$1-simulator.log" 2>&1
+            status=$?
+            set -e
+            grep -E "error:|warning:|\*\* BUILD" "build/logs/$1-simulator.log" | sort -u | head -100
+            if [ $status -ne 0 ]; then tail -80 "build/logs/$1-simulator.log"; exit $status; fi
+          }
+          build IzzyClipz "arm64 x86_64"
+          # Apple silicon only: Stripe's SDK for both kinds of Mac is 82 MB on its own, which would
+          # make this download about 24 MB.
+          build IzzyClipzBusiness arm64
+
+      - name: Archive for iPhones
+        run: |
+          archive() { # $1 = scheme
+            set +e
+            xcodebuild archive \
+              -project IzzyClipz.xcodeproj \
+              -scheme "$1" \
+              -configuration Release \
+              -destination "generic/platform=iOS" \
+              -archivePath "build/$1.xcarchive" \
+              -derivedDataPath "$DERIVED" \
+              -clonedSourcePackagesDirPath "$PACKAGES" \
+              IZZY_DEMO_MODE=YES \
+              DEBUG_INFORMATION_FORMAT=dwarf ENABLE_PREVIEWS=NO ENABLE_DEBUG_DYLIB=NO \
+              CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+              > "build/logs/$1-archive.log" 2>&1
+            status=$?
+            set -e
+            grep -E "error:|warning:|\*\* ARCHIVE" "build/logs/$1-archive.log" | sort -u | head -100
+            if [ $status -ne 0 ]; then tail -80 "build/logs/$1-archive.log"; exit $status; fi
+          }
+          archive IzzyClipz
+          archive IzzyClipzBusiness
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          SIM="$DERIVED/Build/Products/Release-iphonesimulator"
+          mkdir -p "$OUT"
+          OUT_PATH="$PWD/$OUT"
+
+          # The owner app's Simulator build is arm64 only, so Stripe's SDK can be too. Each slice
+          # of a universal binary carries its own signature, so the arm64 one stays valid.
+          STRIPE="$SIM/IzzyClipzBusiness.app/Frameworks/StripeTerminal.framework/StripeTerminal"
+          if [ -f "$STRIPE" ] && lipo "$STRIPE" -verify_arch x86_64 2>/dev/null; then
+            lipo "$STRIPE" -remove x86_64 -output "$STRIPE.arm64"
+            mv "$STRIPE.arm64" "$STRIPE"
+          fi
+
+          for app in IzzyClipz IzzyClipzBusiness; do
+            ditto -c -k --norsrc --noqtn --keepParent --zlibCompressionLevel 9 \
+              "$SIM/$app.app" "$OUT_PATH/$app-Demo-Simulator.zip"
+            # An .ipa is the app in a folder named Payload, zipped.
+            rm -rf build/ipa && mkdir -p build/ipa/Payload
+            ditto --norsrc "build/$app.xcarchive/Products/Applications/$app.app" "build/ipa/Payload/$app.app"
+            (cd build/ipa && zip -qr -X -y -9 "$OUT_PATH/$app-Demo.ipa" Payload)
+          done
+          (cd "$OUT" && shasum -a 256 IzzyClipz-Demo.ipa IzzyClipzBusiness-Demo.ipa \
+            IzzyClipz-Demo-Simulator.zip IzzyClipzBusiness-Demo-Simulator.zip > SHA256SUMS.txt)
+
+      - name: Check the builds
+        run: |
+          set -euo pipefail
+          SIM="$DERIVED/Build/Products/Release-iphonesimulator"
+          DEVICE="Products/Applications"
+          apps=("$SIM/IzzyClipz.app" "$SIM/IzzyClipzBusiness.app" \
+            "build/IzzyClipz.xcarchive/$DEVICE/IzzyClipz.app" "build/IzzyClipzBusiness.xcarchive/$DEVICE/IzzyClipzBusiness.app")
+          for app in "${apps[@]}"; do
+            name=$(basename "$app" .app)
+            flag=$(plutil -extract IzzyDemoMode raw -o - "$app/Info.plist")
+            echo "== $app: IzzyDemoMode = $flag"
+            [ "$flag" = YES ] || { echo "::error::$app isn't the demo version"; exit 1; }
+            lipo -info "$app/$name"
+            if [ -d "$app/Frameworks" ]; then
+              for framework in "$app"/Frameworks/*.framework; do lipo -info "$framework/$(basename "$framework" .framework)"; done
+            fi
+            # Nothing for debugging inside the app.
+            if find "$app" \( -name '*.dSYM' -o -name '*.debug.dylib' -o -name '__preview.dylib' \) | grep .; then
+              echo "::error::$app has debugging files inside"; exit 1
+            fi
+            du -sh "$app"
+            (du -sk "$app"/* "$app"/Frameworks/* 2>/dev/null || true) | sort -rn | sed -n 1,6p
+          done
+
+          echo "== Files"
+          echo "| File | Bytes | MB |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| --- | ---: | ---: |" >> "$GITHUB_STEP_SUMMARY"
+          for file in IzzyClipz-Demo.ipa IzzyClipzBusiness-Demo.ipa IzzyClipz-Demo-Simulator.zip IzzyClipzBusiness-Demo-Simulator.zip SHA256SUMS.txt; do
+            path="$OUT/$file"
+            [ -s "$path" ] || { echo "::error::$file is missing or empty"; exit 1; }
+            bytes=$(stat -f%z "$path")
+            mb=$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1000000 }')
+            echo "$file: $bytes bytes ($mb MB)"
+            echo "| $file | $bytes | $mb |" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$bytes" -gt 15000000 ]; then echo "::warning::$file is over 15 MB ($mb MB)"; fi
+          done
+          cat "$OUT/SHA256SUMS.txt"
+          (cd "$OUT" && shasum -a 256 -c SHA256SUMS.txt)
+          for file in "$OUT"/*.ipa; do
+            listing=$(unzip -l "$file")
+            grep -qE " Payload/[^/]+\.app/Info\.plist$" <<< "$listing" || { echo "::error::$file has no Payload/<App>.app"; exit 1; }
+          done
+
+      - name: Upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: izzy-clipz-demo-builds
+          path: build/demo-builds/
+          if-no-files-found: error
+          retention-days: 14
+          # The files are zipped already.
+          compression-level: 0
+
+      # Installs each Simulator build from its zip, as a tester would, and checks it's still
+      # running a few seconds after launch.
+      - name: Launch the Simulator builds
+        run: |
+          set -euo pipefail
+          SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          best = None
+          for runtime, devices in json.load(sys.stdin)["devices"].items():
+              if ".iOS-" not in runtime:
+                  continue
+              version = tuple(int(part) for part in runtime.split(".iOS-")[-1].split("-"))
+              # The owner app needs iOS 18.
+              if version < (18,):
+                  continue
+              for device in devices:
+                  name = device["name"]
+                  if not name.startswith("iPhone") or not device.get("isAvailable", True):
+                      continue
+                  rank = (version, name.endswith(" Pro"), name)
+                  if best is None or rank > best[0]:
+                      best = (rank, device["udid"], name, runtime)
+          if best is None:
+              sys.exit("No iOS 18+ iPhone simulator available")
+          print(best[1], best[2], best[3], file=sys.stderr)
+          print(best[1])
+          ')
+          xcrun simctl boot "$SIMULATOR" || true
+          xcrun simctl bootstatus "$SIMULATOR" -b
+          xcrun simctl status_bar "$SIMULATOR" override --time "9:41" --dataNetwork wifi --wifiBars 3 --cellularBars 4 --batteryState charged --batteryLevel 100 || true
+          mkdir -p build/screenshots
+          for app in IzzyClipz IzzyClipzBusiness; do
+            rm -rf build/unzipped && mkdir -p build/unzipped
+            ditto -x -k "$OUT/$app-Demo-Simulator.zip" build/unzipped
+            bundle=$(plutil -extract CFBundleIdentifier raw -o - "build/unzipped/$app.app/Info.plist")
+            xcrun simctl install "$SIMULATOR" "build/unzipped/$app.app"
+            xcrun simctl launch "$SIMULATOR" "$bundle"
+            sleep 15
+            xcrun simctl io "$SIMULATOR" screenshot "build/screenshots/$app-Demo.png"
+            running=$(xcrun simctl spawn "$SIMULATOR" launchctl list)
+            if ! grep -q "UIKitApplication:$bundle" <<< "$running"; then
+              echo "::error::$app wasn't running 15 seconds after launch"
+              xcrun simctl spawn "$SIMULATOR" log show --last 2m --style compact --predicate "process == \"$app\"" | tail -60 || true
+              exit 1
+            fi
+            echo "$app is running"
+            xcrun simctl terminate "$SIMULATOR" "$bundle" || true
+          done
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-screenshots
+          path: build/screenshots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: demo-build-logs
+          path: build/logs
+          if-no-files-found: ignore
+          retention-days: 14
