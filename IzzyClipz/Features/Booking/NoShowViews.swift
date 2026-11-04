@@ -162,6 +162,8 @@ struct ReviewCardSection: View {
                 .textRole(.callout)
                 .foregroundStyle(Theme.caution)
                 .fixedSize(horizontal: false, vertical: true)
+                // One message ("Warning, The card wasn't added…"), not the icon and the words apart.
+                .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("cardError")
         }
     }

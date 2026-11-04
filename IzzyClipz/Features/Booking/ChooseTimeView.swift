@@ -418,6 +418,8 @@ private struct ChooseTimeLateCancelNotice: View {
             .foregroundStyle(Theme.caution)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // One note, not the clock and the words apart.
+            .accessibilityElement(children: .combine)
             .accessibilityIdentifier("lateCancelNotice")
     }
 }
