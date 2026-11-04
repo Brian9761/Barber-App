@@ -52,7 +52,14 @@ final class ScriptedAPI: OwnerAPI {
     var createPaymentHandler: ((IzzyAPI.NewPayment) async throws -> IzzyAPI.PaymentIntentCreated)?
     var uploadHandler: ((String, Data) async throws -> IzzyAPI.Product)?
     var paymentsHandler: ((LocalDate) async throws -> [IzzyAPI.Payment])?
+    var chargeHandler: ((String) async throws -> IzzyAPI.Appointment)?
+    var noShowSettingsHandler: (() async throws -> IzzyAPI.NoShowSettings)?
+    var updateNoShowSettingsHandler: ((IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings)?
     private(set) var createdPayments = 0
+    /// Every fee charge asked for, by appointment ID, in order.
+    private(set) var charges: [String] = []
+    /// Every `PATCH /api/owner/no-show-settings` body, in order.
+    private(set) var noShowUpdates: [IzzyAPI.NoShowSettingsUpdate] = []
 
     init(base: FakeOwnerAPI) {
         self.base = base
@@ -73,10 +80,19 @@ final class ScriptedAPI: OwnerAPI {
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {
         try await base.setStatus(status, ofAppointment: id)
     }
-    func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment { try await base.chargeNoShowFee(appointmentId: appointmentId) }
-    func noShowSettings() async throws -> IzzyAPI.NoShowSettings { try await base.noShowSettings() }
+    func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment {
+        charges.append(appointmentId)
+        if let chargeHandler { return try await chargeHandler(appointmentId) }
+        return try await base.chargeNoShowFee(appointmentId: appointmentId)
+    }
+    func noShowSettings() async throws -> IzzyAPI.NoShowSettings {
+        if let noShowSettingsHandler { return try await noShowSettingsHandler() }
+        return try await base.noShowSettings()
+    }
     func updateNoShowSettings(_ update: IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings {
-        try await base.updateNoShowSettings(update)
+        noShowUpdates.append(update)
+        if let updateNoShowSettingsHandler { return try await updateNoShowSettingsHandler(update) }
+        return try await base.updateNoShowSettings(update)
     }
     func timeOff(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.TimeOff] { try await base.timeOff(from: from, to: to) }
     func createTimeOff(_ timeOff: IzzyAPI.NewTimeOff) async throws -> IzzyAPI.TimeOff { try await base.createTimeOff(timeOff) }
