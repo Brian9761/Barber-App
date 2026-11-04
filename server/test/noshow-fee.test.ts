@@ -852,7 +852,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect((await feeRow(id)).no_show_fee_status).toBe('pending');
   });
 
-  it('a lost answer is still looked up after the booking was reopened, but nothing new is sent then', async () => {
+  it('a lost answer is still looked up after the booking was reopened; nothing new is sent then, and nothing was charged', async () => {
     const charged = await noShow();
     h.stripe.loseNextChargeAnswer = true;
     await charge(charged);
@@ -866,12 +866,12 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
     await charge(other);
     await setStatus(other, 'booked');
-    // Nothing reached Stripe and it isn't a no-show any more: no new request.
+    // Nothing reached Stripe and it isn't a no-show any more: no new request, and the try is settled as not charged.
     const res = await charge(other);
     expect(res.status).toBe(409);
-    expect(res.body.error).toEqual({ code: 'not_chargeable', message: 'Mark the appointment as a no-show first.' });
+    expect(res.body.error).toEqual({ code: 'not_chargeable', message: 'Nothing was charged. Mark the appointment as a no-show first.' });
     expect(creates().filter((c) => (c.params as { metadata: { appointment_id: string } }).metadata.appointment_id === other)).toHaveLength(1);
-    expect((await feeRow(other)).no_show_fee_status).toBe('pending');
+    expect((await feeRow(other)).no_show_fee_status).toBe('none');
   });
 
   it('Stripe down before the charge: pending, and the next try (same key) charges', async () => {
@@ -1109,5 +1109,188 @@ describe('POST /api/stripe/webhook for no-show fees', () => {
     expect((await send(unknown)).status).toBe(200);
     expect((await send(event('payment_intent.succeeded', { id: 'pi_x', status: 'succeeded', metadata: { kind: 'no_show_fee', appointment_id: 'nope' } }))).status).toBe(200);
     expect((await h.database.pool.query('SELECT count(*)::int AS n FROM payments')).rows[0].n).toBe(0);
+  });
+});
+
+describe('a try Stripe never got, on a booking that can’t be charged any more, is settled as not charged', () => {
+  const NOTHING = { code: 'not_chargeable', message: 'Nothing was charged. Mark the appointment as a no-show first.' };
+  const lookups = () => h.stripe.calls.filter((c) => c.method === 'paymentIntents.list').length;
+  const feeIntents = (id: string) => [...h.stripe.intents.values()].filter((pi) => pi.metadata.appointment_id === id);
+  /** The Stripe Customer of the card this appointment was booked with. */
+  const customerOf = async (id: string): Promise<string> =>
+    (
+      await h.database.pool.query(
+        'SELECT c.stripe_customer_id FROM saved_cards c JOIN appointments a ON a.saved_card_id = c.id WHERE a.id = $1',
+        [id],
+      )
+    ).rows[0].stripe_customer_id;
+  function succeededEvent(intent: { id: string; metadata: Record<string, string> }) {
+    const payload = JSON.stringify({
+      id: 'evt_fixture_settle',
+      object: 'event',
+      api_version: '2026-10-28.endive',
+      created: Math.floor(h.now.getTime() / 1000),
+      type: 'payment_intent.succeeded',
+      livemode: false,
+      pending_webhooks: 1,
+      request: { id: null, idempotency_key: null },
+      data: { object: { object: 'payment_intent', id: intent.id, status: 'succeeded', amount: 3500, metadata: intent.metadata } },
+    });
+    return h.call('POST', '/api/stripe/webhook', {
+      rawBody: payload,
+      headers: { 'content-type': 'application/json', 'stripe-signature': Stripe.webhooks.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET }) },
+    });
+  }
+
+  /** Kim didn't come; Charge fails before reaching Stripe (the fee stays pending); then Kim walks in late. */
+  async function lostThenCame(start = TUE10) {
+    h.setNow('2026-11-02T17:00:00Z');
+    const { id } = await protectedBooking({ start });
+    h.setNow(new Date(new Date(start).getTime() + 20 * 60_000).toISOString());
+    expect((await markNoShow(id)).status).toBe(200);
+    h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
+    expect((await charge(id)).status).toBe(500);
+    expect((await feeRow(id)).no_show_fee_status).toBe('pending');
+    h.advance(5);
+    expect((await setStatus(id, 'booked')).status).toBe(200);
+    const done = await setStatus(id, 'completed');
+    expect(done.body.appointment.noShowFee).toMatchObject({ status: 'pending', reason: 'noShow' });
+    return id;
+  }
+
+  it('Check again asks Stripe, finds nothing, and settles it: no fee pending on a completed visit', async () => {
+    const id = await lostThenCame();
+    const res = await charge(id);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toEqual(NOTHING);
+    expect(lookups()).toBe(1);
+    expect(creates()).toHaveLength(1);
+    // Both apps now see no fee pending, and why there's none today.
+    const day = await h.call('GET', '/api/owner/appointments?date=2026-11-03', owner);
+    expect(day.body.appointments[0].noShowFee).toEqual({
+      amountCents: 3500,
+      fullPrice: true,
+      status: 'none',
+      chargedAt: null,
+      message: null,
+      customerCancelledAt: null,
+      lateCancelWindowMinutes: 60,
+      reason: null,
+    });
+    expect((await h.call('GET', '/api/owner/payments?date=2026-11-03', owner)).body.payments).toEqual([]);
+    expect(h.logs.at(-1)).toMatchObject({ level: 'warn', message: 'Settled a fee Stripe never got as not charged' });
+    // The attempt stays on the row (its key may still be used), and asking again needs no Stripe call.
+    expect(await feeRow(id)).toMatchObject({ no_show_fee_attempt: 1, no_show_fee_reason: 'no_show', no_show_fee_payment_intent_id: null });
+    const again = await charge(id);
+    expect(again.body.error).toEqual({ code: 'not_chargeable', message: 'Mark the appointment as a no-show first.' });
+    expect(lookups()).toBe(1);
+  });
+
+  it('marked a no-show again later, the charge picks up that same try: looked up first, sent with the same key, charged once', async () => {
+    const id = await lostThenCame();
+    await charge(id);
+    expect((await setStatus(id, 'noShow')).status).toBe(200);
+    const res = await charge(id);
+    expect(res.status, res.text).toBe(200);
+    expect(res.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'noShow' });
+    expect(lookups()).toBe(2);
+    expect(creates().map((c) => (c.options as { idempotencyKey: string }).idempotencyKey)).toEqual([
+      noShowFeeIdempotencyKey(id, 1),
+      noShowFeeIdempotencyKey(id, 1),
+    ]);
+    expect(feeIntents(id).map((pi) => [pi.metadata.attempt, pi.status])).toEqual([['1', 'succeeded']]);
+  });
+
+  it('a request of that try that reached Stripe after all is found, or recorded from the webhook, never charged again', async () => {
+    const id = await lostThenCame();
+    await charge(id);
+    // Stripe got the lost request after all, and charged it.
+    const late = await h.stripe.paymentIntents.create({
+      amount: 3500,
+      currency: 'usd',
+      customer: await customerOf(id),
+      metadata: { source: 'izzy-clipz-api', kind: 'no_show_fee', appointment_id: id, attempt: '1' },
+    });
+    h.stripe.succeed(late.id);
+    // The webhook says so: charged, whatever the booking's status.
+    expect((await succeededEvent(late)).status).toBe(200);
+    expect((await feeRow(id)).no_show_fee_status).toBe('charged');
+
+    // The same, found by the look-up when the owner charges a later no-show for it instead.
+    const other = await lostThenCame('2026-11-03T19:00:00Z');
+    await charge(other);
+    const found = await h.stripe.paymentIntents.create({
+      amount: 3500,
+      currency: 'usd',
+      customer: await customerOf(other),
+      metadata: { source: 'izzy-clipz-api', kind: 'no_show_fee', appointment_id: other, attempt: '1' },
+    });
+    h.stripe.succeed(found.id);
+    await setStatus(other, 'noShow');
+    const res = await charge(other);
+    expect(res.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'noShow' });
+    expect(creates().filter((c) => (c.params as { metadata: { appointment_id: string } }).metadata.appointment_id === other)).toHaveLength(1);
+  });
+
+  it('an answer that arrives while it settles wins: the appointment as it is now', async () => {
+    const id = await lostThenCame();
+    const card = await customerOf(id);
+    const realList = h.stripe.paymentIntents.list;
+    h.stripe.paymentIntents.list = async (params) => {
+      const page = await realList(params);
+      // Right after Stripe answered "nothing", the lost request lands and its webhook comes in.
+      h.stripe.paymentIntents.list = realList;
+      const late = await h.stripe.paymentIntents.create({
+        amount: 3500,
+        currency: 'usd',
+        customer: card,
+        metadata: { source: 'izzy-clipz-api', kind: 'no_show_fee', appointment_id: id, attempt: '1' },
+      });
+      h.stripe.succeed(late.id);
+      expect((await succeededEvent(late)).status).toBe(200);
+      return page;
+    };
+    const res = await charge(id);
+    expect(res.status, res.text).toBe(200);
+    expect(res.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'noShow' });
+  });
+
+  it('a late cancellation’s lost try, once the shop reopened the booking, says why there’s no fee now', async () => {
+    const booking = await protectedBooking();
+    h.setNow('2026-11-03T17:40:00Z');
+    expect((await cancelInApp(booking, ACCEPT)).body.appointment.noShowFee.reason).toBe('lateCancel');
+    h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
+    expect((await charge(booking.id)).status).toBe(500);
+    await setStatus(booking.id, 'booked');
+    const res = await charge(booking.id);
+    expect(res.body.error).toEqual({
+      code: 'not_chargeable',
+      message: "Nothing was charged. The client cancelled this booking in the app, so there's no fee.",
+    });
+    expect((await feeRow(booking.id)).no_show_fee_status).toBe('none');
+    // The client cancels again (still late, the first time counts): the fee picks up that try.
+    h.advance(5);
+    expect((await cancelInApp(booking)).body.error.code).toBe('late_cancel_fee');
+    expect((await cancelInApp(booking, ACCEPT)).body.appointment.noShowFee).toMatchObject({ status: 'none', reason: 'lateCancel' });
+    const charged = await charge(booking.id);
+    expect(charged.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    expect(creates().map((c) => (c.options as { idempotencyKey: string }).idempotencyKey)).toEqual([
+      noShowFeeIdempotencyKey(booking.id, 1),
+      noShowFeeIdempotencyKey(booking.id, 1),
+    ]);
+  });
+
+  it('a pending charge Stripe is still working on is only asked about, never settled', async () => {
+    const id = await noShow();
+    h.stripe.nextCharge = 'processing';
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('pending');
+    await setStatus(id, 'booked');
+    await setStatus(id, 'completed');
+    // Check again: Stripe still says processing, so it stays pending (the webhook settles it).
+    const res = await charge(id);
+    expect(res.status).toBe(200);
+    expect(res.body.appointment.noShowFee.status).toBe('pending');
+    expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.retrieve')).toHaveLength(1);
+    expect(lookups()).toBe(0);
   });
 });

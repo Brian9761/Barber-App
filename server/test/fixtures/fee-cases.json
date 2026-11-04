@@ -222,6 +222,10 @@
     }
   ],
   "notStarted": "The appointment hasn't started yet, so it can't be a no-show.",
+  "nothingCharged": {
+    "refusal": "Mark the appointment as a no-show first.",
+    "message": "Nothing was charged. Mark the appointment as a no-show first."
+  },
   "cancelWarnings": [
     {
       "lateCancelWindowMinutes": 30,

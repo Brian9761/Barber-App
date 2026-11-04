@@ -43,6 +43,10 @@ final class FakeServer {
         /// in the app at 10:50 AM, less than 1 hour before their 11:30 AM haircut with Flowxbori:
         /// a late cancellation the owner may charge.
         var lateCancelWithCard = false
+        /// The next fee charge never reaches Stripe (an outage): like the server, it answers 500 and
+        /// leaves the fee pending. Charging again (Check again) asks Stripe, finds nothing, and then
+        /// charges it if the booking can still be charged, or settles it as not charged if not.
+        var nextFeeChargeFails = false
         /// How long each call takes, so loading states are visible.
         var latency: Duration = .zero
     }
@@ -351,6 +355,10 @@ final class FakeServer {
     /// have no card on file (customer bookings with one come from the customer app), so for them
     /// this is the server's "no card on file" answer; `Options.noShowWithCard` and
     /// `lateCancelWithCard` add ones that have.
+    ///
+    /// A pending fee (`Options.nextFeeChargeFails`: that try never reached Stripe) is checked
+    /// again whatever happened since: charged now if the booking can still be charged (the same
+    /// try), otherwise settled as not charged with the server's 409 "Nothing was charged. …".
     func chargeNoShowFee(appointmentId id: String) throws -> IzzyAPI.Appointment {
         guard options.stripeConfigured else { throw APIError.notConfigured(APIError.Feature.stripe) }
         guard let index = appointments.firstIndex(where: { $0.id == id }) else {
@@ -358,12 +366,34 @@ final class FakeServer {
         }
         var appointment = appointments[index]
         if appointment.noShowFee?.status == .charged { return appointment }
+        let pending = appointment.card != nil && appointment.noShowFee?.status == .pending
         let reason: IzzyAPI.NoShowFeeReason
         switch appointment.feeCase(at: now()) {
-        case .chargeable(let found): reason = found
-        case .refused(let message): throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: message, status: 409)
+        case .chargeable(let found):
+            // A pending try charges for what it was for.
+            reason = pending ? (appointment.noShowFee?.reason ?? found) : found
+        case .refused(let message):
+            guard pending, var fee = appointment.noShowFee else {
+                throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: message, status: 409)
+            }
+            fee.status = .none
+            fee.message = nil
+            appointment.noShowFee = fee
+            Self.refreshFeeReason(&appointment)
+            appointments[index] = appointment
+            throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: IzzyAPI.NoShowRule.nothingChargedMessage(message), status: 409)
         }
         guard var fee = appointment.noShowFee else { return appointment }
+        if options.nextFeeChargeFails {
+            // The request never reaches Stripe: the fee waits, as on the server.
+            options.nextFeeChargeFails = false
+            fee.status = .pending
+            fee.message = nil
+            fee.reason = reason
+            appointment.noShowFee = fee
+            appointments[index] = appointment
+            throw APIError.server(code: IzzyAPI.ErrorCode.serverError, message: "We couldn't reach Stripe. Please try again.", status: 500)
+        }
         // The simulated card is approved, like Stripe's test card 4242.
         counter += 1
         let paymentID = "pi_sample_\(counter)"
