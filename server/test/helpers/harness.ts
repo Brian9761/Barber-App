@@ -68,6 +68,10 @@ export class FakeStripe implements StripeClient {
   nextCharge: ChargeOutcome = 'succeed';
   /** The next off-session charge goes through at Stripe, but its answer is lost (a connection error). */
   loseNextChargeAnswer = false;
+  /** The next connected account is made at Stripe, but its answer is lost (a connection error). */
+  loseNextAccountAnswer = false;
+  /** accounts.create's idempotency keys, with what Stripe answered. */
+  private readonly accountKeys = new Map<string, { params: string; id: string }>();
   /** Idempotency keys Stripe has seen, with what it answered (like Stripe, a repeat gets the same answer). */
   private readonly idempotent = new Map<string, { params: string; intent?: Stripe.PaymentIntent; error?: unknown }>();
   private counter = 0;
@@ -112,6 +116,14 @@ export class FakeStripe implements StripeClient {
     create: async (params: Stripe.AccountCreateParams, options?: Stripe.RequestOptions) => {
       this.calls.push({ method: 'accounts.create', params, options });
       this.maybeFail();
+      const key = options?.idempotencyKey;
+      const seen = key ? this.accountKeys.get(key) : undefined;
+      if (seen) {
+        if (seen.params !== JSON.stringify(params)) {
+          throw stripeError('StripeIdempotencyError', { code: 'idempotency_error', statusCode: 400 }, 'Keys for idempotent requests can only be used with the same parameters');
+        }
+        return structuredClone(this.connectedAccounts.get(seen.id)!);
+      }
       const id = this.nextId('acct_TestFixture');
       const account = {
         id,
@@ -139,6 +151,11 @@ export class FakeStripe implements StripeClient {
         metadata: params.metadata ?? {},
       } as unknown as Stripe.Account;
       this.connectedAccounts.set(id, account);
+      if (key) this.accountKeys.set(key, { params: JSON.stringify(params), id });
+      if (this.loseNextAccountAnswer) {
+        this.loseNextAccountAnswer = false;
+        throw stripeError('StripeConnectionError', {}, 'socket hang up');
+      }
       return structuredClone(account);
     },
     retrieve: async (id: string, params?: Stripe.AccountRetrieveParams, options?: Stripe.RequestOptions) => {

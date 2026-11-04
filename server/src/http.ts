@@ -100,6 +100,22 @@ export function htmlPage(message: string, status: number, headers: Record<string
   return new Response(page, { status, headers: { ...PAGE_HEADERS, ...headers } });
 }
 
+/** `raw` as an http(s) address, or null when it isn't one. */
+export function httpUrl(raw: string | undefined): URL | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/** An address without its trailing slash, as a base to add paths to ("https://example.com/izzy"). */
+export function baseOf(url: URL): string {
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+}
+
 export function noContent(): Response {
   return new Response(null, { status: 204, headers: { 'cache-control': 'no-store' } });
 }

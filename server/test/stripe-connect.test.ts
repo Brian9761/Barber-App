@@ -46,7 +46,7 @@ describe('STRIPE_CONNECT', () => {
     expect(configFromEnv({ STRIPE_CONNECT: '' }).stripeConnect).toBe(false);
     expect(configFromEnv({ STRIPE_CONNECT: 'on' }).stripeConnect).toBe(true);
     expect(configFromEnv({ STRIPE_CONNECT: ' ON ' }).stripeConnect).toBe(true);
-    for (const off of ['off', 'false', '0', 'no', 'OFF']) expect(connectSwitch(off), off).toBe(false);
+    for (const off of ['off', 'false', '0', 'no', 'OFF', 'none', 'disabled', 'direct']) expect(connectSwitch(off), off).toBe(false);
     // A typo must never send the shop's payments to the developer's own account.
     for (const on of ['true', '1', 'yes', 'onn']) expect(connectSwitch(on), on).toBe(true);
     expect(configFromEnv({ STRIPE_CONNECT_WEBHOOK_SECRET: 'whsec_x' }).stripeConnectWebhookSecret).toBe('whsec_x');
@@ -116,12 +116,19 @@ describe('the three modes', () => {
     const off = { code: 'stripe_not_configured', message: 'Connect Stripe in Settings to take card payments.' };
     expect((await h.call('POST', '/api/owner/terminal/connection-token', owner)).body.error).toEqual(off);
     expect((await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 3500 } })).body.error).toEqual(off);
+    // Clients get exactly the answer they get when Stripe is off.
     const checkout = await h.call('POST', '/api/cards/checkout', {
       headers: { 'x-card-token': Buffer.alloc(32, 7).toString('base64url') },
       body: { offeringId: 'flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a' },
     });
+    const clientsOff = { code: 'stripe_not_configured', message: "Card payments aren't set up yet. Add the shop's Stripe key on the server." };
     expect(checkout.status).toBe(503);
-    expect(checkout.body.error).toEqual(off);
+    expect(checkout.body.error).toEqual(clientsOff);
+    const save = await h.call('POST', '/api/cards', {
+      headers: { 'x-card-token': Buffer.alloc(32, 7).toString('base64url') },
+      body: { sessionId: 'cs_test_abc' },
+    });
+    expect(save.body.error).toEqual(clientsOff);
     // The policy needs no card, and booking works without one.
     const policy = await h.call('GET', '/api/no-show-policy?serviceId=haircut&barberId=any');
     expect(policy.body).toMatchObject({ required: false, policyText: null, warning: null });
@@ -157,7 +164,8 @@ describe('POST /api/owner/stripe/connect', () => {
           business_profile: { name: 'Izzy Clipz Barbershop', mcc: '7241', url: PUBLIC_BASE_URL, support_phone: '+14423413053' },
           metadata: { izzy_clipz: 'shop' },
         },
-        options: undefined,
+        // One key per mode and per connection: a lost answer, tried again, gets the same account.
+        options: { idempotencyKey: 'izzy-clipz-shop-account-test-0' },
       },
     ]);
     // The platform's own calls: no Stripe-Account header.
@@ -274,6 +282,40 @@ describe('POST /api/owner/stripe/connect', () => {
     expect(h.stripe.connectedAccounts.size).toBe(1);
   });
 
+  it('a try whose answer was lost gets the same account when tried again; after a disconnect, a new one', async () => {
+    connectMode(h);
+    h.stripe.loseNextAccountAnswer = true;
+    const lost = await connect();
+    expect(lost.status).toBe(500);
+    expect(await stored()).toBeUndefined();
+    // Stripe made it; the same key gets it back instead of a second one.
+    expect(h.stripe.connectedAccounts.size).toBe(1);
+    const again = await connect();
+    expect(again.status, again.text).toBe(201);
+    const account = onlyAccount();
+    expect((await stored()).accountId).toBe(account);
+    expect(accountCreates().map((c) => c.options)).toEqual([
+      { idempotencyKey: 'izzy-clipz-shop-account-test-0' },
+      { idempotencyKey: 'izzy-clipz-shop-account-test-0' },
+    ]);
+    await h.call('DELETE', '/api/owner/stripe/connect', owner);
+    await connect();
+    expect(accountCreates().at(-1)!.options).toEqual({ idempotencyKey: 'izzy-clipz-shop-account-test-1' });
+    expect(h.stripe.connectedAccounts.size).toBe(2);
+  });
+
+  it('a lost try with other details (PUBLIC_BASE_URL changed since) is made afresh rather than stuck', async () => {
+    connectMode(h);
+    h.stripe.loseNextAccountAnswer = true;
+    expect((await connect()).status).toBe(500);
+    h.config.publicBaseUrl = 'https://izzyclipz.example';
+    const res = await connect();
+    expect(res.status, res.text).toBe(201);
+    expect(h.stripe.connectedAccounts.size).toBe(2);
+    expect(accountCreates().at(-1)!.options).toEqual({ idempotencyKey: `izzy-clipz-shop-account-test-0-${Date.parse('2026-11-02T17:00:00Z')}` });
+    expect(h.logs.some((l) => l.message === 'Stripe create account failed' && l.details?.type === 'StripeIdempotencyError')).toBe(true);
+  });
+
   it('a key of the other mode needs an account of its own: a test-mode connection doesn’t count with a live key', async () => {
     const testAccount = await connectedShop(h);
     h.config.stripeSecretKey = 'sk_live_platform';
@@ -321,6 +363,27 @@ describe('the status Settings shows (GET /api/owner/stripe)', () => {
     h.stripe.calls.length = 0;
     expect((await h.call('GET', '/api/owner/me', owner)).body.connection).toEqual({ mode: 'connect', status: 'restricted', businessName: 'Izzy Clipz' });
     expect(h.stripe.calls).toEqual([]);
+  });
+
+  it('when the shop took the platform’s access away, the account is forgotten and Settings asks to connect again', async () => {
+    const account = await connectedShop(h);
+    const revoked = () =>
+      stripeError(
+        'StripePermissionError',
+        { statusCode: 403 },
+        `The provided key 'sk_test_…' does not have access to account '${account}' (or that account does not exist). Application access may have been revoked.`,
+      );
+    h.stripe.nextError = revoked();
+    const res = await status();
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'notConnected', accountId: null, message: 'Connect your Stripe account to take card payments in the app.' });
+    expect(await stored()).toBeUndefined();
+    expect(h.logs.some((l) => l.level === 'warn' && l.details?.accountId === account)).toBe(true);
+    expect((await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 3500 } })).status).toBe(503);
+    // Connecting again makes a new account (not the old one, whose access is gone).
+    expect((await connect()).status).toBe(201);
+    expect(accountCreates().at(-1)!.options).toEqual({ idempotencyKey: 'izzy-clipz-shop-account-test-1' });
+    expect((await stored()).accountId).not.toBe(account);
   });
 
   it('when Stripe can’t be reached, answers from the cache (and logs it)', async () => {
@@ -373,8 +436,9 @@ describe('GET /api/stripe/connect/return and /refresh (Stripe sends the browser 
     expect(res.headers.get('location')).toBe('izzyclipzbusiness://stripe-connected?status=active');
     expect(res.headers.get('cache-control')).toBe('no-store');
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
-    expect(h.stripe.calls.at(-1)).toMatchObject({ method: 'accounts.retrieve', params: { id: account } });
-    expect(await stored()).toMatchObject({ chargesEnabled: true, checkedAt: '2026-11-02T17:04:00Z' });
+    // Read from Stripe, and now that it takes card payments, its Terminal location is made.
+    expect(h.stripe.calls.slice(-2).map((c) => c.method)).toEqual(['accounts.retrieve', 'terminal.locations.create']);
+    expect(await stored()).toMatchObject({ chargesEnabled: true, checkedAt: '2026-11-02T17:04:00Z', locationId: [...h.stripe.locations.keys()][0] });
     // Loaded again (the browser went back): the same answer until the state expires.
     h.advance(50);
     expect((await back('return', state)).headers.get('location')).toBe('izzyclipzbusiness://stripe-connected?status=active');
@@ -584,7 +648,8 @@ describe('POST /api/stripe/webhook with Stripe Connect', () => {
     h.advance(7);
     const updated = event('account.updated', { object: 'account', id: account, charges_enabled: true }, account);
     expect((await send(updated, CONNECT_SECRET)).status).toBe(200);
-    expect(h.stripe.calls).toEqual([{ method: 'accounts.retrieve', params: { id: account }, options: undefined }]);
+    expect(h.stripe.calls.map((c) => c.method)).toEqual(['accounts.retrieve', 'terminal.locations.create']);
+    expect(h.stripe.calls[0]).toEqual({ method: 'accounts.retrieve', params: { id: account }, options: undefined });
     expect(await stored()).toMatchObject({ chargesEnabled: true, payoutsEnabled: true, checkedAt: '2026-11-02T17:07:00Z' });
     expect((await h.call('GET', '/api/owner/me', owner)).body.connection).toEqual({ mode: 'connect', status: 'active', businessName: 'Izzy Clipz Barbershop' });
 
@@ -595,6 +660,27 @@ describe('POST /api/stripe/webhook with Stripe Connect', () => {
     h.config.stripeWebhookSecret = WEBHOOK_SECRET;
     expect((await send(event('account.updated', { object: 'account', id: 'acct_ThePlatform01' }), WEBHOOK_SECRET)).status).toBe(200);
     expect(h.stripe.calls).toEqual([]);
+  });
+
+  it('account.application.deauthorized for the shop’s account forgets it; for another account it’s ignored', async () => {
+    const account = await connectedShop(h);
+    h.config.stripeConnectWebhookSecret = CONNECT_SECRET;
+    const other = event('account.application.deauthorized', { object: 'application', id: 'ca_fixture' }, 'acct_SomeoneElse01');
+    expect((await send(other, CONNECT_SECRET)).status).toBe(200);
+    expect(await stored()).toMatchObject({ accountId: account });
+    const gone = event('account.application.deauthorized', { object: 'application', id: 'ca_fixture' }, account);
+    expect((await send(gone, CONNECT_SECRET)).status).toBe(200);
+    expect(await stored()).toBeUndefined();
+    expect((await status()).body.status).toBe('notConnected');
+  });
+
+  it('account.updated for an account the platform lost access to: forgotten, and 200 (Stripe needn’t send it again)', async () => {
+    const account = await connectedShop(h);
+    h.config.stripeConnectWebhookSecret = CONNECT_SECRET;
+    h.stripe.nextError = stripeError('StripePermissionError', { statusCode: 403 }, `The provided key does not have access to account '${account}'.`);
+    const res = await send(event('account.updated', { object: 'account', id: account }, account), CONNECT_SECRET);
+    expect(res.status).toBe(200);
+    expect(await stored()).toBeUndefined();
   });
 
   it('account.updated when Stripe can’t be reached: 500, so Stripe sends it again', async () => {

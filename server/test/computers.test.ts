@@ -298,6 +298,20 @@ describe('a new owner key signs every computer out', () => {
     const fresh = await signIn(minted.body.code, 'Chrome on Mac', '198.51.100.71');
     expect(fresh.status).toBe(201);
     expect((await h.call('GET', '/api/owner/me', as(fresh.body.token))).status).toBe(200);
+    // The computer from the old key isn't listed as signed in any more.
+    const list = await h.call('GET', '/api/owner/computer-sessions', { headers: { authorization: `Bearer ${rotated}` } });
+    expect(list.body.sessions.map((s: { id: string }) => s.id)).toEqual([fresh.body.session.id]);
+    expect((await h.database.pool.query('SELECT revoked_at FROM computer_sessions WHERE id = $1', [mac.id])).rows).toEqual([]);
+  });
+
+  it('after the key changes, the list shows no computers from the old key, even before anyone signs in again', async () => {
+    const mac = await session();
+    h.config.ownerKey = `${OWNER_KEY}-rotated`;
+    const list = await h.call('GET', '/api/owner/computer-sessions', { headers: { authorization: `Bearer ${OWNER_KEY}-rotated` } });
+    expect(list.status).toBe(200);
+    expect(list.body.sessions).toEqual([]);
+    const { rows } = await h.database.pool.query('SELECT revoked_at FROM computer_sessions WHERE id = $1', [mac.id]);
+    expect(rows[0].revoked_at).toEqual(h.now);
   });
 
   it('a token that isn’t sealed with the key is turned down without looking in the database', async () => {

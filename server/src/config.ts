@@ -40,13 +40,14 @@ function value(env: Env, name: string): string | undefined {
 }
 
 /**
- * STRIPE_CONNECT: "on" turns connect mode on. Unset or empty (or "off", "false", "0", "no") leaves it
- * off. Any other value counts as on: a typo must never send the shop's card payments to the
- * developer's own platform account, while connect mode only waits until the shop connects.
+ * STRIPE_CONNECT: "on" turns connect mode on. Unset or empty, or a word for off ("off", "false",
+ * "0", "no", "none", "disabled", "direct"), leaves it off. Any other value counts as on: a typo
+ * must never treat the developer's platform key as the shop's own (the shop's card payments
+ * would land in the developer's account), while connect mode only waits until the shop connects.
  */
 export function connectSwitch(raw: string | undefined): boolean {
   if (raw === undefined) return false;
-  return !['off', 'false', '0', 'no'].includes(raw.toLowerCase());
+  return !['off', 'false', '0', 'no', 'none', 'disabled', 'direct'].includes(raw.toLowerCase());
 }
 
 function nonNegativeInt(raw: string | undefined, fallback: number): number {

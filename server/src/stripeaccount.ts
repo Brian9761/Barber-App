@@ -198,13 +198,17 @@ export async function shopAccount(deps: Pick<Deps, 'config' | 'db'>, db: Queryab
  * for the shop gets its client here and passes `requestOptions(shop)`.
  *
  * - Without `account`: the shop's current account. 503 stripe_not_configured while there's no
- *   key, or (connect mode) until the connected account can take card payments.
+ *   key, or (connect mode) until the connected account can take card payments: for the owner,
+ *   with what to do in Settings; for clients (`forClients`), exactly as when Stripe is off.
  * - With `account`: an object stored with the account it lives on (a payment's or a saved
  *   card's `stripe_account_id`; null for one made with a server key). That's where Stripe has
  *   it, even after the shop connected another account, so it can still be looked up. Only the
  *   key is needed (in direct mode no Stripe-Account header is ever sent).
  */
-export async function shopStripe(deps: Pick<Deps, 'config' | 'db' | 'stripe'>, options: { account?: string | null; db?: Queryable } = {}): Promise<ShopStripe> {
+export async function shopStripe(
+  deps: Pick<Deps, 'config' | 'db' | 'stripe'>,
+  options: { account?: string | null; db?: Queryable; forClients?: boolean } = {},
+): Promise<ShopStripe> {
   const key = deps.config.stripeSecretKey;
   const setup = stripeSetup(deps.config);
   if (setup === 'off' || !key) throw stripeOff();
@@ -215,7 +219,7 @@ export async function shopStripe(deps: Pick<Deps, 'config' | 'db' | 'stripe'>, o
     return stored ? { stripe: deps.stripe(key), stripeAccount: stored, livemode } : { stripe: deps.stripe(key), livemode };
   }
   const connection = await currentConnection(deps, options.db ?? deps.db);
-  if (!connection?.chargesEnabled) throw notConnected(connection);
+  if (!connection?.chargesEnabled) throw options.forClients ? stripeOff() : notConnected(connection);
   return { stripe: deps.stripe(key), stripeAccount: connection.accountId, livemode: connection.livemode };
 }
 
@@ -279,6 +283,15 @@ function redactSecrets(text: string | undefined): string | undefined {
 }
 
 /**
+ * Whether Stripe says the platform can't use a connected account any more: the shop took its
+ * access away (or the account is gone, or belongs to the other mode).
+ */
+export function accessRevoked(error: unknown): boolean {
+  const e = (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
+  return e.type === 'StripePermissionError' && /does not have access to account|access may have been revoked/i.test(e.message ?? '');
+}
+
+/**
  * Stripe's own errors, logged (what failed and why, never a key) and answered
  * with what to fix: a payment Stripe doesn't have is a 404; a Terminal location
  * or key Stripe turns down is a 500 that names the server setting; anything
@@ -309,7 +322,7 @@ export function stripeFailure(deps: Pick<Deps, 'log'>, error: unknown, what: Str
       "Stripe didn't accept the Terminal location set on the server. Check STRIPE_TERMINAL_LOCATION_ID: it must be a location from the same Stripe account and mode (test or live) as the key.",
     );
   }
-  if (e.type === 'StripePermissionError' && /does not have access to account|access may have been revoked/i.test(e.message ?? '')) {
+  if (accessRevoked(error)) {
     // Connect mode: the platform can't use the shop's connected account any more (access revoked, or the other mode).
     return new ApiError('server_error', "Stripe didn't let the app use the shop's Stripe account. Connect Stripe again in Settings.");
   }

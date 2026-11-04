@@ -96,8 +96,8 @@ pays Stripe's fees and sees everything in his own Stripe Dashboard).
   platform's key, `STRIPE_CONNECT=on`, `PUBLIC_BASE_URL` (the server's https
   address) and `STRIPE_CONNECT_WEBHOOK_SECRET` (from a Connect webhook
   endpoint). `STRIPE_TERMINAL_LOCATION_ID` isn't needed: the server makes
-  the shop's Terminal location on his account the first time Tap to Pay
-  needs it. The steps are in `server/README.md` (Stripe Connect).
+  the shop's Terminal location on his account as soon as it can take card
+  payments. The steps are in `server/README.md` (Stripe Connect).
 - **The owner**: Settings → **Connect Stripe** opens Stripe's own window,
   where he signs in or signs up and finishes setting up. Back in the app,
   Settings shows what Stripe says: "Connected. Card payments are on.", or

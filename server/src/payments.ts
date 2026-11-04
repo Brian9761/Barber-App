@@ -19,7 +19,7 @@ import {
   stripeSetup,
   type StripeErrorLike,
 } from './stripeaccount.js';
-import { accountUpdated, connectionSummary, forgetTerminalLocation, terminalLocation } from './stripeconnect.js';
+import { accountDeauthorized, accountUpdated, connectionSummary, forgetTerminalLocation, terminalLocation } from './stripeconnect.js';
 import { dayBounds } from './time.js';
 import { charLength, email, parse, UUID_RE } from './validation.js';
 
@@ -43,28 +43,15 @@ export async function ownerMe(ctx: Context): Promise<Response> {
   const connection = await currentConnection(deps);
   // `stripe` stays what older apps know: in connect mode, Stripe counts as set up once the shop's account can take card payments.
   const configured = setup === 'direct' || (setup === 'connect' && connection?.chargesEnabled === true);
-  // The app needs the Terminal location to connect Tap to Pay (TapToPayConnectionConfiguration).
-  let locationId: string | null = null;
-  if (setup === 'direct') locationId = deps.config.stripeTerminalLocationId ?? null;
-  else if (configured) locationId = await connectedLocation(deps);
+  // The app needs the Terminal location to connect Tap to Pay (TapToPayConnectionConfiguration). In
+  // connect mode it's the connected account's, made when the account was found able to take card
+  // payments (stripeconnect.ts). All from the cache: this never asks Stripe.
+  const locationId = setup === 'direct' ? (deps.config.stripeTerminalLocationId ?? null) : configured ? (connection?.locationId ?? null) : null;
   return json({
     ok: true,
     stripe: { configured, mode: configured ? stripeMode(deps.config) : null, locationId },
     connection: connectionSummary(setup, connection),
   });
-}
-
-/**
- * Connect mode: the connected account's Terminal location, made the first time the app asks
- * where to connect Tap to Pay. Null (and logged) when Stripe can't be reached: the app asks again.
- */
-async function connectedLocation(deps: Deps): Promise<string | null> {
-  try {
-    return await terminalLocation(deps, await shopStripe(deps));
-  } catch (error) {
-    if (!(error instanceof ApiError)) deps.log.error('Terminal location failed', { error: error instanceof Error ? error.message : String(error) });
-    return null;
-  }
 }
 
 /** Whether Stripe turned down a connection token's location (it doesn't exist on that account, or in that mode). */
@@ -314,6 +301,12 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
   if (!event) throw new ApiError('invalid_request', "The webhook signature doesn't match.");
   // Set on events from a connected account (the Connect endpoint).
   const account = typeof event.account === 'string' && event.account !== '' ? event.account : null;
+
+  if (event.type === 'account.application.deauthorized') {
+    // The shop took the platform's access to its account away (from its own Stripe Dashboard).
+    if (account) await accountDeauthorized(ctx.deps, account);
+    return json({ received: true });
+  }
 
   if (event.type === 'account.updated') {
     const updated = event.data.object as { id?: unknown };

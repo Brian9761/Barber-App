@@ -41,9 +41,10 @@ CREATE TABLE computer_codes (
   CONSTRAINT computer_codes_valid_range CHECK (expires_at > created_at)
 );
 
--- A computer signed in to the website's Business area. Its token (32 random
--- bytes, base64url) works like the owner key on most owner routes until it
--- expires (30 days) or is revoked; only the token's SHA-256 is stored.
+-- A computer signed in to the website's Business area. Its token (43 characters
+-- of base64url: 16 random bytes and the owner key's HMAC of them, so a new owner
+-- key signs every computer out) works like the owner key on most owner routes
+-- until it expires (30 days) or is revoked; only the token's SHA-256 is stored.
 CREATE TABLE computer_sessions (
   id           uuid PRIMARY KEY,
   token_hash   text NOT NULL CHECK (token_hash ~ '^[0-9a-f]{64}$'),

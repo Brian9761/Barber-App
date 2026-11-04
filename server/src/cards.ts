@@ -5,7 +5,7 @@ import { hashManageToken, isNewManageToken } from './auth.js';
 import { resolveTarget, type Target } from './booking.js';
 import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
-import { ApiError, json, readJsonObject, redirect } from './http.js';
+import { ApiError, baseOf, httpUrl, json, readJsonObject, redirect } from './http.js';
 import { loadNoShowSettings, protectionFor } from './noshow.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
@@ -115,14 +115,7 @@ async function limit(deps: Deps, request: Request, scope: string, max: number): 
  * address this request came in on.
  */
 export function publicBase(configured: string | undefined, requestOrigin: string): string {
-  let base: URL | null = null;
-  try {
-    base = configured ? new URL(configured) : null;
-  } catch {
-    base = null;
-  }
-  if (!base || (base.protocol !== 'https:' && base.protocol !== 'http:')) base = new URL(requestOrigin);
-  return `${base.origin}${base.pathname.replace(/\/+$/, '')}`;
+  return baseOf(httpUrl(configured) ?? new URL(requestOrigin));
 }
 
 // POST /api/cards/checkout { offeringId? | serviceId + barberId: "any", returnTo?: "app" | "web" } (X-Card-Token)
@@ -137,7 +130,7 @@ const checkoutBody = z.object({
 
 export async function createCardCheckout(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
-  const shop = await shopStripe(deps);
+  const shop = await shopStripe(deps, { forClients: true });
   const token = requiredCardToken(request);
   const body = parse(checkoutBody, await readJsonObject(request));
   const target = resolveTarget(deps.catalog, body);
@@ -241,7 +234,7 @@ function repeat(existing: SavedCardRow, sessionId: string): Response {
 
 export async function saveCard(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
-  const shop = await shopStripe(deps);
+  const shop = await shopStripe(deps, { forClients: true });
   const token = requiredCardToken(request);
   const { sessionId } = parse(saveBody, await readJsonObject(request));
   const tokenHash = hashManageToken(token);

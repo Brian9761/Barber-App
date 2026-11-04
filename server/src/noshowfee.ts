@@ -6,7 +6,7 @@ import type { Deps } from './deps.js';
 import { FEE_KIND, feeCase, isFeeKind, nothingCharged, reasonOfKind, type FeeKind, type FeeReason } from './feecase.js';
 import { ApiError, json } from './http.js';
 import type { Context } from './router.js';
-import { requestOptions, shopStripe, stripeFailure, type ShopStripe, type StripeErrorLike } from './stripeaccount.js';
+import { accountMatch, requestOptions, shopStripe, stripeFailure, type ShopStripe, type StripeErrorLike } from './stripeaccount.js';
 import { appointmentJSON, type AppointmentRow, type NoShowFeeRowStatus } from './serialize.js';
 import { UUID_RE } from './validation.js';
 
@@ -38,6 +38,11 @@ import { UUID_RE } from './validation.js';
 const notFound = () => new ApiError('not_found', "We couldn't find that appointment.");
 const notChargeable = (message: string) => new ApiError('not_chargeable', message);
 export const OLD_ACCOUNT_MESSAGE = "This card was saved with the shop's old Stripe account.";
+/** A card saved while the shop's Stripe was in the other mode (test or live) is only there, in that mode. */
+const otherModeMessage = (savedLive: boolean) =>
+  savedLive
+    ? "This card was saved while the shop's Stripe was live, so it can't be charged in test mode."
+    : "This card was saved while the shop's Stripe was in test mode, so it can't be charged.";
 
 /** Stripe's idempotency key for one attempt at one appointment's fee. */
 export function noShowFeeIdempotencyKey(appointmentId: string, attempt: number): string {
@@ -96,6 +101,8 @@ interface ChargeRow extends AppointmentRow {
   stripe_payment_method_id: string | null;
   /** The connected account the card is saved on (null: saved with the server's own key). */
   card_stripe_account_id: string | null;
+  /** Whether the card was saved in live mode (null without a card). */
+  card_livemode: boolean | null;
 }
 
 type Claim =
@@ -306,7 +313,7 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
 
   const claim = await deps.db.transaction(async (tx): Promise<Claim> => {
     const { rows } = await tx.query<ChargeRow>(
-      `SELECT a.*, c.stripe_customer_id, c.stripe_payment_method_id, c.stripe_account_id AS card_stripe_account_id
+      `SELECT a.*, c.stripe_customer_id, c.stripe_payment_method_id, c.stripe_account_id AS card_stripe_account_id, c.livemode AS card_livemode
          FROM appointments a LEFT JOIN saved_cards c ON c.id = a.saved_card_id
         WHERE a.id = $1
         FOR UPDATE OF a`,
@@ -324,9 +331,12 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
       throw notChargeable("This booking has no card on file, so there's no fee to charge.");
     }
     const chargeable = chargeCase(row, now);
-    // The card can only be charged on the account it was saved on, which must be the shop's now.
-    const oldAccount = (row.card_stripe_account_id ?? null) !== (current.stripeAccount ?? null);
-    const refusal = chargeable.refusal ?? (oldAccount ? notChargeable(OLD_ACCOUNT_MESSAGE) : null);
+    // The card can only be charged on the account it was saved on, in the mode it was saved in,
+    // and those must be the shop's now.
+    const savedLive = row.card_livemode === true;
+    const match = accountMatch({ stripe_account_id: row.card_stripe_account_id, livemode: savedLive }, current);
+    const unusable = match === 'otherAccount' ? notChargeable(OLD_ACCOUNT_MESSAGE) : match === 'otherMode' ? notChargeable(otherModeMessage(savedLive)) : null;
+    const refusal = chargeable.refusal ?? unusable;
     // A try whose answer never came keeps its attempt (Stripe key and reason) and is looked up
     // first, whatever happened since; after a "no", a new attempt, only for a chargeable case.
     const pending = row.no_show_fee_status === 'pending';

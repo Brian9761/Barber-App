@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
 import { SHOP_ADDRESS } from '../src/stripeconnect.js';
 import { RESPONSES } from './helpers/contract.js';
-import { connectedShop, FakeStripe, PLATFORM_KEY, stripeError, useHarness } from './helpers/harness.js';
+import { connectedShop, connectMode, FakeStripe, PLATFORM_KEY, stripeError, useHarness } from './helpers/harness.js';
 
 // With Stripe Connect every Stripe call for the shop goes to its connected account (the
 // Stripe-Account header): Tap to Pay and its Terminal location, payments, saved cards and
@@ -69,13 +69,17 @@ function clientMethods(client: FakeStripe): string[] {
 
 describe('every Stripe call for the shop goes to its connected account', () => {
   it('walks every call site with a connected account: each sends it as stripeAccount, except the platform’s own calls', async () => {
-    // accounts.create, accountLinks.create, accounts.retrieve: the platform's own calls.
-    const account = await connectedShop(h);
-    await protectionOn();
+    connectMode(h);
     const sites: { site: string; calls: Awaited<ReturnType<typeof callsDuring>> }[] = [];
     const site = async (name: string, fn: () => Promise<unknown>) => sites.push({ site: name, calls: await callsDuring(fn) });
 
-    await site('Terminal location (GET /api/owner/me)', () => h.call('GET', '/api/owner/me', owner));
+    // accounts.create, accountLinks.create, accounts.retrieve: the platform's own calls.
+    await site('connect (the account and its onboarding link)', () => h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'app' } }));
+    const account = [...h.stripe.connectedAccounts.keys()][0]!;
+    h.stripe.activateAccount(account);
+    await site('Settings (GET /api/owner/stripe), and the Terminal location', () => h.call('GET', '/api/owner/stripe', owner));
+    await protectionOn();
+    await site('GET /api/owner/me (the cache only)', () => h.call('GET', '/api/owner/me', owner));
     await site('connection token', () => h.call('POST', '/api/owner/terminal/connection-token', owner));
     let intentId = '';
     await site('Tap to Pay payment', async () => {
@@ -95,11 +99,12 @@ describe('every Stripe call for the shop goes to its connected account', () => {
     h.stripe.loseNextChargeAnswer = true;
     await site('a fee whose answer was lost', () => charge(lost));
     await site('…looked up at Stripe before charging again', () => charge(lost));
-    await site('Settings (GET /api/owner/stripe)', () => h.call('GET', '/api/owner/stripe', owner));
     await site('another onboarding link', () => h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'web' } }));
 
     expect(sites.map((s) => [s.site, methods(s.calls)])).toEqual([
-      ['Terminal location (GET /api/owner/me)', ['terminal.locations.create']],
+      ['connect (the account and its onboarding link)', ['accounts.create', 'accountLinks.create']],
+      ['Settings (GET /api/owner/stripe), and the Terminal location', ['accounts.retrieve', 'terminal.locations.create']],
+      ['GET /api/owner/me (the cache only)', []],
       ['connection token', ['terminal.connectionTokens.create']],
       ['Tap to Pay payment', ['paymentIntents.create']],
       ['complete a payment', ['paymentIntents.retrieve']],
@@ -108,7 +113,6 @@ describe('every Stripe call for the shop goes to its connected account', () => {
       ['a fee Stripe is processing, checked again', ['paymentIntents.retrieve']],
       ['a fee whose answer was lost', ['paymentIntents.create']],
       ['…looked up at Stripe before charging again', ['paymentIntents.list']],
-      ['Settings (GET /api/owner/stripe)', ['accounts.retrieve']],
       ['another onboarding link', ['accountLinks.create']],
     ]);
     const platformCalls = new Set(['accounts.create', 'accounts.retrieve', 'accountLinks.create']);
@@ -132,18 +136,12 @@ describe('every Stripe call for the shop goes to its connected account', () => {
 });
 
 describe('Tap to Pay with a connected account', () => {
-  it('makes the shop’s Terminal location on its account once, even when several requests need it at once', async () => {
+  it('makes the shop’s Terminal location on its account once it takes card payments, once even when several requests need it', async () => {
+    // Found active in Settings: the location is made on the shop's account.
     const account = await connectedShop(h);
     h.config.stripeTerminalLocationId = 'tml_IgnoredInConnectMode';
-    const results = await Promise.all([
-      h.call('GET', '/api/owner/me', owner),
-      h.call('POST', '/api/owner/terminal/connection-token', owner),
-      h.call('POST', '/api/owner/terminal/connection-token', owner),
-      h.call('GET', '/api/owner/me', owner),
-    ]);
-    expect(results.map((r) => r.status)).toEqual([200, 200, 200, 200]);
-    const creates = h.stripe.calls.filter((c) => c.method === 'terminal.locations.create');
-    expect(creates).toEqual([
+    const made = () => h.stripe.calls.filter((c) => c.method === 'terminal.locations.create');
+    expect(made()).toEqual([
       {
         method: 'terminal.locations.create',
         params: { display_name: 'Izzy Clipz Barbershop', address: SHOP_ADDRESS },
@@ -151,30 +149,55 @@ describe('Tap to Pay with a connected account', () => {
       },
     ]);
     expect(SHOP_ADDRESS).toEqual({ line1: '1919 Mission Ave', line2: 'Ste 105', city: 'Oceanside', state: 'CA', postal_code: '92058', country: 'US' });
-    const location = [...h.stripe.locations.keys()][0];
-    expect(results[0]!.body).toEqual({
+    // Without one cached (as before an earlier try made it), several requests at once make one.
+    await h.database.pool.query(`UPDATE settings SET value = value || '{"locationId": null}' WHERE key = 'stripe_connect'`);
+    const results = await Promise.all([
+      h.call('GET', '/api/owner/stripe', owner),
+      h.call('POST', '/api/owner/terminal/connection-token', owner),
+      h.call('POST', '/api/owner/terminal/connection-token', owner),
+      h.call('GET', '/api/owner/stripe', owner),
+    ]);
+    expect(results.map((r) => r.status)).toEqual([200, 200, 200, 200]);
+    expect(made()).toHaveLength(2);
+    const location = [...h.stripe.locations.keys()][1];
+    const me = await h.call('GET', '/api/owner/me', owner);
+    expect(me.body).toEqual({
       ok: true,
       stripe: { configured: true, mode: 'test', locationId: location },
       connection: { mode: 'connect', status: 'active', businessName: 'Izzy Clipz Barbershop' },
     });
-    expect(RESPONSES['owner-me-connected'].safeParse(results[0]!.body).success).toBe(true);
+    expect(RESPONSES['owner-me-connected'].safeParse(me.body).success).toBe(true);
     for (const token of h.stripe.calls.filter((c) => c.method === 'terminal.connectionTokens.create')) {
       expect(token).toEqual({ method: 'terminal.connectionTokens.create', params: { location }, options: { stripeAccount: account } });
     }
     // Cached: later requests don't ask for another.
     await h.call('POST', '/api/owner/terminal/connection-token', owner);
-    expect(h.stripe.calls.filter((c) => c.method === 'terminal.locations.create')).toHaveLength(1);
+    await h.call('GET', '/api/owner/stripe', owner);
+    expect(made()).toHaveLength(2);
   });
 
-  it('when Stripe can’t make the location, /api/owner/me answers without one, and asks again next time', async () => {
-    await connectedShop(h);
-    h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
-    const first = await h.call('GET', '/api/owner/me', owner);
+  it('when Stripe can’t make the location, Settings still answers; the next look makes it, and /api/owner/me never asks Stripe', async () => {
+    connectMode(h);
+    await h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'app' } });
+    const account = [...h.stripe.connectedAccounts.keys()][0]!;
+    h.stripe.activateAccount(account);
+    // accounts.retrieve answers; the location fails.
+    const retrieve = h.stripe.accounts.retrieve;
+    h.stripe.accounts.retrieve = async (...args) => {
+      const answer = await retrieve(...args);
+      h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
+      return answer;
+    };
+    const first = await h.call('GET', '/api/owner/stripe', owner);
+    h.stripe.accounts.retrieve = retrieve;
     expect(first.status).toBe(200);
-    expect(first.body.stripe).toEqual({ configured: true, mode: 'test', locationId: null });
+    expect(first.body.status).toBe('active');
     expect(h.logs.at(-1)).toMatchObject({ level: 'error', message: 'Stripe create terminal location failed' });
-    const second = await h.call('GET', '/api/owner/me', owner);
-    expect(second.body.stripe.locationId).toMatch(/^tml_/);
+    const calls = h.stripe.calls.length;
+    expect((await h.call('GET', '/api/owner/me', owner)).body.stripe).toEqual({ configured: true, mode: 'test', locationId: null });
+    expect(h.stripe.calls.length).toBe(calls);
+    await h.call('GET', '/api/owner/stripe', owner);
+    expect((await h.call('GET', '/api/owner/me', owner)).body.stripe.locationId).toMatch(/^tml_/);
   });
 
   it('a location the owner deleted in the Dashboard: the token fails with what to do, and the next try makes a new one', async () => {
@@ -243,7 +266,7 @@ describe('Tap to Pay with a connected account', () => {
       expect(res.status, path).toBe(403);
       expect(res.body.error).toEqual({ code: 'forbidden', message: 'This can only be done in the Izzy Clipz Business app on your iPhone.' });
     }
-    expect(h.stripe.calls.filter((c) => c.method.startsWith('terminal') || c.method.startsWith('paymentIntents'))).toEqual([]);
+    expect(h.stripe.calls.filter((c) => c.method === 'terminal.connectionTokens.create' || c.method.startsWith('paymentIntents'))).toEqual([]);
   });
 });
 
@@ -267,7 +290,10 @@ describe('saved cards and fees with a connected account', () => {
     expect((await policy()).body).toMatchObject({ required: false, policyText: null });
     const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': newManageToken() }, body: { offeringId: FLOW45 } });
     expect(checkout.status).toBe(503);
-    expect(checkout.body.error.message).toBe('Stripe paused card payments: open Stripe to fix it.');
+    expect(checkout.body.error.message).toBe("Card payments aren't set up yet. Add the shop's Stripe key on the server.");
+    // The owner is told what's wrong.
+    const tap = await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 3500 } });
+    expect(tap.body.error.message).toBe('Stripe paused card payments: open Stripe to fix it.');
   });
 
   it('a fee is charged to the card on the account it was saved on, and recorded with it', async () => {
@@ -327,6 +353,18 @@ describe('saved cards and fees with a connected account', () => {
     expect(list.options).toEqual({ stripeAccount: first });
     // Found, not charged again.
     expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.create' && (c.params as { confirm?: boolean }).confirm)).toHaveLength(1);
+  });
+
+  it('a card saved while the server’s key was in test mode can’t be charged once it’s live', async () => {
+    h.config.stripeSecretKey = 'sk_test_fixture';
+    await protectionOn();
+    const id = await noShow(await saveCard());
+    h.config.stripeSecretKey = 'sk_live_fixture';
+    h.stripe.calls.length = 0;
+    const res = await charge(id);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toEqual({ code: 'not_chargeable', message: "This card was saved while the shop's Stripe was in test mode, so it can't be charged." });
+    expect(h.stripe.calls).toEqual([]);
   });
 
   it('a card saved with the server’s own key (before connect mode) is from another account too', async () => {

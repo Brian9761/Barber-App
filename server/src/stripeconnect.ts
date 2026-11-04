@@ -1,14 +1,15 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import type Stripe from 'stripe';
 import { z } from 'zod';
-import { requireOwner } from './auth.js';
+import { requireOwner, sha256Hex } from './auth.js';
 import type { Config } from './config.js';
 import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
-import { ApiError, htmlPage, json, readOptionalJsonObject, redirect } from './http.js';
+import { ApiError, baseOf, htmlPage, httpUrl, json, readOptionalJsonObject, redirect } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
 import {
+  accessRevoked,
   ACCOUNT_ID_RE,
   CONNECT_SETTINGS_KEY,
   CONNECT_STRIPE_MESSAGE,
@@ -21,11 +22,13 @@ import {
   parseConnection,
   platformStripe,
   requestOptions,
+  shopStripe,
   stripeFailure,
   stripeSetup,
   type ConnectionStatus,
   type ShopStripe,
   type StripeConnection,
+  type StripeErrorLike,
   type StripeSetup,
 } from './stripeaccount.js';
 import { formatInstant } from './time.js';
@@ -82,7 +85,8 @@ const EXPIRED_MESSAGE = 'This link has expired. Go back to Izzy Clipz Business a
 const NO_BASE_URL_MESSAGE =
   "Stripe can't send you back to the app until the server's PUBLIC_BASE_URL is set (its https address). Set it on the server, then try again.";
 
-const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
+/** How many times the shop's account was forgotten (disconnected, or its access taken away): see `accountIdempotencyKey`. */
+const HISTORY_SETTINGS_KEY = 'stripe_connect_history';
 
 /** The connection as Settings shows it (GET /api/owner/stripe and the connect routes). */
 export interface StripeConnectionJSON {
@@ -169,19 +173,65 @@ async function updateConnection(db: Queryable, accountId: string, fields: Partia
 }
 
 /**
- * Reads the connected account's status from Stripe and caches it. Null when the shop
- * disconnected it meanwhile. A Stripe failure is logged and thrown (stripeFailure).
+ * Forgets the shop's account (only if it's still `accountId`, when given), and counts it, so the
+ * next connection makes a new account. The account itself stays at Stripe.
+ */
+async function forgetConnection(tx: Queryable, now: Date, accountId?: string): Promise<boolean> {
+  const { rowCount } = await tx.query(
+    accountId === undefined
+      ? 'DELETE FROM settings WHERE key = $1'
+      : `DELETE FROM settings WHERE key = $1 AND value->>'accountId' = $2`,
+    accountId === undefined ? [CONNECT_SETTINGS_KEY] : [CONNECT_SETTINGS_KEY, accountId],
+  );
+  if (!rowCount) return false;
+  await tx.query(
+    `INSERT INTO settings (key, value, updated_at) VALUES ($1, '{"disconnects": 1}'::jsonb, $2)
+     ON CONFLICT (key) DO UPDATE
+       SET value = jsonb_build_object('disconnects', COALESCE((settings.value->>'disconnects')::int, 0) + 1), updated_at = EXCLUDED.updated_at`,
+    [HISTORY_SETTINGS_KEY, now],
+  );
+  // A way back from Stripe that's still open would now lead nowhere.
+  await tx.query('DELETE FROM stripe_connect_states');
+  return true;
+}
+
+/**
+ * Reads the connected account's status from Stripe and caches it; once it can take card
+ * payments, its Terminal location is made too (so Tap to Pay finds it in GET /api/owner/me).
+ * Null when the shop disconnected it meanwhile, or when Stripe says the platform can't use it
+ * any more (the shop took the access away): then it's forgotten, and Settings asks to connect
+ * again. Any other Stripe failure is logged and thrown (stripeFailure).
  */
 export async function refreshConnection(deps: Deps, connection: StripeConnection): Promise<StripeConnection | null> {
   let account: Stripe.Account;
   try {
     account = await platformStripe(deps).accounts.retrieve(connection.accountId);
   } catch (error) {
-    throw stripeFailure(deps, error, 'retrieve account');
+    if (!accessRevoked(error)) throw stripeFailure(deps, error, 'retrieve account');
+    stripeFailure(deps, error, 'retrieve account');
+    await accessLost(deps, connection.accountId);
+    return null;
   }
   if (account.id !== connection.accountId) throw stripeFailure(deps, new Error('Stripe answered with another account'), 'retrieve account');
   const now = deps.now();
-  return updateConnection(deps.db, connection.accountId, { ...accountStatus(account), checkedAt: formatInstant(now) }, now);
+  const updated = await updateConnection(deps.db, connection.accountId, { ...accountStatus(account), checkedAt: formatInstant(now) }, now);
+  if (updated?.chargesEnabled && !updated.locationId) {
+    try {
+      updated.locationId = await terminalLocation(deps, await shopStripe(deps));
+    } catch {
+      // Logged by stripeFailure; the next refresh, or a connection token, makes it.
+    }
+  }
+  return updated;
+}
+
+/** The platform can't use the shop's account any more: forget it, so Settings asks to connect again. */
+async function accessLost(deps: Deps, accountId: string): Promise<void> {
+  const forgot = await deps.db.transaction(async (tx) => {
+    await lockConnect(tx);
+    return forgetConnection(tx, deps.now(), accountId);
+  });
+  if (forgot) deps.log.warn("Stripe no longer lets the platform use the shop's account; forgot it", { accountId });
 }
 
 /** The connection, read live from Stripe when that works, from the cache when it doesn't (logged). */
@@ -195,12 +245,32 @@ async function freshConnection(deps: Deps): Promise<StripeConnection | null> {
   }
 }
 
-/** The account.updated webhook for the shop's connected account: cache its new status (others are ignored). */
+/**
+ * The account.updated webhook for the shop's connected account: cache its new status (others are
+ * ignored). Read from Stripe rather than from the event, since events can come out of order.
+ */
 export async function accountUpdated(deps: Deps, accountId: string): Promise<void> {
   const connection = await currentConnection(deps);
   if (!connection || connection.accountId !== accountId) return;
   // A Stripe failure answers 500, so Stripe sends the event again.
   await refreshConnection(deps, connection);
+}
+
+/** The account.application.deauthorized webhook: the shop took the platform's access away. Forget the account. */
+export async function accountDeauthorized(deps: Deps, accountId: string): Promise<void> {
+  const connection = await loadConnection(deps.db);
+  if (connection?.accountId === accountId) await accessLost(deps, accountId);
+}
+
+/**
+ * Stripe's idempotency key for making the shop's account: one per mode and per connection, so a
+ * try whose answer was lost (a timeout, the function stopping) gets the same account when it's
+ * tried again, and connecting again after a disconnect makes a new one.
+ */
+async function accountIdempotencyKey(tx: Queryable, livemode: boolean): Promise<string> {
+  const { rows } = await tx.query<{ value: { disconnects?: unknown } }>('SELECT value FROM settings WHERE key = $1', [HISTORY_SETTINGS_KEY]);
+  const disconnects = Number(rows[0]?.value.disconnects ?? 0);
+  return `izzy-clipz-shop-account-${livemode ? 'live' : 'test'}-${Number.isSafeInteger(disconnects) ? disconnects : 0}`;
 }
 
 /**
@@ -213,29 +283,38 @@ async function shopAccountForOnboarding(deps: Deps, base: string): Promise<Strip
     await lockConnect(tx);
     const existing = connectionForKey(await loadConnection(tx), deps.config);
     if (existing) return existing;
+    const params: Stripe.AccountCreateParams = {
+      controller: {
+        stripe_dashboard: { type: 'full' },
+        fees: { payer: 'account' },
+        losses: { payments: 'stripe' },
+        requirement_collection: 'stripe',
+      },
+      // Tap to Pay (Terminal) and direct charges need card_payments; Stripe asks for transfers with it.
+      capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
+      country: 'US',
+      business_profile: {
+        name: SHOP_NAME,
+        mcc: SHOP_MCC,
+        // Stripe only takes a public https address as the business's website.
+        ...(base.startsWith('https://') ? { url: base } : {}),
+        support_phone: SHOP_SUPPORT_PHONE,
+      },
+      metadata: { izzy_clipz: 'shop' },
+    };
+    const idempotencyKey = await accountIdempotencyKey(tx, keyLivemode(deps.config) === true);
     let account: Stripe.Account;
     try {
-      account = await platformStripe(deps).accounts.create({
-        controller: {
-          stripe_dashboard: { type: 'full' },
-          fees: { payer: 'account' },
-          losses: { payments: 'stripe' },
-          requirement_collection: 'stripe',
-        },
-        // Tap to Pay (Terminal) and direct charges need card_payments; Stripe asks for transfers with it.
-        capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
-        country: 'US',
-        business_profile: {
-          name: SHOP_NAME,
-          mcc: SHOP_MCC,
-          // Stripe only takes a public https address as the business's website.
-          ...(base.startsWith('https://') ? { url: base } : {}),
-          support_phone: SHOP_SUPPORT_PHONE,
-        },
-        metadata: { izzy_clipz: 'shop' },
-      });
+      account = await platformStripe(deps).accounts.create(params, { idempotencyKey });
     } catch (error) {
-      throw stripeFailure(deps, error, 'create account');
+      if ((error as StripeErrorLike | null)?.type !== 'StripeIdempotencyError') throw stripeFailure(deps, error, 'create account');
+      // A lost try was made with other details (PUBLIC_BASE_URL changed since): make it afresh.
+      stripeFailure(deps, error, 'create account');
+      try {
+        account = await platformStripe(deps).accounts.create(params, { idempotencyKey: `${idempotencyKey}-${deps.now().getTime()}` });
+      } catch (retryError) {
+        throw stripeFailure(deps, retryError, 'create account');
+      }
     }
     if (!ACCOUNT_ID_RE.test(account.id)) throw stripeFailure(deps, new Error('Stripe answered with an account id we can’t use'), 'create account');
     const now = deps.now();
@@ -257,15 +336,9 @@ async function shopAccountForOnboarding(deps: Deps, base: string): Promise<Strip
  * when it isn't set or isn't an http(s) address (Stripe wants https with a live key).
  */
 export function connectBase(config: Config): string | null {
-  if (!config.publicBaseUrl) return null;
-  let url: URL;
-  try {
-    url = new URL(config.publicBaseUrl);
-  } catch {
-    return null;
-  }
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && keyLivemode(config) !== true)) return null;
-  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+  const url = httpUrl(config.publicBaseUrl);
+  if (!url || (url.protocol === 'http:' && keyLivemode(config) === true)) return null;
+  return baseOf(url);
 }
 
 type ReturnTo = 'app' | 'web';
@@ -276,7 +349,7 @@ async function newState(deps: Deps, returnTo: ReturnTo): Promise<string> {
   const state = randomBytes(32).toString('base64url');
   await deps.db.query('DELETE FROM stripe_connect_states WHERE expires_at <= $1', [now]);
   await deps.db.query('INSERT INTO stripe_connect_states (state_hash, return_to, created_at, expires_at) VALUES ($1, $2, $3, $4)', [
-    sha256(state),
+    sha256Hex(state),
     returnTo,
     now,
     new Date(now.getTime() + CONNECT_STATE_MINUTES * 60_000),
@@ -289,7 +362,7 @@ async function stateReturnTo(deps: Deps, state: string | null): Promise<ReturnTo
   if (!state || !STATE_RE.test(state)) return null;
   const { rows } = await deps.db.query<{ return_to: ReturnTo }>(
     'SELECT return_to FROM stripe_connect_states WHERE state_hash = $1 AND expires_at > $2',
-    [sha256(state), deps.now()],
+    [sha256Hex(state), deps.now()],
   );
   return rows[0]?.return_to ?? null;
 }
@@ -397,9 +470,7 @@ export async function deleteStripeConnect(ctx: Context): Promise<Response> {
   if (setup !== 'connect') throw connectOff(setup, 'disconnect');
   await deps.db.transaction(async (tx) => {
     await lockConnect(tx);
-    await tx.query('DELETE FROM settings WHERE key = $1', [CONNECT_SETTINGS_KEY]);
-    // A way back from Stripe that's still open would now lead nowhere.
-    await tx.query('DELETE FROM stripe_connect_states');
+    await forgetConnection(tx, deps.now());
   });
   return json({ ...connectionJSON(setup, null, deps.config), message: DISCONNECTED_MESSAGE });
 }

@@ -126,8 +126,13 @@ export function newManageToken(): string {
   return randomBytes(32).toString('base64url');
 }
 
+/** SHA-256 in hex: how manage tokens, card tokens, computer session tokens and Stripe Connect states are stored. */
+export function sha256Hex(text: string): string {
+  return sha256(text).toString('hex');
+}
+
 export function hashManageToken(token: string): string {
-  return sha256(token).toString('hex');
+  return sha256Hex(token);
 }
 
 export function isWellFormedManageToken(token: string): boolean {

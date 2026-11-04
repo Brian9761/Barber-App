@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { hashManageToken, newSessionToken, ownerKeyConfigured, ownerNotConfigured, requireOwner, type ComputerSessionRow } from './auth.js';
+import type { Queryable } from './db.js';
 import { ApiError, json, noContent, readJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
@@ -30,6 +31,8 @@ export const SESSION_DAYS = 30;
 /** Making a code and using one take turns, so a code is never used twice or outlives its replacement. */
 const CODES_LOCK = 'izzy-clipz-computer-codes';
 const NAME_MAX = 80;
+/** Which owner key the sessions were made with (as a check, never the key). */
+const SESSIONS_SETTINGS_KEY = 'computer_sessions';
 
 const wrongCode = () =>
   new ApiError('wrong_code', "That code isn't right or has run out. Open Izzy Clipz Business → Settings → Use on a computer for a new one.");
@@ -44,6 +47,27 @@ function codeMatches(ownerKey: string, code: string, storedHash: string): boolea
   const given = Buffer.from(codeHash(ownerKey, code), 'hex');
   const stored = Buffer.from(storedHash, 'hex');
   return given.length === stored.length && timingSafeEqual(given, stored);
+}
+
+/** A check of the owner key: an HMAC of fixed text, which tells nothing about the key. */
+function keyCheck(ownerKey: string): string {
+  return createHmac('sha256', ownerKey).update('izzy-clipz-computer-sessions-key', 'utf8').digest('hex');
+}
+
+/**
+ * Sessions made with an earlier owner key can't get in any more (their tokens carry its seal),
+ * so they're signed out here, and the list only shows computers that still can.
+ */
+async function signOutOldKeys(db: Queryable, ownerKey: string, now: Date): Promise<void> {
+  const check = keyCheck(ownerKey);
+  const { rows } = await db.query<{ value: { keyCheck?: unknown } }>('SELECT value FROM settings WHERE key = $1', [SESSIONS_SETTINGS_KEY]);
+  if (rows[0]?.value.keyCheck === check) return;
+  if (rows[0]) await db.query('UPDATE computer_sessions SET revoked_at = $1 WHERE revoked_at IS NULL', [now]);
+  await db.query(
+    `INSERT INTO settings (key, value, updated_at) VALUES ($1, $2::jsonb, $3)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+    [SESSIONS_SETTINGS_KEY, JSON.stringify({ keyCheck: check }), now],
+  );
 }
 
 /** What the website calls the computer ("Chrome on Mac"): one line of at most 80 characters, or "Computer". */
@@ -133,9 +157,10 @@ export async function createComputerSession(ctx: Context): Promise<Response> {
       return null;
     }
     await tx.query('UPDATE computer_codes SET used_at = $2 WHERE id = $1', [active.id, now]);
+    await signOutOldKeys(tx, ownerKey, now);
     // Sessions that ended (signed out or expired) aren't kept.
     await tx.query('DELETE FROM computer_sessions WHERE revoked_at IS NOT NULL OR expires_at <= $1', [now]);
-    // 32 random bytes, like a manage token; the token is sealed with the owner key.
+    // From 32 fresh random bytes (made like a manage token), sealed with the owner key.
     const token = newSessionToken(ownerKey, Buffer.from(deps.manageToken(), 'base64url'));
     const { rows: created } = await tx.query<ComputerSessionRow>(
       `INSERT INTO computer_sessions (id, token_hash, name, created_at, last_used_at, expires_at)
@@ -154,6 +179,7 @@ export async function createComputerSession(ctx: Context): Promise<Response> {
 
 export async function listComputerSessions(ctx: Context): Promise<Response> {
   const auth = await requireOwner(ctx);
+  await signOutOldKeys(ctx.deps.db, ctx.deps.config.ownerKey ?? '', ctx.deps.now());
   const { rows } = await ctx.deps.db.query<ComputerSessionRow>(
     `SELECT * FROM computer_sessions
       WHERE revoked_at IS NULL AND expires_at > $1
