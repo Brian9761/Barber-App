@@ -152,8 +152,9 @@ line that the fee was charged to the card on file, so the fee isn't taken
 again at the counter.
 
 **Refunds and disputes.** Reopening an appointment never refunds a fee
-(the app says so before it reopens one). To give money back, refund it in
-the Stripe Dashboard: find the payment (its description starts with
+(the app says so before it reopens one), and neither does cancelling it
+afterwards (Cancel appointment says so first). To give money back, refund
+it in the Stripe Dashboard: find the payment (its description starts with
 "No-show fee" or "Late cancellation fee", then the service, barber and
 time) and choose Refund. The policy the client agreed to, and when, are
 kept with the booking as evidence if a client disputes a fee.
