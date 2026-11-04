@@ -1135,7 +1135,9 @@ final class IzzyClipzUITests: XCTestCase {
         dayID.dateFormat = "'day-'yyyy-MM-dd"
         let now = Date()
         guard let start = shopCalendar.date(bySettingHour: hour, minute: minute, second: 0, of: now) else { return nil }
-        let isToday = element(dayID.string(from: now)).isSelected
+        // Today's cell isn't on screen when the first open day is in another month.
+        let todayCell = element(dayID.string(from: now))
+        let isToday = todayCell.exists && todayCell.isSelected
         let minutesAway = start.timeIntervalSince(now) / 60
         if isToday, abs(minutesAway - 60) < 1 { return nil }
         let expected = isToday && minutesAway < 60
