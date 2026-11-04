@@ -9,6 +9,7 @@ import { isFeeKind } from './feecase.js';
 import { ApiError, json, readJsonObject, readText } from './http.js';
 import type { Context } from './router.js';
 import { syncNoShowFeeFromStripe } from './noshowfee.js';
+import { cardSaleBody, cardSaleDraft, recordCardSale } from './sales.js';
 import { PAYMENT_COLUMNS, paymentJSON, type PaymentRow } from './serialize.js';
 import { dayBounds } from './time.js';
 import { charLength, email, parse, UUID_RE } from './validation.js';
@@ -125,7 +126,7 @@ export async function connectionToken(ctx: Context): Promise<Response> {
   }
 }
 
-// POST /api/owner/payments { amountCents, description?, appointmentId?, receiptEmail? }
+// POST /api/owner/payments { amountCents, description?, appointmentId?, receiptEmail?, sale? }
 
 const paymentBody = z.object({
   amountCents: z
@@ -143,13 +144,16 @@ const paymentBody = z.object({
     .refine((v) => v === null || charLength(v) <= 200, { error: 'Keep the note to 200 characters or fewer.' }),
   appointmentId: z.string({ error: 'appointmentId must be an appointment id.' }).nullish(),
   receiptEmail: email.optional(),
+  /** A checkout's ticket (sales.ts): recorded as a card sale once this payment succeeds. */
+  sale: cardSaleBody.optional(),
 });
 
 export async function createPayment(ctx: Context): Promise<Response> {
   requireOwner(ctx.request, ctx.deps.config);
   const stripe = stripeClient(ctx.deps);
   const body = parse(paymentBody, await readJsonObject(ctx.request));
-  const appointmentId = body.appointmentId ?? null;
+  const draft = body.sale ? await cardSaleDraft(ctx.deps.db, ctx.deps.catalog, body.sale, body) : null;
+  const appointmentId = draft ? draft.appointmentId : (body.appointmentId ?? null);
   if (appointmentId !== null) {
     const known =
       UUID_RE.test(appointmentId) &&
@@ -176,22 +180,24 @@ export async function createPayment(ctx: Context): Promise<Response> {
 
   const now = ctx.deps.now();
   await ctx.deps.db.query(
-    `INSERT INTO payments (id, amount_cents, description, appointment_id, status, receipt_email, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+    `INSERT INTO payments (id, amount_cents, description, appointment_id, status, receipt_email, created_at, updated_at, sale_draft)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8::jsonb)
      ON CONFLICT (id) DO NOTHING`,
-    [intent.id, body.amountCents, body.description, appointmentId, intent.status, body.receiptEmail ?? null, now],
+    [intent.id, body.amountCents, body.description, appointmentId, intent.status, body.receiptEmail ?? null, now, draft ? JSON.stringify(draft) : null],
   );
   return json({ paymentIntentId: intent.id, clientSecret: intent.client_secret }, 201);
 }
 
 /**
- * Records Stripe's view of a PaymentIntent and, once it succeeded, marks its
- * appointment paid (paid amount = all succeeded payments for it). Idempotent.
+ * Records Stripe's view of a PaymentIntent and, once it succeeded, records its
+ * checkout's card sale (if it has a ticket) and marks its appointment paid
+ * (paid amount = all succeeded payments for it). Idempotent.
  */
 export async function syncPayment(
   db: Queryable,
   intent: Pick<Stripe.PaymentIntent, 'id' | 'status'>,
   now: Date,
+  deps: Pick<Deps, 'uuid' | 'log'>,
 ): Promise<PaymentRow | null> {
   // succeeded and canceled are final in Stripe, so a late or replayed event can't undo them.
   await db.query(
@@ -200,8 +206,13 @@ export async function syncPayment(
     [intent.id, intent.status, now],
   );
   const { rows } = await db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [intent.id]);
-  const row = rows[0];
+  let row = rows[0];
   if (!row) return null;
+  if (row.status === 'succeeded' && row.kind === 'in_person' && row.sale_id === null) {
+    // In this same transaction, so the money is in the sales exactly when the payment is.
+    const saleId = await recordCardSale(db, deps, row.id, now);
+    if (saleId) row = { ...row, sale_id: saleId };
+  }
   // A fee charged to the card on file isn't a payment for the service: it never marks the appointment paid.
   if (row.status === 'succeeded' && row.appointment_id && row.kind === 'in_person') {
     await db.query(
@@ -250,7 +261,7 @@ export async function completePayment(ctx: Context): Promise<Response> {
       const { rows } = await tx.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [id]);
       return rows[0] ?? null;
     }
-    return syncPayment(tx, intent, now);
+    return syncPayment(tx, intent, now, ctx.deps);
   });
   if (!row) throw notFound();
   // `status` is Stripe's: "succeeded" means the money is in. Anything else is not paid (yet).
@@ -329,7 +340,7 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
           );
           return;
         }
-        await syncPayment(tx, intent, now);
+        await syncPayment(tx, intent, now, ctx.deps);
       });
     }
   }

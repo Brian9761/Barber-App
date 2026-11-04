@@ -26,7 +26,8 @@
       "note": null,
       "createdAt": "2026-11-02T18:20:00Z",
       "card": null,
-      "noShowFee": null
+      "noShowFee": null,
+      "sale": null
     },
     {
       "id": "00000000-0000-4000-8000-000000000005",
@@ -65,7 +66,8 @@
         "customerCancelledAt": null,
         "lateCancelWindowMinutes": 60,
         "reason": null
-      }
+      },
+      "sale": null
     },
     {
       "id": "00000000-0000-4000-8000-000000000006",
@@ -104,7 +106,8 @@
         "customerCancelledAt": "2026-11-02T17:00:00Z",
         "lateCancelWindowMinutes": 60,
         "reason": null
-      }
+      },
+      "sale": null
     },
     {
       "id": "00000000-0000-4000-8000-000000000008",
@@ -132,7 +135,8 @@
       "note": null,
       "createdAt": "2026-11-02T19:06:00Z",
       "card": null,
-      "noShowFee": null
+      "noShowFee": null,
+      "sale": null
     }
   ]
 }

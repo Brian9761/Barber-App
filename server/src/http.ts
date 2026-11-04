@@ -15,6 +15,13 @@ export const ERROR_STATUS = {
   not_chargeable: 409,
   /** A no-show can only be marked once a booking with a card on file has started. */
   not_started: 409,
+  // Sales
+  /** Only a booked or completed appointment can be checked out. */
+  not_checkoutable: 409,
+  /** The appointment already has a live (not voided) sale. */
+  already_checked_out: 409,
+  /** A card payment's amount isn't its ticket's total. */
+  amount_mismatch: 400,
   stripe_not_configured: 503,
   owner_not_configured: 503,
   server_error: 500,

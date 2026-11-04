@@ -36,6 +36,7 @@
       "customerCancelledAt": "2026-11-03T20:30:00Z",
       "lateCancelWindowMinutes": 60,
       "reason": "lateCancel"
-    }
+    },
+    "sale": null
   }
 }

@@ -40,6 +40,11 @@ export const Appointment = z.strictObject({
     .nullable(),
 });
 
+/** The owner's view of an appointment: the client's view plus its checkout (live sale). */
+export const OwnerAppointment = Appointment.extend({
+  sale: z.strictObject({ id, totalCents: int.min(0).max(1_000_000), method: z.enum(['card', 'cash', 'other']) }).nullable(),
+});
+
 export const Slot = z.strictObject({ start: instant, barberIds: z.array(id) });
 export const DaySlots = z.strictObject({ date, slots: z.array(Slot) });
 export const Product = z.strictObject({
@@ -77,6 +82,7 @@ export const Payment = z.strictObject({
   status: z.string(),
   createdAt: instant,
   kind: z.enum(['inPerson', 'noShowFee', 'lateCancelFee']),
+  saleId: id.nullable(),
 });
 export const SavedCard = z.strictObject({
   brand: z.string().regex(/^[a-z0-9_]+$/),
@@ -100,6 +106,102 @@ export const NoShowPolicy = z.strictObject({
   lateCancelWindowMinutes: int.min(30).max(2880).nullable(),
   warning: z.strictObject({ title: z.string().min(1), message: z.string().min(1) }).nullable(),
 });
+export const SaleItem = z.strictObject({
+  kind: z.enum(['service', 'product', 'custom']),
+  serviceId: id.nullable(),
+  productId: id.nullable(),
+  name: z.string().min(1).max(80),
+  quantity: int.min(1).max(99),
+  unitCents: int.min(0).max(1_000_000),
+  totalCents: int.min(0),
+});
+export const Sale = z.strictObject({
+  id,
+  barberId: id,
+  barberName: z.string().min(1),
+  appointmentId: id.nullable(),
+  customerName: z.string().min(1).max(60).nullable(),
+  method: z.enum(['card', 'cash', 'other']),
+  paymentIntentId: z.string().regex(/^pi_/).nullable(),
+  totalCents: int.min(0).max(1_000_000),
+  items: z.array(SaleItem).min(1).max(20),
+  soldAt: instant,
+  voidedAt: instant.nullable(),
+  voidReason: z.string().nullable(),
+});
+const month = z.string().regex(/^\d{4}-\d{2}$/);
+const cents = int.min(0);
+const rate = z.number().min(0);
+export const Analytics = z.strictObject({
+  from: date,
+  to: date,
+  barberId: id.nullable(),
+  timeZone: z.string().min(1),
+  generatedAt: instant,
+  granularity: z.enum(['day', 'month']),
+  totals: z.strictObject({
+    salesCents: cents,
+    servicesCents: cents,
+    productsCents: cents,
+    otherCents: cents,
+    feesCents: cents,
+    servicesCount: int.min(0),
+    productsCount: int.min(0),
+    clientsServed: int.min(0),
+    checkouts: int.min(0),
+    averageTicketCents: cents,
+  }),
+  previous: z.strictObject({ from: date, to: date, salesCents: cents }),
+  productivity: z.strictObject({
+    openMinutes: int.min(0),
+    bookedMinutes: int.min(0),
+    chairTimeBooked: rate,
+    appointments: z.strictObject({
+      booked: int.min(0),
+      completed: int.min(0),
+      noShows: int.min(0),
+      cancelled: int.min(0),
+      lateCancellations: int.min(0),
+      upcoming: int.min(0),
+    }),
+    completionRate: rate.max(1),
+    noShowRate: rate.max(1),
+    salesPerHourCents: cents,
+    productAttachRate: rate.max(1),
+  }),
+  topBarber: z
+    .strictObject({ barberId: id, name: z.string().min(1), salesCents: cents, servicesCount: int.min(0), productsCount: int.min(0) })
+    .nullable(),
+  leaderboard: z.array(
+    z.strictObject({
+      rank: int.min(1),
+      barberId: id,
+      name: z.string().min(1),
+      salesCents: cents,
+      servicesCents: cents,
+      productsCents: cents,
+      servicesCount: int.min(0),
+      productsCount: int.min(0),
+      clientsServed: int.min(0),
+      averageTicketCents: cents,
+    }),
+  ),
+  services: z.array(z.strictObject({ serviceId: id, name: z.string().min(1), count: int.min(0), salesCents: cents })),
+  products: z.array(z.strictObject({ productId: id.nullable(), name: z.string().min(1), quantity: int.min(0), salesCents: cents })),
+  series: z.array(
+    z.strictObject({
+      date: z.union([date, month]),
+      salesCents: cents,
+      servicesCents: cents,
+      productsCents: cents,
+      otherCents: cents,
+      feesCents: cents,
+      servicesCount: int.min(0),
+      productsCount: int.min(0),
+    }),
+  ),
+  barbers: z.array(z.strictObject({ barberId: id, name: z.string().min(1) })),
+});
 export const ErrorBody = z.strictObject({
   error: z.strictObject({
     code: z.enum([
@@ -116,6 +218,9 @@ export const ErrorBody = z.strictObject({
       'policy_changed',
       'not_chargeable',
       'not_started',
+      'not_checkoutable',
+      'already_checked_out',
+      'amount_mismatch',
       'stripe_not_configured',
       'owner_not_configured',
       'server_error',
@@ -138,9 +243,9 @@ export const RESPONSES = {
     ok: z.literal(true),
     stripe: z.strictObject({ configured: z.boolean(), mode: z.enum(['test', 'live']).nullable(), locationId: z.string().nullable() }),
   }),
-  'owner-appointments': z.strictObject({ appointments: z.array(Appointment) }),
-  'owner-appointment-created': z.strictObject({ appointment: Appointment }),
-  'owner-appointment-updated': z.strictObject({ appointment: Appointment }),
+  'owner-appointments': z.strictObject({ appointments: z.array(OwnerAppointment) }),
+  'owner-appointment-created': z.strictObject({ appointment: OwnerAppointment }),
+  'owner-appointment-updated': z.strictObject({ appointment: OwnerAppointment }),
   'time-off-list': z.strictObject({ timeOff: z.array(TimeOff) }),
   'time-off-created': z.strictObject({ timeOff: TimeOff }),
   'owner-products': z.strictObject({ products: z.array(Product) }),
@@ -159,10 +264,19 @@ export const RESPONSES = {
   'no-show-settings': z.strictObject({ noShowSettings: NoShowSettings }),
   'no-show-settings-updated': z.strictObject({ noShowSettings: NoShowSettings }),
   'payments-with-fees': z.strictObject({ payments: z.array(Payment) }),
-  'no-show-fee-charged': z.strictObject({ appointment: Appointment }),
-  'no-show-fee-declined': z.strictObject({ appointment: Appointment }),
+  'no-show-fee-charged': z.strictObject({ appointment: OwnerAppointment }),
+  'no-show-fee-declined': z.strictObject({ appointment: OwnerAppointment }),
   'appointment-cancelled-late': z.strictObject({ appointment: Appointment }),
-  'late-cancel-fee-charged': z.strictObject({ appointment: Appointment }),
+  'late-cancel-fee-charged': z.strictObject({ appointment: OwnerAppointment }),
+  // Sales and analytics
+  'sale-created': z.strictObject({ sale: Sale }),
+  'sales-day': z.strictObject({ date, sales: z.array(Sale), totals: z.strictObject({ totalCents: int.min(0), count: int.min(0) }) }),
+  'sale-voided': z.strictObject({ sale: Sale, message: z.string().min(1) }),
+  'payment-created-with-sale': z.strictObject({ paymentIntentId: z.string().regex(/^pi_/), clientSecret: z.string().min(1) }),
+  'payment-completed-with-sale': z.strictObject({ payment: Payment }),
+  'owner-appointments-with-sale': z.strictObject({ appointments: z.array(OwnerAppointment) }),
+  analytics: Analytics,
+  'analytics-barber': Analytics,
 } as const;
 
 export type ResponseName = keyof typeof RESPONSES;

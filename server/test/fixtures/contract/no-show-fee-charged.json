@@ -36,6 +36,7 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
       "reason": "noShow"
-    }
+    },
+    "sale": null
   }
 }
