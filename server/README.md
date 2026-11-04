@@ -16,6 +16,7 @@ TypeScript on Vercel Functions (Node 24), Postgres on Neon, region `pdx1`. One f
 | `src/noshow.ts`, `src/feecase.ts`, `src/cards.ts`, `src/noshowfee.ts` | No-show protection: the settings, the fee rule, the policy and the clients' warning; which bookings can be charged (a no-show or a late cancellation); saving a card with Stripe Checkout and booking with it; charging the fee. |
 | `src/auth.ts`, `src/ratelimit.ts`, `src/validation.ts`, `src/time.ts` | Owner key, manage tokens, rate limits, input rules, time zone math. |
 | `src/catalog.ts`, `data/catalog.json` | The menu, team and hours, exported from IzzyClipzKit. |
+| `src/website.ts` | `GET /api/catalog`: the same catalog for the website, with the shop's details and the menu's and team's words. |
 | `src/db.ts`, `src/migrate.ts`, `migrations/*.sql`, `scripts/migrate.ts` | Postgres pool, migrations and the barber seed. |
 | `src/production.ts` | Real dependencies (pg pool, Stripe, Blob, fetch). Tests swap in fakes. |
 | `scripts/dev.ts`, `scripts/smoke.ts` | A local server without Vercel, and the end-to-end check to run after a deploy. |
@@ -165,6 +166,7 @@ The client's rules: when protection is on, every online booking needs a card, an
 - `POST /api/owner/payments/:id/complete` answers 200 with the payment and Stripe's current `status`; the app should treat only `"succeeded"` as paid.
 - `GET /api/owner/availability`: the same query and answer as `GET /api/availability`, with the owner key and without the lead time, so a walk-in can take the next slot that hasn't started yet.
 - `GET /api/owner/me`: `stripe.locationId` is the Terminal location the owner app connects Tap to Pay to (`STRIPE_TERMINAL_LOCATION_ID`), `null` until Stripe is configured.
+- `GET /api/catalog` (public, `Cache-Control: public, max-age=300`, no database) answers with `data/catalog.json` as the Kit exports it: the booking catalog (services, barbers, offerings with their price label and kind, hours, time zone, lead time, window, slot interval, `firstAvailable`) plus what the website shows: `shop` (name, phone in E.164 and for display, address and its lines, coordinates, Instagram, Apple Maps and Google Maps links, the review and website links, about, highlights, payment methods, accessibility), each service's `description`, `category` and `popular`, and each barber's `title`, `bio`, `specialties`, `monogram` and `instagram` (if any). The booking code ignores those extra fields.
 - `GET /api/availability`: `from` defaults to today and must be within a year of it; `days` defaults to 1 (max 31). `serviceId` + `barberId=any` works for the services listed in the catalog's `firstAvailable` (those at least two barbers share); for the others it's a 400 and the app should ask for a barber.
 - `GET /api/owner/appointments`, `/api/owner/time-off` and `/api/owner/payments` take shop-local days: `date`, or `from` and `to` (inclusive; at most 62 days, or 366 for time off), defaulting to today. Time off is listed when it overlaps those days.
 - No-show protection adds, all additive (older apps keep working until the owner turns protection on, when they get `card_required` and need an update):

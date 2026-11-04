@@ -46,6 +46,10 @@ const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x4
 const h = useHarness({ now: '2026-11-02T17:00:00Z' });
 
 describe('contract fixtures (API v1)', () => {
+  it('the website’s catalog (GET /api/catalog)', async () => {
+    check('catalog', await h.call('GET', '/api/catalog'));
+  });
+
   it('every response type, from the real handlers', async () => {
     const owner = { owner: true } as const;
     h.config.stripeSecretKey = 'sk_test_fixture';

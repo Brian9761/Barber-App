@@ -1,0 +1,114 @@
+{
+  "barbers": [
+    {
+      "bio": "Izzy is a licensed barber and educator who believes a haircut is more than a service.",
+      "id": "israel-flores",
+      "instagram": {
+        "handle": "izzy_clipz_",
+        "url": "https://www.instagram.com/izzy_clipz_/"
+      },
+      "monogram": "IZ",
+      "name": "Izzy",
+      "specialties": ["Color & lightener", "Perms"],
+      "title": "Owner · Barber"
+    },
+    {
+      "bio": "Custom cuts, haircut and beard combos, hot towel shaves and seniors' cuts.",
+      "id": "flowxbori",
+      "monogram": "FL",
+      "name": "Flowxbori",
+      "specialties": ["Custom cuts"],
+      "title": "Barber"
+    }
+  ],
+  "firstAvailable": [
+    {
+      "offeringIds": [
+        "israel-flores/4cee4e88-564d-415e-a095-d47d89d132bc",
+        "flowxbori/4cee4e88-564d-415e-a095-d47d89d132bc"
+      ],
+      "serviceId": "military-haircut"
+    }
+  ],
+  "hours": {
+    "1": { "closes": "18:00", "opens": "10:00" },
+    "2": { "closes": "19:00", "opens": "10:00" }
+  },
+  "leadTimeMinutes": 30,
+  "offerings": [
+    {
+      "barberId": "israel-flores",
+      "durationMinutes": 45,
+      "id": "israel-flores/4cee4e88-564d-415e-a095-d47d89d132bc",
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "priceLabel": "$25",
+      "serviceId": "military-haircut"
+    },
+    {
+      "barberId": "flowxbori",
+      "durationMinutes": 45,
+      "id": "flowxbori/4cee4e88-564d-415e-a095-d47d89d132bc",
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "priceLabel": "$25",
+      "serviceId": "military-haircut"
+    },
+    {
+      "barberId": "israel-flores",
+      "durationMinutes": 120,
+      "id": "israel-flores/8f795304-bb2d-4f55-bd37-a6fe6cabb43c",
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "priceLabel": "From $80",
+      "serviceId": "lightener"
+    }
+  ],
+  "services": [
+    {
+      "category": "Haircuts",
+      "description": "A clean, sharp cut with clipper and shear work and a straight-razor finish.",
+      "id": "military-haircut",
+      "name": "Military Haircut",
+      "popular": false
+    },
+    {
+      "category": "Color & Texture",
+      "id": "lightener",
+      "name": "Lightener Process",
+      "popular": false
+    }
+  ],
+  "shop": {
+    "about": ["Walk-ins are welcome, and appointments are available for your convenience."],
+    "accessibility": ["Wheelchair accessible"],
+    "address": {
+      "city": "Oceanside",
+      "lines": ["1919 Mission Ave, Ste 105", "Oceanside, CA 92058"],
+      "postalCode": "92058",
+      "state": "CA",
+      "street": "1919 Mission Ave",
+      "unit": "Ste 105"
+    },
+    "appleMapsDirectionsUrl": "https://maps.apple.com/?daddr=1919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058&dirflg=d",
+    "appleMapsUrl": "https://maps.apple.com/?q=Izzy%20Clipz%20Barbershop&address=1919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058&ll=33.2034409,-117.364815",
+    "coordinate": { "latitude": 33.2034409, "longitude": -117.364815 },
+    "fullName": "Izzy Clipz Barbershop",
+    "googleMapsDirectionsUrl": "https://www.google.com/maps/dir/?api=1&destination=Izzy%20Clipz%20Barbershop,%201919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058",
+    "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Izzy%20Clipz%20Barbershop&query_place_id=ChIJGz5HChRv3IARYJJy_6jyRm8",
+    "googleReviewUrl": "https://search.google.com/local/writereview?placeid=ChIJGz5HChRv3IARYJJy_6jyRm8",
+    "highlights": ["Walk-ins welcome", "Appointments available"],
+    "instagram": {
+      "handle": "izzy_clipz_barbershop_",
+      "url": "https://www.instagram.com/izzy_clipz_barbershop_/"
+    },
+    "name": "Izzy Clipz",
+    "paymentMethods": ["Credit card", "Gift card"],
+    "phone": { "display": "(442) 341-3053", "e164": "+14423413053" },
+    "tagline": "Traditional & modern cuts in Oceanside",
+    "websiteUrl": "https://www.izzyclipzbarbershop.net"
+  },
+  "slotIntervalMinutes": 30,
+  "timeZone": "America/Los_Angeles",
+  "windowDays": 60
+}

@@ -124,9 +124,76 @@ export const ErrorBody = z.strictObject({
   }),
 });
 
+const httpsUrl = z.string().regex(/^https:\/\/\S+$/);
+const Instagram = z.strictObject({ handle: z.string().min(1), url: httpsUrl });
+const clock = z.string().regex(/^\d{2}:\d{2}$/);
+
+/** GET /api/catalog: data/catalog.json as the Kit exports it, for the website. */
+export const WebsiteCatalog = z.strictObject({
+  timeZone: z.string().min(1),
+  slotIntervalMinutes: int.positive(),
+  leadTimeMinutes: int.min(0),
+  windowDays: int.min(0),
+  hours: z.record(z.enum(['1', '2', '3', '4', '5', '6', '7']), z.strictObject({ opens: clock, closes: clock })),
+  services: z.array(
+    z.strictObject({ id, name: z.string().min(1), description: z.string().min(1).optional(), category: z.string().min(1), popular: z.boolean() }),
+  ),
+  barbers: z.array(
+    z.strictObject({
+      id,
+      name: z.string().min(1),
+      title: z.string().min(1),
+      bio: z.string().min(1),
+      specialties: z.array(z.string().min(1)),
+      monogram: z.string().regex(/^[A-Z0-9]{1,2}$/),
+      instagram: Instagram.optional(),
+    }),
+  ),
+  offerings: z.array(
+    z.strictObject({
+      id,
+      serviceId: id,
+      barberId: id,
+      durationMinutes: int.positive(),
+      priceCents: int.min(0),
+      priceKind: z.enum(['fixed', 'startingAt', 'includedWithCut']),
+      priceLabel: z.string().min(1),
+      name: z.string().min(1).optional(),
+    }),
+  ),
+  firstAvailable: z.array(z.strictObject({ serviceId: id, offeringIds: z.array(id).min(2) })),
+  shop: z.strictObject({
+    name: z.string().min(1),
+    fullName: z.string().min(1),
+    tagline: z.string().min(1),
+    phone: z.strictObject({ e164: z.string().regex(/^\+1\d{10}$/), display: z.string().regex(/^\(\d{3}\) \d{3}-\d{4}$/) }),
+    address: z.strictObject({
+      street: z.string().min(1),
+      unit: z.string().min(1).optional(),
+      city: z.string().min(1),
+      state: z.string().regex(/^[A-Z]{2}$/),
+      postalCode: z.string().regex(/^\d{5}$/),
+      lines: z.array(z.string().min(1)).min(1),
+    }),
+    coordinate: z.strictObject({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) }),
+    instagram: Instagram,
+    appleMapsUrl: httpsUrl,
+    appleMapsDirectionsUrl: httpsUrl,
+    googleMapsUrl: httpsUrl,
+    googleMapsDirectionsUrl: httpsUrl,
+    googleReviewUrl: httpsUrl,
+    websiteUrl: httpsUrl,
+    about: z.array(z.string().min(1)),
+    highlights: z.array(z.string().min(1)),
+    paymentMethods: z.array(z.string().min(1)),
+    accessibility: z.array(z.string().min(1)),
+  }),
+});
+
 /** Response bodies by fixture name. */
 export const RESPONSES = {
   health: z.strictObject({ ok: z.literal(true), version: z.string() }),
+  catalog: WebsiteCatalog,
   availability: z.strictObject({ timeZone: z.string(), days: z.array(DaySlots) }),
   'appointment-created': z.strictObject({ appointment: Appointment, manageToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }),
   appointment: z.strictObject({ appointment: Appointment }),
