@@ -80,6 +80,24 @@ export function localDate(instant: Date, zone: string): string {
   return wallClock(instant, zone).date;
 }
 
+/**
+ * The instant the shop's wall clock shows `minutes` past midnight on `date`, or null when that
+ * time doesn't exist that day (skipped when clocks spring forward). A time that happens twice
+ * (when clocks fall back) is the first one. The server's `wallClock` (server/src/time.ts): each
+ * offset the zone has around that day is tried, and the earliest instant that shows this time wins.
+ */
+export function zonedInstant(date: string, minutes: number, zone: string): Date | null {
+  const { year, month, day } = parseDate(date);
+  const hour = Math.floor(minutes / 60);
+  if (hour > 23 || minutes < 0) return null;
+  const local = Date.UTC(year, month - 1, day, hour, minutes % 60);
+  const offsets = new Set([-1, 0, 1].map((days) => zoneOffsetMinutes(new Date(local + days * 86_400_000), zone)));
+  const matches = [...offsets]
+    .map((offset) => local - offset * 60_000)
+    .filter((instant) => zoneOffsetMinutes(new Date(instant), zone) === (local - instant) / 60_000);
+  return matches.length > 0 ? new Date(Math.min(...matches)) : null;
+}
+
 function utcDay(date: string): Date {
   const [y, m, d] = date.split('-').map(Number) as [number, number, number];
   return new Date(Date.UTC(y, m - 1, d));

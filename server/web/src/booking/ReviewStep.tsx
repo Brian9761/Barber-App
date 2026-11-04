@@ -5,6 +5,7 @@ import type { BookingTarget, Catalog, NoShowPolicy } from '../api/types';
 import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
 import { CallLink, Loading, Notice } from '../components/ui';
+import { DemoNotice } from '../demo/DemoNotice';
 import { cardLabel, list, windowLabel } from '../lib/format';
 import { cancelledLate, feeLabel } from '../lib/lateCancel';
 import { leaveTo } from '../lib/leave';
@@ -222,6 +223,7 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
       <Notice tone="success" title="No payment now. You'll pay at the shop.">
         <p>Pay at the shop with a {list(catalog.shop.paymentMethods.map((m) => m.toLowerCase()))}.</p>
       </Notice>
+      <DemoNotice />
 
       {policyState.status === 'loading' ? <Loading text="Checking the booking rules…" /> : null}
       {policyState.status === 'error' ? (

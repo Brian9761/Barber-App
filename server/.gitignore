@@ -6,6 +6,8 @@ coverage/
 *.log
 # The website's build output (npm run build:web), served from public/ on Vercel.
 /public/
+# The website's demo version (npm --prefix web run build:demo), deployed as a static site of its own.
+web/dist-demo/
 # Playwright's output from the website's end-to-end tests
 web/test-results/
 web/playwright-report/

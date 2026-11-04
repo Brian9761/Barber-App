@@ -7,6 +7,7 @@ import './styles/tokens.css';
 import './styles/base.css';
 import './styles/components.css';
 import './styles/pages.css';
+import './styles/app.css';
 import { App, ROUTER_FUTURE } from './App';
 import { CatalogProvider } from './data/catalog';
 

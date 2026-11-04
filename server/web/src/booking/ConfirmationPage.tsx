@@ -3,6 +3,7 @@ import type { Appointment, Catalog } from '../api/types';
 import { Icon } from '../components/Icon';
 import { MoreLink, Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
+import { DemoNotice } from '../demo/DemoNotice';
 import { cardLabel, durationLabel, list } from '../lib/format';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { longDateTimeLabel } from '../lib/shopTime';
@@ -56,6 +57,7 @@ export function ConfirmationPage({ catalog }: { catalog: Catalog }) {
       <Notice tone="success" title="No payment now. You'll pay at the shop.">
         <p>Pay at the shop with a {list(shop.paymentMethods.map((m) => m.toLowerCase()))}.</p>
       </Notice>
+      <DemoNotice />
 
       {!saved ? (
         <Notice tone="warning" title="Write this one down">

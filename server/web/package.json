@@ -9,7 +9,9 @@
   },
   "scripts": {
     "dev": "vite",
+    "dev:demo": "vite --mode demo",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:demo": "tsc -p tsconfig.json --noEmit && vite build --mode demo",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "test": "vitest run",
     "e2e": "playwright test",

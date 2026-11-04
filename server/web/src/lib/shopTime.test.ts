@@ -14,6 +14,7 @@ import {
   wallClock,
   weekdayOf,
   weekRows,
+  zonedInstant,
   zoneOffsetMinutes,
 } from './shopTime';
 
@@ -107,5 +108,44 @@ describe('the shop’s calendar and labels', () => {
     expect(monthPage(2026, 12).leadingBlanks).toBe(2);
     expect(monthPage(2028, 2).days).toHaveLength(29);
     expect(monthsBetween('2026-11-03', addDays('2026-11-03', 60)).map((p) => p.id)).toEqual(['2026-11', '2026-12', '2027-01']);
+  });
+});
+
+describe('a time on the shop’s clock as an instant (the server’s wallClock)', () => {
+  const at = (date: string, clock: string) => {
+    const [h, m] = clock.split(':').map(Number) as [number, number];
+    return zonedInstant(date, h * 60 + m, LA)?.toISOString() ?? null;
+  };
+
+  it('uses the offset of that day: Pacific Daylight Time in October, Standard Time in November', () => {
+    expect(at('2026-10-30', '10:00')).toBe('2026-10-30T17:00:00.000Z');
+    expect(at('2026-11-04', '10:00')).toBe('2026-11-04T18:00:00.000Z');
+    expect(at('2026-11-04', '19:00')).toBe('2026-11-05T03:00:00.000Z');
+  });
+
+  it('has no 2:30 AM on the day clocks spring forward, and 3 AM is the first hour after it', () => {
+    expect(at('2026-03-08', '02:30')).toBeNull();
+    expect(at('2026-03-08', '01:59')).toBe('2026-03-08T09:59:00.000Z');
+    expect(at('2026-03-08', '03:00')).toBe('2026-03-08T10:00:00.000Z');
+    expect(at('2026-03-08', '10:00')).toBe('2026-03-08T17:00:00.000Z');
+  });
+
+  it('takes the first 1:30 AM on the day clocks fall back, which happens twice', () => {
+    expect(at('2026-11-01', '01:30')).toBe('2026-11-01T08:30:00.000Z');
+    expect(at('2026-11-01', '10:00')).toBe('2026-11-01T18:00:00.000Z');
+  });
+
+  it("doesn't depend on the computer's own time zone", () => {
+    const originalTZ = process.env.TZ;
+    try {
+      process.env.TZ = 'Asia/Tokyo';
+      expect(at('2026-11-04', '10:00')).toBe('2026-11-04T18:00:00.000Z');
+    } finally {
+      process.env.TZ = originalTZ;
+    }
+  });
+
+  it('turns down a time past midnight', () => {
+    expect(zonedInstant('2026-11-04', 24 * 60, LA)).toBeNull();
   });
 });

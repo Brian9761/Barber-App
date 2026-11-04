@@ -1,0 +1,37 @@
+/* The web app's own pieces: the demo version's notice. */
+
+/* ------------------------------------------------------------- Demo version */
+
+/* "Demo version: bookings aren't sent to the shop." Calm, like the apps' line on ink. */
+.demo-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-notice);
+  background: var(--color-bg-alt);
+  color: var(--color-text);
+  text-align: left;
+}
+
+.demo-notice__icon {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  color: var(--color-action);
+}
+
+.demo-notice--on-dark {
+  background: var(--color-ink-2);
+  color: var(--color-bone);
+}
+
+.demo-notice--on-dark .demo-notice__icon {
+  color: var(--color-link-on-dark);
+}
+
+.hero .demo-notice {
+  max-width: 560px;
+  margin: var(--space-6) auto 0;
+}

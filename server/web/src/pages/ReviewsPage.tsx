@@ -5,6 +5,7 @@ import { usePageMeta } from '../components/usePageMeta';
 import { useCatalog } from '../data/catalog';
 import { FALLBACK_SHOP } from '../data/fallback';
 import { useReviews } from '../data/reviews';
+import { DemoNotice } from '../demo/DemoNotice';
 import { MONTH_SHORT, localDate, parseDate } from '../lib/shopTime';
 
 // Live reviews from Google and Yelp, each in its own section with its own
@@ -29,6 +30,7 @@ export function ReviewsPage() {
         <PreferToCall className="page-header__call" />
       </header>
       <div className="container container--narrow reviews">
+        <DemoNotice about="reviews" />
         {reviews.status === 'loading' ? <Loading text="Loading reviews from Google…" /> : null}
         {reviews.status === 'error' ? (
           <div className="reviews__error">

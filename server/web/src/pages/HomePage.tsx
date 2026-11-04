@@ -4,6 +4,7 @@ import type { Catalog } from '../api/types';
 import { GALLERY, STOREFRONT } from '../assets/images';
 import { useNearScreen, useNow } from '../components/hooks';
 import { Logo } from '../components/Logo';
+import { DemoNotice } from '../demo/DemoNotice';
 import { CallLink, Monogram, MoreLink, Photo, Stars } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { useCatalog } from '../data/catalog';
@@ -44,6 +45,7 @@ export function HomePage() {
               See services
             </MoreLink>
           </div>
+          <DemoNotice onDark />
           <p className="hero__call">
             Prefer to call? <CallLink className="inline-link nowrap" />
           </p>
