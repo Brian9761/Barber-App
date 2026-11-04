@@ -771,7 +771,22 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     private func typeInto(_ identifier: String, _ text: String, file: StaticString = #filePath, line: UInt = #line) {
         let field = reveal(identifier, file: file, line: line)
         field.tap()
+        // On a slow simulator the keyboard can still be with the previous field when typing starts,
+        // and typing then fails ("Neither element nor any descendant has keyboard focus").
+        if !waitForKeyboardFocus(on: field) {
+            field.tap()
+            XCTAssertTrue(waitForKeyboardFocus(on: field), "\(identifier) didn't get the keyboard", file: file, line: line)
+        }
         field.typeText(text)
+    }
+
+    /// Whether `field` has the keyboard within `timeout`. `hasKeyboardFocus` isn't in XCUIElement's
+    /// public interface, so where it's missing this only waits for a keyboard to show.
+    private func waitForKeyboardFocus(on field: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+        guard field.responds(to: NSSelectorFromString("hasKeyboardFocus")) else {
+            return app.keyboards.firstMatch.waitForExistence(timeout: timeout)
+        }
+        return waitUntil(field, toMatch: NSPredicate(format: "hasKeyboardFocus == true"), timeout: timeout)
     }
 
     /// Replaces a text field's text: taps its trailing end (so the cursor goes after the text),

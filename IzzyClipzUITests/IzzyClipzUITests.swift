@@ -516,7 +516,9 @@ final class IzzyClipzUITests: XCTestCase {
         continueToReview()
         tapPinned("bookAppointmentButton")
         XCTAssertTrue(waitUntil(element("bookAppointmentButton"), toMatch: NSPredicate(format: "isEnabled == false")), "It isn't booking")
-        XCTAssertTrue(waitForDisappearance(of: element("bookingStartOver")), "Start over shows while it's booking")
+        // The sample server holds the booking for up to 2 minutes, so a slow simulator can take its
+        // time taking the button away.
+        XCTAssertTrue(waitForDisappearance(of: element("bookingStartOver"), timeout: 30), "Start over shows while it's booking")
 
         // Another booking, started from Home while the first is still being sent. The sample
         // server holds the first booking's answer until the app asks for open times again, so
