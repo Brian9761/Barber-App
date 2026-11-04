@@ -239,7 +239,8 @@ struct DayPicker: View {
     }
 }
 
-/// One appointment in the list: time, client, service, barber, status, paid.
+/// One appointment in the list: time, client, service, barber, status ("Cancelled late" for a
+/// late cancellation), paid, and the card on file or its fee ("No-show fee $35 charged").
 struct AppointmentRow: View {
     let appointment: IzzyAPI.Appointment
     let shopTime: ShopTime
@@ -266,12 +267,7 @@ struct AppointmentRow: View {
                 Text("\(appointment.serviceName) · \(appointment.barberName)")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                HStack(spacing: 6) {
-                    StatusBadge(status: appointment.status)
-                    if appointment.payment.status == .paid {
-                        Badge(text: paidText, color: BusinessTheme.paid)
-                    }
-                }
+                AppointmentBadgeRow(badges: AppointmentBadges(appointment: appointment))
             }
             // The rest of the row's width: with two badges, the name and service otherwise
             // wrapped into a narrow column ("Marcus / Sample").
@@ -283,27 +279,53 @@ struct AppointmentRow: View {
         .accessibilityLabel(accessibilityText)
     }
 
-    private var paidText: String {
-        appointment.payment.amountCents.map { "Paid \(Money.amount($0))" } ?? "Paid"
-    }
-
     private var accessibilityText: String {
-        var parts = [
+        let parts = [
             shopTime.time(appointment.start),
             appointment.customer.name,
             "\(appointment.serviceName) with \(appointment.barberName)",
-            appointment.status.title,
-        ]
-        if appointment.payment.status == .paid { parts.append(paidText) }
+        ] + AppointmentBadges(appointment: appointment).spoken
         return parts.joined(separator: ", ")
     }
 }
 
-struct StatusBadge: View {
-    let status: IzzyAPI.AppointmentStatus
+/// An appointment's badges side by side, or under each other when they don't fit the width.
+struct AppointmentBadgeRow: View {
+    let badges: AppointmentBadges
+    /// The status badge's accessibility identifier, for UI tests.
+    var statusIdentifier: String?
 
     var body: some View {
-        Badge(text: status.title, color: status.color)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) { items }
+            VStack(alignment: .leading, spacing: 4) { items }
+        }
+    }
+
+    @ViewBuilder
+    private var items: some View {
+        ForEach(Array(badges.items.enumerated()), id: \.offset) { index, item in
+            if index == 0, let statusIdentifier {
+                Badge(text: item.text, color: item.tone.color)
+                    .accessibilityLabel(item.spoken)
+                    .accessibilityIdentifier(statusIdentifier)
+            } else {
+                Badge(text: item.text, color: item.tone.color)
+                    .accessibilityLabel(item.spoken)
+            }
+        }
+    }
+}
+
+extension AppointmentBadges.Tone {
+    var color: Color {
+        switch self {
+        case .status(let status): return status.color
+        case .paid, .feeCharged: return BusinessTheme.paid
+        case .card: return .purple
+        case .feeDeclined: return .red
+        case .feeWaiting: return BusinessTheme.caution
+        }
     }
 }
 

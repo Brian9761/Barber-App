@@ -1,8 +1,8 @@
 import IzzyClipzKit
 import SwiftUI
 
-/// Server and Stripe status, Tap to Pay setup and "How to Tap", the owner
-/// key, sign out, and the app's version.
+/// Server and Stripe status, no-show protection, Tap to Pay setup and "How
+/// to Tap", the owner key, sign out, and the app's version.
 struct SettingsView: View {
     let workspace: Workspace
     let model: AppModel
@@ -20,6 +20,7 @@ struct SettingsView: View {
                 }
                 serverSection
                 stripeSection
+                noShowSection
                 tapToPaySection
                 keySection
                 Section {
@@ -38,8 +39,13 @@ struct SettingsView: View {
             .refreshable {
                 await workspace.refreshStatus()
                 await workspace.refreshHealth()
+                await workspace.noShow.refresh()
             }
-            .task { await workspace.refreshHealth() }
+            .task {
+                async let health: Void = workspace.refreshHealth()
+                async let noShow: Void = workspace.noShow.refresh()
+                _ = await (health, noShow)
+            }
             .sheet(isPresented: $showsReplaceKey) {
                 ReplaceKeyView(model: model)
             }
@@ -128,6 +134,28 @@ struct SettingsView: View {
             return "Stripe test keys: only Stripe test cards work and no money moves. Switch the server to the live key to take real payments."
         }
         return "Payments go to the shop's Stripe account."
+    }
+
+    private var noShowSection: some View {
+        Section {
+            NavigationLink {
+                NoShowSettingsView(store: workspace.noShow, stripe: workspace.ownerStatus?.stripe)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No-show protection")
+                    Text(workspace.noShow.summary)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+                .accessibilityElement(children: .combine)
+            }
+            .accessibilityIdentifier("noShowSettingsLink")
+        } header: {
+            Text("Bookings")
+        } footer: {
+            Text("A card on file for online bookings, and the fee for no-shows and late cancellations.")
+        }
     }
 
     private var tapToPaySection: some View {

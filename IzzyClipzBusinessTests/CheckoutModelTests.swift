@@ -674,7 +674,7 @@ final class SampleServerNoShowTests: XCTestCase {
         let payments = try await harness.api.payments(on: TestClock.today)
         let fee = try XCTUnwrap(payments.first { $0.kind == .noShowFee })
         XCTAssertEqual(fee.amountCents, 3_500)
-        XCTAssertEqual(fee.description, "No-show fee: Haircut with Flowxbori")
+        XCTAssertEqual(fee.description, "No-show fee: Haircut with Flowxbori, Mon, Nov 2 at 10:00 AM", "as the server words it")
         XCTAssertEqual(fee.appointmentId, kim.id)
         XCTAssertTrue(fee.isSucceeded)
 
@@ -777,7 +777,7 @@ final class SampleServerNoShowTests: XCTestCase {
         let payments = try await harness.api.payments(on: TestClock.today)
         let fee = try XCTUnwrap(payments.first { $0.kind == .lateCancelFee })
         XCTAssertEqual(fee.amountCents, 3_500)
-        XCTAssertEqual(fee.description, "Late cancellation fee: Haircut with Flowxbori")
+        XCTAssertEqual(fee.description, "Late cancellation fee: Haircut with Flowxbori, Mon, Nov 2 at 11:30 AM", "as the server words it")
         XCTAssertEqual(fee.kind.title, "Late cancellation fee")
         XCTAssertEqual(payments.filter(\.kind.isFee).count, 1)
         // Again: the same answer, no second charge; reopening doesn't refund.

@@ -5,7 +5,7 @@ import { bearerMatches, hashManageToken, manageTokenMatches, newManageToken } fr
 import { Catalog, loadCatalog } from '../src/catalog.js';
 import { configFromEnv } from '../src/config.js';
 import { createPool, normalizeConnectionString } from '../src/db.js';
-import { addDays, dayBounds, formatInstant, isDate, localDate, parseInstant, wallClock, weekday } from '../src/time.js';
+import { addDays, dayBounds, formatInstant, isDate, localDate, parseInstant, wallClock, weekday, wholeSecond } from '../src/time.js';
 import { charLength, normalizeUSPhone } from '../src/validation.js';
 
 describe('US phone numbers → E.164', () => {
@@ -40,6 +40,19 @@ describe('time helpers', () => {
   it('formats instants without fractional seconds', () => {
     expect(formatInstant(new Date('2026-11-02T18:00:00.000Z'))).toBe('2026-11-02T18:00:00Z');
     expect(formatInstant(new Date('2026-11-02T18:00:00.123Z'))).toBe('2026-11-02T18:00:00Z');
+  });
+
+  it('rounds an instant down to the whole second, as it is written', () => {
+    for (const [time, whole] of [
+      ['2026-11-02T18:00:00.000Z', '2026-11-02T18:00:00.000Z'],
+      ['2026-11-02T18:00:00.400Z', '2026-11-02T18:00:00.000Z'],
+      ['2026-11-02T18:00:00.999Z', '2026-11-02T18:00:00.000Z'],
+      ['2026-11-02T17:59:59.999Z', '2026-11-02T17:59:59.000Z'],
+    ] as const) {
+      const rounded = wholeSecond(new Date(time));
+      expect(rounded.toISOString(), time).toBe(whole);
+      expect(formatInstant(rounded)).toBe(formatInstant(new Date(time)));
+    }
   });
 
   it('parses only full date-times with a zone', () => {

@@ -13,6 +13,15 @@ export function formatInstant(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, 'Z');
 }
 
+/**
+ * The instant rounded down to the whole second, as `formatInstant` writes it. A time that's kept
+ * and decided on (when a client cancelled, say) is taken this way, so what the server decides
+ * matches what the apps read back.
+ */
+export function wholeSecond(date: Date): Date {
+  return new Date(Math.floor(date.getTime() / 1000) * 1000);
+}
+
 /** Parses an ISO 8601 date-time with a zone designator ("Z" or "+hh:mm"). */
 export function parseInstant(text: string): Date | null {
   if (!INSTANT_RE.test(text)) return null;

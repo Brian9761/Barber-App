@@ -600,6 +600,11 @@ final class CheckoutModel {
         todaysPayments.reduce(0) { $0 + $1.amountCents }
     }
 
+    /// The part of today's total that's no-show and late cancellation fees charged to cards on file.
+    var todaysFeesCents: Int {
+        todaysPayments.filter(\.kind.isFee).reduce(0) { $0 + $1.amountCents }
+    }
+
     /// Asks the server about payments left unconfirmed by an earlier run (the
     /// app closed mid-payment, the network dropped).
     func syncPendingPayments() async {

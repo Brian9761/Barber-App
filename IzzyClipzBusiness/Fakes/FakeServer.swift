@@ -38,18 +38,43 @@ final class FakeServer {
         var empty = false
         /// Also start with a client who booked online with a card on file (Visa 4242, the fee the
         /// settings give a $35 haircut) and didn't come: a 10 AM haircut with Flowxbori, marked no-show.
+        /// With any of these three, no-show protection starts on: those clients booked with it on.
         var noShowWithCard = false
         /// Also start with a client who booked online with a card on file (Visa 4242) and cancelled
         /// in the app at 10:50 AM, less than 1 hour before their 11:30 AM haircut with Flowxbori:
         /// a late cancellation the owner may charge.
         var lateCancelWithCard = false
+        /// Also start with a client who booked online with a card on file (Visa 4242) for later
+        /// today: a 2:30 PM haircut with Flowxbori that hasn't started, so it can't be a no-show yet.
+        var upcomingWithCard = false
         /// The next fee charge never reaches Stripe (an outage): like the server, it answers 500 and
         /// leaves the fee pending. Charging again (Check again) asks Stripe, finds nothing, and then
         /// charges it if the booking can still be charged, or settles it as not charged if not.
         var nextFeeChargeFails = false
+        /// What Stripe answers the next fee charge instead of approving it, like the server records it:
+        /// declined (not enough money on the card), or the client's bank wants them to approve it. The
+        /// answer is 200 with the fee declined or needing the client; charging again is a new try.
+        var nextFeeAnswer: FeeAnswer?
+        /// The next fee charge reaches the server and Stripe answers it (approved, or `nextFeeAnswer`'s
+        /// "no"), and the server records that, but the answer never reaches the phone: the app sees it
+        /// as offline. Loading the day again shows what happened.
+        var loseNextFeeAnswer = false
         /// How long each call takes, so loading states are visible.
         var latency: Duration = .zero
     }
+
+    /// A definite "no" from Stripe to a fee charge (`Options.nextFeeAnswer`).
+    enum FeeAnswer: Equatable {
+        /// `card_declined` / `insufficient_funds`: the fee is `declined`.
+        case declined
+        /// `authentication_required`: the fee is `needsAction`.
+        case needsAction
+    }
+
+    /// The server's words for those answers (`server/src/noshowfee.ts`).
+    static let insufficientFundsMessage = "The card was declined: there isn't enough money on it."
+    static let authenticationMessage =
+        "The client's bank wants them to approve this charge, so it can't go through from here. Ask them to pay at the shop."
 
     var options: Options
     let catalog: Catalog
@@ -61,7 +86,8 @@ final class FakeServer {
     private(set) var products: [IzzyAPI.Product] = []
     private(set) var payments: [StoredPayment] = []
     /// The no-show protection settings, starting where the server does (off; once on, the full
-    /// service price for a no-show or a cancellation less than 1 hour before).
+    /// service price for a no-show or a cancellation less than 1 hour before). On from the start
+    /// when the sample day has bookings made with a card on file, as they were booked with it on.
     private(set) var noShowSettings = IzzyAPI.NoShowSettings.default
     /// Every call, in order ("ownerStatus", "createPayment", …), for tests.
     private(set) var calls: [String] = []
@@ -359,6 +385,10 @@ final class FakeServer {
     /// A pending fee (`Options.nextFeeChargeFails`: that try never reached Stripe) is checked
     /// again whatever happened since: charged now if the booking can still be charged (the same
     /// try), otherwise settled as not charged with the server's 409 "Nothing was charged. …".
+    ///
+    /// `Options.nextFeeAnswer` makes Stripe say no once, as the server records it: a 200 with the
+    /// fee declined (and why) or needing the client, and the PaymentIntent in Payments with Stripe's
+    /// status (`requires_payment_method`), so it isn't listed as money that came in.
     func chargeNoShowFee(appointmentId id: String) throws -> IzzyAPI.Appointment {
         guard options.stripeConfigured else { throw APIError.notConfigured(APIError.Feature.stripe) }
         guard let index = appointments.firstIndex(where: { $0.id == id }) else {
@@ -394,24 +424,51 @@ final class FakeServer {
             appointments[index] = appointment
             throw APIError.server(code: IzzyAPI.ErrorCode.serverError, message: "We couldn't reach Stripe. Please try again.", status: 500)
         }
-        // The simulated card is approved, like Stripe's test card 4242.
         counter += 1
         let paymentID = "pi_sample_\(counter)"
-        fee.status = .charged
-        fee.chargedAt = now()
-        fee.message = nil
+        let stripeStatus: String
+        if let answer = options.nextFeeAnswer {
+            // Stripe's definite "no": the try is over, and the next charge is a new one.
+            options.nextFeeAnswer = nil
+            stripeStatus = "requires_payment_method"
+            fee.status = answer == .declined ? .declined : .needsAction
+            fee.chargedAt = nil
+            fee.message = answer == .declined ? Self.insufficientFundsMessage : Self.authenticationMessage
+        } else {
+            // The simulated card is approved, like Stripe's test card 4242.
+            stripeStatus = "succeeded"
+            fee.status = .charged
+            fee.chargedAt = now()
+            fee.message = nil
+        }
         fee.reason = reason
         appointment.noShowFee = fee
         appointments[index] = appointment
         payments.append(StoredPayment(
             payment: IzzyAPI.Payment(
                 id: paymentID, amountCents: fee.amountCents,
-                description: "\(reason.title): \(appointment.serviceName) with \(appointment.barberName)",
-                appointmentId: id, status: "succeeded", createdAt: now(), kind: IzzyAPI.PaymentKind(feeReason: reason)
+                description: Self.feeDescription(appointment, reason: reason, shopTime: shopTime),
+                appointmentId: id, status: stripeStatus, createdAt: now(), kind: IzzyAPI.PaymentKind(feeReason: reason)
             ),
             clientSecret: "\(paymentID)_secret_sample", receiptEmail: nil
         ))
+        if options.loseNextFeeAnswer {
+            // Recorded as Stripe answered, but the answer never reaches the phone.
+            options.loseNextFeeAnswer = false
+            throw APIError.offline
+        }
         return appointment
+    }
+
+    /// The fee's description as the server writes it (`feeDescription` in `server/src/noshowfee.ts`):
+    /// "No-show fee: Haircut with Flowxbori, Mon, Nov 2 at 10:00 AM", in shop time.
+    static func feeDescription(_ appointment: IzzyAPI.Appointment, reason: IzzyAPI.NoShowFeeReason, shopTime: ShopTime) -> String {
+        let parts = shopTime.calendar.dateComponents([.hour, .minute], from: appointment.start)
+        let hour = parts.hour ?? 0
+        let minute = parts.minute ?? 0
+        let clock = "\(hour % 12 == 0 ? 12 : hour % 12):\(minute < 10 ? "0" : "")\(minute) \(hour < 12 ? "AM" : "PM")"
+        let when = "\(shopTime.shortDay(shopTime.day(containing: appointment.start))) at \(clock)"
+        return String("\(reason.title): \(appointment.serviceName) with \(appointment.barberName), \(when)".prefix(200))
     }
 
     // MARK: Time off
@@ -641,6 +698,11 @@ final class FakeServer {
                 status: sample.6, cancelledBy: sample.7, payment: payment, note: sample.9
             ))
         }
+        // Clients booked these with a card because protection was on, and it still is: Settings
+        // then reads the same as the bookings (it starts off otherwise, as on the server).
+        if options.noShowWithCard || options.lateCancelWithCard || options.upcomingWithCard {
+            noShowSettings.enabled = true
+        }
         // Booked online with a card on file under the settings' policy, like the server keeps it.
         func protected(_ appointment: IzzyAPI.Appointment, price: Price, customerCancelledAt: Date? = nil) -> IzzyAPI.Appointment {
             var appointment = appointment
@@ -666,6 +728,11 @@ final class FakeServer {
                 offering: haircut, start: at(11, 30), customer: IzzyAPI.Customer(name: "Lee Sample", phone: "+14425550109"),
                 status: .cancelled, cancelledBy: .customer
             ), price: haircut.price, customerCancelledAt: at(10, 50)))
+        }
+        if options.upcomingWithCard, let haircut = offering("haircut", "flowxbori") {
+            appointments.append(protected(makeAppointment(
+                offering: haircut, start: at(14, 30), customer: IzzyAPI.Customer(name: "Nia Sample", phone: "+14425550110")
+            ), price: haircut.price))
         }
         timeOff.append(IzzyAPI.TimeOff(id: nextUUID(), barberId: "flowxbori", start: at(13), end: at(14), reason: "Lunch"))
         products = [

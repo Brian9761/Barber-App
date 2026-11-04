@@ -21,6 +21,20 @@ enum LaunchArgument {
     static let empty = "-fake-empty"
     /// Every sample server call takes a moment, so loading states show.
     static let slow = "-fake-slow"
+    /// Also clients who booked online with a card on file: Kim Sample (10 AM, a no-show), Lee
+    /// Sample (11:30 AM, cancelled in the app at 10:50 AM: a late cancellation) and Nia Sample
+    /// (2:30 PM, booked). All with Flowxbori, $35 haircuts, the full price as the fee. No-show
+    /// protection starts on, as they booked with it on.
+    static let cardsOnFile = "-fake-cards-on-file"
+    /// The next fee charged to a card on file is declined (not enough money on the card).
+    static let noShowDeclined = "-fake-no-show-declined"
+    /// The next fee charged to a card on file needs the client to approve it with their bank.
+    static let noShowNeedsAction = "-fake-no-show-needs-action"
+    /// The next fee charged to a card on file never reaches Stripe: it waits, and Check again charges it.
+    static let noShowUnreachable = "-fake-no-show-unreachable"
+    /// The next fee charged to a card on file goes through (or is declined, with `noShowDeclined`), but
+    /// the answer is lost on the way back: the app loads the day again and shows what happened.
+    static let noShowAnswerLost = "-fake-no-show-answer-lost"
 }
 
 /// What the app talks to and how: the real server and Tap to Pay, or the
@@ -162,6 +176,15 @@ final class AppEnvironment {
         if arguments.contains(LaunchArgument.paymentIncomplete) { options.completeStatusOverride = "requires_payment_method" }
         options.empty = arguments.contains(LaunchArgument.empty)
         if arguments.contains(LaunchArgument.slow) { options.latency = .milliseconds(600) }
+        if arguments.contains(LaunchArgument.cardsOnFile) {
+            options.noShowWithCard = true
+            options.lateCancelWithCard = true
+            options.upcomingWithCard = true
+        }
+        if arguments.contains(LaunchArgument.noShowDeclined) { options.nextFeeAnswer = .declined }
+        if arguments.contains(LaunchArgument.noShowNeedsAction) { options.nextFeeAnswer = .needsAction }
+        options.nextFeeChargeFails = arguments.contains(LaunchArgument.noShowUnreachable)
+        options.loseNextFeeAnswer = arguments.contains(LaunchArgument.noShowAnswerLost)
         let server = FakeServer(options: options, shopTime: shopTime, now: clock)
 
         let terminal = SimulatedPaymentTerminal(stepDelay: stepDelay)
