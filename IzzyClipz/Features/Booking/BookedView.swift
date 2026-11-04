@@ -78,6 +78,12 @@ struct BookedView: View {
                         value: card.label,
                         detail: NoShowCopy.bookedCardDetail(saved.snapshot)
                     )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        [NoShowCopy.spokenCardOnFileLine(saved.snapshot), NoShowCopy.bookedCardDetail(saved.snapshot)]
+                            .compactMap { $0 }
+                            .joined(separator: ", ")
+                    )
                 }
             }
             .card(padding: Theme.Space.xl)

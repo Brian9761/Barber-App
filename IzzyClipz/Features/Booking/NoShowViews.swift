@@ -104,7 +104,8 @@ struct ReviewCardSection: View {
                         .foregroundStyle(Theme.smoke)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(NoShowCopy.spokenCard(card.card.cardOnFile)), \(card.card.expiryLabel)")
                 .accessibilityIdentifier("savedCard")
                 if setup.isWorking {
                     ProgressView()

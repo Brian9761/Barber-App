@@ -50,7 +50,11 @@ struct CustomerDetailsSheet: View {
                                 .textRole(.caption)
                                 .foregroundStyle(Theme.smoke)
                         }
-                        .accessibilityElement(children: .combine)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel(
+                            NoShowCopy.spokenCard(card.card.cardOnFile) + ", "
+                                + (card.card.isValid(at: Date(), in: AppData.shop.timeZone) ? card.card.expiryLabel : "Expired")
+                        )
                         .accessibilityIdentifier("detailsSheetCard")
                         Button("Remove card", role: .destructive) {
                             cards.forget()
@@ -59,7 +63,7 @@ struct CustomerDetailsSheet: View {
                     } header: {
                         Text("Card on file")
                     } footer: {
-                        Text("Holds your bookings for no-shows and late cancellations. Stripe keeps the card; this iPhone keeps only a key to it.")
+                        Text("Used when the shop asks for a card to book. Stripe keeps the card; this iPhone keeps only a key to it. Appointments already booked keep their card.")
                     }
                 }
                 Section {

@@ -107,6 +107,8 @@ struct AppointmentCard: View {
                     .textRole(.caption)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(NoShowCopy.spokenCardOnFileLine(appointment.snapshot) ?? line)
                     .accessibilityIdentifier("appointmentCardOnFile")
             }
             if let charged = NoShowCopy.feeChargedLine(appointment.snapshot) {

@@ -42,6 +42,36 @@ final class KeychainSecretStoreTests: XCTestCase {
         XCTAssertNoThrow(try store.removeSecret(for: "a"))
     }
 
+    /// The card for no-show protection has a Keychain service of its own and never leaves this
+    /// iPhone (no backup restores it on another one); the manage tokens still move with an
+    /// encrypted backup, like the appointments.
+    func testTheSavedCardStaysOnThisIPhone() throws {
+        let cards = KeychainSecretStore.savedCard()
+        XCTAssertEqual(cards.service, "com.izzyclipz.app.saved-card")
+        XCTAssertEqual(cards.accessibility as String, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+        XCTAssertEqual(store.accessibility as String, kSecAttrAccessibleAfterFirstUnlock as String)
+
+        let deviceOnly = KeychainSecretStore(
+            service: "com.izzyclipz.app.tests-\(UUID().uuidString)",
+            accessibility: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        )
+        defer { try? deviceOnly.removeSecret(for: "a") }
+        try deviceOnly.setSecret("card", for: "a")
+        try deviceOnly.setSecret("card again", for: "a")
+        let request: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: deviceOnly.service,
+            kSecAttrAccount as String: "a",
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var result: CFTypeRef?
+        XCTAssertEqual(SecItemCopyMatching(request as CFDictionary, &result), errSecSuccess)
+        let attributes = try XCTUnwrap(result as? [String: Any])
+        XCTAssertEqual(attributes[kSecAttrAccessible as String] as? String, kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly as String)
+        XCTAssertEqual(try deviceOnly.secret(for: "a"), "card again")
+    }
+
     func testServicesAreSeparate() throws {
         try store.setSecret("mine", for: "a")
         let other = KeychainSecretStore(service: "com.izzyclipz.app.tests-other-\(UUID().uuidString)")

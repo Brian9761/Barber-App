@@ -53,6 +53,8 @@ private struct ChooseTimeScreen: View {
     @State private var hasPickedDay = false
     /// The first look moves on to next month when this one has no openings left.
     @State private var hasLookedAhead = false
+    /// Set when the picked time comes inside the late-cancellation window, so its note shows then.
+    @State private var noticeClock = Date.distantPast
 
     private let calendar = AppData.bookingCalendar
 
@@ -72,11 +74,11 @@ private struct ChooseTimeScreen: View {
                     BookingStepHeader(step: 3, title: "Pick a day and time")
                     ChooseTimeChoiceSummary(choice: choice)
                 }
-                if let warning = NoShowWarningContent(policy: policy, start: nil, now: Date()) {
-                    NoShowWarningCard(content: warning)
-                }
                 if let notice {
                     ChooseTimeNotice(text: notice)
+                }
+                if let warning = NoShowWarningContent(policy: policy, start: nil, now: Date()) {
+                    NoShowWarningCard(content: warning)
                 }
                 if let page = displayedPage {
                     CalendarMonthView(
@@ -92,13 +94,8 @@ private struct ChooseTimeScreen: View {
                     )
                 }
                 times
-                if let start = selectedStart, policy?.lateCancelWindowMinutes != nil {
-                    // Worked out again every minute: the picked time can come inside the window.
-                    TimelineView(.everyMinute) { context in
-                        if let lateNotice = policy?.lateCancelNotice(start: start, now: context.date) {
-                            ChooseTimeLateCancelNotice(text: lateNotice)
-                        }
-                    }
+                if let start = selectedStart, let lateNotice = policy?.lateCancelNotice(start: start, now: max(noticeClock, Date())) {
+                    ChooseTimeLateCancelNotice(text: lateNotice)
                 }
                 if let zone = BookingFlowCopy.timeZoneNote(at: selectedStart ?? Date()) {
                     Text(zone)
@@ -140,6 +137,14 @@ private struct ChooseTimeScreen: View {
         .task {
             // Whether this booking needs a card, and the notice about the fee.
             await policies.load(choice.target)
+        }
+        .task(id: LateCancelNoticeTimer(start: selectedStart, windowMinutes: policy?.lateCancelWindowMinutes)) {
+            // The picked time comes inside the late-cancellation window while the client looks:
+            // show its note from that moment.
+            guard let start = selectedStart, let window = policy?.lateCancelWindowMinutes else { return }
+            let wait = start.addingTimeInterval(-Double(window) * 60).timeIntervalSinceNow
+            guard wait > 0, (try? await Task.sleep(for: .seconds(wait))) != nil else { return }
+            noticeClock = Date()
         }
         .onAppear {
             if loader.isStale(maxAge: Self.maxAge), loader.loadedAt != nil {
@@ -373,6 +378,12 @@ private struct ChooseTimeNotice: View {
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("timeNotice")
     }
+}
+
+/// What the note about a picked time inside the late-cancellation window waits for.
+private struct LateCancelNoticeTimer: Equatable {
+    let start: Date?
+    let windowMinutes: Int?
 }
 
 /// Under the times: "This time is less than 1 hour away, so cancelling it may be charged $40."

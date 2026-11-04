@@ -306,6 +306,17 @@ enum NoShowCopy {
         return "\(cardOnFileLabel(appointment.noShowFee)): \(card.label)"
     }
 
+    /// "Visa ending in 4242": what VoiceOver says for "Visa •••• 4242" (it would read each dot).
+    static func spokenCard(_ card: IzzyAPI.CardOnFile) -> String {
+        "\(card.brandName) ending in \(card.last4)"
+    }
+
+    /// `cardOnFileLine` as VoiceOver says it: "Card on file for no-shows: Visa ending in 4242".
+    static func spokenCardOnFileLine(_ appointment: IzzyAPI.Appointment) -> String? {
+        guard let card = appointment.card else { return nil }
+        return "\(cardOnFileLabel(appointment.noShowFee)): \(spokenCard(card))"
+    }
+
     /// "No-show fee charged: $20", or "Late cancellation fee charged: $40", once Stripe charged it.
     static func feeChargedLine(_ appointment: IzzyAPI.Appointment) -> String? {
         guard appointment.card != nil, let fee = appointment.noShowFee, fee.isCharged else { return nil }

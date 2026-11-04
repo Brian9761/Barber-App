@@ -961,11 +961,16 @@ final class NoShowCopyTests: XCTestCase {
         XCTAssertEqual(NoShowCopy.cardOnFileLine(appointment), "Card on file for no-shows: Visa •••• 4242")
         XCTAssertEqual(NoShowCopy.bookedCardDetail(appointment), "Nothing is charged now. If you don't come, the shop may charge $20.")
 
+        // VoiceOver hears "ending in", not each dot.
+        XCTAssertEqual(NoShowCopy.spokenCard(IzzyAPI.CardOnFile(brand: "amex", last4: "0005")), "American Express ending in 0005")
+        XCTAssertEqual(NoShowCopy.spokenCardOnFileLine(appointment), "Card on file for no-shows: Visa ending in 4242")
+
         // No card on file: nothing to say.
         let plain = TestData.appointment()
         XCTAssertNil(NoShowCopy.cardOnFileLine(plain))
         XCTAssertNil(NoShowCopy.feeChargedLine(plain))
         XCTAssertNil(NoShowCopy.bookedCardDetail(plain))
+        XCTAssertNil(NoShowCopy.spokenCardOnFileLine(plain))
     }
 
     /// Only a fee Stripe charged is said to be charged.

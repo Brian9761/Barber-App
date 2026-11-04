@@ -701,7 +701,7 @@ final class IzzyClipzUITests: XCTestCase {
         tap("addCardButton")
         let saved = element("savedCard")
         XCTAssertTrue(saved.waitForExistence(timeout: 15), "The card wasn't added")
-        XCTAssertTrue(saved.label.contains("Visa •••• 4242"), saved.label)
+        XCTAssertTrue(saved.label.contains("Visa ending in 4242"), saved.label)
         XCTAssertFalse(element("addCardButton").exists)
         XCTAssertTrue(element("changeCardButton").exists, "The card can be changed before booking")
         XCTAssertTrue(waitUntil(book, toMatch: NSPredicate(format: "isEnabled == true")), "Book didn't turn on once the card was added")
@@ -709,14 +709,14 @@ final class IzzyClipzUITests: XCTestCase {
 
         bookAppointment()
         let summary = element("bookedSummary")
-        XCTAssertTrue(summary.label.contains("Visa •••• 4242"), summary.label)
+        XCTAssertTrue(summary.label.contains("Visa ending in 4242"), summary.label)
         XCTAssertTrue(summary.label.contains("Nothing is charged now"), summary.label)
         screenshot("53-Booked-With-Card")
 
         tapPinned("bookedDoneButton")
         let onCard = element("appointmentCardOnFile")
         XCTAssertTrue(onCard.waitForExistence(timeout: 10), "The appointment doesn't show its card on file")
-        XCTAssertTrue(onCard.label.contains("Card on file for no-shows and late cancellations: Visa •••• 4242"), onCard.label)
+        XCTAssertTrue(onCard.label.contains("Card on file for no-shows and late cancellations: Visa ending in 4242"), onCard.label)
 
         // The next booking: the same card, straight away.
         openReviewOfCarlosHaircut()
@@ -724,7 +724,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertFalse(element("addCardButton").exists)
         XCTAssertTrue(waitUntil(element("bookAppointmentButton"), toMatch: NSPredicate(format: "isEnabled == true")), "Book should be ready with the saved card")
         bookAppointment()
-        XCTAssertTrue(element("bookedSummary").label.contains("Visa •••• 4242"))
+        XCTAssertTrue(element("bookedSummary").label.contains("Visa ending in 4242"))
     }
 
     /// Protection off (as the server starts): no notice, no card section, and Book works as before.
@@ -803,7 +803,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "Book doesn't show the appointment")
         let onCard = element("appointmentCardOnFile")
         XCTAssertTrue(onCard.waitForExistence(timeout: 10), "The appointment doesn't show its card on file")
-        XCTAssertTrue(onCard.label.contains("Visa •••• 4242"), onCard.label)
+        XCTAssertTrue(onCard.label.contains("Visa ending in 4242"), onCard.label)
 
         let cancel = element("cancelAppointmentButton")
         scroll(toReveal: cancel)
