@@ -6,6 +6,10 @@ import UIKit
 /// each as its own button: Add to Calendar, Directions, Cancel appointment (after a confirmation),
 /// or Remove once it's over or cancelled.
 ///
+/// A booking with a card on file (no-show protection) says so, and says when a fee was charged.
+/// Cancelling it inside the late-cancellation window warns first that it may be charged; if the
+/// shop's server says so instead (its clock decides), the client is asked again with its words.
+///
 /// Appointments saved by the previous version (booked on Squire) are read-only: the card says to call the
 /// shop to change them.
 struct AppointmentCard: View {
@@ -15,11 +19,12 @@ struct AppointmentCard: View {
 
     @Environment(AppRouter.self) private var router
     @Environment(AppointmentStore.self) private var store
-    @State private var isConfirmingCancel = false
     @State private var isConfirmingRemove = false
-    @State private var isCancelling = false
-    @State private var cancelError: String?
+    /// Cancelling it: the question, and the request. Made when the card first shows.
+    @State private var cancelling: AppointmentCancelling?
     private let calendar = AppData.bookingCalendar
+
+    private var isCancelling: Bool { cancelling?.isCancelling ?? false }
 
     var body: some View {
         TimelineView(.everyMinute) { context in
@@ -28,12 +33,27 @@ struct AppointmentCard: View {
         .card(padding: Theme.Space.xl)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("appointmentCard")
-        .confirmationDialog("Cancel this appointment?", isPresented: $isConfirmingCancel, titleVisibility: .visible) {
-            Button("Cancel appointment", role: .destructive, action: cancel)
-                .accessibilityIdentifier("confirmCancelAppointment")
-            Button("Keep it", role: .cancel) {}
-        } message: {
-            Text("\(appointment.title), \(calendar.dateTimeLabel(for: appointment.start)). The shop sees it right away.")
+        .onAppear {
+            if cancelling?.appointmentID != appointment.id {
+                cancelling = AppointmentCancelling(appointmentID: appointment.id, store: store)
+            }
+        }
+        .confirmationDialog(
+            CancelQuestion.title,
+            isPresented: Binding(
+                get: { cancelling?.question != nil },
+                set: { if !$0 { cancelling?.dismissQuestion() } }
+            ),
+            titleVisibility: .visible,
+            presenting: cancelling?.question
+        ) { question in
+            Button(CancelQuestion.confirmButton, role: .destructive) {
+                cancel(question)
+            }
+            .accessibilityIdentifier("confirmCancelAppointment")
+            Button(CancelQuestion.keepButton, role: .cancel) {}
+        } message: { question in
+            Text(question.message)
         }
         .confirmationDialog("Remove this appointment from the list?", isPresented: $isConfirmingRemove, titleVisibility: .visible) {
             Button("Remove", role: .destructive) {
@@ -45,10 +65,10 @@ struct AppointmentCard: View {
                  ? "This only removes it from the app. To change or cancel the booking, call the shop at \(AppData.shop.phone.display)."
                  : "It only comes off this iPhone's list.")
         }
-        .alert("Couldn't cancel", isPresented: Binding(get: { cancelError != nil }, set: { if !$0 { cancelError = nil } })) {
+        .alert("Couldn't cancel", isPresented: Binding(get: { cancelling?.error != nil }, set: { if !$0 { cancelling?.clearError() } })) {
             Button("OK", role: .cancel) {}
         } message: {
-            Text(cancelError ?? "")
+            Text(cancelling?.error ?? "")
         }
     }
 
@@ -82,6 +102,23 @@ struct AppointmentCard: View {
                     .accessibilityIdentifier("appointmentNote")
             }
 
+            if isOn, let line = NoShowCopy.cardOnFileLine(appointment.snapshot) {
+                Label(line, systemImage: Symbol.payment)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.smoke)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(NoShowCopy.spokenCardOnFileLine(appointment.snapshot) ?? line)
+                    .accessibilityIdentifier("appointmentCardOnFile")
+            }
+            if let charged = NoShowCopy.feeChargedLine(appointment.snapshot) {
+                Label(charged, systemImage: Symbol.payment)
+                    .textRole(.caption)
+                    .foregroundStyle(Theme.bone)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("appointmentFeeCharged")
+            }
+
             actions(isOn: isOn, now: now)
         }
     }
@@ -113,7 +150,8 @@ struct AppointmentCard: View {
             }
             if appointment.canCancelInApp(at: now) {
                 Button(role: .destructive) {
-                    isConfirmingCancel = true
+                    // Worked out when it's tapped: a late-cancellation warning if cancelling now may be charged.
+                    cancelling?.ask()
                 } label: {
                     HStack(spacing: Theme.Space.s) {
                         if isCancelling {
@@ -176,18 +214,13 @@ struct AppointmentCard: View {
         .accessibilityIdentifier("removeAppointmentButton")
     }
 
-    private func cancel() {
-        guard !isCancelling else { return }
-        isCancelling = true
+    /// The client said yes to `question`.
+    private func cancel(_ question: CancelQuestion) {
+        guard let cancelling else { return }
         Task {
-            defer { isCancelling = false }
-            do {
-                try await store.cancel(appointment.id)
+            // Asked again (the server's warning), VoiceOver reads the new question as it opens.
+            if await cancelling.confirm(question) == .cancelled {
                 UIAccessibility.post(notification: .announcement, argument: "Appointment cancelled.")
-            } catch let error as AppointmentActionError {
-                cancelError = error.userMessage
-            } catch {
-                cancelError = error.asAPIError.userMessage
             }
         }
     }

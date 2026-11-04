@@ -42,6 +42,8 @@ extension IzzyAPI {
         public let credential: Credential
         /// Sent as `Idempotency-Key`, so the server can tell a retry from a new request.
         public let idempotencyKey: IdempotencyKey?
+        /// Sent as `X-Card-Token`: the saved card for no-show protection.
+        public let cardToken: CardToken?
         public let timeout: TimeInterval
 
         init(
@@ -52,6 +54,7 @@ extension IzzyAPI {
             contentType: String? = nil,
             credential: Credential = .none,
             idempotencyKey: IdempotencyKey? = nil,
+            cardToken: CardToken? = nil,
             timeout: TimeInterval = 30
         ) {
             // A POST always has a body, `{}` if nothing else, so servers that
@@ -64,6 +67,7 @@ extension IzzyAPI {
             self.contentType = contentType ?? (body == nil ? nil : "application/json")
             self.credential = credential
             self.idempotencyKey = idempotencyKey
+            self.cardToken = cardToken
             self.timeout = timeout
         }
 
@@ -112,6 +116,10 @@ extension IzzyAPI {
                 // Always 43 base64url characters, so always safe in a header.
                 request.setValue(idempotencyKey.rawValue, forHTTPHeaderField: "Idempotency-Key")
             }
+            if let cardToken {
+                // Always 43 base64url characters too.
+                request.setValue(cardToken.rawValue, forHTTPHeaderField: "X-Card-Token")
+            }
             return request
         }
     }
@@ -137,8 +145,12 @@ extension IzzyAPI {
         /// `POST /api/appointments` with the app's own `X-Manage-Token` → 201 `{ appointment,
         /// manageToken }`, or 200 with the same when this token already booked this appointment
         /// (a retry after a lost answer).
+        /// With `appointment.noShow`, also `X-Card-Token` and the agreed policy (no-show protection).
         public static func book(_ appointment: NewAppointment, token: ManageToken) throws -> Endpoint<BookingConfirmation> {
-            Endpoint(.post, "/api/appointments", body: try json(appointment), credential: .manageToken(token.rawValue))
+            Endpoint(
+                .post, "/api/appointments", body: try json(appointment), credential: .manageToken(token.rawValue),
+                cardToken: appointment.noShow?.cardToken
+            )
         }
 
         /// `GET /api/appointments/:id` with `X-Manage-Token` → `{ appointment }`.
@@ -146,9 +158,15 @@ extension IzzyAPI {
             Endpoint(.get, "/api/appointments/" + segment(id), credential: .manageToken(manageToken))
         }
 
-        /// `POST /api/appointments/:id/cancel` with `X-Manage-Token` → `{ appointment }`.
-        public static func cancelAppointment(id: String, manageToken: String) -> Endpoint<AppointmentResponse> {
-            Endpoint(.post, "/api/appointments/" + segment(id) + "/cancel", credential: .manageToken(manageToken))
+        /// `POST /api/appointments/:id/cancel` with `X-Manage-Token` → `{ appointment }`. The body is
+        /// `{ "acceptLateCancelFee": true }` once the client agreed to the late-cancellation warning
+        /// (409 `late_cancel_fee` otherwise, inside the window), and `{}` before.
+        public static func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool = false) -> Endpoint<AppointmentResponse> {
+            Endpoint(
+                .post, "/api/appointments/" + segment(id) + "/cancel",
+                body: acceptLateCancelFee ? Data(#"{"acceptLateCancelFee":true}"#.utf8) : nil,
+                credential: .manageToken(manageToken)
+            )
         }
 
         /// `GET /api/reviews` → `{ google, yelp }`.
@@ -159,6 +177,24 @@ extension IzzyAPI {
         /// `GET /api/products` → `{ products }`: visible ones, in the shop's order.
         public static func products() -> Endpoint<ProductsResponse> {
             Endpoint(.get, "/api/products")
+        }
+
+        // MARK: No-show protection
+
+        /// `GET /api/no-show-policy?offeringId=…|serviceId=…&barberId=any` → `{ required,
+        /// minFeeCents, maxFeeCents, policyText, lateCancelWindowMinutes, warning }`.
+        public static func noShowPolicy(for target: BookingTarget) -> Endpoint<NoShowPolicy> {
+            Endpoint(.get, "/api/no-show-policy", query: target.fields.map { QueryItem($0.name, $0.value) })
+        }
+
+        /// `POST /api/cards/checkout` with `X-Card-Token` → 201 `{ url, sessionId }`.
+        public static func startCardCheckout(for target: BookingTarget, token: CardToken) throws -> Endpoint<CardCheckout> {
+            Endpoint(.post, "/api/cards/checkout", body: try json(TargetBody(target: target)), cardToken: token)
+        }
+
+        /// `POST /api/cards` `{ sessionId }` with `X-Card-Token` → 201 `{ card }` (200 when saved before).
+        public static func saveCard(sessionId: String, token: CardToken) throws -> Endpoint<SavedCardResponse> {
+            Endpoint(.post, "/api/cards", body: try json(SaveCardBody(sessionId: sessionId)), cardToken: token)
         }
 
         // MARK: Owner
@@ -202,6 +238,22 @@ extension IzzyAPI {
         /// `PATCH /api/owner/appointments/:id` `{ status }` → `{ appointment }`.
         public static func setAppointmentStatus(id: String, to status: AppointmentStatus) throws -> Endpoint<AppointmentResponse> {
             Endpoint(.patch, "/api/owner/appointments/" + segment(id), body: try json(StatusChange(status: status)), credential: .ownerKey)
+        }
+
+        /// `POST /api/owner/appointments/:id/no-show-fee` (a no-show or a late cancellation) →
+        /// `{ appointment }`: see its `noShowFee`.
+        public static func chargeNoShowFee(appointmentId: String) -> Endpoint<AppointmentResponse> {
+            Endpoint(.post, "/api/owner/appointments/" + segment(appointmentId) + "/no-show-fee", credential: .ownerKey)
+        }
+
+        /// `GET /api/owner/no-show-settings` → `{ noShowSettings }`.
+        public static func noShowSettings() -> Endpoint<NoShowSettingsResponse> {
+            Endpoint(.get, "/api/owner/no-show-settings", credential: .ownerKey)
+        }
+
+        /// `PATCH /api/owner/no-show-settings` (partial) → `{ noShowSettings }`.
+        public static func updateNoShowSettings(_ update: NoShowSettingsUpdate) throws -> Endpoint<NoShowSettingsResponse> {
+            Endpoint(.patch, "/api/owner/no-show-settings", body: try json(update), credential: .ownerKey)
         }
 
         /// `GET /api/owner/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD` → `{ timeOff: [TimeOff] }`.

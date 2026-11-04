@@ -47,6 +47,10 @@ final class ContractFixtureTests: XCTestCase {
         kind(IzzyAPI.PaymentIntentCreated.self, "POST /api/owner/payments", has("clientSecret")),
         kind(IzzyAPI.PaymentResponse.self, "{ payment }", has("payment")),
         kind(IzzyAPI.PaymentsResponse.self, "{ payments }", has("payments")),
+        kind(IzzyAPI.NoShowPolicy.self, "GET /api/no-show-policy", has("required")),
+        kind(IzzyAPI.CardCheckout.self, "POST /api/cards/checkout", has("sessionId")),
+        kind(IzzyAPI.SavedCardResponse.self, "POST /api/cards", has("card")),
+        kind(IzzyAPI.NoShowSettingsResponse.self, "{ noShowSettings }", has("noShowSettings")),
     ]
 
     /// Checks every file in `folder`; returns the kinds it covered.

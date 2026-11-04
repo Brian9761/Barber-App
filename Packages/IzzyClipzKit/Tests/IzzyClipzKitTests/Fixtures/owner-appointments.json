@@ -16,7 +16,9 @@
       "payment": { "status": "paid", "amountCents": 8000, "paidAt": "2026-11-02T19:20:31Z" },
       "customer": { "name": "Walk-in Client", "phone": null, "email": null },
       "note": null,
-      "createdAt": "2026-11-02T17:58:02Z"
+      "createdAt": "2026-11-02T17:58:02Z",
+      "card": null,
+      "noShowFee": null
     },
     {
       "id": "1b2c3d4e-5f6a-4b7c-9d8e-0f1a2b3c4d5e",
@@ -34,7 +36,18 @@
       "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
       "customer": { "name": "Test Customer Two", "phone": "+17605550188", "email": null },
       "note": null,
-      "createdAt": "2026-10-30T22:41:17Z"
+      "createdAt": "2026-10-30T22:41:17Z",
+      "card": { "brand": "mastercard", "last4": "4444" },
+      "noShowFee": {
+        "amountCents": 4500,
+        "fullPrice": true,
+        "status": "charged",
+        "chargedAt": "2026-11-02T19:05:00Z",
+        "message": null,
+        "customerCancelledAt": null,
+        "lateCancelWindowMinutes": 60,
+        "reason": "noShow"
+      }
     },
     {
       "id": "2c3d4e5f-6a7b-4c8d-ae9f-1a2b3c4d5e6f",
@@ -52,7 +65,38 @@
       "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
       "customer": { "name": "Test Customer Three", "phone": "+16195550142", "email": "three@example.com" },
       "note": "First time with lightener.",
-      "createdAt": "2026-10-29T15:03:44Z"
+      "createdAt": "2026-10-29T15:03:44Z",
+      "card": null,
+      "noShowFee": null
+    },
+    {
+      "id": "3d4e5f6a-7b8c-4d9e-8fa0-2b3c4d5e6f7a",
+      "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+      "serviceId": "haircut",
+      "serviceName": "Haircut",
+      "barberId": "flowxbori",
+      "barberName": "Flowxbori",
+      "start": "2026-11-02T23:00:00Z",
+      "end": "2026-11-02T23:45:00Z",
+      "durationMinutes": 45,
+      "priceLabel": "$35",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "payment": { "status": "unpaid", "amountCents": null, "paidAt": null },
+      "customer": { "name": "Test Customer Four", "phone": "+17605550190", "email": null },
+      "note": null,
+      "createdAt": "2026-10-31T16:12:40Z",
+      "card": { "brand": "visa", "last4": "4242" },
+      "noShowFee": {
+        "amountCents": 3500,
+        "fullPrice": true,
+        "status": "none",
+        "chargedAt": null,
+        "message": null,
+        "customerCancelledAt": "2026-11-02T22:30:00Z",
+        "lateCancelWindowMinutes": 60,
+        "reason": "lateCancel"
+      }
     }
   ]
 }

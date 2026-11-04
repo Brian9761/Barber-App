@@ -14,15 +14,23 @@ final class ScriptedShopAPI: ShopAPI {
     var cancelHandler: (String, String) throws -> IzzyAPI.Appointment = { _, _ in throw APIError.offline }
     var reviewsHandler: () throws -> IzzyAPI.ReviewsResponse = { throw APIError.offline }
     var productsHandler: () throws -> [IzzyAPI.Product] = { [] }
+    /// No-show protection: off unless a test turns it on.
+    var noShowPolicyHandler: (IzzyAPI.BookingTarget) throws -> IzzyAPI.NoShowPolicy = { _ in .notRequired }
+    var startCardCheckoutHandler: (IzzyAPI.BookingTarget, IzzyAPI.CardToken) throws -> IzzyAPI.CardCheckout = { _, _ in throw APIError.offline }
+    var saveCardHandler: (String, IzzyAPI.CardToken) throws -> IzzyAPI.SavedCard = { _, _ in throw APIError.offline }
 
     private(set) var availabilityQueries: [IzzyAPI.AvailabilityQuery] = []
     private(set) var bookings: [IzzyAPI.NewAppointment] = []
     /// The manage token each booking was sent with.
     private(set) var bookingTokens: [IzzyAPI.ManageToken] = []
     private(set) var lookups: [(id: String, token: String)] = []
-    private(set) var cancellations: [(id: String, token: String)] = []
+    /// Every cancellation, with whether the client had agreed to a late-cancellation fee.
+    private(set) var cancellations: [(id: String, token: String, acceptLateCancelFee: Bool)] = []
     private(set) var reviewRequests = 0
     private(set) var productRequests = 0
+    private(set) var noShowPolicyRequests: [IzzyAPI.BookingTarget] = []
+    private(set) var cardCheckouts: [(target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken)] = []
+    private(set) var cardSaves: [(sessionId: String, token: IzzyAPI.CardToken)] = []
 
     func health() async throws -> IzzyAPI.Health { try healthHandler() }
 
@@ -42,8 +50,9 @@ final class ScriptedShopAPI: ShopAPI {
         return try appointmentHandler(id, manageToken)
     }
 
-    func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
-        cancellations.append((id, manageToken))
+    /// The handler can read `cancellations.last?.acceptLateCancelFee` to answer like the server.
+    func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment {
+        cancellations.append((id, manageToken, acceptLateCancelFee))
         return try cancelHandler(id, manageToken)
     }
 
@@ -55,6 +64,21 @@ final class ScriptedShopAPI: ShopAPI {
     func products() async throws -> [IzzyAPI.Product] {
         productRequests += 1
         return try productsHandler()
+    }
+
+    func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy {
+        noShowPolicyRequests.append(target)
+        return try noShowPolicyHandler(target)
+    }
+
+    func startCardCheckout(for target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardCheckout {
+        cardCheckouts.append((target, token))
+        return try startCardCheckoutHandler(target, token)
+    }
+
+    func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard {
+        cardSaves.append((sessionId, token))
+        return try saveCardHandler(sessionId, token)
     }
 
     /// Every day asked for, with no openings.

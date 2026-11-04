@@ -9,6 +9,8 @@ struct BookingDetailsView: View {
 
     @Environment(AppRouter.self) private var router
     @Environment(CustomerDetailsStore.self) private var savedDetails
+    @Environment(SavedCardStore.self) private var cards
+    @Environment(NoShowPolicyStore.self) private var policies
     @State private var name = ""
     @State private var phone = ""
     @State private var note = ""
@@ -75,9 +77,10 @@ struct BookingDetailsView: View {
                         Text("Remember me on this iPhone")
                             .textRole(.callout)
                             .foregroundStyle(Theme.bone)
-                        Text("Your name and number fill in next time.")
+                        Text(NoShowCopy.rememberNote(cardNeeded: policies.policy(for: plan.choice.target)?.required == true))
                             .textRole(.caption)
                             .foregroundStyle(Theme.smoke)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 .tint(Theme.electric)
@@ -226,15 +229,14 @@ struct BookingDetailsView: View {
         // A second tap while the review slides in mustn't push it twice.
         if let last = router.bookingPath.last, case .review = last { return }
         focus = nil
-        if remember {
-            savedDetails.remember(details)
-        } else {
-            savedDetails.forget()
-        }
+        // The name and number, and the card for no-show protection with them: kept for next time,
+        // or only for this booking.
+        RememberedDetails.apply(remember: remember, details: details, to: savedDetails, cards: cards)
         let draft = BookingDraft(
             plan: plan,
             customer: CustomerDetails(name: details.trimmedName, phone: details.displayPhone),
-            note: note.trimmingCharacters(in: .whitespacesAndNewlines)
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            remember: remember
         )
         router.bookingPath.append(.review(draft))
     }

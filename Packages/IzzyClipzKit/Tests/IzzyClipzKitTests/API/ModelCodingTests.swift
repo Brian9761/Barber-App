@@ -32,7 +32,8 @@ final class ResponseDecodingTests: XCTestCase {
 
     func testAppointmentStatusesPaymentsAndWalkIns() throws {
         let list = try decoder.decode(IzzyAPI.AppointmentsResponse.self, from: try kitFixture("owner-appointments.json")).appointments
-        XCTAssertEqual(list.map(\.status), [.completed, .noShow, .cancelled])
+        XCTAssertEqual(list.map(\.status), [.completed, .noShow, .cancelled, .cancelled])
+        XCTAssertEqual(list.map(\.cancelledBy), [nil, nil, .shop, .customer])
         XCTAssertEqual(list[0].payment, IzzyAPI.AppointmentPayment(status: .paid, amountCents: 8000, paidAt: utc(2026, 11, 2, 19, 20, 31)))
         XCTAssertNil(list[0].customer.phone)
         XCTAssertEqual(list[2].cancelledBy, .shop)
@@ -245,7 +246,7 @@ final class ResponseDecodingTests: XCTestCase {
         XCTAssertEqual(payment.amountLabel, "$80")
         XCTAssertEqual(payment.appointmentId, "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d")
         let payments = try decoder.decode(IzzyAPI.PaymentsResponse.self, from: try kitFixture("payments.json")).payments
-        XCTAssertEqual(payments.map(\.isSucceeded), [true, false])
+        XCTAssertEqual(payments.map(\.isSucceeded), [true, false, true])
         XCTAssertNil(payments[1].description)
         XCTAssertEqual(payments[1].amountLabel, "$25")
     }
@@ -272,7 +273,10 @@ final class ResponseEncodingTests: XCTestCase {
         XCTAssertEqual(json["customer"], .object(["name": .string("Test"), "phone": .null, "email": .null]))
         XCTAssertEqual(json["start"], .string("2026-11-02T18:00:00Z"))
         XCTAssertEqual(json["status"], .string("booked"))
-        XCTAssertEqual(json.keys.count, 16)
+        // No-show protection: no card on file, no fee.
+        XCTAssertEqual(json["card"], .null)
+        XCTAssertEqual(json["noShowFee"], .null)
+        XCTAssertEqual(json.keys.count, 18)
 
         let product = try encodeAPI(IzzyAPI.Product(id: "p", name: "Comb"))
         XCTAssertEqual(product, .object([

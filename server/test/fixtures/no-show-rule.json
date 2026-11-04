@@ -1,0 +1,2786 @@
+{
+  "fees": [
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4000,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "feeCents": 1250
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 5500,
+      "priceKind": "fixed",
+      "feeCents": 2750
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "fixed",
+      "feeCents": 4000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3000,
+      "priceKind": "fixed",
+      "feeCents": 1500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "feeCents": 4000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 15000,
+      "priceKind": "fixed",
+      "feeCents": 7500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4500,
+      "priceKind": "fixed",
+      "feeCents": 2250
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3500,
+      "priceKind": "fixed",
+      "feeCents": 1750
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 6000,
+      "priceKind": "fixed",
+      "feeCents": 3000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 500,
+      "priceKind": "fixed",
+      "feeCents": 250
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "includedWithCut",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1600,
+      "priceKind": "fixed",
+      "feeCents": 800
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1999,
+      "priceKind": "fixed",
+      "feeCents": 1000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 333,
+      "priceKind": "fixed",
+      "feeCents": 167
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 99,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 98,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4000,
+      "priceKind": "fixed",
+      "feeCents": 400
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "feeCents": 250
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 5500,
+      "priceKind": "fixed",
+      "feeCents": 550
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "fixed",
+      "feeCents": 800
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3000,
+      "priceKind": "fixed",
+      "feeCents": 300
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "feeCents": 800
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 15000,
+      "priceKind": "fixed",
+      "feeCents": 1500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4500,
+      "priceKind": "fixed",
+      "feeCents": 450
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3500,
+      "priceKind": "fixed",
+      "feeCents": 350
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 6000,
+      "priceKind": "fixed",
+      "feeCents": 600
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 500,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "includedWithCut",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1600,
+      "priceKind": "fixed",
+      "feeCents": 160
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1999,
+      "priceKind": "fixed",
+      "feeCents": 200
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 333,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 99,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 98,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4000,
+      "priceKind": "fixed",
+      "feeCents": 4000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "feeCents": 2500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 5500,
+      "priceKind": "fixed",
+      "feeCents": 5500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "fixed",
+      "feeCents": 8000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3000,
+      "priceKind": "fixed",
+      "feeCents": 3000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "feeCents": 8000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 15000,
+      "priceKind": "fixed",
+      "feeCents": 15000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4500,
+      "priceKind": "fixed",
+      "feeCents": 4500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3500,
+      "priceKind": "fixed",
+      "feeCents": 3500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 6000,
+      "priceKind": "fixed",
+      "feeCents": 6000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 500,
+      "priceKind": "fixed",
+      "feeCents": 500
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "includedWithCut",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1600,
+      "priceKind": "fixed",
+      "feeCents": 1600
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1999,
+      "priceKind": "fixed",
+      "feeCents": 1999
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 333,
+      "priceKind": "fixed",
+      "feeCents": 333
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 99,
+      "priceKind": "fixed",
+      "feeCents": 99
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 98,
+      "priceKind": "fixed",
+      "feeCents": 98
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4000,
+      "priceKind": "fixed",
+      "feeCents": 1320
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "feeCents": 825
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 5500,
+      "priceKind": "fixed",
+      "feeCents": 1815
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "fixed",
+      "feeCents": 2640
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3000,
+      "priceKind": "fixed",
+      "feeCents": 990
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "feeCents": 2640
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 15000,
+      "priceKind": "fixed",
+      "feeCents": 4950
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4500,
+      "priceKind": "fixed",
+      "feeCents": 1485
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3500,
+      "priceKind": "fixed",
+      "feeCents": 1155
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 6000,
+      "priceKind": "fixed",
+      "feeCents": 1980
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 500,
+      "priceKind": "fixed",
+      "feeCents": 165
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "includedWithCut",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1600,
+      "priceKind": "fixed",
+      "feeCents": 528
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1999,
+      "priceKind": "fixed",
+      "feeCents": 660
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 333,
+      "priceKind": "fixed",
+      "feeCents": 110
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 99,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 98,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4000,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 5500,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3000,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 15000,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4500,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3500,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 6000,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 500,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "includedWithCut",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1600,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1999,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 333,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 99,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 98,
+      "priceKind": "fixed",
+      "feeCents": 2000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4000,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 5500,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3000,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 15000,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4500,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3500,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 6000,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 500,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "includedWithCut",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1600,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1999,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 333,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 99,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 98,
+      "priceKind": "fixed",
+      "feeCents": 50
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "fixed",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4000,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 2500,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 5500,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3000,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 8000,
+      "priceKind": "startingAt",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 15000,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 4500,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 3500,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 6000,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 500,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "includedWithCut",
+      "feeCents": null
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1600,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 1999,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 333,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 99,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 98,
+      "priceKind": "fixed",
+      "feeCents": 50000
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "priceCents": 0,
+      "priceKind": "fixed",
+      "feeCents": null
+    }
+  ],
+  "policies": [
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20 (50% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50 (50% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500 (50% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30 (50% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20 (10% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50 (10% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500 (10% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 10,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30 (10% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20 (33% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50 (33% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500 (33% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 33,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30 (33% of the service). Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 50000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 1 hour before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged the full service price ($20). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged the full service price ($17.50–$22.50). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged the full service price ($0.50–$500). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged the full service price ($27.05–$30). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $20 (50% of the service). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $17.50–$22.50 (50% of the service). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $0.50–$500 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $0.50–$500 (50% of the service). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $27.05–$30 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $27.05–$30 (50% of the service). Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2500,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $20. Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2500,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $17.50–$22.50. Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2500,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $0.50–$500. Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2500,
+        "lateCancelEnabled": false,
+        "lateCancelWindowMinutes": 60
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app before your appointment is free.",
+      "warning": {
+        "title": "No-Show Fee",
+        "message": "Not showing up is charged $27.05–$30. Cancelling in the app before your appointment is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 30
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 30 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 30
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 30 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 30
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 30 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 30
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 30 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 45
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $20 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $20 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 45
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $17.50–$22.50 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 45
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $0.50–$500 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 50,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 45
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $27.05–$30 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 90
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 90 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $20. Cancelling in the app more than 90 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 90
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 90 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 90 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 90
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 90 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 90 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "flat",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 90
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 90 minutes before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 90 minutes before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 120
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 2 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 120
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 2 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 120
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 2 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 120
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 2 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 1440
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 24 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 1440
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 24 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 1440
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 24 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 100,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 1440
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
+      "warning": {
+        "title": "Full Service Cancellation & No-Show Fee",
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 24 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 25,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 2880
+      },
+      "minFeeCents": 2000,
+      "maxFeeCents": 2000,
+      "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $20 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $20 (25% of the service). Cancelling in the app more than 48 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 25,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 2880
+      },
+      "minFeeCents": 1750,
+      "maxFeeCents": 2250,
+      "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $17.50–$22.50 (25% of the service). Cancelling in the app more than 48 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 25,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 2880
+      },
+      "minFeeCents": 50,
+      "maxFeeCents": 50000,
+      "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $0.50–$500 (25% of the service). Cancelling in the app more than 48 hours before is free."
+      }
+    },
+    {
+      "settings": {
+        "enabled": true,
+        "feeMode": "percent",
+        "percent": 25,
+        "flatCents": 2000,
+        "lateCancelEnabled": true,
+        "lateCancelWindowMinutes": 2880
+      },
+      "minFeeCents": 2705,
+      "maxFeeCents": 3000,
+      "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
+      "warning": {
+        "title": "Late Cancellation & No-Show Fee",
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $27.05–$30 (25% of the service). Cancelling in the app more than 48 hours before is free."
+      }
+    }
+  ],
+  "windows": [
+    {
+      "minutes": 30,
+      "label": "30 minutes"
+    },
+    {
+      "minutes": 45,
+      "label": "45 minutes"
+    },
+    {
+      "minutes": 59,
+      "label": "59 minutes"
+    },
+    {
+      "minutes": 60,
+      "label": "1 hour"
+    },
+    {
+      "minutes": 61,
+      "label": "61 minutes"
+    },
+    {
+      "minutes": 90,
+      "label": "90 minutes"
+    },
+    {
+      "minutes": 120,
+      "label": "2 hours"
+    },
+    {
+      "minutes": 150,
+      "label": "150 minutes"
+    },
+    {
+      "minutes": 180,
+      "label": "3 hours"
+    },
+    {
+      "minutes": 360,
+      "label": "6 hours"
+    },
+    {
+      "minutes": 720,
+      "label": "12 hours"
+    },
+    {
+      "minutes": 1440,
+      "label": "24 hours"
+    },
+    {
+      "minutes": 2880,
+      "label": "48 hours"
+    }
+  ]
+}

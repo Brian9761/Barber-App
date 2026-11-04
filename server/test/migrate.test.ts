@@ -19,7 +19,12 @@ describe('npm run migrate', () => {
   it('applied every migration once, recorded with its checksum', async () => {
     const { rows } = await db.pool.query('SELECT version, checksum FROM schema_migrations ORDER BY version');
     expect(rows).toEqual(migrationFiles().map((f) => ({ version: f.name, checksum: f.checksum })));
-    expect(rows.map((r) => r.version)).toEqual(['001_init.sql', '002_manage_token_unique.sql', '003_owner_idempotency_key.sql']);
+    expect(rows.map((r) => r.version)).toEqual([
+      '001_init.sql',
+      '002_manage_token_unique.sql',
+      '003_owner_idempotency_key.sql',
+      '004_no_show_protection.sql',
+    ]);
   });
 
   it('is idempotent: running again applies nothing', async () => {
@@ -88,6 +93,67 @@ describe('npm run migrate', () => {
     expect(index.rows[0].indexdef).toBe(
       'CREATE UNIQUE INDEX appointments_idempotency_key_hash_key ON public.appointments USING btree (idempotency_key_hash) WHERE (idempotency_key_hash IS NOT NULL)',
     );
+  });
+
+  it('004 adds saved cards (hashes and Stripe ids only), settings, the fee columns and the payment kind', async () => {
+    const columns = async (table: string) =>
+      (await db.pool.query(`SELECT column_name FROM information_schema.columns WHERE table_name = $1 ORDER BY column_name`, [table])).rows.map(
+        (r) => r.column_name,
+      );
+    expect(await columns('saved_cards')).toEqual([
+      'brand',
+      'checkout_session_id',
+      'created_at',
+      'exp_month',
+      'exp_year',
+      'id',
+      'last4',
+      'livemode',
+      'stripe_customer_id',
+      'stripe_payment_method_id',
+      'token_hash',
+    ]);
+    expect(await columns('settings')).toEqual(['key', 'updated_at', 'value']);
+    const appointmentColumns = await columns('appointments');
+    for (const c of [
+      'saved_card_id',
+      'card_brand',
+      'card_last4',
+      'no_show_fee_cents',
+      'no_show_policy',
+      'no_show_consent_at',
+      'no_show_fee_status',
+      'no_show_fee_attempt',
+      'no_show_fee_payment_intent_id',
+      'no_show_fee_message',
+      'no_show_fee_charged_at',
+      'no_show_fee_attempt_at',
+      'no_show_fee_reason',
+      'late_cancel_window_minutes',
+      'customer_cancelled_at',
+    ]) {
+      expect(appointmentColumns, c).toContain(c);
+    }
+    const kind = await db.pool.query(
+      `SELECT column_default, is_nullable FROM information_schema.columns WHERE table_name = 'payments' AND column_name = 'kind'`,
+    );
+    expect(kind.rows).toEqual([{ column_default: "'in_person'::text", is_nullable: 'NO' }]);
+    // The payment kinds: in person, and the two fees charged to a card on file.
+    const kindCheck = await db.pool.query(
+      `SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conrelid = 'payments'::regclass AND contype = 'c' AND pg_get_constraintdef(oid) LIKE '%kind%'`,
+    );
+    expect(kindCheck.rows).toHaveLength(1);
+    for (const k of ['in_person', 'no_show_fee', 'late_cancel_fee']) expect(kindCheck.rows[0].def).toContain(`'${k}'`);
+    const unique = await db.pool.query(
+      `SELECT conname FROM pg_constraint WHERE conrelid = 'saved_cards'::regclass AND contype = 'u' ORDER BY conname`,
+    );
+    expect(unique.rows.map((r) => r.conname)).toEqual(['saved_cards_checkout_session_id_key', 'saved_cards_token_hash_key']);
+    // A bad token hash or a full card number can't get in.
+    await expect(
+      db.pool.query(
+        `INSERT INTO saved_cards VALUES (gen_random_uuid(), 'not-a-hash', 'cs_test_x', 'cus_x', 'pm_x', 'visa', '4242424242424242', 1, 2030, false, now())`,
+      ),
+    ).rejects.toThrow();
   });
 
   it('the schema has the exclusion constraint and btree_gist', async () => {

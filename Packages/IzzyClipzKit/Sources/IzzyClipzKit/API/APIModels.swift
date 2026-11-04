@@ -105,6 +105,11 @@ extension IzzyAPI {
         public var customer: Customer
         public var note: String?
         public var createdAt: Date
+        /// The card on file (no-show protection), or `nil` when the booking has none.
+        public var card: CardOnFile?
+        /// The fee agreed at booking (for a no-show or a late cancellation) and what happened to it,
+        /// or `nil` without a card on file. See `chargeableFee(at:)` and `lateCancelWarning(at:)`.
+        public var noShowFee: NoShowFee?
 
         public init(
             id: String,
@@ -122,7 +127,9 @@ extension IzzyAPI {
             payment: AppointmentPayment = .unpaid,
             customer: Customer,
             note: String? = nil,
-            createdAt: Date
+            createdAt: Date,
+            card: CardOnFile? = nil,
+            noShowFee: NoShowFee? = nil
         ) {
             self.id = id
             self.offeringId = offeringId
@@ -140,6 +147,8 @@ extension IzzyAPI {
             self.customer = customer
             self.note = note
             self.createdAt = createdAt
+            self.card = card
+            self.noShowFee = noShowFee
         }
 
         /// Hasn't finished yet: it's later, or happening right now.
@@ -160,6 +169,7 @@ extension IzzyAPI {
         private enum CodingKeys: String, CodingKey {
             case id, offeringId, serviceId, serviceName, barberId, barberName, start, end, durationMinutes, priceLabel
             case status, cancelledBy, payment, customer, note, createdAt
+            case card, noShowFee
         }
 
         public init(from decoder: Decoder) throws {
@@ -185,7 +195,10 @@ extension IzzyAPI {
                 payment: try container.decode(AppointmentPayment.self, forKey: .payment),
                 customer: try container.decode(Customer.self, forKey: .customer),
                 note: try container.decodeIfPresent(String.self, forKey: .note),
-                createdAt: try container.decode(Date.self, forKey: .createdAt)
+                createdAt: try container.decode(Date.self, forKey: .createdAt),
+                // Missing on a server from before no-show protection: no card, no fee.
+                card: try container.decodeIfPresent(CardOnFile.self, forKey: .card),
+                noShowFee: try container.decodeIfPresent(NoShowFee.self, forKey: .noShowFee)
             )
         }
 
@@ -207,6 +220,8 @@ extension IzzyAPI {
             try container.encode(customer, forKey: .customer)
             try container.encode(note, forKey: .note)
             try container.encode(createdAt, forKey: .createdAt)
+            try container.encode(card, forKey: .card)
+            try container.encode(noShowFee, forKey: .noShowFee)
         }
     }
 
@@ -657,6 +672,8 @@ extension IzzyAPI {
         /// Stripe's PaymentIntent status, e.g. "succeeded".
         public var status: String
         public var createdAt: Date
+        /// Taken in the shop, or a no-show fee charged to the card on file.
+        public var kind: PaymentKind
 
         public init(
             id: String,
@@ -664,7 +681,8 @@ extension IzzyAPI {
             description: String? = nil,
             appointmentId: String? = nil,
             status: String,
-            createdAt: Date
+            createdAt: Date,
+            kind: PaymentKind = .inPerson
         ) {
             self.id = id
             self.amountCents = amountCents
@@ -672,6 +690,7 @@ extension IzzyAPI {
             self.appointmentId = appointmentId
             self.status = status
             self.createdAt = createdAt
+            self.kind = kind
         }
 
         public var isSucceeded: Bool { status == "succeeded" }
@@ -680,7 +699,19 @@ extension IzzyAPI {
         public var amountLabel: String { Price.currencyString(cents: amountCents) }
 
         private enum CodingKeys: String, CodingKey {
-            case id, amountCents, description, appointmentId, status, createdAt
+            case id, amountCents, description, appointmentId, status, createdAt, kind
+        }
+
+        public init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(String.self, forKey: .id)
+            amountCents = try container.decode(Int.self, forKey: .amountCents)
+            description = try container.decodeIfPresent(String.self, forKey: .description)
+            appointmentId = try container.decodeIfPresent(String.self, forKey: .appointmentId)
+            status = try container.decode(String.self, forKey: .status)
+            createdAt = try container.decode(Date.self, forKey: .createdAt)
+            // Missing on a server from before no-show protection: every payment was in person.
+            kind = try container.decodeIfPresent(PaymentKind.self, forKey: .kind) ?? .inPerson
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -691,6 +722,7 @@ extension IzzyAPI {
             try container.encode(appointmentId, forKey: .appointmentId)
             try container.encode(status, forKey: .status)
             try container.encode(createdAt, forKey: .createdAt)
+            try container.encode(kind, forKey: .kind)
         }
     }
 
@@ -761,6 +793,17 @@ extension IzzyAPI {
         public static let tooSoon = "too_soon"
         public static let tooFar = "too_far"
         public static let rateLimited = "rate_limited"
+        /// 400: this booking needs a saved card (no-show protection), or the card can't be used.
+        public static let cardRequired = "card_required"
+        /// 409: the no-show policy sent with a booking isn't the current one; show the new one.
+        public static let policyChanged = "policy_changed"
+        /// 409: no fee (no-show or late cancellation) can be charged for this appointment (now).
+        public static let notChargeable = "not_chargeable"
+        /// 409: a booking with a card on file can be marked a no-show only once it has started.
+        public static let notStarted = "not_started"
+        /// 409: cancelling now, inside the agreed late-cancellation window, may be charged the fee.
+        /// The message is the warning to show; cancel again with `acceptLateCancelFee` to go ahead.
+        public static let lateCancelFee = "late_cancel_fee"
         public static let stripeNotConfigured = "stripe_not_configured"
         public static let ownerNotConfigured = "owner_not_configured"
         public static let serverError = "server_error"

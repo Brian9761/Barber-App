@@ -80,6 +80,7 @@ describe('with Stripe configured', () => {
         appointmentId: appointment.id,
         status: 'requires_payment_method',
         createdAt: '2026-11-02T19:10:00Z',
+        kind: 'inPerson',
       },
     ]);
   });
@@ -121,6 +122,7 @@ describe('with Stripe configured', () => {
         appointmentId: appointment.id,
         status: 'succeeded',
         createdAt: '2026-11-02T19:10:00Z',
+        kind: 'inPerson',
       },
     });
     const paid = await h.call('GET', '/api/owner/appointments?date=2026-11-02', { owner: true });

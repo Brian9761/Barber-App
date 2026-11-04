@@ -19,6 +19,18 @@ export interface StripeClient {
   paymentIntents: {
     create(params: Stripe.PaymentIntentCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent>;
     retrieve(id: string): Promise<Stripe.PaymentIntent>;
+    /** One page (the newest first); a no-show fee whose answer was lost is looked up this way. */
+    list(params: Stripe.PaymentIntentListParams, options?: Stripe.RequestOptions): Promise<Stripe.ApiList<Stripe.PaymentIntent>>;
+  };
+  /** No-show protection: a Customer to save the card to, and Checkout in setup mode to collect it. */
+  customers: {
+    create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer>;
+  };
+  checkout: {
+    sessions: {
+      create(params: Stripe.Checkout.SessionCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Checkout.Session>;
+      retrieve(id: string, params?: Stripe.Checkout.SessionRetrieveParams): Promise<Stripe.Checkout.Session>;
+    };
   };
 }
 

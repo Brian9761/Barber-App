@@ -31,13 +31,46 @@ public protocol ShopAPI: Sendable {
     func appointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment
 
     /// `POST /api/appointments/:id/cancel`.
-    func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment
+    ///
+    /// Inside the late-cancellation window of a booking with a card on file, the server asks first:
+    /// without `acceptLateCancelFee` it throws `APIError.lateCancelFee(message:)` and changes
+    /// nothing. Show that message ("Cancelling now, less than 1 hour before your appointment, may be
+    /// charged $35, the full service price.") with "Cancel appointment" and "Keep appointment", and
+    /// call again with `acceptLateCancelFee: true` to cancel anyway. Send `true` only after the
+    /// client saw a warning: the server decides by its own clock, so the phone's may be off.
+    func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment
 
     /// `GET /api/reviews`: live, never stored.
     func reviews() async throws -> IzzyAPI.ReviewsResponse
 
     /// `GET /api/products`: the products on show, in the shop's order.
     func products() async throws -> [IzzyAPI.Product]
+
+    // MARK: No-show protection
+
+    /// `GET /api/no-show-policy`: whether booking `target` needs a saved card, the fee (a range
+    /// for "any barber" when the barbers' fees differ), the late-cancellation window, the policy to
+    /// agree to and the warning to show while booking. Not required when Stripe isn't set up, the
+    /// shop hasn't turned protection on, or the item has no fee.
+    func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy
+
+    /// `POST /api/cards/checkout`: Stripe's card page for saving a card under `token` (a new
+    /// `CardToken.generate()` for each "Add a card"). Open its `url` in
+    /// `ASWebAuthenticationSession` with `CardCheckout.callbackScheme`, then read the callback
+    /// with `CardCheckoutResult(callbackURL:)`.
+    func startCardCheckout(for target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardCheckout
+
+    /// `POST /api/cards`: saves the card from a completed Checkout Session under `token` (the
+    /// one the checkout was started with). Safe to call again after a lost answer.
+    func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard
+}
+
+extension ShopAPI {
+    /// `cancelAppointment(id:manageToken:acceptLateCancelFee:)` before any warning: a cancellation
+    /// inside the late-cancellation window comes back as `APIError.lateCancelFee`.
+    public func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
+        try await cancelAppointment(id: id, manageToken: manageToken, acceptLateCancelFee: false)
+    }
 }
 
 /// What the owner app needs from the server. Every call but `health` and
@@ -78,6 +111,20 @@ public protocol OwnerAPI: Sendable {
     /// `PATCH /api/owner/appointments/:id`. Cancelling here records the shop
     /// as the one who cancelled.
     func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment
+
+    /// `POST /api/owner/appointments/:id/no-show-fee`: charges the fee agreed at booking to the
+    /// card on file, for a no-show whose start has passed or a late cancellation by the client
+    /// (`Appointment.chargeableFee(at:)`; `noShowFee.reason` says which it was charged for).
+    /// Returns the appointment as it is now: its `noShowFee.status` says whether it was charged,
+    /// declined (`message` says why), needs the client, or is still pending. Charged at most once:
+    /// calling again after a lost answer or a pending charge never charges twice.
+    func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment
+
+    /// `GET /api/owner/no-show-settings`.
+    func noShowSettings() async throws -> IzzyAPI.NoShowSettings
+
+    /// `PATCH /api/owner/no-show-settings`: changes only the fields that are set.
+    func updateNoShowSettings(_ update: IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings
 
     /// `GET /api/owner/time-off?from=&to=`.
     func timeOff(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.TimeOff]

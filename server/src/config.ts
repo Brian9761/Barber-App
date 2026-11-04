@@ -10,6 +10,11 @@ export interface Config {
   stripeSecretKey: string | undefined;
   stripeTerminalLocationId: string | undefined;
   stripeWebhookSecret: string | undefined;
+  /**
+   * The API's own public address, e.g. https://izzy-clipz-api.vercel.app, for the
+   * https pages Stripe Checkout returns to. Unset: the address the request came in on.
+   */
+  publicBaseUrl: string | undefined;
 }
 
 export const DEFAULT_GOOGLE_PLACE_ID = 'ChIJGz5HChRv3IARYJJy_6jyRm8';
@@ -43,5 +48,6 @@ export function configFromEnv(env: Env = process.env): Config {
     stripeSecretKey: value(env, 'STRIPE_SECRET_KEY'),
     stripeTerminalLocationId: value(env, 'STRIPE_TERMINAL_LOCATION_ID'),
     stripeWebhookSecret: value(env, 'STRIPE_WEBHOOK_SECRET'),
+    publicBaseUrl: value(env, 'PUBLIC_BASE_URL'),
   };
 }

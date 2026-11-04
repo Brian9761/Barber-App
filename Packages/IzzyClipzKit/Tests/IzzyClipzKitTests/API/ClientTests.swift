@@ -303,7 +303,7 @@ final class ClientTests: XCTestCase {
             },
             OwnerCall(name: "day", reply: .fixture("owner-appointments.json"), method: "GET", path: "/api/owner/appointments", query: "date=2026-11-02") {
                 let list = try await $0.appointments(on: day)
-                XCTAssertEqual(list.count, 3)
+                XCTAssertEqual(list.count, 4)
             },
             OwnerCall(name: "range", reply: .fixture("owner-appointments.json"), method: "GET", path: "/api/owner/appointments",
                       query: "from=2026-11-02&to=2026-11-08") {
@@ -368,7 +368,7 @@ final class ClientTests: XCTestCase {
             },
             OwnerCall(name: "payments", reply: .fixture("payments.json"), method: "GET", path: "/api/owner/payments", query: "date=2026-11-02") {
                 let payments = try await $0.payments(on: day)
-                XCTAssertEqual(payments.count, 2)
+                XCTAssertEqual(payments.count, 3)
             },
         ]
         for call in calls {

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { Settings } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import { bearerMatches, hashManageToken, manageTokenMatches, newManageToken } from '../src/auth.js';
 import { Catalog, loadCatalog } from '../src/catalog.js';
@@ -78,6 +79,33 @@ describe('time helpers', () => {
     expect(localDate(new Date('2026-11-02T08:00:00Z'), zone)).toBe('2026-11-02');
   });
 
+  it('a time that happens twice is the same instant whatever the date the server runs on', () => {
+    const zone = 'America/Los_Angeles';
+    const realNow = Settings.now;
+    try {
+      for (const today of ['2026-07-01T12:00:00Z', '2026-11-04T12:00:00Z', '2027-01-15T12:00:00Z']) {
+        Settings.now = () => Date.parse(today);
+        // 1:30 AM on Nov 1 is 1:30 PDT (08:30Z), then 1:30 PST (09:30Z): the first one.
+        expect(wallClock('2026-11-01', 90, zone)?.toISOString(), today).toBe('2026-11-01T08:30:00.000Z');
+        expect(wallClock('2026-11-01', 60, zone)?.toISOString(), today).toBe('2026-11-01T08:00:00.000Z');
+        expect(wallClock('2026-11-01', 120, zone)?.toISOString(), today).toBe('2026-11-01T10:00:00.000Z');
+        expect(wallClock('2026-03-08', 150, zone), today).toBeNull();
+        expect(wallClock('2026-03-08', 180, zone)?.toISOString(), today).toBe('2026-03-08T10:00:00.000Z');
+        expect(wallClock('2026-11-03', 600, zone)?.toISOString(), today).toBe('2026-11-03T18:00:00.000Z');
+        expect(wallClock('2026-07-04', 0, zone)?.toISOString(), today).toBe('2026-07-04T07:00:00.000Z');
+        expect(wallClock('2026-07-04', 1439, zone)?.toISOString(), today).toBe('2026-07-05T06:59:00.000Z');
+      }
+    } finally {
+      Settings.now = realNow;
+    }
+    expect(wallClock('2026-07-04', 24 * 60, zone)).toBeNull();
+    expect(wallClock('2026-07-04', 600, 'Not/AZone')).toBeNull();
+    expect(wallClock('2026-07-04', 600, 'UTC')?.toISOString()).toBe('2026-07-04T10:00:00.000Z');
+    // A zone that moves by 30 minutes (Lord Howe Island), and one that skipped a whole day (Samoa, 2011).
+    expect(wallClock('2026-04-05', 90, 'Australia/Lord_Howe')?.toISOString()).toBe('2026-04-04T14:30:00.000Z');
+    expect(wallClock('2011-12-30', 600, 'Pacific/Apia')).toBeNull();
+  });
+
   it("doesn't depend on the server's own time zone", () => {
     expect(process.env.TZ === undefined || typeof process.env.TZ === 'string').toBe(true);
     const zone = 'America/Los_Angeles';
@@ -135,6 +163,8 @@ describe('config', () => {
     expect(c.yelpBusinessId).toBe('izzy-clipz-barbershop-oceanside');
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '100' }).googleDailyLimit).toBe(100);
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '0' }).googleDailyLimit).toBe(0);
+    expect(configFromEnv({}).publicBaseUrl).toBeUndefined();
+    expect(configFromEnv({ PUBLIC_BASE_URL: ' https://api.izzyclipz.example ' }).publicBaseUrl).toBe('https://api.izzyclipz.example');
   });
 
   it("silences pg's sslmode=require warning by saying verify-full", () => {
@@ -179,5 +209,18 @@ describe('catalog.json (exported from IzzyClipzKit)', () => {
   it('counts characters as people do', () => {
     expect(charLength('José')).toBe(4);
     expect(charLength('💈💈')).toBe(2);
+  });
+});
+
+describe('production log lines', () => {
+  it('keep our message, with a message from the details (Stripe’s) as detail', async () => {
+    const { logLine } = await import('../src/production.js');
+    expect(JSON.parse(logLine('error', 'Stripe create customer failed', { type: 'StripeAuthenticationError', message: 'Invalid API Key provided' }))).toEqual({
+      level: 'error',
+      message: 'Stripe create customer failed',
+      type: 'StripeAuthenticationError',
+      detail: 'Invalid API Key provided',
+    });
+    expect(JSON.parse(logLine('warn', 'Plain'))).toEqual({ level: 'warn', message: 'Plain' });
   });
 });

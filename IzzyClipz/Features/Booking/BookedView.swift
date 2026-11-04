@@ -71,6 +71,20 @@ struct BookedView: View {
                 SummaryRow(label: "Barber", value: saved.barberName)
                 SummaryDivider()
                 SummaryRow(label: "Where", value: AppData.shop.address.streetLine, detail: AppData.shop.address.cityLine)
+                if let card = saved.snapshot.card {
+                    SummaryDivider()
+                    SummaryRow(
+                        label: NoShowCopy.cardOnFileLabel(saved.snapshot.noShowFee),
+                        value: card.label,
+                        detail: NoShowCopy.bookedCardDetail(saved.snapshot)
+                    )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        [NoShowCopy.spokenCardOnFileLine(saved.snapshot), NoShowCopy.bookedCardDetail(saved.snapshot)]
+                            .compactMap { $0 }
+                            .joined(separator: ", ")
+                    )
+                }
             }
             .card(padding: Theme.Space.xl)
             .accessibilityElement(children: .combine)
@@ -96,6 +110,8 @@ struct BookedView: View {
 }
 
 /// "Remind me the day before and an hour before", and what happens when notifications are off.
+/// For a booking whose late cancellations may be charged, the reminders also say until when
+/// cancelling is free (`AppointmentPlanner.reminders`), and the toggle says so.
 struct AppointmentRemindersToggle: View {
     let appointment: SavedAppointment
 
@@ -107,10 +123,18 @@ struct AppointmentRemindersToggle: View {
                 get: { appointment.remind },
                 set: { appointments.setReminders($0, for: appointment.id) }
             )) {
-                Text("Remind me the day before and an hour before")
-                    .textRole(.body)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Remind me the day before and an hour before")
+                        .textRole(.body)
+                        .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if appointment.snapshot.lateCancelTerms != nil {
+                        Text(NoShowCopy.remindersNote)
+                            .textRole(.caption)
+                            .foregroundStyle(Theme.smoke)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .tint(Theme.electric)
             .accessibilityIdentifier("appointmentRemindersToggle")

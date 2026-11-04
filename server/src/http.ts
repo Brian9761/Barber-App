@@ -9,6 +9,17 @@ export const ERROR_STATUS = {
   too_soon: 422,
   too_far: 422,
   rate_limited: 429,
+  // No-show protection
+  card_required: 400,
+  policy_changed: 409,
+  not_chargeable: 409,
+  /** A no-show can only be marked once a booking with a card on file has started. */
+  not_started: 409,
+  /**
+   * Cancelling now, inside the agreed late-cancellation window, may be charged: the message is the
+   * warning to show the client, and they cancel again with `acceptLateCancelFee: true`.
+   */
+  late_cancel_fee: 409,
   stripe_not_configured: 503,
   owner_not_configured: 503,
   server_error: 500,
@@ -41,6 +52,26 @@ const BASE_HEADERS = {
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...BASE_HEADERS, ...headers } });
+}
+
+/**
+ * A 302 to `location` (the apps' own `izzyclipz://` links after Stripe Checkout),
+ * with a tiny page linking to it for a browser that doesn't follow it by itself.
+ * `location` must already be safe to put in HTML (the callers only use fixed
+ * text and Stripe ids).
+ */
+export function redirect(location: string): Response {
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Izzy Clipz</title><p><a href="${location}">Back to Izzy Clipz</a></p>`;
+  return new Response(page, {
+    status: 302,
+    headers: {
+      location,
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      'referrer-policy': 'no-referrer',
+    },
+  });
 }
 
 export function noContent(): Response {
@@ -114,14 +145,33 @@ export async function readJsonObject(request: Request, maxBytes = MAX_JSON_BYTES
   if (mediaType(request) !== 'application/json') {
     throw new ApiError('invalid_request', 'Send the request body as JSON (Content-Type: application/json).', { status: 415 });
   }
-  const bytes = await readLimited(request, maxBytes);
-  let text: string;
+  const text = utf8(await readLimited(request, maxBytes));
+  if (text.trim() === '') throw new ApiError('invalid_request', 'The request needs a JSON body.');
+  return jsonObject(text);
+}
+
+/**
+ * Like `readJsonObject` for a request whose body is optional (it used to have none): no body,
+ * or an empty one, is `{}`. Anything else must be a JSON object sent as `application/json`.
+ */
+export async function readOptionalJsonObject(request: Request, maxBytes = MAX_JSON_BYTES): Promise<Record<string, unknown>> {
+  const text = utf8(await readLimited(request, maxBytes));
+  if (text.trim() === '') return {};
+  if (mediaType(request) !== 'application/json') {
+    throw new ApiError('invalid_request', 'Send the request body as JSON (Content-Type: application/json).', { status: 415 });
+  }
+  return jsonObject(text);
+}
+
+function utf8(bytes: Uint8Array): string {
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
     throw new ApiError('invalid_request', 'The request body must be UTF-8 JSON.');
   }
-  if (text.trim() === '') throw new ApiError('invalid_request', 'The request needs a JSON body.');
+}
+
+function jsonObject(text: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

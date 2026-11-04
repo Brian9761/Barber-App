@@ -85,6 +85,9 @@ enum UITestSetup {
     static let bookedAppointment = "-fakeBookedAppointment"
     /// `-fakeSavedDetails`: the client's name and number are already remembered.
     static let savedDetails = "-fakeSavedDetails"
+    /// `-fakeBookedSoonWithCard`: an appointment booked in the app with a card on file, starting in
+    /// 45 minutes, so cancelling it now may be charged (no-show protection's late cancellation).
+    static let bookedSoonWithCard = "-fakeBookedSoonWithCard"
 
     private static var arguments: [String] { ProcessInfo.processInfo.arguments }
 
@@ -111,6 +114,9 @@ enum UITestSetup {
 
     static func seed(_ store: AppointmentStore, api: any ShopAPI, customerDetails: CustomerDetailsStore) {
         if arguments.contains(bookedAppointment), let fake = api as? FakeShopAPI, let confirmation = fake.seedBooking() {
+            store.add(confirmation, remind: true)
+        }
+        if arguments.contains(bookedSoonWithCard), let fake = api as? FakeShopAPI, let confirmation = fake.seedBookingStartingSoonWithCard() {
             store.add(confirmation, remind: true)
         }
         if arguments.contains(savedDetails) {

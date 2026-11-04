@@ -127,6 +127,9 @@ struct BookingDraft: Hashable {
     let plan: BookingPlan
     let customer: CustomerDetails
     let note: String
+    /// "Remember me on this iPhone" on the details step: a card added for this booking is kept
+    /// for next time, or (off) forgotten once it's booked.
+    var remember = true
 }
 
 /// What the client has typed on the details step, kept while they're booking: going back to the

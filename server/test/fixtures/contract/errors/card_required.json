@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "card_required",
+    "message": "Add a card to book this time. You won't be charged now."
+  }
+}
