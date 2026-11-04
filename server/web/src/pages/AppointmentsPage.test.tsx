@@ -59,6 +59,8 @@ describe('My appointments', () => {
     expect(card.textContent).toContain('Haircut with Flowxbori');
     expect(card.textContent).toContain('$35 · 45 min · Pay at the shop');
     expect(card.textContent).toContain('Card on file: Visa •••• 4242');
+    // The demo's notice is the demo's alone.
+    expect(screen.queryByTestId('demo-notice')).toBeNull();
     await waitFor(() => expect(api.calls).toHaveLength(1));
     expect(api.calls[0]).toMatchObject({ method: 'GET', path: `/api/appointments/${fixtureAppointment.id}`, headers: { 'x-manage-token': MANAGE } });
   });
@@ -111,7 +113,7 @@ describe('cancelling', () => {
     expect(within(dialog).getAllByRole('button').map((b) => b.textContent)).toEqual(['Keep appointment', 'Cancel appointment']);
 
     await userEvent.click(within(dialog).getByTestId('confirm-cancel'));
-    expect(await screen.findByText('Appointment cancelled. The shop sees it right away.')).toBeTruthy();
+    expect((await screen.findByTestId('cancelled-notice')).textContent).toBe('Appointment cancelled. The shop sees it right away.');
     const [cancel] = api.calls.filter((c) => c.method === 'POST');
     expect(cancel).toMatchObject({ path: CANCEL_PATH, headers: { 'x-manage-token': MANAGE }, body: undefined });
     expect(screen.getByTestId('appointment-status').textContent).toBe('Cancelled');

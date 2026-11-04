@@ -20,9 +20,9 @@ import {
 // The demo version (playwright.demo.config.ts): the whole booking, "Demo booking made", My
 // appointments after a reload and offline, and cancelling, with not one request to /api,
 // from the page or its service worker; it says it's a demo wherever a booking could be taken
-// for real, on a phone's first screen and in the calendar file too; it keeps none of the
-// client's details; the reviews are samples; it's hosted the way its vercel.json says; and
-// it can be retired.
+// for real, on a phone's first screen and in the calendar file too, and on My appointments,
+// where cancelling says nothing was sent to the shop; it keeps none of the client's details;
+// the reviews are samples; it's hosted the way its vercel.json says; and it can be retired.
 
 const NOTICE = "Demo version: bookings aren't sent to the shop. To book for real, call (442) 341-3053.";
 
@@ -111,6 +111,16 @@ test('books and cancels with no request to /api, saying it’s a demo', async ({
   const card = page.getByTestId('appointment-card');
   await expect(card.getByTestId('appointment-status')).toHaveText('Next appointment');
   await expect(card).toContainText('Haircut with');
+  // Above it, that it's the demo: coming back to it later, nobody should think the shop has it.
+  await expect(page.getByTestId('demo-notice')).toHaveText(NOTICE);
+  expect(
+    await page.getByTestId('demo-notice').evaluate((notice) => {
+      const listed = document.querySelector('[data-testid="appointment-card"]');
+      return listed !== null && Boolean(notice.compareDocumentPosition(listed) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }),
+    'the demo notice comes before the booking',
+  ).toBe(true);
+  await expectAccessible(page, 'the demo’s My appointments');
   await screenshot(page, testInfo, '08-appointments-booked');
 
   // And offline: the demo's bookings live in this browser, so they're still there, and the line says the demo works.
@@ -124,9 +134,16 @@ test('books and cancels with no request to /api, saying it’s a demo', async ({
   await context.setOffline(false);
   await page.reload();
 
+  // Cancelling says the shop hears nothing of it, before and after: it never had the booking.
   await card.getByRole('button', { name: 'Cancel appointment' }).click();
+  const dialog = page.getByTestId('cancel-dialog');
+  await expect(dialog).toContainText('This is the demo: nothing was sent to the shop.');
+  await expect(dialog).not.toContainText('The shop sees it right away');
+  await screenshot(page, testInfo, '08c-appointments-cancel-dialog', { fullPage: false });
   await page.getByTestId('confirm-cancel').click();
   await expect(card.getByTestId('appointment-status')).toHaveText('Cancelled');
+  await expect(card.getByTestId('cancelled-notice')).toHaveText('Appointment cancelled. This is the demo: nothing was sent to the shop.');
+  await expect(page.getByText('The shop sees it right away')).toHaveCount(0);
   await page.reload();
   await expect(page.getByTestId('appointment-card').getByTestId('appointment-status')).toHaveText('Cancelled');
   await screenshot(page, testInfo, '09-appointments-cancelled');
@@ -168,6 +185,16 @@ test.describe('on an iPhone', () => {
     expect(ics).toContain('SUMMARY:DEMO\\, not booked: Haircut at Izzy Clipz');
     expect(ics).toContain("DESCRIPTION:Demo version: this booking wasn't sent to the shop\\, and Izzy Clipz doesn't have it. To book for real\\, call (442) 341-3053.");
     expect(ics).not.toContain('VALARM');
+
+    // On My appointments too, the notice is on the first screen, above the booking: opened again
+    // days later, from the Home Screen say, it's the first thing that says what the booking is.
+    await page.getByRole('link', { name: 'Manage or cancel' }).click();
+    const card = page.getByTestId('appointment-card');
+    await expect(card.getByTestId('appointment-status')).toHaveText('Next appointment');
+    const listed = (await page.getByTestId('demo-notice').boundingBox())!;
+    expect(listed.y + listed.height, 'the demo notice ends on the first screen').toBeLessThanOrEqual(page.viewportSize()!.height);
+    expect(listed.y + listed.height, 'the demo notice is above the booking').toBeLessThanOrEqual((await card.boundingBox())!.y);
+    await screenshot(page, testInfo, '12-iphone-appointments-first-screen', { fullPage: false });
   });
 });
 

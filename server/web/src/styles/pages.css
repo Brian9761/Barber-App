@@ -977,6 +977,11 @@
 
 /* -------------------------------------------------------------- Appointments */
 
+/* The demo's notice, between the title and the appointments (the demo only). */
+.appointments-demo {
+  margin-bottom: var(--space-10);
+}
+
 .appointments {
   display: grid;
   gap: var(--space-10);

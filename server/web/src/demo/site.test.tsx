@@ -38,6 +38,24 @@ async function bookInDemo(customer = { name: 'Private Person', phone: '(760) 555
 }
 
 describe('My appointments in the demo', () => {
+  it('says it’s the demo above its bookings, and that cancelling one sends the shop nothing', async () => {
+    await bookInDemo();
+    renderApp('/appointments');
+    const card = await screen.findByTestId('appointment-card');
+    const notice = screen.getByTestId('demo-notice');
+    expect(notice.textContent).toBe("Demo version: bookings aren't sent to the shop. To book for real, call (442) 341-3053.");
+    expect(notice.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Cancel appointment' }));
+    const dialog = screen.getByTestId('cancel-dialog');
+    expect(dialog.textContent).toContain('This is the demo: nothing was sent to the shop.');
+    expect(dialog.textContent).not.toContain('The shop sees it right away');
+    await userEvent.click(within(dialog).getByTestId('confirm-cancel'));
+    expect((await within(card).findByTestId('cancelled-notice')).textContent).toBe('Appointment cancelled. This is the demo: nothing was sent to the shop.');
+    expect(within(card).getByTestId('appointment-status').textContent).toBe('Cancelled');
+    expect(card.textContent).not.toContain('The shop sees it right away');
+  });
+
   it('still lists the bookings made in it offline: they live in this browser', async () => {
     await bookInDemo();
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);

@@ -10,6 +10,7 @@ import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
 import { CallLink, Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
+import { DemoNotice } from '../demo/DemoNotice';
 import { isDemo } from '../demo/mode';
 import { cardLabel, durationLabel } from '../lib/format';
 import { useOnline } from '../pwa/connection';
@@ -42,6 +43,13 @@ export function AppointmentsPage() {
         <p className="lead secondary">The appointments booked on this {thisDevice()}. Check them, add them to your calendar, or cancel.</p>
         <PreferToCall className="page-header__call" />
       </header>
+      {/* The demo says what it is here too, above its bookings: someone who opens it days later
+          shouldn't think the shop has one, or that cancelling it told the shop anything. */}
+      {isDemo() ? (
+        <div className="container container--narrow appointments-demo">
+          <DemoNotice />
+        </div>
+      ) : null}
       <CatalogGate>{(catalog) => <AppointmentList catalog={catalog} />}</CatalogGate>
     </>
   );
@@ -353,6 +361,8 @@ function AppointmentCard({
   const [problem, setProblem] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const title = `${a.serviceName} with ${a.barberName}`;
+  // What the shop hears of a cancellation: at once, or in the demo nothing (it never had the booking).
+  const shopHears = isDemo() ? 'This is the demo: nothing was sent to the shop.' : 'The shop sees it right away.';
 
   const askToCancel = () => {
     setProblem(null);
@@ -424,8 +434,8 @@ function AppointmentCard({
       ) : null}
       {note ? <p className="appointment__note">{note}</p> : null}
       {done ? (
-        <Notice tone="success" role="status">
-          <p>Appointment cancelled. The shop sees it right away.</p>
+        <Notice tone="success" role="status" testId="cancelled-notice">
+          <p>Appointment cancelled. {shopHears}</p>
         </Notice>
       ) : null}
       {problem ? (
@@ -509,7 +519,7 @@ function AppointmentCard({
           </p>
         ) : null}
         <p>
-          {title}, {longDateTimeLabel(new Date(a.start), zone)}. The shop sees it right away.
+          {title}, {longDateTimeLabel(new Date(a.start), zone)}. {shopHears}
         </p>
       </Dialog>
     </article>
