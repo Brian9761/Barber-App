@@ -322,7 +322,16 @@
   text-align: center;
   text-decoration: none;
   white-space: nowrap;
+  max-width: 100%;
   cursor: pointer;
+}
+
+/* On a narrow phone a long label wraps rather than pushing the page sideways. */
+@media (max-width: 479px) {
+  .button {
+    white-space: normal;
+    text-wrap: balance;
+  }
 }
 
 .button:hover {

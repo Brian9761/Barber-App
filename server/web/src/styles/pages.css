@@ -499,11 +499,18 @@
 
 .review-source {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: start;
   gap: var(--space-5);
   padding: var(--space-8);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-tile);
+}
+
+@media (max-width: 599px) {
+  .review-source {
+    padding: var(--space-6) var(--space-5);
+  }
 }
 
 /* Google's attribution: plain text at a regular weight. */
