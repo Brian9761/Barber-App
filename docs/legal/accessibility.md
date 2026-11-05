@@ -52,7 +52,7 @@ You never have to use our website or apps to book.
 - **Text us at (442) 341-3053.** [TO FILL IN: keep this line only once you've confirmed this number takes texts and someone reads them during opening hours; otherwise delete every mention of texting us in this statement.]
 - **Email us at [TO FILL IN: the shop's email address].**
 - **Walk in.** Walk-ins are welcome, depending on which barbers are free.
-- **At the shop.** Our Visit page lists the shop's accessibility features. If you need help getting in, or any other accommodation during your visit, contact us before you come or tell us when you arrive. Service animals are welcome.
+- **At the shop.** If you need help getting in, or any other accommodation during your visit, contact us before you come or tell us when you arrive. Service animals are welcome.
 
 ## Tell us about a problem
 
