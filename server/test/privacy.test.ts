@@ -99,7 +99,7 @@ describe('privacy:correct', () => {
     const ids = await history();
     const res = await correctAppointment(h.deps, ids.tuesday, { name: 'Andre Sampel', phone: '(760) 555-0142', email: '' });
     expect(res.appointment.customer).toEqual({ name: 'Andre Sampel', phone: '+17605550142', email: null });
-    expect(res.salesCorrected).toBe(1);
+    expect(res).toMatchObject({ salesCorrected: 1, cardTicketsCorrected: 0 });
     const sale = await h.database.pool.query('SELECT customer_name FROM sales WHERE id = $1', [ids.saleId]);
     expect(sale.rows).toEqual([{ customer_name: 'Andre Sampel' }]);
     // Only what's given changes.
@@ -108,6 +108,24 @@ describe('privacy:correct', () => {
       phone: '+14425550170',
       email: 'andre@example.org',
     });
+  });
+
+  it('fixes the name a card checkout copied from the appointment, and leaves a name typed differently', async () => {
+    const ids = await history();
+    const pay = async (sale: Record<string, unknown>) => {
+      const res = await h.call('POST', '/api/owner/payments', {
+        ...owner,
+        body: { amountCents: 3500, sale: { appointmentId: ids.nextWeek, items: [{ kind: 'service', serviceId: 'haircut', unitCents: 3500 }], ...sale } },
+      });
+      expect(res.status, res.text).toBe(201);
+      return res.body.paymentIntentId as string;
+    };
+    const copied = await pay({});
+    const typed = await pay({ customerName: 'Leo Sample' });
+    const res = await correctAppointment(h.deps, ids.nextWeek, { name: 'Andre Sampel' });
+    expect(res).toMatchObject({ salesCorrected: 0, cardTicketsCorrected: 1 });
+    const names = await h.database.pool.query(`SELECT id, sale_draft->>'customerName' AS name FROM payments WHERE id = ANY($1) ORDER BY id`, [[copied, typed]]);
+    expect(Object.fromEntries(names.rows.map((r) => [r.id, r.name]))).toEqual({ [copied]: 'Andre Sampel', [typed]: 'Leo Sample' });
   });
 
   it('checks what it’s given, and leaves an appointment whose details were removed alone', async () => {

@@ -108,7 +108,7 @@ describe('clients’ details are removed 12 months after the appointment', () =>
     expect((await row('appointments', booking.id)).customer_name).toBe(NAME_REMOVED);
   });
 
-  it('names on sales and void reasons, and card payments’ descriptions, tickets and receipt emails, after 12 months', async () => {
+  it('names on sales and void reasons, and card payments’ descriptions, names on tickets and receipt emails, after 12 months', async () => {
     // Monday 10:20 AM: a walk-in checked out in cash by name, then voided; a card payment with a note.
     h.setNow('2026-11-02T18:20:00Z');
     const sale = await h.call('POST', '/api/owner/sales', {
@@ -135,7 +135,36 @@ describe('clients’ details are removed 12 months after the appointment', () =>
     expect((await cron()).body.anonymized).toEqual({ appointments: 0, sales: 1, payments: 1, receiptEmails: 0 });
     expect(await row('sales', sale.body.sale.id)).toMatchObject({ customer_name: null, void_reason: null, total_cents: 4500, method: 'cash' });
     expect((await row('sales', sale.body.sale.id)).voided_at).not.toBeNull();
-    expect(await row('payments', paymentId)).toMatchObject({ description: null, sale_draft: null, receipt_email: null, amount_cents: 4500 });
+    // The ticket keeps its items (and the appointment it was for, if any), without the name.
+    const payment = await row('payments', paymentId);
+    expect(payment).toMatchObject({ description: null, receipt_email: null, amount_cents: 4500 });
+    expect(payment.sale_draft).toMatchObject({ barberId: 'carlos-rafael', appointmentId: null, customerName: null, totalCents: 4500, items: [{ serviceId: 'haircut' }] });
+  });
+
+  it('a card checkout’s ticket still names its appointment, so voiding the other sale a year later gives the visit to the card', async () => {
+    h.config.stripeSecretKey = 'sk_test_fixture';
+    // Monday 10 AM, a walk-in: paid by card, and checked out in cash by mistake while the card went through.
+    const walkIn = await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: FLOW45, start: '2026-11-02T18:00:00Z', customer: { name: 'Ben Walkin' } } });
+    expect(walkIn.status, walkIn.text).toBe(201);
+    const appointment = walkIn.body.appointment.id as string;
+    const haircut = [{ kind: 'service', serviceId: 'haircut' }];
+    const card = await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 3500, sale: { appointmentId: appointment, items: haircut } } });
+    expect(card.status, card.text).toBe(201);
+    const cash = await h.call('POST', '/api/owner/sales', { ...owner, body: { method: 'cash', appointmentId: appointment, items: haircut } });
+    expect(cash.status, cash.text).toBe(201);
+    h.stripe.succeed(card.body.paymentIntentId);
+    const cardSale = (await h.call('POST', `/api/owner/payments/${card.body.paymentIntentId}/complete`, owner)).body.payment.saleId as string;
+    expect((await row('sales', cardSale)).appointment_id).toBeNull();
+    // A year and a day later the details are gone.
+    h.setNow('2027-11-03T19:00:00Z');
+    expect((await cron()).body.anonymized).toEqual({ appointments: 1, sales: 2, payments: 1, receiptEmails: 0 });
+    // Voiding the cash sale now still gives the visit to the card sale, and the reason typed isn't kept.
+    const voided = await h.call('POST', `/api/owner/sales/${cash.body.sale.id}/void`, { ...owner, body: { reason: 'Ben paid by card' } });
+    expect(voided.status, voided.text).toBe(200);
+    expect(voided.body.message).toBe('The sale was voided, so it no longer counts in your sales. The card payment taken for this appointment is its checkout now.');
+    expect(voided.body.sale.voidReason).toBeNull();
+    expect(await row('sales', cardSale)).toMatchObject({ appointment_id: appointment, customer_name: null });
+    expect(await row('appointments', appointment)).toMatchObject({ sale_id: cardSale, customer_name: NAME_REMOVED });
   });
 
   it('a fee’s description (the service and the time) stays; the payment row does too', async () => {

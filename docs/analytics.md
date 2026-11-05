@@ -108,7 +108,8 @@ The leaderboard and the top barber stay the whole shop's.
   hours stop counting.
 - **Checked-out appointments** can't be reopened, cancelled or marked a
   no-show until their sale is voided, so the numbers always match what
-  happened.
+  happened. One booked with a card on file never becomes a no-show once
+  it's been completed, even after that (the Cancellation & No-Show Policy).
 - Payments taken by card **without** a checkout (from an older version of
   the app) don't show up here, except as the appointment's booked price
   when it's marked Done.

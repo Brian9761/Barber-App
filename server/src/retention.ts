@@ -14,7 +14,7 @@ import { localDate } from './time.js';
 //   removed, except while a fee for it is still pending. The appointment stays, without them, so
 //   the analytics (which never read them) don't change.
 // - The client's name on a sale (and why it was voided), and a card payment's description, receipt
-//   email and checkout ticket: 12 months.
+//   email and the client's name on its checkout ticket: 12 months.
 // - A saved card: deleted at Stripe (detached, and its Customer deleted) once it has expired, gone
 //   12 months without being used for a booking, or the client asked (Remove card, Forget my details,
 //   or a booking made without Remember me), as soon as no booking still needs it.
@@ -70,12 +70,17 @@ async function anonymizeSales(db: Queryable, ids: string[], now: Date): Promise<
   return result.rowCount ?? 0;
 }
 
-/** A card payment taken at the shop loses its description too (it may name the client); a fee's names only the service. */
+/**
+ * A card payment taken at the shop loses its description too (it may name the client); a fee's names
+ * only the service. Its checkout ticket loses the client's name and keeps the rest (the items, and
+ * the appointment it was for, which `voidSale` still reads to give that appointment back to it).
+ */
 async function anonymizePayments(db: Queryable, ids: string[], now: Date): Promise<number> {
   if (ids.length === 0) return 0;
+  // jsonb_set leaves a payment without a ticket (NULL) as it is.
   const result = await db.query(
     `UPDATE payments
-        SET receipt_email = NULL, sale_draft = NULL,
+        SET receipt_email = NULL, sale_draft = jsonb_set(sale_draft, '{customerName}', 'null'::jsonb),
             description = CASE WHEN kind = 'in_person' THEN NULL ELSE description END,
             anonymized_at = $2, updated_at = $2
       WHERE id = ANY($1::text[]) AND anonymized_at IS NULL`,

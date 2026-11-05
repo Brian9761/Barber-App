@@ -112,7 +112,10 @@ export interface Correction {
 
 /**
  * Fixes a typo in an appointment's name, number or email (an empty number or email removes it),
- * and the name on its checkout. Not for an appointment whose details were already removed.
+ * and the same name where its checkout copied it: on its sale, and on a card checkout's ticket
+ * (kept with the payment; the sale takes its name from it once the card goes through). A name
+ * typed differently at the checkout stays. Not for an appointment whose details were already
+ * removed.
  */
 export async function correctAppointment(deps: Pick<Deps, 'db' | 'now'>, id: string, changes: Correction) {
   if (!UUID_RE.test(id)) throw new PrivacyError("That isn't an appointment id (it looks like 1b4e28ba-2fa1-11d2-883f-0016d3cca427).");
@@ -155,9 +158,26 @@ export async function correctAppointment(deps: Pick<Deps, 'db' | 'now'>, id: str
     const sales =
       name === undefined
         ? 0
-        : ((await tx.query('UPDATE sales SET customer_name = $2, updated_at = $3 WHERE appointment_id = $1 AND anonymized_at IS NULL', [id, name, now]))
-            .rowCount ?? 0);
-    return { appointment: appointmentJSON(updated[0] ?? row), salesCorrected: sales };
+        : ((
+            await tx.query('UPDATE sales SET customer_name = $2, updated_at = $3 WHERE appointment_id = $1 AND customer_name = $4 AND anonymized_at IS NULL', [
+              id,
+              name,
+              now,
+              row.customer_name,
+            ])
+          ).rowCount ?? 0);
+    // A ticket names its appointment even when its sale was recorded without it (sales.ts).
+    const tickets =
+      name === undefined
+        ? 0
+        : ((
+            await tx.query(
+              `UPDATE payments SET sale_draft = jsonb_set(sale_draft, '{customerName}', to_jsonb($2::text)), updated_at = $3
+                WHERE sale_draft->>'appointmentId' = $1::text AND sale_draft->>'customerName' = $4 AND anonymized_at IS NULL`,
+              [id, name, now, row.customer_name],
+            )
+          ).rowCount ?? 0);
+    return { appointment: appointmentJSON(updated[0] ?? row), salesCorrected: sales, cardTicketsCorrected: tickets };
   });
 }
 

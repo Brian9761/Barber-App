@@ -577,7 +577,12 @@ export async function voidSale(ctx: Context): Promise<Response> {
     const sale = rows[0];
     if (!sale) throw notFound();
     if (sale.voided_at !== null) return false;
-    await tx.query('UPDATE sales SET voided_at = $2, void_reason = $3, updated_at = $2 WHERE id = $1', [id, now, reason]);
+    // A sale whose details were already removed (retention.ts) doesn't take a new reason: the job won't come back to it.
+    await tx.query('UPDATE sales SET voided_at = $2, void_reason = CASE WHEN anonymized_at IS NULL THEN $3 END, updated_at = $2 WHERE id = $1', [
+      id,
+      now,
+      reason,
+    ]);
     if (sale.appointment_id === null) return false;
     await tx.query(
       `UPDATE appointments a
