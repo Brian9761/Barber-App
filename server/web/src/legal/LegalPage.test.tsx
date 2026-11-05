@@ -5,6 +5,7 @@ import { ROUTER_FUTURE } from '../App';
 import { renderApp } from '../test/api';
 import type { LegalDocumentId } from './documents';
 import { LegalArticle, numberHref } from './LegalPage';
+import { legalDraft } from './mode';
 import { LEGAL_TEXTS } from './texts';
 
 // The four legal pages, drawn from docs/legal: as drafts (every build but a strict one), with the
@@ -155,6 +156,18 @@ describe('the legal pages, as drafts', () => {
     renderApp('/privacy#saved-cards');
     const heading = await screen.findByRole('heading', { level: 3, name: 'Saved cards' });
     await waitFor(() => expect(document.activeElement).toBe(heading));
+  });
+});
+
+describe('a strict build, as the pages see it', () => {
+  it('has no draft note: the build’s VITE_LEGAL_STRICT reaches the page', async () => {
+    expect(legalDraft()).toBe(true);
+    vi.stubEnv('VITE_LEGAL_STRICT', '1');
+    expect(legalDraft()).toBe(false);
+    renderApp('/privacy');
+    await screen.findByRole('heading', { level: 1, name: 'Privacy Policy' });
+    expect(screen.queryByTestId('legal-draft')).toBeNull();
+    expect(screen.queryByText(/Not in effect yet/)).toBeNull();
   });
 });
 

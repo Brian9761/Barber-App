@@ -3,7 +3,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { loadEnv, type ConfigEnv, type UserConfig } from 'vite';
 import { LEGAL_FILES, legalDocuments, legalStrict, readLegalFiles, strictFailure, unfinished } from './legal.js';
 
 // A strict build publishes the legal documents as they are, so it stops while any placeholder
@@ -111,5 +112,27 @@ describe('the message', () => {
       '  docs/legal/terms.md:4: [TO FILL IN: y]',
       expect.stringContaining('Fill them in'),
     ]);
+  });
+});
+
+describe('how the build tells the pages', () => {
+  // The pages read import.meta.env.VITE_LEGAL_STRICT (src/legal/mode.ts; tested there): the build's
+  // config sets it from LEGAL_STRICT and VERCEL_ENV, and Vite hands every VITE_ variable to the site.
+  async function strictFor(env: { LEGAL_STRICT?: string; VERCEL_ENV?: string }, mode = 'production'): Promise<string | undefined> {
+    vi.stubEnv('LEGAL_STRICT', env.LEGAL_STRICT ?? '');
+    vi.stubEnv('VERCEL_ENV', env.VERCEL_ENV ?? '');
+    vi.stubEnv('VITE_DEMO_MODE', '');
+    vi.stubEnv('VITE_LEGAL_STRICT', '');
+    const { default: config } = await import('../vite.config.js');
+    (config as (env: ConfigEnv) => UserConfig)({ mode, command: 'build' });
+    return loadEnv(mode, fileURLToPath(new URL('..', import.meta.url)), 'VITE_').VITE_LEGAL_STRICT;
+  }
+
+  it('a strict build says so to the site; every other build doesn’t', async () => {
+    expect(await strictFor({ LEGAL_STRICT: '1' })).toBe('1');
+    expect(await strictFor({ VERCEL_ENV: 'production' })).toBe('1');
+    expect(await strictFor({ VERCEL_ENV: 'production' }, 'demo')).toBe('');
+    expect(await strictFor({ VERCEL_ENV: 'preview' })).toBe('');
+    expect(await strictFor({})).toBe('');
   });
 });
