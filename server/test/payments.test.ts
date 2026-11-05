@@ -30,6 +30,7 @@ describe('without Stripe configured', () => {
       ['POST', '/api/owner/terminal/connection-token', undefined],
       ['POST', '/api/owner/payments', { amountCents: 3500 }],
       ['POST', '/api/owner/payments/pi_123/complete', undefined],
+      ['POST', '/api/owner/payments/pi_123/receipt', { email: 'client@example.com' }],
     ] as const) {
       const res = await h.call(method, path, { owner: true, ...(body ? { body } : {}) });
       expect(res.status, path).toBe(503);
@@ -57,7 +58,7 @@ describe('with Stripe configured', () => {
   it('creates a card_present PaymentIntent with allowed_payment_method_types and automatic capture', async () => {
     configureStripe();
     const appointment = await walkIn();
-    const res = await pay({ amountCents: 3500, description: ' Haircut ', appointmentId: appointment.id, receiptEmail: 'client@example.com' });
+    const res = await pay({ amountCents: 3500, description: ' Haircut ', appointmentId: appointment.id });
     expect(res.status).toBe(201);
     expect(res.body).toEqual({ paymentIntentId: 'pi_3TestFixture000001', clientSecret: 'pi_3TestFixture000001_secret_FixtureClientSecret' });
     const params = h.stripe.calls.find((c) => c.method === 'paymentIntents.create')!.params as Record<string, unknown>;
@@ -67,10 +68,10 @@ describe('with Stripe configured', () => {
       allowed_payment_method_types: ['card_present'],
       capture_method: 'automatic',
       description: 'Haircut',
-      receipt_email: 'client@example.com',
       metadata: { source: 'izzy-clipz-business', appointment_id: appointment.id },
     });
     expect(params).not.toHaveProperty('payment_method_types');
+    expect(params).not.toHaveProperty('receipt_email');
     const list = await h.call('GET', '/api/owner/payments?date=2026-11-02', { owner: true });
     expect(list.body.payments).toEqual([
       {
@@ -95,9 +96,96 @@ describe('with Stripe configured', () => {
     expect((await pay({ amountCents: 50 })).status).toBe(201);
     expect((await pay({ amountCents: 100_000 })).status).toBe(201);
     expect((await pay({ amountCents: 500, receiptEmail: 'nope' })).status).toBe(400);
+    // An older app's empty receipt email is ignored.
+    expect((await pay({ amountCents: 500, receiptEmail: '' })).status).toBe(201);
+    expect((await pay({ amountCents: 500, receiptEmail: null })).status).toBe(201);
     expect((await pay({ amountCents: 500, description: 'd'.repeat(201) })).status).toBe(400);
     expect((await pay({ amountCents: 500, appointmentId: '00000000-0000-4000-8000-0000000000aa' })).status).toBe(404);
     expect((await pay({ amountCents: 500, appointmentId: 'nope' })).status).toBe(404);
+  });
+
+  it('never takes an email before the card payment (Song-Beverly): a clear 400, nothing sent to Stripe or kept', async () => {
+    configureStripe();
+    const res = await pay({ amountCents: 3500, description: 'Haircut', receiptEmail: 'client@example.com' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toEqual({
+      code: 'invalid_request',
+      message: 'Take the card payment without an email. Once it goes through, you can email the client a receipt.',
+    });
+    expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.create')).toEqual([]);
+    expect((await h.database.pool.query('SELECT count(*)::int AS n FROM payments')).rows[0].n).toBe(0);
+    // Without one, as the app does now: nothing kept either.
+    const { paymentIntentId } = (await pay({ amountCents: 3500 })).body;
+    expect((await h.database.pool.query('SELECT receipt_email FROM payments WHERE id = $1', [paymentIntentId])).rows).toEqual([{ receipt_email: null }]);
+  });
+
+  it('a receipt by email after the payment went through: set at Stripe, which sends it, and never kept here', async () => {
+    configureStripe();
+    const appointment = await walkIn();
+    const { paymentIntentId } = (await pay({ amountCents: 3500, description: 'Haircut', appointmentId: appointment.id })).body;
+    const receipt = (email: unknown) => h.call('POST', `/api/owner/payments/${paymentIntentId}/receipt`, { owner: true, body: { email } });
+    // Not before it went through.
+    const early = await receipt('client@example.com');
+    expect(early.status).toBe(400);
+    expect(early.body.error).toEqual({ code: 'invalid_request', message: "This payment hasn't gone through, so there's no receipt to send yet." });
+    h.stripe.succeed(paymentIntentId);
+    await h.call('POST', `/api/owner/payments/${paymentIntentId}/complete`, { owner: true });
+    const res = await receipt(' client@example.com ');
+    expect(res.status, res.text).toBe(200);
+    expect(res.body.payment).toMatchObject({ id: paymentIntentId, status: 'succeeded', kind: 'inPerson', amountCents: 3500 });
+    expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.update')).toEqual([
+      { method: 'paymentIntents.update', params: { id: paymentIntentId, receipt_email: 'client@example.com' }, options: undefined },
+    ]);
+    expect(h.stripe.intents.get(paymentIntentId)?.receipt_email).toBe('client@example.com');
+    expect((await h.database.pool.query('SELECT receipt_email FROM payments WHERE id = $1', [paymentIntentId])).rows).toEqual([{ receipt_email: null }]);
+    // Again (a typo fixed): Stripe sends a new one to the new address.
+    expect((await receipt('client2@example.com')).status).toBe(200);
+    expect(h.stripe.intents.get(paymentIntentId)?.receipt_email).toBe('client2@example.com');
+    // The address is checked first.
+    for (const [email, message] of [
+      ['', "Enter the client's email address."],
+      [null, "Enter the client's email address."],
+      ['client at example', 'Enter a valid email address.'],
+    ] as const) {
+      const bad = await receipt(email);
+      expect(bad.status, String(email)).toBe(400);
+      expect(bad.body.error.message).toBe(message);
+    }
+    expect(h.logs.some((l) => JSON.stringify(l).includes('client'))).toBe(false);
+  });
+
+  it('a receipt: only for an in-person payment this server made; Stripe’s refusals in plain words, never logging the address', async () => {
+    configureStripe();
+    const receipt = (id: string, email = 'client@example.com') => h.call('POST', `/api/owner/payments/${id}/receipt`, { owner: true, body: { email } });
+    expect((await receipt('pi_unknown')).status).toBe(404);
+    expect((await receipt('nope')).status).toBe(404);
+    const { paymentIntentId } = (await pay({ amountCents: 3500 })).body;
+    h.stripe.succeed(paymentIntentId);
+    await h.call('POST', `/api/owner/payments/${paymentIntentId}/complete`, { owner: true });
+    // A fee charged to a card on file isn't one.
+    await h.database.pool.query(`UPDATE payments SET kind = 'no_show_fee' WHERE id = $1`, [paymentIntentId]);
+    expect((await receipt(paymentIntentId)).body.error).toEqual({
+      code: 'invalid_request',
+      message: 'Receipts are sent only for card payments taken at the shop.',
+    });
+    await h.database.pool.query(`UPDATE payments SET kind = 'in_person' WHERE id = $1`, [paymentIntentId]);
+    // Stripe turns the address down: say so, and log nothing that has it.
+    h.stripe.nextError = Object.assign(new Error('Invalid email address: client@example.com'), {
+      type: 'StripeInvalidRequestError',
+      code: 'email_invalid',
+      param: 'receipt_email',
+      statusCode: 400,
+    });
+    const refused = await receipt(paymentIntentId);
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toEqual({ code: 'invalid_request', message: "Stripe didn't accept that email address. Check it and try again." });
+    expect(h.logs.at(-1)).toMatchObject({ level: 'error', message: 'Stripe send receipt failed', details: { code: 'email_invalid', param: 'receipt_email' } });
+    expect(JSON.stringify(h.logs)).not.toContain('client@example.com');
+    // Stripe down.
+    h.stripe.nextError = Object.assign(new Error('socket hang up'), { type: 'StripeConnectionError' });
+    expect((await receipt(paymentIntentId)).body.error).toEqual({ code: 'server_error', message: "We couldn't reach Stripe. Please try again." });
+    // The owner key only (a computer can't: see owner-auth.test.ts), and the owner's at all.
+    expect((await h.call('POST', `/api/owner/payments/${paymentIntentId}/receipt`, { body: { email: 'client@example.com' } })).status).toBe(401);
   });
 
   it('complete: reports Stripe’s status, and marks the appointment paid only once it succeeded', async () => {

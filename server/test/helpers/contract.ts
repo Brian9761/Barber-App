@@ -246,6 +246,7 @@ export const ErrorBody = z.strictObject({
       'policy_changed',
       'not_chargeable',
       'not_started',
+      'already_completed',
       'late_cancel_fee',
       'not_checkoutable',
       'already_checked_out',
@@ -356,12 +357,17 @@ export const RESPONSES = {
   'connection-token': z.strictObject({ secret: z.string().min(1) }),
   'payment-created': z.strictObject({ paymentIntentId: z.string().regex(/^pi_/), clientSecret: z.string().min(1) }),
   'payment-completed': z.strictObject({ payment: Payment }),
+  // POST /api/owner/payments/:id/receipt: Stripe emails the receipt; the payment as it is.
+  'payment-receipt-sent': z.strictObject({ payment: Payment }),
   payments: z.strictObject({ payments: z.array(Payment) }),
   // No-show protection
   'no-show-policy': NoShowPolicy,
   'no-show-policy-not-required': NoShowPolicy,
   'card-checkout': z.strictObject({ url: z.string().regex(/^https:\/\//), sessionId: z.string().regex(/^cs_(test|live)_/) }),
   'card-saved': z.strictObject({ card: SavedCard }),
+  // DELETE /api/cards: deleted at Stripe now, or once no booking needs it.
+  'card-deletion': z.strictObject({ cardDeletion: z.strictObject({ status: z.enum(['deleted', 'scheduled']), message: z.string().min(1) }) }),
+  'card-deletion-scheduled': z.strictObject({ cardDeletion: z.strictObject({ status: z.enum(['deleted', 'scheduled']), message: z.string().min(1) }) }),
   'no-show-settings': z.strictObject({ noShowSettings: NoShowSettings }),
   'no-show-settings-updated': z.strictObject({ noShowSettings: NoShowSettings }),
   'payments-with-fees': z.strictObject({ payments: z.array(Payment) }),

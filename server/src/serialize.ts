@@ -53,6 +53,13 @@ export interface AppointmentRow {
   no_show_fee_charged_at: Date | null;
   /** When the client cancelled in the app, or asked to, before the start; never cleared. No fee then. */
   customer_cancelled_at: Date | null;
+  /**
+   * When the shop first marked it completed or checked it out (migrations/008); never cleared, so a
+   * booking with a card on file that was completed can't become a no-show, even after it's reopened.
+   */
+  completed_at: Date | null;
+  /** When the client's details were removed, 12 months on or on request (migrations/008, retention.ts). */
+  anonymized_at: Date | null;
   /** The appointment's live sale (migrations/006), copied from `sales`: all three set, or all null. */
   sale_id: string | null;
   sale_total_cents: number | null;

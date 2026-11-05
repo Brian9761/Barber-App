@@ -129,6 +129,10 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(try encoded { try IzzyAPI.Endpoints.saveCard(sessionId: sessionId, token: token) }).card
     }
 
+    public func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion {
+        try await send(IzzyAPI.Endpoints.deleteCard(token: token)).cardDeletion
+    }
+
     // MARK: OwnerAPI
 
     public func ownerStatus() async throws -> IzzyAPI.OwnerStatus {
@@ -215,6 +219,10 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
 
     public func completePayment(id: String) async throws -> IzzyAPI.Payment {
         try await send(IzzyAPI.Endpoints.completePayment(id: id)).payment
+    }
+
+    public func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment {
+        try await send(try encoded { try IzzyAPI.Endpoints.sendReceipt(paymentId: paymentId, email: email) }).payment
     }
 
     public func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment] {

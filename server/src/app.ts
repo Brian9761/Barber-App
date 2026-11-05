@@ -1,5 +1,5 @@
 import { cancelAppointment, getAppointment, getAvailability, getOwnerAvailability, listOwnerAppointments, patchOwnerAppointment, postAppointment, postOwnerAppointment } from './appointments.js';
-import { cardCheckoutCancel, cardCheckoutReturn, createCardCheckout, saveCard } from './cards.js';
+import { cardCheckoutCancel, cardCheckoutReturn, createCardCheckout, deleteCard, saveCard } from './cards.js';
 import {
   createComputerCode,
   createComputerSession,
@@ -11,7 +11,7 @@ import {
 import { dailyCron } from './cron.js';
 import type { Deps } from './deps.js';
 import { json } from './http.js';
-import { completePayment, connectionToken, createPayment, listPayments, ownerMe, stripeWebhook } from './payments.js';
+import { completePayment, connectionToken, createPayment, listPayments, ownerMe, sendPaymentReceipt, stripeWebhook } from './payments.js';
 import { getNoShowPolicy, getNoShowSettings, patchNoShowSettings } from './noshow.js';
 import { chargeNoShowFee } from './noshowfee.js';
 import { createProduct, deleteProduct, listOwnerProducts, listPublicProducts, updateProduct, uploadProductPhoto } from './products.js';
@@ -43,6 +43,7 @@ export function createRouter(): Router {
       .on('GET', '/api/cards/return', cardCheckoutReturn)
       .on('GET', '/api/cards/cancel', cardCheckoutCancel)
       .on('POST', '/api/cards', saveCard)
+      .on('DELETE', '/api/cards', deleteCard)
       // Signing in on a computer with a code from the Business app
       .on('POST', '/api/computer-sessions', createComputerSession)
       // Stripe's way back after connecting the shop's own account (a browser lands here)
@@ -69,6 +70,7 @@ export function createRouter(): Router {
       .on('POST', '/api/owner/payments', createPayment) // the owner key only
       .on('GET', '/api/owner/payments', listPayments)
       .on('POST', '/api/owner/payments/:id/complete', completePayment)
+      .on('POST', '/api/owner/payments/:id/receipt', sendPaymentReceipt) // the owner key only
       // Sales (checkout) and analytics
       .on('POST', '/api/owner/sales', postSale)
       .on('GET', '/api/owner/sales', listSales)

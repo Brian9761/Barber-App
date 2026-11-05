@@ -27,6 +27,7 @@ describe('npm run migrate', () => {
       '005_stripe_connect_and_computers.sql',
       '006_sales.sql',
       '007_payment_succeeded_at.sql',
+      '008_retention.sql',
     ]);
   });
 
@@ -107,11 +108,14 @@ describe('npm run migrate', () => {
       'brand',
       'checkout_session_id',
       'created_at',
+      // 008: when the client asked to delete it, and when it was deleted at Stripe.
+      'delete_requested_at',
       'exp_month',
       'exp_year',
       'id',
       'last4',
       'livemode',
+      'removed_at',
       // 005: the connected Stripe account the card is saved on.
       'stripe_account_id',
       'stripe_customer_id',
@@ -245,6 +249,8 @@ describe('npm run migrate', () => {
         (r) => r.column_name,
       );
     expect(await columns('sales')).toEqual([
+      // 008: when the client's name was removed, 12 months on.
+      'anonymized_at',
       'appointment_id',
       'barber_id',
       'created_at',
@@ -435,6 +441,126 @@ describe('npm run migrate', () => {
     } finally {
       await client.query('SET search_path TO public').catch(() => undefined);
       await client.query('DROP SCHEMA IF EXISTS before_007 CASCADE').catch(() => undefined);
+      client.release();
+    }
+  });
+
+  it('008 adds when details were removed, and lets a saved card lose its Stripe ids once removed, never before', async () => {
+    const columns = async (table: string) =>
+      (
+        await db.pool.query(
+          `SELECT column_name, data_type, is_nullable FROM information_schema.columns WHERE table_name = $1 ORDER BY column_name`,
+          [table],
+        )
+      ).rows.map((r) => `${r.column_name} ${r.data_type}${r.is_nullable === 'YES' ? ' null' : ''}`);
+    for (const table of ['appointments', 'sales', 'payments']) {
+      expect(await columns(table), table).toContain('anonymized_at timestamp with time zone null');
+    }
+    expect(await columns('appointments')).toContain('completed_at timestamp with time zone null');
+    const cards = await columns('saved_cards');
+    for (const c of [
+      'removed_at timestamp with time zone null',
+      'delete_requested_at timestamp with time zone null',
+      'checkout_session_id text null',
+      'stripe_customer_id text null',
+      'stripe_payment_method_id text null',
+      'token_hash text',
+    ]) {
+      expect(cards, c).toContain(c);
+    }
+    const index = async (name: string) => (await db.pool.query(`SELECT indexdef FROM pg_indexes WHERE indexname = $1`, [name])).rows[0]?.indexdef;
+    expect(await index('appointments_to_anonymize_idx')).toBe(
+      'CREATE INDEX appointments_to_anonymize_idx ON public.appointments USING btree (end_at) WHERE (anonymized_at IS NULL)',
+    );
+    expect(await index('appointments_saved_card_idx')).toContain('(saved_card_id, created_at) WHERE (saved_card_id IS NOT NULL)');
+    const client = await db.pool.connect();
+    const refused = async (constraint: string, sql: string) => {
+      await client.query('SAVEPOINT probe');
+      await expect(client.query(sql)).rejects.toMatchObject({ constraint });
+      await client.query('ROLLBACK TO SAVEPOINT probe');
+    };
+    try {
+      await client.query('BEGIN');
+      const card = (hash: string, ids: string, removed: string) =>
+        `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id, brand, last4, exp_month, exp_year, livemode, created_at, removed_at)
+         VALUES (gen_random_uuid(), '${hash}', ${ids}, 'visa', '4242', 12, 2030, false, now(), ${removed})`;
+      await client.query(card('a'.repeat(64), `'cs_test_kept', 'cus_kept', 'pm_kept'`, 'NULL'));
+      // A card without its Stripe ids must be a removed one.
+      await refused('saved_cards_stripe_ids', card('b'.repeat(64), 'NULL, NULL, NULL', 'NULL'));
+      await refused('saved_cards_stripe_ids', card('c'.repeat(64), `'cs_test_x', NULL, 'pm_x'`, 'NULL'));
+      await client.query(card('d'.repeat(64), 'NULL, NULL, NULL', 'now()'));
+      await client.query(card('e'.repeat(64), 'NULL, NULL, NULL', 'now()'));
+    } finally {
+      await client.query('ROLLBACK').catch(() => undefined);
+      client.release();
+    }
+  });
+
+  it('008 keeps when a booking was first completed, clears kept receipt emails, and keeps every row before it valid', async () => {
+    // 001–007 into a schema of its own, rows the way the server wrote them, then 008 on top.
+    const dir = mkdtempSync(join(tmpdir(), 'izzy-migrations-before-008-'));
+    const all = migrationFiles();
+    for (const f of all.filter((f) => f.name < '008')) writeFileSync(join(dir, f.name), f.sql);
+    const client = await db.pool.connect();
+    try {
+      await client.query('CREATE SCHEMA before_008');
+      await client.query('SET search_path TO before_008, public');
+      await migrate(client, pathToFileURL(`${dir}/`));
+      await client.query(`INSERT INTO barbers (id, name) VALUES ('flowxbori', 'Flowxbori')`);
+      const appointment = (id: number, status: string, updated: string) =>
+        client.query(
+          `INSERT INTO appointments (id, offering_id, service_id, barber_id, service_name, barber_name, price_label, price_cents,
+             price_kind, start_at, end_at, status, cancelled_by, booked_by, customer_name, created_at, updated_at)
+           VALUES ($1, 'x', 'haircut', 'flowxbori', 'Haircut', 'Flowxbori', '$35', 3500, 'fixed', $2, $3, $4, $5, 'shop', 'Walk-in', $2, $6)`,
+          [
+            `33000000-0000-4000-8000-00000000000${id}`,
+            `2026-11-0${id}T18:00:00Z`,
+            `2026-11-0${id}T18:45:00Z`,
+            status,
+            status === 'cancelled' ? 'shop' : null,
+            updated,
+          ],
+        );
+      await appointment(1, 'completed', '2026-11-01T18:50:00Z');
+      await appointment(2, 'booked', '2026-11-01T17:00:00Z');
+      await appointment(3, 'cancelled', '2026-11-01T17:00:00Z');
+      // A card payment whose receipt email was kept, and a saved card, the way the server wrote them.
+      await client.query(
+        `INSERT INTO payments (id, amount_cents, description, status, receipt_email, created_at, updated_at)
+         VALUES ('pi_before008', 3500, 'Haircut', 'succeeded', 'client@example.com', now(), now())`,
+      );
+      await client.query(
+        `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id, brand, last4, exp_month, exp_year, livemode, created_at)
+         VALUES (gen_random_uuid(), $1, 'cs_test_before008', 'cus_before008', 'pm_before008', 'visa', '4242', 12, 2030, false, now())`,
+        ['f'.repeat(64)],
+      );
+      const file = all.find((f) => f.name === '008_retention.sql');
+      if (!file) throw new Error('008_retention.sql is missing');
+      writeFileSync(join(dir, file.name), file.sql);
+      expect((await migrate(client, pathToFileURL(`${dir}/`))).applied).toEqual(['008_retention.sql']);
+      const { rows } = await client.query('SELECT status, completed_at FROM appointments ORDER BY id');
+      expect(rows).toEqual([
+        { status: 'completed', completed_at: new Date('2026-11-01T18:50:00Z') },
+        { status: 'booked', completed_at: null },
+        { status: 'cancelled', completed_at: null },
+      ]);
+      // Receipt emails aren't kept any more; the payment and the card are otherwise as they were.
+      expect((await client.query('SELECT receipt_email, description, anonymized_at FROM payments')).rows).toEqual([
+        { receipt_email: null, description: 'Haircut', anonymized_at: null },
+      ]);
+      expect((await client.query('SELECT stripe_customer_id, removed_at, delete_requested_at FROM saved_cards')).rows).toEqual([
+        { stripe_customer_id: 'cus_before008', removed_at: null, delete_requested_at: null },
+      ]);
+      // The code already live still completes appointments, and saves cards, without the new columns.
+      await client.query(`UPDATE appointments SET status = 'completed' WHERE id = '33000000-0000-4000-8000-000000000002'`);
+      await client.query(
+        `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id, brand, last4, exp_month, exp_year, livemode, created_at)
+         VALUES (gen_random_uuid(), $1, 'cs_test_after008', 'cus_after008', 'pm_after008', 'visa', '4242', 12, 2030, false, now())`,
+        ['0'.repeat(64)],
+      );
+    } finally {
+      await client.query('SET search_path TO public').catch(() => undefined);
+      await client.query('DROP SCHEMA IF EXISTS before_008 CASCADE').catch(() => undefined);
       client.release();
     }
   });

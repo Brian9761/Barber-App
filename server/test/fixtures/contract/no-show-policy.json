@@ -6,6 +6,6 @@
   "lateCancelWindowMinutes": 60,
   "warning": {
     "title": "Full Service Cancellation & No-Show Fee",
-    "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free."
+    "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free."
   }
 }

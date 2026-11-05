@@ -40,10 +40,18 @@ export interface StripeClient {
     retrieve(id: string, params?: Stripe.PaymentIntentRetrieveParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent>;
     /** One page (the newest first); a no-show fee whose answer was lost is looked up this way. */
     list(params: Stripe.PaymentIntentListParams, options?: Stripe.RequestOptions): Promise<Stripe.ApiList<Stripe.PaymentIntent>>;
+    /** An email receipt after an in-person payment went through: Stripe sends one when `receipt_email` is set. */
+    update(id: string, params: Stripe.PaymentIntentUpdateParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentIntent>;
   };
   /** No-show protection: a Customer to save the card to, and Checkout in setup mode to collect it. */
   customers: {
     create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer>;
+    /** Deleting a saved card's Customer (retention.ts): Stripe can't charge anything saved under it any more. */
+    del(id: string, params?: Stripe.CustomerDeleteParams, options?: Stripe.RequestOptions): Promise<Stripe.DeletedCustomer>;
+  };
+  /** Deleting a saved card (retention.ts): detached from its Customer, it can never be used again. */
+  paymentMethods: {
+    detach(id: string, params?: Stripe.PaymentMethodDetachParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentMethod>;
   };
   checkout: {
     sessions: {

@@ -201,7 +201,7 @@ export async function seedWeek(h: Harness): Promise<Week> {
   at('2026-11-03T17:00:00Z');
   await book('A6', OFFERING.izzyVip, '2026-11-03T19:00:00Z', 'Gus'); // 11 AM
   await book('A7', OFFERING.julianHaircut, '2026-11-03T23:00:00Z', 'Hal'); // 3 PM, right after Julian's time off
-  at('2026-11-03T18:20:00Z'); // Fay never came: no-show, fee charged ($35)
+  at('2026-11-03T18:50:00Z'); // 10:50 AM, after her 10–10:45: Fay never came: no-show, fee charged ($35)
   await mark('C1', 'noShow');
   expect(ok(await h.call('POST', `/api/owner/appointments/${week.appointments.C1}/no-show-fee`, owner)).appointment.noShowFee.status).toBe('charged');
   at('2026-11-03T20:20:00Z'); // Gus: VIP and a sea salt spray (no list price: $12)

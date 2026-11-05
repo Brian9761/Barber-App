@@ -1077,7 +1077,7 @@
       },
       "priceCents": 500,
       "priceKind": "fixed",
-      "feeCents": 2000
+      "feeCents": 500
     },
     {
       "settings": {
@@ -1103,7 +1103,7 @@
       },
       "priceCents": 1600,
       "priceKind": "fixed",
-      "feeCents": 2000
+      "feeCents": 1600
     },
     {
       "settings": {
@@ -1116,7 +1116,7 @@
       },
       "priceCents": 1999,
       "priceKind": "fixed",
-      "feeCents": 2000
+      "feeCents": 1999
     },
     {
       "settings": {
@@ -1129,7 +1129,7 @@
       },
       "priceCents": 333,
       "priceKind": "fixed",
-      "feeCents": 2000
+      "feeCents": 333
     },
     {
       "settings": {
@@ -1142,7 +1142,7 @@
       },
       "priceCents": 99,
       "priceKind": "fixed",
-      "feeCents": 2000
+      "feeCents": 99
     },
     {
       "settings": {
@@ -1155,7 +1155,7 @@
       },
       "priceCents": 98,
       "priceKind": "fixed",
-      "feeCents": 2000
+      "feeCents": 98
     },
     {
       "settings": {
@@ -1415,7 +1415,7 @@
       },
       "priceCents": 4000,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 4000
     },
     {
       "settings": {
@@ -1428,7 +1428,7 @@
       },
       "priceCents": 2500,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 2500
     },
     {
       "settings": {
@@ -1441,7 +1441,7 @@
       },
       "priceCents": 5500,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 5500
     },
     {
       "settings": {
@@ -1454,7 +1454,7 @@
       },
       "priceCents": 8000,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 8000
     },
     {
       "settings": {
@@ -1467,7 +1467,7 @@
       },
       "priceCents": 3000,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 3000
     },
     {
       "settings": {
@@ -1480,7 +1480,7 @@
       },
       "priceCents": 8000,
       "priceKind": "startingAt",
-      "feeCents": 50000
+      "feeCents": 8000
     },
     {
       "settings": {
@@ -1493,7 +1493,7 @@
       },
       "priceCents": 15000,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 15000
     },
     {
       "settings": {
@@ -1506,7 +1506,7 @@
       },
       "priceCents": 4500,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 4500
     },
     {
       "settings": {
@@ -1519,7 +1519,7 @@
       },
       "priceCents": 3500,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 3500
     },
     {
       "settings": {
@@ -1532,7 +1532,7 @@
       },
       "priceCents": 6000,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 6000
     },
     {
       "settings": {
@@ -1545,7 +1545,7 @@
       },
       "priceCents": 500,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 500
     },
     {
       "settings": {
@@ -1571,7 +1571,7 @@
       },
       "priceCents": 1600,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 1600
     },
     {
       "settings": {
@@ -1584,7 +1584,7 @@
       },
       "priceCents": 1999,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 1999
     },
     {
       "settings": {
@@ -1597,7 +1597,7 @@
       },
       "priceCents": 333,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 333
     },
     {
       "settings": {
@@ -1610,7 +1610,7 @@
       },
       "priceCents": 99,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 99
     },
     {
       "settings": {
@@ -1623,7 +1623,7 @@
       },
       "priceCents": 98,
       "priceKind": "fixed",
-      "feeCents": 50000
+      "feeCents": 98
     },
     {
       "settings": {
@@ -1654,7 +1654,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20 (50% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1671,7 +1671,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50 (50% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $17.50–$22.50 (50% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1688,7 +1688,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500 (50% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $0.50–$500 (50% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1705,7 +1705,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (50% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30 (50% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $27.05–$30 (50% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1722,7 +1722,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20 (10% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20 (10% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1739,7 +1739,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50 (10% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $17.50–$22.50 (10% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1756,7 +1756,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500 (10% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $0.50–$500 (10% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1773,7 +1773,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (10% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30 (10% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $27.05–$30 (10% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1790,7 +1790,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($20). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1807,7 +1807,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($17.50–$22.50). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1824,7 +1824,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($0.50–$500). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1841,7 +1841,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($27.05–$30). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1858,7 +1858,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20 (33% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20 (33% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1875,7 +1875,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50 (33% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $17.50–$22.50 (33% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1892,7 +1892,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500 (33% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $0.50–$500 (33% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1909,7 +1909,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (33% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30 (33% of the service). Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $27.05–$30 (33% of the service). Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1926,7 +1926,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1943,7 +1943,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1960,7 +1960,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1977,7 +1977,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -1994,7 +1994,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2011,7 +2011,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2028,7 +2028,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2045,7 +2045,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2062,7 +2062,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2079,7 +2079,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $17.50–$22.50. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2096,7 +2096,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $0.50–$500. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2113,7 +2113,7 @@
       "policyText": "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 1 hour before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 1 hour before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
+        "message": "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $27.05–$30. Cancelling in the app more than 1 hour before is free."
       }
     },
     {
@@ -2130,7 +2130,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged the full service price ($20). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged the full service price ($20). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2147,7 +2147,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged the full service price ($17.50–$22.50). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged the full service price ($17.50–$22.50). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2164,7 +2164,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged the full service price ($0.50–$500). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged the full service price ($0.50–$500). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2181,7 +2181,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged the full service price ($27.05–$30). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged the full service price ($27.05–$30). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2198,7 +2198,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $20 (50% of the service). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $20 (50% of the service). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2215,7 +2215,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $17.50–$22.50 (50% of the service). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $17.50–$22.50 (50% of the service). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2232,7 +2232,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $0.50–$500 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $0.50–$500 (50% of the service). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $0.50–$500 (50% of the service). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2249,7 +2249,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $27.05–$30 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $27.05–$30 (50% of the service). Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $27.05–$30 (50% of the service). Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2266,7 +2266,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $20. Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $20. Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2283,7 +2283,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $17.50–$22.50. Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $17.50–$22.50. Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2300,7 +2300,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $0.50–$500. Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $0.50–$500. Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2317,7 +2317,7 @@
       "policyText": "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app before your appointment is free.",
       "warning": {
         "title": "No-Show Fee",
-        "message": "Not showing up is charged $27.05–$30. Cancelling in the app before your appointment is free."
+        "message": "Not showing up may be charged $27.05–$30. Cancelling in the app before your appointment is free."
       }
     },
     {
@@ -2334,7 +2334,7 @@
       "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 30 minutes before is free."
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, may be charged the full service price ($20). Cancelling in the app more than 30 minutes before is free."
       }
     },
     {
@@ -2351,7 +2351,7 @@
       "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 30 minutes before is free."
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, may be charged the full service price ($17.50–$22.50). Cancelling in the app more than 30 minutes before is free."
       }
     },
     {
@@ -2368,7 +2368,7 @@
       "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 30 minutes before is free."
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, may be charged the full service price ($0.50–$500). Cancelling in the app more than 30 minutes before is free."
       }
     },
     {
@@ -2385,7 +2385,7 @@
       "policyText": "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 30 minutes before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 30 minutes before is free."
+        "message": "Cancelling less than 30 minutes before your appointment, or not showing up, may be charged the full service price ($27.05–$30). Cancelling in the app more than 30 minutes before is free."
       }
     },
     {
@@ -2402,7 +2402,7 @@
       "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $20 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $20 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling in the app more than 45 minutes before is free."
       }
     },
     {
@@ -2419,7 +2419,7 @@
       "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $17.50–$22.50 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, may be charged $17.50–$22.50 (50% of the service). Cancelling in the app more than 45 minutes before is free."
       }
     },
     {
@@ -2436,7 +2436,7 @@
       "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $0.50–$500 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, may be charged $0.50–$500 (50% of the service). Cancelling in the app more than 45 minutes before is free."
       }
     },
     {
@@ -2453,7 +2453,7 @@
       "policyText": "No payment now. If you cancel less than 45 minutes before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (50% of the service) to this card. Cancelling in the app more than 45 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, is charged $27.05–$30 (50% of the service). Cancelling in the app more than 45 minutes before is free."
+        "message": "Cancelling less than 45 minutes before your appointment, or not showing up, may be charged $27.05–$30 (50% of the service). Cancelling in the app more than 45 minutes before is free."
       }
     },
     {
@@ -2470,7 +2470,7 @@
       "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $20 to this card. Cancelling in the app more than 90 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $20. Cancelling in the app more than 90 minutes before is free."
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, may be charged $20. Cancelling in the app more than 90 minutes before is free."
       }
     },
     {
@@ -2487,7 +2487,7 @@
       "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 to this card. Cancelling in the app more than 90 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $17.50–$22.50. Cancelling in the app more than 90 minutes before is free."
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, may be charged $17.50–$22.50. Cancelling in the app more than 90 minutes before is free."
       }
     },
     {
@@ -2504,7 +2504,7 @@
       "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 to this card. Cancelling in the app more than 90 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $0.50–$500. Cancelling in the app more than 90 minutes before is free."
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, may be charged $0.50–$500. Cancelling in the app more than 90 minutes before is free."
       }
     },
     {
@@ -2521,7 +2521,7 @@
       "policyText": "No payment now. If you cancel less than 90 minutes before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 to this card. Cancelling in the app more than 90 minutes before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, is charged $27.05–$30. Cancelling in the app more than 90 minutes before is free."
+        "message": "Cancelling less than 90 minutes before your appointment, or not showing up, may be charged $27.05–$30. Cancelling in the app more than 90 minutes before is free."
       }
     },
     {
@@ -2538,7 +2538,7 @@
       "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 2 hours before is free."
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, may be charged the full service price ($20). Cancelling in the app more than 2 hours before is free."
       }
     },
     {
@@ -2555,7 +2555,7 @@
       "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 2 hours before is free."
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, may be charged the full service price ($17.50–$22.50). Cancelling in the app more than 2 hours before is free."
       }
     },
     {
@@ -2572,7 +2572,7 @@
       "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 2 hours before is free."
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, may be charged the full service price ($0.50–$500). Cancelling in the app more than 2 hours before is free."
       }
     },
     {
@@ -2589,7 +2589,7 @@
       "policyText": "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 2 hours before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 2 hours before is free."
+        "message": "Cancelling less than 2 hours before your appointment, or not showing up, may be charged the full service price ($27.05–$30). Cancelling in the app more than 2 hours before is free."
       }
     },
     {
@@ -2606,7 +2606,7 @@
       "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $20 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($20). Cancelling in the app more than 24 hours before is free."
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, may be charged the full service price ($20). Cancelling in the app more than 24 hours before is free."
       }
     },
     {
@@ -2623,7 +2623,7 @@
       "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($17.50–$22.50). Cancelling in the app more than 24 hours before is free."
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, may be charged the full service price ($17.50–$22.50). Cancelling in the app more than 24 hours before is free."
       }
     },
     {
@@ -2640,7 +2640,7 @@
       "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($0.50–$500). Cancelling in the app more than 24 hours before is free."
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, may be charged the full service price ($0.50–$500). Cancelling in the app more than 24 hours before is free."
       }
     },
     {
@@ -2657,7 +2657,7 @@
       "policyText": "No payment now. If you cancel less than 24 hours before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (100% of the service) to this card. Cancelling in the app more than 24 hours before is free.",
       "warning": {
         "title": "Full Service Cancellation & No-Show Fee",
-        "message": "Cancelling less than 24 hours before your appointment, or not showing up, is charged the full service price ($27.05–$30). Cancelling in the app more than 24 hours before is free."
+        "message": "Cancelling less than 24 hours before your appointment, or not showing up, may be charged the full service price ($27.05–$30). Cancelling in the app more than 24 hours before is free."
       }
     },
     {
@@ -2674,7 +2674,7 @@
       "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $20 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $20 (25% of the service). Cancelling in the app more than 48 hours before is free."
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, may be charged $20 (25% of the service). Cancelling in the app more than 48 hours before is free."
       }
     },
     {
@@ -2691,7 +2691,7 @@
       "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $17.50–$22.50 (25% of the service). Cancelling in the app more than 48 hours before is free."
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, may be charged $17.50–$22.50 (25% of the service). Cancelling in the app more than 48 hours before is free."
       }
     },
     {
@@ -2708,7 +2708,7 @@
       "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $0.50–$500 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $0.50–$500 (25% of the service). Cancelling in the app more than 48 hours before is free."
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, may be charged $0.50–$500 (25% of the service). Cancelling in the app more than 48 hours before is free."
       }
     },
     {
@@ -2725,7 +2725,7 @@
       "policyText": "No payment now. If you cancel less than 48 hours before your appointment, or don't come, Izzy Clipz may charge $27.05–$30 (25% of the service) to this card. Cancelling in the app more than 48 hours before is free.",
       "warning": {
         "title": "Late Cancellation & No-Show Fee",
-        "message": "Cancelling less than 48 hours before your appointment, or not showing up, is charged $27.05–$30 (25% of the service). Cancelling in the app more than 48 hours before is free."
+        "message": "Cancelling less than 48 hours before your appointment, or not showing up, may be charged $27.05–$30 (25% of the service). Cancelling in the app more than 48 hours before is free."
       }
     }
   ],
@@ -2781,6 +2781,143 @@
     {
       "minutes": 2880,
       "label": "48 hours"
+    }
+  ],
+  "graceMinutes": 15,
+  "lateCancels": [
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T17:30:00Z",
+      "cancelledAt": "2026-11-03T17:44:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T17:30:00Z",
+      "cancelledAt": "2026-11-03T17:45:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T17:30:00Z",
+      "cancelledAt": "2026-11-03T17:46:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": true
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T17:15:00Z",
+      "cancelledAt": "2026-11-03T17:16:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T17:15:00Z",
+      "cancelledAt": "2026-11-03T17:59:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": true
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T16:00:00Z",
+      "cancelledAt": "2026-11-03T16:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T16:00:00Z",
+      "cancelledAt": "2026-11-03T17:01:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": true
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T16:00:00Z",
+      "cancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": true
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T16:59:00Z",
+      "cancelledAt": "2026-11-03T17:01:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T16:59:00Z",
+      "cancelledAt": "2026-11-03T17:13:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T16:59:00Z",
+      "cancelledAt": "2026-11-03T17:15:00Z",
+      "lateCancelWindowMinutes": 60,
+      "late": true
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T17:30:00Z",
+      "cancelledAt": "2026-11-03T17:44:00Z",
+      "lateCancelWindowMinutes": 30,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-03T17:30:00Z",
+      "cancelledAt": "2026-11-03T17:46:00Z",
+      "lateCancelWindowMinutes": 30,
+      "late": true
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-02T18:00:00Z",
+      "cancelledAt": "2026-11-02T18:14:00Z",
+      "lateCancelWindowMinutes": 2880,
+      "late": false
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-11-02T18:00:00Z",
+      "cancelledAt": "2026-11-02T18:16:00Z",
+      "lateCancelWindowMinutes": 2880,
+      "late": true
+    },
+    {
+      "start": "2026-11-03T18:00:00Z",
+      "createdAt": "2026-10-31T18:00:00Z",
+      "cancelledAt": "2026-11-02T18:00:00Z",
+      "lateCancelWindowMinutes": 2880,
+      "late": true
+    }
+  ],
+  "notices": [
+    {
+      "lateCancelWindowMinutes": 60,
+      "feeLabel": "$35",
+      "notice": "This time is less than 1 hour away, so cancelling it more than 15 minutes after booking may be charged $35."
+    },
+    {
+      "lateCancelWindowMinutes": 30,
+      "feeLabel": "$17.50",
+      "notice": "This time is less than 30 minutes away, so cancelling it more than 15 minutes after booking may be charged $17.50."
+    },
+    {
+      "lateCancelWindowMinutes": 90,
+      "feeLabel": "$55–$60",
+      "notice": "This time is less than 90 minutes away, so cancelling it more than 15 minutes after booking may be charged $55–$60."
+    },
+    {
+      "lateCancelWindowMinutes": 2880,
+      "feeLabel": "$5",
+      "notice": "This time is less than 48 hours away, so cancelling it more than 15 minutes after booking may be charged $5."
     }
   ]
 }

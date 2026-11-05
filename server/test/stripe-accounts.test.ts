@@ -55,11 +55,11 @@ async function book(cardToken: string, start = TUE10, phone = '4425550150') {
   });
 }
 
-/** A booking with a card on file whose client didn't come, marked as a no-show after the start. */
+/** A booking with a card on file whose client didn't come, marked as a no-show after its (45-minute) end. */
 async function noShow(cardToken: string, start = TUE10, phone?: string): Promise<string> {
   const booked = await book(cardToken, start, phone);
   expect(booked.status, booked.text).toBe(201);
-  h.setNow(new Date(Date.parse(start) + 20 * 60_000).toISOString());
+  h.setNow(new Date(Date.parse(start) + 50 * 60_000).toISOString());
   expect((await h.call('PATCH', `/api/owner/appointments/${booked.body.appointment.id}`, { ...owner, body: { status: 'noShow' } })).status).toBe(200);
   return booked.body.appointment.id;
 }
@@ -97,6 +97,9 @@ describe('every Stripe call for the shop goes to its connected account', () => {
     });
     h.stripe.succeed(intentId);
     await site('complete a payment', () => h.call('POST', `/api/owner/payments/${intentId}/complete`, owner));
+    await site('email a receipt after the payment', () =>
+      h.call('POST', `/api/owner/payments/${intentId}/receipt`, { ...owner, body: { email: 'client@example.com' } }),
+    );
     let token = '';
     await site('card checkout and save', async () => {
       token = await saveCard();
@@ -110,6 +113,8 @@ describe('every Stripe call for the shop goes to its connected account', () => {
     await site('a fee whose answer was lost', () => charge(lost));
     await site('…looked up at Stripe before charging again', () => charge(lost));
     await site('another onboarding link', () => h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'web' } }));
+    const spare = await saveCard('192.0.2.53');
+    await site('a client removes a saved card', () => h.call('DELETE', '/api/cards', { headers: { 'x-card-token': spare } }));
 
     expect(sites.map((s) => [s.site, methods(s.calls)])).toEqual([
       ['connect (the account and its onboarding link)', ['accounts.create', 'accountLinks.create']],
@@ -118,12 +123,14 @@ describe('every Stripe call for the shop goes to its connected account', () => {
       ['connection token', ['terminal.connectionTokens.create']],
       ['Tap to Pay payment', ['paymentIntents.create']],
       ['complete a payment', ['paymentIntents.retrieve']],
+      ['email a receipt after the payment', ['paymentIntents.update']],
       ['card checkout and save', ['customers.create', 'checkout.sessions.create', 'checkout.sessions.retrieve']],
       ['no-show fee', ['paymentIntents.create']],
       ['a fee Stripe is processing, checked again', ['paymentIntents.retrieve']],
       ['a fee whose answer was lost', ['paymentIntents.create']],
       ['…looked up at Stripe before charging again', ['paymentIntents.list']],
       ['another onboarding link', ['accountLinks.create']],
+      ['a client removes a saved card', ['paymentMethods.detach', 'customers.del']],
     ]);
     const platformCalls = new Set(['accounts.create', 'accounts.retrieve', 'accountLinks.create']);
     for (const call of h.stripe.calls) {
@@ -334,7 +341,7 @@ describe('saved cards and fees with a connected account', () => {
     expect(again.status).toBe(400);
     expect(again.body.error).toEqual({ code: 'card_required', message: 'Add your card again: the shop changed its payment account.' });
     // The booking made with it is kept, but its fee can't be charged with the new account.
-    h.setNow('2026-11-05T18:20:00Z');
+    h.setNow('2026-11-05T18:50:00Z');
     await h.call('PATCH', `/api/owner/appointments/${booked.body.appointment.id}`, { ...owner, body: { status: 'noShow' } });
     h.stripe.calls.length = 0;
     const refused = await charge(booked.body.appointment.id);

@@ -317,7 +317,7 @@ async function insertSale(
   if (appointmentId !== null) {
     await tx.query(
       `UPDATE appointments a
-          SET status = 'completed',
+          SET status = 'completed', completed_at = COALESCE(a.completed_at, $6),
               sale_id = $2, sale_total_cents = $3, sale_method = $4,
               payment_status = CASE WHEN card.paid THEN a.payment_status ELSE 'paid' END,
               paid_cents = CASE WHEN card.paid THEN a.paid_cents ELSE $3 END,
@@ -359,7 +359,7 @@ interface SaleItemRow {
   total_cents: number;
 }
 
-interface LoadedSale {
+export interface LoadedSale {
   row: SaleRow;
   items: SaleItemRow[];
 }
@@ -368,7 +368,7 @@ const SALE_COLUMNS = `s.id, s.barber_id, b.name AS barber_name, s.appointment_id
   s.total_cents, s.sold_at, s.voided_at, s.void_reason`;
 
 /** Sales matching `where` (on `sales s`), in `order`, with their items: two queries in all. */
-async function loadSales(db: Queryable, where: string, values: unknown[], order = 's.sold_at DESC, s.id DESC'): Promise<LoadedSale[]> {
+export async function loadSales(db: Queryable, where: string, values: unknown[], order = 's.sold_at DESC, s.id DESC'): Promise<LoadedSale[]> {
   const { rows } = await db.query<SaleRow>(`SELECT ${SALE_COLUMNS} FROM sales s JOIN barbers b ON b.id = s.barber_id WHERE ${where} ORDER BY ${order}`, values);
   if (rows.length === 0) return [];
   const { rows: items } = await db.query<SaleItemRow>(
@@ -577,7 +577,12 @@ export async function voidSale(ctx: Context): Promise<Response> {
     const sale = rows[0];
     if (!sale) throw notFound();
     if (sale.voided_at !== null) return false;
-    await tx.query('UPDATE sales SET voided_at = $2, void_reason = $3, updated_at = $2 WHERE id = $1', [id, now, reason]);
+    // A sale whose details were already removed (retention.ts) doesn't take a new reason: the job won't come back to it.
+    await tx.query('UPDATE sales SET voided_at = $2, void_reason = CASE WHEN anonymized_at IS NULL THEN $3 END, updated_at = $2 WHERE id = $1', [
+      id,
+      now,
+      reason,
+    ]);
     if (sale.appointment_id === null) return false;
     await tx.query(
       `UPDATE appointments a
