@@ -694,7 +694,7 @@ final class SampleServerNoShowTests: XCTestCase {
         XCTAssertEqual(paid.noShowFee?.status, .charged, "reopening doesn't refund")
     }
 
-    func testOnlyANoShowWithACardThatHasStartedCanBeCharged() async throws {
+    func testOnlyANoShowWithACardThatHasEndedCanBeCharged() async throws {
         var options = FakeServer.Options()
         options.noShowWithCard = true
         let harness = Harness(options: options)
@@ -715,30 +715,42 @@ final class SampleServerNoShowTests: XCTestCase {
         XCTAssertNil(reopened.noShowFee?.reason)
         await expect(kim.id, .server(code: IzzyAPI.ErrorCode.notChargeable, message: "Mark the appointment as a no-show first.", status: 409))
         let markedAgain = try await harness.api.setStatus(.noShow, ofAppointment: kim.id)
-        XCTAssertEqual(markedAgain.noShowFee?.reason, .noShow, "it has started, so it can be a no-show again")
+        XCTAssertEqual(markedAgain.noShowFee?.reason, .noShow, "it has ended, so it can be a no-show again")
 
-        // Marked a no-show before it started (from before that was refused).
-        let early = Harness(options: options, now: TestClock.at(9, 30))
-        let kimEarly = try XCTUnwrap(early.appointment(named: "Kim Sample"))
-        do {
-            _ = try await early.api.chargeNoShowFee(appointmentId: kimEarly.id)
-            XCTFail("Expected not_chargeable")
-        } catch {
-            XCTAssertEqual(error as? APIError, .server(
-                code: IzzyAPI.ErrorCode.notChargeable, message: "The appointment hasn't started yet, so it can't be a no-show.", status: 409
-            ))
+        // Kim's 10 AM haircut ends at 10:45. Marked a no-show before that (from before it was refused),
+        // before her start or after it, the fee can't be charged: she may still come.
+        for moment in [TestClock.at(9, 30), TestClock.at(10, 44)] {
+            let early = Harness(options: options, now: moment)
+            let kimEarly = try XCTUnwrap(early.appointment(named: "Kim Sample"))
+            do {
+                _ = try await early.api.chargeNoShowFee(appointmentId: kimEarly.id)
+                XCTFail("Expected not_chargeable")
+            } catch {
+                XCTAssertEqual(error as? APIError, .server(
+                    code: IzzyAPI.ErrorCode.notChargeable, message: "The appointment hasn't ended yet, so it can't be a no-show.", status: 409
+                ))
+            }
         }
-        // Now a booking with a card on file can't be marked a no-show before it starts, so the client can still cancel.
+        // Now a booking with a card on file can't be marked a no-show before it ends, a minute before
+        // included; at its end it can.
+        let early = Harness(options: options, now: TestClock.at(10, 44))
+        let kimEarly = try XCTUnwrap(early.appointment(named: "Kim Sample"))
         _ = try await early.api.setStatus(.booked, ofAppointment: kimEarly.id)
         do {
             _ = try await early.api.setStatus(.noShow, ofAppointment: kimEarly.id)
             XCTFail("Expected not_started")
         } catch {
             XCTAssertEqual(error as? APIError, .server(
-                code: IzzyAPI.ErrorCode.notStarted, message: "You can mark a no-show once the appointment has started.", status: 409
+                code: IzzyAPI.ErrorCode.notStarted, message: "You can mark a no-show once the appointment has ended.", status: 409
             ))
         }
         XCTAssertEqual(early.appointment(named: "Kim Sample")?.status, .booked)
+        let atTheEnd = Harness(options: options, now: TestClock.at(10, 45))
+        let kimAtTheEnd = try XCTUnwrap(atTheEnd.appointment(named: "Kim Sample"))
+        _ = try await atTheEnd.api.setStatus(.booked, ofAppointment: kimAtTheEnd.id)
+        let ended = try await atTheEnd.api.setStatus(.noShow, ofAppointment: kimAtTheEnd.id)
+        XCTAssertEqual(ended.status, .noShow)
+        XCTAssertEqual(ended.chargeableFee(at: TestClock.at(10, 45)), .noShow)
         // A booking without a card can still be marked early, as before.
         let andre = try XCTUnwrap(early.appointment(named: "Andre Sample"))
         let andreNoShow = try await early.api.setStatus(.noShow, ofAppointment: andre.id)
@@ -873,7 +885,7 @@ final class SampleServerNoShowTests: XCTestCase {
                 XCTAssertEqual(error as? APIError, .server(code: IzzyAPI.ErrorCode.notChargeable, message: message, status: 409), line: line)
             }
         }
-        await expect("Nothing was charged. Mark the appointment as a no-show first.")
+        await expect("Nothing was charged. The appointment is marked completed, so there's no fee to charge.")
         let settled = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
         XCTAssertEqual(settled.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none)
         XCTAssertNil(settled.noShowFee?.reason)
@@ -882,12 +894,24 @@ final class SampleServerNoShowTests: XCTestCase {
         let payments = try await harness.api.payments(on: TestClock.today)
         XCTAssertFalse(payments.contains { $0.kind.isFee })
         // Asked again: the plain answer.
+        await expect("The appointment is marked completed, so there's no fee to charge.")
+        // She came, so the visit never becomes a no-show, even reopened: nothing more can be charged.
+        func expectNoNoShow(line: UInt = #line) async {
+            do {
+                _ = try await harness.api.setStatus(.noShow, ofAppointment: kim.id)
+                XCTFail("Expected already_completed", line: line)
+            } catch {
+                XCTAssertEqual(error as? APIError, .server(
+                    code: IzzyAPI.ErrorCode.alreadyCompleted, message: "This appointment was marked completed, so it can't become a no-show.", status: 409
+                ), line: line)
+            }
+        }
+        await expectNoNoShow()
+        _ = try await harness.api.setStatus(.booked, ofAppointment: kim.id)
+        await expectNoNoShow()
+        XCTAssertEqual(harness.appointment(named: "Kim Sample")?.status, .booked)
         await expect("Mark the appointment as a no-show first.")
-        // Marked a no-show again after all: it can be charged, once.
-        _ = try await harness.api.setStatus(.noShow, ofAppointment: kim.id)
-        let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
-        XCTAssertEqual(charged.noShowFee?.status, .charged)
         let after = try await harness.api.payments(on: TestClock.today)
-        XCTAssertEqual(after.filter(\.kind.isFee).count, 1)
+        XCTAssertFalse(after.contains { $0.kind.isFee })
     }
 }

@@ -34,7 +34,7 @@ final class NoShowFeeTests: XCTestCase {
         let harness = Harness(options: cardsOnFile())
         let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
         XCTAssertNil(panel(andre))
-        XCTAssertTrue(andre.canMarkNoShow(at: TestClock.now), "booked at the shop: no card, so no wait for the start")
+        XCTAssertTrue(andre.canMarkNoShow(at: TestClock.now), "booked at the shop: no card, so no wait for the end")
         XCTAssertNil(FeePanel.reopenWarning(for: andre, now: TestClock.now))
         XCTAssertNil(FeePanel.noShowHint(for: andre, now: TestClock.now, shopTime: TestClock.shopTime))
         XCTAssertFalse(andre.isCancelledLate)
@@ -133,8 +133,8 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertNil(FeePanel.reopenWarning(for: completed, now: TestClock.now))
 
         // What the warning says is what the sample server (like the server) does: Lee cancelled late,
-        // the owner reopens her booking, and she doesn't come.
-        let later = TestClock.at(11, 40)
+        // the owner reopens her booking, and she doesn't come (her 11:30 AM haircut ended at 12:15 PM).
+        let later = TestClock.at(12, 20)
         let after = Harness(options: cardsOnFile(), now: later)
         let lateCancel = try XCTUnwrap(after.appointment(named: "Lee Sample"))
         XCTAssertEqual(FeePanel.reopenWarning(for: lateCancel, now: later), Self.reopenLateCancelWarning)
@@ -209,18 +209,23 @@ final class NoShowFeeTests: XCTestCase {
 
     func testWhenNoFeeCanBeChargedTheDetailsSayWhy() async throws {
         let harness = Harness(options: cardsOnFile())
-        // Nia's haircut hasn't started.
+        // Nia's 2:30 PM haircut hasn't ended (it ends at 3:15 PM), before its start or after it.
         let nia = try XCTUnwrap(harness.appointment(named: "Nia Sample"))
-        XCTAssertFalse(nia.canMarkNoShow(at: TestClock.now))
-        XCTAssertEqual(
-            FeePanel.noShowHint(for: nia, now: TestClock.now, shopTime: TestClock.shopTime),
-            "You can mark a no-show once the appointment starts at 2:30 PM. Until then, the client can still cancel in the app."
-        )
-        XCTAssertEqual(panel(nia)?.status, .notCharged(note: "If the client doesn't come, you can mark a no-show once the appointment has started. Then you can charge the fee."))
-        XCTAssertNil(panel(nia)?.action)
-        XCTAssertNil(panel(nia)?.footer)
-        // Once it has started.
-        let later = TestClock.at(14, 35)
+        for moment in [TestClock.now, TestClock.at(14, 35), TestClock.at(15, 14)] {
+            XCTAssertFalse(nia.canMarkNoShow(at: moment))
+            XCTAssertEqual(
+                FeePanel.noShowHint(for: nia, now: moment, shopTime: TestClock.shopTime),
+                "You can mark a no-show once the appointment ends at 3:15 PM. Until then, the client may still come."
+            )
+            XCTAssertEqual(
+                panel(nia, at: moment)?.status,
+                .notCharged(note: "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee.")
+            )
+            XCTAssertNil(panel(nia, at: moment)?.action)
+            XCTAssertNil(panel(nia, at: moment)?.footer)
+        }
+        // Once it has ended.
+        let later = TestClock.at(15, 15)
         XCTAssertTrue(nia.canMarkNoShow(at: later))
         XCTAssertNil(FeePanel.noShowHint(for: nia, now: later, shopTime: TestClock.shopTime))
         XCTAssertEqual(panel(nia, at: later)?.status, .notCharged(note: "If the client didn't come, mark a no-show. Then you can charge the fee."))
@@ -251,9 +256,11 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertNil(panel(early)?.action)
         XCTAssertEqual(FeePanel.reopenWarning(for: early, now: TestClock.now), Self.reopenCancelledInAppWarning)
 
-        // Marked a no-show before it started (before the server refused that).
-        XCTAssertEqual(panel(kim, at: TestClock.at(9, 30))?.status, .notCharged(note: "The appointment hasn't started yet, so it can't be a no-show."))
-        XCTAssertNil(panel(kim, at: TestClock.at(9, 30))?.action)
+        // Marked a no-show before it ended (before the server refused that): her 10 AM haircut ends at 10:45.
+        for moment in [TestClock.at(9, 30), TestClock.at(10, 44)] {
+            XCTAssertEqual(panel(kim, at: moment)?.status, .notCharged(note: "The appointment hasn't ended yet, so it can't be a no-show."))
+            XCTAssertNil(panel(kim, at: moment)?.action)
+        }
     }
 
     func testDeclinedNeedingTheClientAndUnconfirmedFees() throws {
@@ -825,7 +832,7 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(panel(completed)?.status, .pending(FeePanel.pendingCheckOnlyMessage))
         _ = await store.chargeFee(for: completed)
         let settled = try XCTUnwrap(store.appointment(withID: kim.id))
-        XCTAssertEqual(store.feeError(for: settled), "Nothing was charged. Mark the appointment as a no-show first.")
+        XCTAssertEqual(store.feeError(for: settled), "Nothing was charged. The appointment is marked completed, so there's no fee to charge.")
         XCTAssertEqual(settled.noShowFee?.status, IzzyAPI.NoShowFeeStatus.none, "loaded again: settled as not charged")
         XCTAssertNil(panel(settled)?.action)
         XCTAssertFalse(harness.server.payments.contains { $0.payment.kind.isFee })
@@ -1049,7 +1056,14 @@ final class NoShowFeeTests: XCTestCase {
         nia.end = TestClock.at(15, 15, on: tomorrow)
         XCTAssertEqual(
             FeePanel.noShowHint(for: nia, now: TestClock.now, shopTime: TestClock.shopTime),
-            "You can mark a no-show once the appointment starts on Tue, Nov 3 at 2:30 PM. Until then, the client can still cancel in the app."
+            "You can mark a no-show once the appointment ends on Tue, Nov 3 at 3:15 PM. Until then, the client may still come."
+        )
+        // A late appointment that ends after midnight: the day it ends.
+        nia.start = TestClock.at(23, 30)
+        nia.end = TestClock.at(0, 15, on: tomorrow)
+        XCTAssertEqual(
+            FeePanel.noShowHint(for: nia, now: TestClock.now, shopTime: TestClock.shopTime),
+            "You can mark a no-show once the appointment ends on Tue, Nov 3 at 12:15 AM. Until then, the client may still come."
         )
         // Not for a booking without a card, nor once it's not booked.
         var walkIn = nia
@@ -1079,28 +1093,95 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(ScheduleStore.feeErrorMessage(for: APIError.unauthorized), APIError.unauthorized.userMessage)
     }
 
-    func testANoShowWithACardWaitsForTheStartThenCanBeCharged() async throws {
-        let harness = Harness(options: cardsOnFile())
-        let store = makeStore(harness.api)
-        await store.refresh()
-        let nia = try XCTUnwrap(store.appointments.first { $0.customer.name == "Nia Sample" })
-        let early = await store.setStatus(.noShow, for: nia)
-        XCTAssertFalse(early)
-        XCTAssertEqual(store.actionError, "You can mark a no-show once the appointment has started.")
-        XCTAssertEqual(store.appointment(withID: nia.id)?.status, .booked)
+    func testANoShowWithACardWaitsForTheEndThenCanBeCharged() async throws {
+        // Nia's 2:30 PM haircut ends at 3:15 PM: before that, before her start or after it, she may still come.
+        for moment in [TestClock.now, TestClock.at(14, 35), TestClock.at(15, 14)] {
+            let harness = Harness(options: cardsOnFile(), now: moment)
+            let store = makeStore(harness.api, now: moment)
+            await store.refresh()
+            let nia = try XCTUnwrap(store.appointments.first { $0.customer.name == "Nia Sample" })
+            XCTAssertFalse(nia.canMarkNoShow(at: store.now))
+            let early = await store.setStatus(.noShow, for: nia)
+            XCTAssertFalse(early)
+            XCTAssertEqual(store.actionError, "You can mark a no-show once the appointment has ended.")
+            XCTAssertEqual(store.appointment(withID: nia.id)?.status, .booked)
+        }
 
-        let later = Harness(options: cardsOnFile(), now: TestClock.at(14, 35))
-        let laterStore = makeStore(later.api, now: TestClock.at(14, 35))
+        let later = Harness(options: cardsOnFile(), now: TestClock.at(15, 15))
+        let laterStore = makeStore(later.api, now: TestClock.at(15, 15))
         await laterStore.refresh()
-        let started = try XCTUnwrap(laterStore.appointments.first { $0.customer.name == "Nia Sample" })
-        XCTAssertTrue(started.canMarkNoShow(at: laterStore.now))
-        let marked = await laterStore.setStatus(.noShow, for: started)
+        let ended = try XCTUnwrap(laterStore.appointments.first { $0.customer.name == "Nia Sample" })
+        XCTAssertTrue(ended.canMarkNoShow(at: laterStore.now))
+        let marked = await laterStore.setStatus(.noShow, for: ended)
         XCTAssertTrue(marked)
-        let noShow = try XCTUnwrap(laterStore.appointment(withID: nia.id))
+        let noShow = try XCTUnwrap(laterStore.appointment(withID: ended.id))
         XCTAssertEqual(panel(noShow, at: laterStore.now)?.action?.title, "Charge no-show fee ($35)")
         let charged = try await XCTUnwrapAsync(await laterStore.chargeFee(for: noShow))
         XCTAssertEqual(charged.noShowFee?.status, .charged)
         XCTAssertEqual(charged.noShowFee?.reason, .noShow)
+    }
+
+    /// A client who came (the visit marked completed) is never a no-show, even once it's reopened:
+    /// the server answers 409 `already_completed`, and the details say it in its words.
+    func testACompletedVisitWithACardNeverBecomesANoShow() async throws {
+        let harness = Harness(options: cardsOnFile(), now: TestClock.at(15, 30))
+        let store = makeStore(harness.api, now: TestClock.at(15, 30))
+        await store.refresh()
+        let nia = try XCTUnwrap(store.appointments.first { $0.customer.name == "Nia Sample" })
+        let completed = await store.setStatus(.completed, for: nia)
+        XCTAssertTrue(completed)
+        let reopened = await store.setStatus(.booked, for: try XCTUnwrap(store.appointment(withID: nia.id)))
+        XCTAssertTrue(reopened)
+        let booked = try XCTUnwrap(store.appointment(withID: nia.id))
+        XCTAssertTrue(booked.canMarkNoShow(at: store.now), "the app can't see that it was completed: the server says so")
+        let marked = await store.setStatus(.noShow, for: booked)
+        XCTAssertFalse(marked)
+        XCTAssertEqual(store.actionError, "This appointment was marked completed, so it can't become a no-show.")
+        XCTAssertEqual(store.appointment(withID: nia.id)?.status, .booked)
+        XCTAssertNil(panel(booked, at: store.now)?.action)
+    }
+
+    /// No fee can be charged more than 7 days after the appointment's start; exactly 7 days after still counts.
+    func testAFeeCanBeChargedForSevenDays() throws {
+        let harness = Harness(options: cardsOnFile())
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        let lastMoment = kim.start.addingTimeInterval(7 * 24 * 60 * 60)
+        XCTAssertEqual(kim.feeDeadline, lastMoment)
+        XCTAssertEqual(panel(kim, at: lastMoment)?.action?.title, "Charge no-show fee ($35)")
+        let tooLate = lastMoment.addingTimeInterval(60)
+        let deadline = "It's more than 7 days after the appointment, so the fee can't be charged."
+        XCTAssertEqual(panel(kim, at: tooLate)?.status, .notCharged(note: deadline))
+        XCTAssertNil(panel(kim, at: tooLate)?.action)
+        XCTAssertNil(panel(kim, at: tooLate)?.footer)
+        // A late cancellation too.
+        let lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        let leeTooLate = lee.start.addingTimeInterval(7 * 24 * 60 * 60 + 60)
+        XCTAssertEqual(panel(lee, at: leeTooLate)?.status, .notCharged(note: deadline))
+        XCTAssertNil(panel(lee, at: leeTooLate)?.action)
+        // Still booked a week on: it can be marked a no-show, but the fee can't be charged, and the details say so.
+        let nia = try XCTUnwrap(harness.appointment(named: "Nia Sample"))
+        let weekOn = nia.start.addingTimeInterval(7 * 24 * 60 * 60 + 60)
+        XCTAssertTrue(nia.canMarkNoShow(at: weekOn))
+        XCTAssertEqual(panel(nia, at: weekOn)?.status, .notCharged(note: deadline))
+        XCTAssertNil(panel(nia, at: weekOn)?.action)
+    }
+
+    /// Cancelling within 15 minutes of booking is free, even inside the window: no "Cancelled late",
+    /// no fee, and the details say why.
+    func testCancellingWithin15MinutesOfBookingIsntLate() throws {
+        let harness = Harness(options: cardsOnFile())
+        var lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
+        // Lee cancelled at 10:50 AM, 40 minutes before her 11:30 AM haircut.
+        lee.createdAt = TestClock.at(10, 35)
+        XCTAssertFalse(lee.isCancelledLate, "15 minutes after booking")
+        XCTAssertEqual(AppointmentBadges(appointment: lee).items.first?.text, "Cancelled")
+        XCTAssertEqual(panel(lee)?.status, .notCharged(note: "The client cancelled within 15 minutes of booking, so there's no fee."))
+        XCTAssertNil(panel(lee)?.action)
+        XCTAssertEqual(FeePanel.reopenWarning(for: lee, now: TestClock.now), Self.reopenCancelledInAppWarning, "free, like cancelling in time")
+        lee.createdAt = TestClock.at(10, 34)
+        XCTAssertTrue(lee.isCancelledLate, "16 minutes after booking")
+        XCTAssertEqual(AppointmentBadges(appointment: lee).items.first?.text, "Cancelled late")
+        XCTAssertEqual(panel(lee)?.action?.title, "Charge late cancellation fee ($35)")
     }
 
     // MARK: The sample server

@@ -101,21 +101,27 @@ app never have a card on file.
 **What can be charged.** The same fee, for two cases, and you decide each
 time:
 
-- **A no-show**: the appointment is marked No-show, it has started, and
+- **A no-show**: the appointment is marked No-show, it has ended, and
   the client never cancelled. **Mark no-show** shows only once a booking
-  with a card on file has started: until then the client can still cancel
-  in the app (free until the late-cancellation window starts).
+  with a card on file has ended: until then the client may still come
+  (and can cancel in the app until the start). A visit marked completed
+  never becomes a no-show, even once it's reopened: the client came.
 - **A late cancellation**: the client cancelled in the app less than the
-  window before the start (1 hour to begin with). Cancelling earlier is
-  free. The shop cancelling is never charged, and neither is a booking
-  the client cancelled that you reopened: once it's reopened, it can't be
-  charged a no-show fee either (Reopen says so first). To keep a fee for
-  a client who wants their time back, ask them to book again in the app.
+  window before the start (1 hour to begin with), and more than 15
+  minutes after booking. Cancelling earlier, or within 15 minutes of
+  booking, is free. The shop cancelling is never charged, and neither is
+  a booking the client cancelled that you reopened: once it's reopened,
+  it can't be charged a no-show fee either (Reopen says so first). To
+  keep a fee for a client who wants their time back, ask them to book
+  again in the app.
 
-Each booking keeps the fee and window it was booked with, so a change in
-Settings only affects new bookings. Turning protection off works the same
-way: new online bookings don't need a card, and bookings already made with
-one keep their fee, which you can still charge.
+A fee is never more than the booked service's price, and it can be
+charged only up to 7 days after the appointment's start: after that, the
+details say it can't be. Each booking keeps the fee and window it was
+booked with, so a change in Settings only affects new bookings. Turning
+protection off works the same way: new online bookings don't need a
+card, and bookings already made with one keep their fee, which you can
+still charge.
 
 **Charging.** Open the appointment. The **Card on file** section shows the
 card, the fee agreed at booking and what it covers. **Charge no-show fee
@@ -161,7 +167,8 @@ kept with the booking as evidence if a client disputes a fee.
 
 **Settings → No-show protection**: on or off; the fee as a share of the
 service (the stepper goes from 10% to 100% in steps of 5; 100%, the full
-service price, to begin with) or a flat amount ($0.50 to $500); **Charge
+service price, to begin with) or a flat amount ($0.50 to $500, never
+more than a service's price); **Charge
 late cancellations** on or off, and the window (30 minutes to 48 hours);
 an example ("A $40 haircut: $40"); and what clients see, for the example
 haircut. **Save** sends only what you changed, so a change made on another

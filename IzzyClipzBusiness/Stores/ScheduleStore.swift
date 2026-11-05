@@ -241,7 +241,7 @@ final class ScheduleStore {
 
     // MARK: No-show protection
 
-    /// Charges the fee agreed at booking to the card on file (for a no-show whose start has passed,
+    /// Charges the fee agreed at booking to the card on file (for a no-show whose end has passed,
     /// or a late cancellation by the client), or checks again on a try Stripe hasn't answered. Only
     /// after the owner confirmed it (`FeePanel.Action`).
     ///

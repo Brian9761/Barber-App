@@ -45,7 +45,7 @@ final class FakeServer {
         /// a late cancellation the owner may charge.
         var lateCancelWithCard = false
         /// Also start with a client who booked online with a card on file (Visa 4242) for later
-        /// today: a 2:30 PM haircut with Flowxbori that hasn't started, so it can't be a no-show yet.
+        /// today: a 2:30 PM haircut with Flowxbori that hasn't ended, so it can't be a no-show yet.
         var upcomingWithCard = false
         /// The next fee charge never reaches Stripe (an outage): like the server, it answers 500 and
         /// leaves the fee pending. Charging again (Check again) asks Stripe, finds nothing, and then
@@ -95,6 +95,9 @@ final class FakeServer {
     private(set) var bookingKeys: [IzzyAPI.IdempotencyKey] = []
     /// What each key booked: the appointment's ID and the request, to recognize Book again.
     private var keyed: [IzzyAPI.IdempotencyKey: (id: String, request: IzzyAPI.NewAppointment)] = [:]
+    /// The appointments that were ever marked completed, like the server's `completed_at`: one with a
+    /// card on file never becomes a no-show, even after it's reopened.
+    private var everCompleted: Set<String> = []
 
     struct StoredPayment: Equatable {
         var payment: IzzyAPI.Payment
@@ -326,11 +329,18 @@ final class FakeServer {
            !isFree(barberID: appointment.barberId, from: appointment.start, to: appointment.end, ignoring: id) {
             throw APIError.slotTaken
         }
-        // Like the server: a booking with a card on file is a no-show only once it has started,
-        // so until then the client can still cancel it in the app.
-        if status == .noShow, appointment.card != nil, appointment.start > now() {
-            throw APIError.server(code: IzzyAPI.ErrorCode.notStarted, message: "You can mark a no-show once the appointment has started.", status: 409)
+        // Like the server: a booking with a card on file is a no-show only once it has ended (a client
+        // who comes before the end isn't one), and never once it was marked completed, even after
+        // it's reopened (the client came).
+        if status == .noShow, appointment.card != nil, appointment.status != .noShow {
+            if appointment.status == .completed || everCompleted.contains(id) {
+                throw APIError.server(code: IzzyAPI.ErrorCode.alreadyCompleted, message: IzzyAPI.NoShowRule.completedNoShowMessage, status: 409)
+            }
+            if appointment.end > now() {
+                throw APIError.server(code: IzzyAPI.ErrorCode.notStarted, message: IzzyAPI.NoShowRule.noShowBeforeEndMessage, status: 409)
+            }
         }
+        if status == .completed || appointment.status == .completed { everCompleted.insert(id) }
         let previous = appointment.status
         appointment.status = status
         if status == .cancelled {
@@ -350,7 +360,8 @@ final class FakeServer {
         guard var fee = appointment.noShowFee, fee.status == .none else { return }
         let found = IzzyAPI.NoShowRule.feeCase(
             status: appointment.status, cancelledBy: appointment.cancelledBy, start: appointment.start,
-            customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes
+            customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes,
+            createdAt: appointment.createdAt
         )
         if case .chargeable(let reason) = found { fee.reason = reason } else { fee.reason = nil }
         appointment.noShowFee = fee

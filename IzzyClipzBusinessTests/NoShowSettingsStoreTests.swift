@@ -271,7 +271,7 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.examples, ["A $40 haircut: $40", "A $5 hot lather shave: $5"])
         XCTAssertEqual(store.clientWarning, IzzyAPI.NoShowWarning(
             title: "Full Service Cancellation & No-Show Fee",
-            message: "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($40). Cancelling in the app more than 1 hour before is free."
+            message: "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($40). Cancelling in the app more than 1 hour before is free."
         ))
         XCTAssertEqual(
             store.clientPolicy,
@@ -293,16 +293,16 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.clientWarning?.title, "Late Cancellation & No-Show Fee")
         XCTAssertEqual(
             store.clientWarning?.message,
-            "Cancelling less than 1 hour before your appointment, or not showing up, is charged $20 (50% of the service). Cancelling in the app more than 1 hour before is free."
+            "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling in the app more than 1 hour before is free."
         )
         store.draft.feeMode = .flat
         store.draft.flatText = "25"
-        XCTAssertEqual(store.examples, ["A $40 haircut: $25", "A $5 hot lather shave: $25"], "a flat fee can be more than a cheap service")
+        XCTAssertEqual(store.examples, ["A $40 haircut: $25", "A $5 hot lather shave: $5"], "a flat fee is never more than the service's price")
         XCTAssertEqual(store.clientPolicy?.contains("may charge $25 to this card"), true)
         store.draft.lateCancelWindowMinutes = 120
         store.draft.lateCancelEnabled = false
         XCTAssertEqual(store.clientWarning, IzzyAPI.NoShowWarning(
-            title: "No-Show Fee", message: "Not showing up is charged $25. Cancelling in the app before your appointment is free."
+            title: "No-Show Fee", message: "Not showing up may be charged $25. Cancelling in the app before your appointment is free."
         ))
         XCTAssertEqual(
             store.clientPolicy,

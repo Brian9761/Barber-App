@@ -7,8 +7,9 @@ import IzzyClipzKit
 /// read the same when they're opened again later.
 ///
 /// Which fee can be charged is the server's rule, through the Kit (`Appointment.chargeableFee(at:)`):
-/// a no-show whose start has passed, or a cancellation by the client less than the agreed window
-/// before the start. Only a fee Stripe reported as succeeded shows as charged.
+/// a no-show whose end has passed, or a cancellation by the client less than the agreed window
+/// before the start (and more than 15 minutes after booking), up to 7 days after the start. Only a
+/// fee Stripe reported as succeeded shows as charged.
 struct FeePanel: Equatable {
     /// "Visa •••• 4242".
     let cardLabel: String
@@ -129,8 +130,10 @@ struct FeePanel: Equatable {
         if appointment.noShowFee?.customerCancelledAt != nil { return refusal }
         switch appointment.status {
         case .booked:
-            return appointment.start > now
-                ? "If the client doesn't come, you can mark a no-show once the appointment has started. Then you can charge the fee."
+            // More than 7 days after the start, no fee can be charged any more: say that instead.
+            if refusal == IzzyAPI.NoShowRule.feeDeadlineMessage { return refusal }
+            return appointment.end > now
+                ? "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee."
                 : "If the client didn't come, mark a no-show. Then you can charge the fee."
         case .completed:
             // The client came: there's nothing to explain.
@@ -208,13 +211,14 @@ struct FeePanel: Equatable {
         }
     }
 
-    /// Under the status buttons of a booking with a card on file that hasn't started: "Mark no-show"
-    /// isn't offered yet, because the client can still cancel in the app until then.
+    /// Under the status buttons of a booking with a card on file that hasn't ended: "Mark no-show"
+    /// isn't offered yet, because the client may still come (a client who comes before the end isn't
+    /// a no-show), and can cancel in the app until the start.
     static func noShowHint(for appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime) -> String? {
         guard appointment.status == .booked, !appointment.canMarkNoShow(at: now) else { return nil }
-        let today = shopTime.day(containing: now) == shopTime.day(containing: appointment.start)
-        let when = today ? "at \(shopTime.time(appointment.start))" : "on \(shopTime.dayAndTime(appointment.start))"
-        return "You can mark a no-show once the appointment starts \(when). Until then, the client can still cancel in the app."
+        let today = shopTime.day(containing: now) == shopTime.day(containing: appointment.end)
+        let when = today ? "at \(shopTime.time(appointment.end))" : "on \(shopTime.dayAndTime(appointment.end))"
+        return "You can mark a no-show once the appointment ends \(when). Until then, the client may still come."
     }
 
     /// Added to "Cancel appointment"'s question for a booking with a card on file: the shop
@@ -238,19 +242,21 @@ struct FeePanel: Equatable {
 }
 
 extension IzzyAPI.Appointment {
-    /// Whether "Mark no-show" is offered: for a booking with a card on file only once it has
-    /// started (the server answers `not_started` before, so the client can still cancel), for
-    /// others whenever it's booked, as before.
+    /// Whether "Mark no-show" is offered for a booked appointment, by the server's rule (the Kit's
+    /// `canBeMarkedNoShow(at:)`): for a booking with a card on file only once it has ended (the
+    /// server answers `not_started` before, so the client may still come), for others whenever it's
+    /// booked, as before.
     func canMarkNoShow(at now: Date) -> Bool {
-        status == .booked && (card == nil || start <= now)
+        status == .booked && canBeMarkedNoShow(at: now)
     }
 
-    /// The client cancelled in the app less than the agreed window before the start: a late
-    /// cancellation, which can be charged (once) while it stays cancelled.
+    /// The client cancelled in the app less than the agreed window before the start, and more than
+    /// 15 minutes after booking: a late cancellation, which can be charged (once) while it stays cancelled.
     var isCancelledLate: Bool {
         guard status == .cancelled, cancelledBy == .customer, card != nil, let fee = noShowFee else { return false }
         return IzzyAPI.NoShowRule.cancelledLate(
-            start: start, customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes
+            start: start, customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes,
+            createdAt: createdAt
         )
     }
 }

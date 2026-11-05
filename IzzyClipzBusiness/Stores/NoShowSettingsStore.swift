@@ -225,7 +225,7 @@ final class NoShowSettingsStore {
     }
 
     /// The menu items the example uses: the first barber's haircut (the owner's, $40), and the
-    /// cheapest item with a price, since a flat fee can be more than a cheap service.
+    /// cheapest item with a price, since a flat fee is capped at a cheap service's price.
     var exampleItems: [(name: String, price: Price)] {
         var items: [(name: String, price: Price)] = []
         if let haircut = catalog.offerings.first(where: { $0.serviceID == "haircut" && $0.price.kind == .fixed && $0.price.cents > 0 }) {

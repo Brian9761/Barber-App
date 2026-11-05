@@ -18,7 +18,7 @@ struct AppointmentDetailView: View {
         Group {
             if let appointment = store.appointment(withID: appointmentID) {
                 // Every minute the clock is read again, so a booking with a card on file offers
-                // "Mark no-show" (and its fee) once it has started.
+                // "Mark no-show" (and its fee) once it has ended.
                 TimelineView(.everyMinute) { _ in
                     details(appointment, now: store.now)
                 }
@@ -201,7 +201,7 @@ struct AppointmentDetailView: View {
                 actionButton("Mark completed", systemImage: "checkmark.circle", id: "markCompleted", disabled: isBusy) {
                     Task { await store.setStatus(.completed, for: appointment) }
                 }
-                // A booking with a card on file is a no-show only once it has started (the client can cancel until then).
+                // A booking with a card on file is a no-show only once it has ended (the client may still come until then).
                 if appointment.canMarkNoShow(at: now) {
                     actionButton("Mark no-show", systemImage: "person.fill.questionmark", id: "markNoShow", disabled: isBusy) {
                         Task { await store.setStatus(.noShow, for: appointment) }

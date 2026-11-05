@@ -421,7 +421,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     // MARK: No-show protection
 
     /// Kim Sample booked online with a card on file (Visa 4242) for a $35 haircut at 10 AM and
-    /// didn't come (`-fake-cards-on-file`). The owner marks the no-show (her start has passed), and
+    /// didn't come (`-fake-cards-on-file`). The owner marks the no-show (her appointment has ended), and
     /// the fee is charged once, after a question that names the amount and the card. Payments today
     /// lists it as a no-show fee, and the Payment section says the service itself isn't paid.
     func testChargeANoShowFeeToTheCardOnFile() {
@@ -435,7 +435,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(reveal("detailFee").label.contains("$35 (the full service price)"), "Got: \(element("detailFee").label)")
 
         // Mark no-show → charge → charged: reopened first (an uncharged no-show reopens without a
-        // question), then marked a no-show, which her 10 AM start allows at 11:05.
+        // question), then marked a no-show, which her haircut's end (10:45 AM) allows at 11:05.
         tap("reopenAppointment")
         XCTAssertTrue(statusShows("Booked"))
         XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "If the client didn't come, mark a no-show."))
@@ -599,19 +599,19 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("chargeFee"), containing: "Charge again ($35)"))
     }
 
-    /// Nia Sample booked online with a card for 2:30 PM. Until it starts she can still cancel in the
-    /// app, so there's no Mark no-show yet, and no fee to charge.
-    func testANoShowWithACardWaitsForTheStart() {
+    /// Nia Sample booked online with a card for 2:30 PM. Until her haircut ends (3:15 PM) she may
+    /// still come, so there's no Mark no-show yet, and no fee to charge.
+    func testANoShowWithACardWaitsForTheEnd() {
         launch("-fake-cards-on-file")
         let row = reveal("appointment-Nia Sample")
         XCTAssertTrue(row.label.contains("Card on file"), "Got: \(row.label)")
         row.tap()
         XCTAssertTrue(statusShows("Booked"))
-        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "you can mark a no-show once the appointment has started"))
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "you can mark a no-show once the appointment has ended"))
         XCTAssertFalse(element("chargeFee").exists)
         XCTAssertTrue(reveal("markCompleted").exists)
-        XCTAssertFalse(element("markNoShow").exists, "Not before the start")
-        XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: "once the appointment starts at 2:30 PM"))
+        XCTAssertFalse(element("markNoShow").exists, "Not before the end")
+        XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: "once the appointment ends at 3:15 PM"))
         tap("cancelAppointment")
         XCTAssertTrue(text(containing: "There's no fee when the shop cancels.").waitForExistence(timeout: 10))
     }
@@ -642,7 +642,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $25"))
         let warning = reveal("noShowClientWarning")
         XCTAssertTrue(waitForLabel(warning, containing: "Late Cancellation & No-Show Fee"), "Got: \(warning.label)")
-        XCTAssertTrue(warning.label.contains("is charged $25."), "Got: \(warning.label)")
+        XCTAssertTrue(warning.label.contains("may be charged $25."), "Got: \(warning.label)")
         // The Save message sits just above Stripe's costs. It's looked for with those on screen:
         // under the keyboard, a busy simulator kept reporting it there after it had gone.
         reveal("noShowCosts")
@@ -668,7 +668,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         flipSwitch(reveal("noShowLateCancel", searchingFirst: .up))
         XCTAssertTrue(waitForDisappearance(of: element("noShowWindow")))
         let warning = reveal("noShowClientWarning")
-        XCTAssertTrue(waitForLabel(warning, containing: "Not showing up is charged the full service price ($40)."), "Got: \(warning.label)")
+        XCTAssertTrue(waitForLabel(warning, containing: "Not showing up may be charged the full service price ($40)."), "Got: \(warning.label)")
         tap("saveNoShowSettings")
         XCTAssertTrue(reveal("noShowSaved").exists)
         app.navigationBars.buttons.element(boundBy: 0).tap()
