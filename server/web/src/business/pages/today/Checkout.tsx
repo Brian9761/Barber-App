@@ -1,18 +1,21 @@
 // "Check out", like the owner app's ticket: the client, Sold by, the items (+ Service, +
 // Product, + Amount), the total, and how they're paying, cash or other (card payments
 // happen on the iPhone with Tap to Pay). Recording asks first, with the amount; the
-// receipt then says what happened: "Sold $60 · Cash · Izzy".
+// receipt then says what happened: "Sold $60 · Cash · Izzy". The total and how they're
+// paying sit at the bottom of the panel (its dock), below the items, which scroll: what
+// "+ Service" or "+ Product" opens comes into view above them, never under them.
 
-import { useMemo, useRef, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { errorMessage, isApiError } from '../../../api/errors';
 import type { Catalog } from '../../../api/types';
 import { Dialog } from '../../../components/Dialog';
 import { Icon } from '../../../components/Icon';
 import { Monogram } from '../../../components/ui';
-import { durationLabel, money } from '../../../lib/format';
+import { durationLabel } from '../../../lib/format';
 import { dateTimeLabel } from '../../../lib/shopTime';
 import { ownerApi } from '../../api/client';
-import { ProductPlaceholder } from '../../components/common';
+import { PanelDock, ProductPlaceholder } from '../../components/common';
 import { methodTitle } from '../../lib/fees';
 import { moneyWithCommas, parseMoney } from '../../lib/money';
 import {
@@ -22,7 +25,7 @@ import {
   lineTotal,
   removeLine,
   rememberBarber,
-  SaleKeys,
+  saleKeys,
   setBarber,
   setCustomerName,
   setPrice,
@@ -91,7 +94,29 @@ function ServicePicker({ ticket, catalog, onPick }: { ticket: Ticket; catalog: C
   );
 }
 
-function ProductPicker({ products, onPick }: { products: Product[] | null; onPick: (product: Product) => void }) {
+function ProductPicker({
+  products,
+  error,
+  onRetry,
+  onPick,
+}: {
+  products: Product[] | null;
+  /** Why the products didn't load, or null. */
+  error: string | null;
+  onRetry: () => void;
+  onPick: (product: Product) => void;
+}) {
+  if (error !== null) {
+    return (
+      <div className="biz-picker biz-picker--error" role="alert" data-testid="products-failed">
+        <p className="biz-picker__title">The products didn't load.</p>
+        <p>{error}</p>
+        <button type="button" className="button button--secondary" onClick={onRetry}>
+          Try again
+        </button>
+      </div>
+    );
+  }
   if (products === null) return <p className="biz-picker__empty">Loading the products…</p>;
   if (products.length === 0) return <p className="biz-picker__empty">No products yet. Add them in Products, then sell them here.</p>;
   return (
@@ -107,7 +132,7 @@ function ProductPicker({ products, onPick }: { products: Product[] | null; onPic
                 <ProductPlaceholder className="biz-picker__photo biz-picker__photo--empty" />
               )}
               <span className="biz-picker__name">{product.name}</span>
-              <span className="biz-picker__detail">{product.priceCents === null ? 'No price: you type it' : money(product.priceCents)}</span>
+              <span className="biz-picker__detail">{product.priceCents === null ? 'No price: you type it' : moneyWithCommas(product.priceCents)}</span>
             </button>
           </li>
         ))}
@@ -210,7 +235,7 @@ function Lines({ ticket, products, onChange }: { ticket: Ticket; products: Produ
                   </span>
                 </span>
               ) : (
-                <span className="biz-line__unit">{money(parseMoney(line.priceText) ?? 0)} each</span>
+                <span className="biz-line__unit">{moneyWithCommas(parseMoney(line.priceText) ?? 0)} each</span>
               )}
             </div>
             <div className="biz-line__side">
@@ -239,7 +264,7 @@ function Lines({ ticket, products, onChange }: { ticket: Ticket; products: Produ
                   </button>
                 </span>
               ) : null}
-              <span className="biz-line__total">{total === null ? '—' : money(total)}</span>
+              <span className="biz-line__total">{total === null ? '—' : moneyWithCommas(total)}</span>
               <button type="button" className="biz-line__remove" aria-label={`Remove ${line.name}`} onClick={() => onChange(removeLine(ticket, line.key))}>
                 <Icon name="close" />
               </button>
@@ -256,6 +281,8 @@ export function Checkout({
   onChange,
   catalog,
   products,
+  productsError = null,
+  onRetryProducts = () => undefined,
   onSold,
 }: {
   ticket: Ticket;
@@ -263,6 +290,9 @@ export function Checkout({
   catalog: Catalog;
   /** The shop's products, null while loading. */
   products: Product[] | null;
+  /** Why the products didn't load, or null. */
+  productsError?: string | null;
+  onRetryProducts?: () => void;
   onSold: (sale: Sale) => void;
 }) {
   const [adding, setAdding] = useState<Adding>(null);
@@ -270,13 +300,27 @@ export function Checkout({
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
-  const keys = useRef(new SaleKeys());
+  const dock = useContext(PanelDock);
+  const picker = useRef<HTMLDivElement>(null);
+  const addButtons = useRef<Partial<Record<Exclude<Adding, null>, HTMLButtonElement | null>>>({});
   const total = ticketTotal(ticket);
   const barberName = useMemo(() => catalog.barbers.find((b) => b.id === ticket.barberId)?.name ?? null, [catalog, ticket.barberId]);
   const change = (next: Ticket) => {
     setProblem(null);
     setFailed(null);
     onChange(next);
+  };
+
+  // What + Service, + Product or + Amount opens comes into view (also once the products load).
+  useEffect(() => {
+    if (adding) picker.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [adding, products, productsError]);
+
+  /** An item was added: the list closes, and the focus goes back to the button that opened it. */
+  const added = (kind: Exclude<Adding, null>, next: Ticket) => {
+    addButtons.current[kind]?.focus();
+    change(next);
+    setAdding(null);
   };
 
   const pay = (method: 'cash' | 'other') => {
@@ -294,15 +338,18 @@ export function Checkout({
     setBusy(true);
     setFailed(null);
     try {
-      const recorded = await ownerApi.createSale(sale, keys.current.keyFor(sale));
-      keys.current.done();
+      const recorded = await ownerApi.createSale(sale, saleKeys.keyFor(sale));
+      saleKeys.done(sale);
       rememberBarber(recorded.barberId);
       setAsking(null);
       onSold(recorded);
     } catch (error) {
       setAsking(null);
-      // After a lost answer the sale may have gone through: the same key makes trying again safe.
-      setFailed(isApiError(error) && error.isOffline ? `${errorMessage(error)} Trying again is safe: the sale can't be recorded twice.` : errorMessage(error));
+      // After a lost answer the sale may have gone through. Its key is kept until it's recorded
+      // (also if this ticket is closed and the sale rung up again), so trying again is safe.
+      setFailed(
+        isApiError(error) && error.isOffline ? `${errorMessage(error)} Trying again is safe: the same sale can't be recorded twice.` : errorMessage(error),
+      );
     } finally {
       setBusy(false);
     }
@@ -313,6 +360,45 @@ export function Checkout({
     asking === 'cash'
       ? `Record a ${totalText} cash sale for ${barberName ?? 'this barber'}?`
       : `Record a ${totalText} sale for ${barberName ?? 'this barber'}, paid another way?`;
+
+  // The total and how they're paying: in the panel's dock, below the items, which scroll.
+  const payBlock = (
+    <div className="biz-checkout__pay">
+      <div className="biz-total" aria-live="polite">
+        <span className="biz-total__label">Total</span>
+        <span className="biz-total__value" data-testid="ticket-total">
+          {totalText}
+        </span>
+      </div>
+
+      <section aria-labelledby="ticket-paying">
+        <h3 id="ticket-paying" className="biz-section-title">
+          How are they paying?
+        </h3>
+        <div className="biz-pay">
+          <button type="button" className="biz-pay__button" onClick={() => pay('cash')} disabled={busy}>
+            <span className="biz-pay__title">Cash</span>
+          </button>
+          <button type="button" className="biz-pay__button" onClick={() => pay('other')} disabled={busy}>
+            <span className="biz-pay__title">Other</span>
+            <span className="biz-pay__subtitle">Squire, Zelle, Cash App…</span>
+          </button>
+        </div>
+        {problem ? (
+          <p className="field__error" role="alert" data-testid="ticket-problem">
+            <Icon name="error" />
+            <span>{problem}</span>
+          </p>
+        ) : null}
+        {failed ? (
+          <p className="field__error" role="alert" data-testid="ticket-failed">
+            <Icon name="error" />
+            <span>{failed}</span>
+          </p>
+        ) : null}
+      </section>
+    </div>
+  );
 
   return (
     <div className="biz-checkout" data-testid="checkout">
@@ -357,6 +443,9 @@ export function Checkout({
           {(['service', 'product', 'amount'] as const).map((kind) => (
             <button
               key={kind}
+              ref={(element) => {
+                addButtons.current[kind] = element;
+              }}
               type="button"
               className={`biz-add__button${adding === kind ? ' is-open' : ''}`}
               aria-expanded={adding === kind}
@@ -366,73 +455,26 @@ export function Checkout({
             </button>
           ))}
         </div>
-        {adding === 'service' ? (
-          <ServicePicker
-            ticket={ticket}
-            catalog={catalog}
-            onPick={(offeringId) => {
-              const offering = catalog.offerings.find((o) => o.id === offeringId);
-              if (!offering) return;
-              change(addService(ticket, offering, catalog.services.find((s) => s.id === offering.serviceId)?.name ?? offering.serviceId));
-              setAdding(null);
-            }}
-          />
-        ) : null}
-        {adding === 'product' ? (
-          <ProductPicker
-            products={products}
-            onPick={(product) => {
-              change(addProduct(ticket, product));
-              setAdding(null);
-            }}
-          />
-        ) : null}
-        {adding === 'amount' ? (
-          <AmountForm
-            onAdd={(name, cents) => {
-              change(addAmount(ticket, name, cents));
-              setAdding(null);
-            }}
-          />
-        ) : null}
+        <div ref={picker} className="biz-checkout__picker">
+          {adding === 'service' ? (
+            <ServicePicker
+              ticket={ticket}
+              catalog={catalog}
+              onPick={(offeringId) => {
+                const offering = catalog.offerings.find((o) => o.id === offeringId);
+                if (!offering) return;
+                added('service', addService(ticket, offering, catalog.services.find((s) => s.id === offering.serviceId)?.name ?? offering.serviceId));
+              }}
+            />
+          ) : null}
+          {adding === 'product' ? (
+            <ProductPicker products={products} error={productsError} onRetry={onRetryProducts} onPick={(product) => added('product', addProduct(ticket, product))} />
+          ) : null}
+          {adding === 'amount' ? <AmountForm onAdd={(name, cents) => added('amount', addAmount(ticket, name, cents))} /> : null}
+        </div>
       </section>
 
-      {/* The total and how they're paying stay at the bottom of the panel while the items scroll. */}
-      <div className="biz-checkout__pay">
-        <div className="biz-total" aria-live="polite">
-          <span className="biz-total__label">Total</span>
-          <span className="biz-total__value" data-testid="ticket-total">
-            {totalText}
-          </span>
-        </div>
-
-        <section aria-labelledby="ticket-paying">
-          <h3 id="ticket-paying" className="biz-section-title">
-            How are they paying?
-          </h3>
-          <div className="biz-pay">
-            <button type="button" className="biz-pay__button" onClick={() => pay('cash')} disabled={busy}>
-              <span className="biz-pay__title">Cash</span>
-            </button>
-            <button type="button" className="biz-pay__button" onClick={() => pay('other')} disabled={busy}>
-              <span className="biz-pay__title">Other</span>
-              <span className="biz-pay__subtitle">Squire, Zelle, Cash App…</span>
-            </button>
-          </div>
-          {problem ? (
-            <p className="field__error" role="alert" data-testid="ticket-problem">
-              <Icon name="error" />
-              <span>{problem}</span>
-            </p>
-          ) : null}
-          {failed ? (
-            <p className="field__error" role="alert" data-testid="ticket-failed">
-              <Icon name="error" />
-              <span>{failed}</span>
-            </p>
-          ) : null}
-        </section>
-      </div>
+      {dock ? createPortal(payBlock, dock) : payBlock}
 
       <Dialog
         open={asking !== null}
@@ -478,7 +520,7 @@ export function Receipt({ sale, zone }: { sale: Sale; zone: string }) {
               {item.quantity > 1 ? `${item.quantity} × ` : ''}
               {item.name}
             </span>
-            <span>{money(item.totalCents)}</span>
+            <span>{moneyWithCommas(item.totalCents)}</span>
           </li>
         ))}
         <li className="biz-receipt__total">

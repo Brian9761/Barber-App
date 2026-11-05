@@ -5,11 +5,12 @@
 
 import { useCallback, useState, useSyncExternalStore, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { errorMessage } from '../../api/errors';
 import type { Catalog } from '../../api/types';
 import { Icon } from '../../components/Icon';
 import { Monogram } from '../../components/ui';
 import { useCatalog } from '../../data/catalog';
-import { addDays, daysBetween, localDate, longDateLabel, timeLabel, WEEKDAY_NAMES, weekdayOf } from '../../lib/shopTime';
+import { addDays, dateTimeLabel, daysBetween, localDate, longDateLabel, timeLabel, WEEKDAY_NAMES, weekdayOf } from '../../lib/shopTime';
 import { ownerApi } from '../api/client';
 import { Badges, ErrorBanner, PageHeader, SidePanel, Skeleton, SkeletonCard } from '../components/common';
 import { useBusinessTitle, useClock, useLoad } from '../hooks';
@@ -19,7 +20,7 @@ import { appointmentTicket, lastBarber, walkInTicket, type Ticket } from '../lib
 import type { OwnerAppointment, Product, Sale, SalesDay, TimeOff, VoidedSale } from '../types';
 import { AppointmentDetails, timeRange } from './today/AppointmentDetails';
 import { Checkout, Receipt } from './today/Checkout';
-import { SalesList, useVoidSale } from './today/SalesList';
+import { SalesList, useVoidSale, type SaleToVoid } from './today/SalesList';
 
 interface DayView {
   appointments: OwnerAppointment[];
@@ -70,55 +71,86 @@ function AppointmentCard({ appointment, zone, onOpen, showBarber }: { appointmen
         {appointment.serviceName}
         {showBarber ? ` · ${appointment.barberName}` : ''}
       </span>
-      <Badges badges={appointmentBadges(appointment)} />
+      <Badges badges={appointmentBadges(appointment)} inline />
     </button>
   );
 }
 
-function BlockCard({ block, zone }: { block: TimeOff; zone: string }) {
+/** The days a block of time off covers on the shop's calendar, its last minute included. */
+function blockDays(block: TimeOff, zone: string): { first: string; last: string } {
+  const first = localDate(new Date(block.start), zone);
+  const last = localDate(new Date(Date.parse(block.end) - 1), zone);
+  return { first, last: last < first ? first : last };
+}
+
+/**
+ * When time off is, as the app says it: "1 – 2 PM" when it's all on the day shown; "All day" for
+ * a day it covers whole; otherwise with the days, "Mon, Nov 2 at 6:50 PM – Fri, Nov 6 at 6:50 PM".
+ */
+export function blockTimeText(block: TimeOff, date: string, zone: string): string {
+  const { first, last } = blockDays(block, zone);
+  if (first === date && last === date) return timeRange(block, zone);
+  if (first < date && last > date) return 'All day';
+  return `${dateTimeLabel(new Date(block.start), zone)} – ${dateTimeLabel(new Date(block.end), zone)}`;
+}
+
+/** "The shop is blocked …": the same, in the middle of a sentence. */
+function shopBlockText(block: TimeOff, date: string, zone: string): string {
+  const when = blockTimeText(block, date, zone);
+  return when === 'All day' ? 'all day' : when;
+}
+
+function BlockCard({ block, date, zone }: { block: TimeOff; date: string; zone: string }) {
   return (
     <div className="biz-block">
-      <span className="biz-appt__time">{timeRange(block, zone)}</span>
+      <span className="biz-appt__time">{blockTimeText(block, date, zone)}</span>
       <span>Blocked{block.reason ? `: ${block.reason}` : ''}</span>
     </div>
   );
 }
 
-function Board({ catalog, view, onOpen }: { catalog: Catalog; view: DayView; onOpen: (id: string) => void }) {
+/** Under a barber's name: how many appointments, or that nothing is booked (or only cancelled ones). */
+function columnCount(appointments: OwnerAppointment[]): string {
+  const booked = appointments.filter((a) => a.status !== 'cancelled').length;
+  if (booked > 0) return `${booked} ${booked === 1 ? 'appointment' : 'appointments'}`;
+  const cancelled = appointments.length;
+  return cancelled > 0 ? `${cancelled} cancelled` : 'Nothing booked';
+}
+
+function Board({ catalog, view, date, onOpen }: { catalog: Catalog; view: DayView; date: string; onOpen: (id: string) => void }) {
   const zone = catalog.timeZone;
   return (
-    <div className="biz-board" role="list" aria-label="Appointments by barber">
+    <ul className="biz-board" role="list" aria-label="Appointments by barber">
       {catalog.barbers.map((barber) => {
         const appointments = view.appointments.filter((a) => a.barberId === barber.id);
         const blocks = view.timeOff.filter((b) => b.barberId === barber.id);
-        const booked = appointments.filter((a) => a.status !== 'cancelled').length;
         const items = [
           ...appointments.map((a) => ({
             start: a.start,
             node: <AppointmentCard key={a.id} appointment={a} zone={zone} onOpen={() => onOpen(a.id)} showBarber={false} />,
           })),
-          ...blocks.map((b) => ({ start: b.start, node: <BlockCard key={b.id} block={b} zone={zone} /> })),
+          ...blocks.map((b) => ({ start: b.start, node: <BlockCard key={b.id} block={b} date={date} zone={zone} /> })),
         ].sort((a, b) => a.start.localeCompare(b.start));
         return (
-          <section key={barber.id} className="biz-column" role="listitem" aria-labelledby={`column-${barber.id}`}>
+          <li key={barber.id} className="biz-column" aria-labelledby={`column-${barber.id}`}>
             <header className="biz-column__head">
               <Monogram letters={barber.monogram} tone="ink" size="small" />
               <div>
                 <h2 id={`column-${barber.id}`} className="biz-column__name">
                   {barber.name}
                 </h2>
-                <p className="biz-column__count">{booked === 0 ? 'Nothing booked' : `${booked} ${booked === 1 ? 'appointment' : 'appointments'}`}</p>
+                <p className="biz-column__count">{columnCount(appointments)}</p>
               </div>
             </header>
             <div className="biz-column__items">{items.map((item) => item.node)}</div>
-          </section>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
 
-function List({ catalog, view, onOpen }: { catalog: Catalog; view: DayView; onOpen: (id: string) => void }) {
+function List({ catalog, view, date, onOpen }: { catalog: Catalog; view: DayView; date: string; onOpen: (id: string) => void }) {
   const zone = catalog.timeZone;
   const blocks = view.timeOff.filter((b) => b.barberId !== null);
   return (
@@ -137,7 +169,7 @@ function List({ catalog, view, onOpen }: { catalog: Catalog; view: DayView; onOp
           </h2>
           {blocks.map((block) => (
             <div key={block.id} className="biz-block">
-              <span className="biz-appt__time">{timeRange(block, zone)}</span>
+              <span className="biz-appt__time">{blockTimeText(block, date, zone)}</span>
               <span>
                 {catalog.barbers.find((b) => b.id === block.barberId)?.name}
                 {block.reason ? `: ${block.reason}` : ''}
@@ -206,6 +238,7 @@ export function TodayPage() {
 
   const [panel, setPanel] = useState<PanelState>(null);
   const [products, setProducts] = useState<Product[] | null>(null);
+  const [productsError, setProductsError] = useState<string | null>(null);
   const [voidMessage, setVoidMessage] = useState<string | null>(null);
 
   const setDate = (next: string) => {
@@ -214,12 +247,14 @@ export function TodayPage() {
     setParams(next === today ? {} : { date: next }, { replace: true });
   };
 
+  /** The products for "+ Product": a list, or why it didn't load (so it never reads as "No products yet"). */
   const loadProducts = useCallback(() => {
     setProducts(null);
+    setProductsError(null);
     ownerApi
       .products()
       .then(setProducts)
-      .catch(() => setProducts([]));
+      .catch((error: unknown) => setProductsError(errorMessage(error)));
   }, []);
 
   const voids = useVoidSale((result: VoidedSale) => {
@@ -243,42 +278,39 @@ export function TodayPage() {
     setPanel({ kind: 'checkout', ticket, appointmentId: from?.id ?? null });
   };
 
-  const voidFromDetails = (saleId: string) => {
-    const found = view?.sales.sales.find((s) => s.id === saleId);
-    if (found) {
-      voids.ask(found, zone);
+  /**
+   * Void an appointment's sale from its details. The day shown has it, or (checked out on another
+   * day) the day it was paid; failing that, the question names only what the appointment knows
+   * of it (the amount and how it was paid), never items or a barber it can't be sure of.
+   */
+  const voidFromDetails = async (saleId: string): Promise<void> => {
+    const shown = view?.sales.sales.find((s) => s.id === saleId);
+    if (shown) {
+      voids.ask(shown, zone, date);
       return;
     }
-    // Checked out on another day: what the appointment knows of its sale.
-    if (appointment?.sale) {
-      voids.ask(
-        {
-          id: appointment.sale.id,
-          barberId: appointment.barberId,
-          barberName: appointment.barberName,
-          appointmentId: appointment.id,
-          customerName: appointment.customer.name,
-          method: appointment.sale.method,
-          paymentIntentId: null,
-          totalCents: appointment.sale.totalCents,
-          items: [
-            {
-              kind: 'service',
-              serviceId: appointment.serviceId,
-              productId: null,
-              name: appointment.serviceName,
-              quantity: 1,
-              unitCents: appointment.sale.totalCents,
-              totalCents: appointment.sale.totalCents,
-            },
-          ],
-          soldAt: appointment.payment.paidAt ?? appointment.end,
-          voidedAt: null,
-          voidReason: null,
-        },
-        zone,
-      );
+    if (!appointment?.sale || appointment.sale.id !== saleId) return;
+    const paidAt = appointment.payment.paidAt;
+    const paidOn = paidAt ? localDate(new Date(paidAt), zone) : null;
+    let sale: SaleToVoid | undefined;
+    if (paidOn && paidOn !== date) {
+      try {
+        sale = (await ownerApi.sales(paidOn)).sales.find((s) => s.id === saleId);
+      } catch {
+        // Asked with what the appointment knows.
+      }
     }
+    voids.ask(
+      sale ?? {
+        id: appointment.sale.id,
+        appointmentId: appointment.id,
+        customerName: appointment.customer.name,
+        method: appointment.sale.method,
+        totalCents: appointment.sale.totalCents,
+      },
+      zone,
+      date,
+    );
   };
 
   let panelTitle = '';
@@ -288,6 +320,7 @@ export function TodayPage() {
     panelTitle = appointment.customer.name;
     panelBody = (
       <AppointmentDetails
+        key={appointment.id}
         appointment={appointment}
         zone={zone}
         now={now}
@@ -306,6 +339,8 @@ export function TodayPage() {
         onChange={(ticket) => setPanel({ ...panel, ticket })}
         catalog={catalog}
         products={products}
+        productsError={productsError}
+        onRetryProducts={loadProducts}
         onSold={(sale) => {
           setPanel({ kind: 'receipt', sale });
           setVoidMessage(null);
@@ -344,9 +379,9 @@ export function TodayPage() {
           {summaryLine(view)}
           {day.updatedAt ? <span className="biz-summary__updated"> · Updated {timeLabel(day.updatedAt, zone)}. Refreshes every minute.</span> : null}
         </p>
-      ) : (
+      ) : day.status !== 'error' ? (
         <Skeleton height={22} width="40%" />
-      )}
+      ) : null}
 
       {view && catalog ? (
         view.appointments.length === 0 && view.timeOff.length === 0 ? (
@@ -360,14 +395,14 @@ export function TodayPage() {
               .filter((b) => b.barberId === null)
               .map((block) => (
                 <p key={block.id} className="notice notice--info biz-shop-block">
-                  The shop is blocked {timeRange(block, zone)}
+                  The shop is blocked {shopBlockText(block, date, zone)}
                   {block.reason ? `: ${block.reason}` : ''}.
                 </p>
               ))}
             {wide ? (
-              <Board catalog={catalog} view={view} onOpen={(id) => setPanel({ kind: 'appointment', id })} />
+              <Board catalog={catalog} view={view} date={date} onOpen={(id) => setPanel({ kind: 'appointment', id })} />
             ) : (
-              <List catalog={catalog} view={view} onOpen={(id) => setPanel({ kind: 'appointment', id })} />
+              <List catalog={catalog} view={view} date={date} onOpen={(id) => setPanel({ kind: 'appointment', id })} />
             )}
           </>
         )
@@ -381,10 +416,11 @@ export function TodayPage() {
 
       <SalesList
         day={view?.sales ?? null}
+        failed={day.status === 'error' && !view}
         title={isToday ? "Today's sales" : `Sales on ${longDateLabel(date)}`}
         zone={zone}
         message={voidMessage}
-        onVoid={(sale) => voids.ask(sale, zone)}
+        onVoid={(sale) => voids.ask(sale, zone, date)}
         onNewSale={() => startCheckout(null)}
       />
 

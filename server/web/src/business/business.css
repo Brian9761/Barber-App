@@ -779,7 +779,9 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: calc(var(--space-2) + var(--safe-top)) var(--space-4) 0;
+  /* Clear of the notch and the rounded corners when the app is open on an iPhone held sideways. */
+  padding: calc(var(--space-2) + var(--safe-top)) max(var(--space-4), var(--safe-right)) 0 var(--space-4);
+  background: var(--color-bg);
 }
 
 .biz-panel__back {
@@ -815,8 +817,9 @@
 
 .biz-panel__body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: var(--space-2) var(--space-6) var(--space-8);
+  padding: var(--space-2) max(var(--space-6), var(--safe-right)) var(--space-8) var(--space-6);
 }
 
 .biz-panel__title {
@@ -826,9 +829,60 @@
   overflow-wrap: anywhere;
 }
 
-.biz-panel__footer {
-  padding: var(--space-4) var(--space-6) calc(var(--space-4) + var(--safe-bottom));
+/* What stays in sight below what scrolls (checkout's total and how they're paying). */
+.biz-panel__dock {
+  padding: 0 max(var(--space-6), var(--safe-right)) calc(var(--space-5) + var(--safe-bottom)) var(--space-6);
   border-top: 1px solid var(--color-line);
+  background: var(--color-bg);
+  box-shadow: 0 -8px 16px rgba(0, 0, 0, 0.04);
+}
+
+.biz-panel__dock:empty {
+  display: none;
+}
+
+.biz-panel__footer {
+  padding: var(--space-4) max(var(--space-6), var(--safe-right)) calc(var(--space-4) + var(--safe-bottom)) var(--space-6);
+  border-top: 1px solid var(--color-line);
+}
+
+@media (max-width: 600px) {
+  .biz-panel__top {
+    padding-left: max(var(--space-4), var(--safe-left));
+  }
+
+  .biz-panel__body,
+  .biz-panel__dock,
+  .biz-panel__footer {
+    padding-left: max(var(--space-6), var(--safe-left));
+  }
+}
+
+/*
+ * A short screen (a phone held sideways, a laptop zoomed in): the whole panel scrolls as one,
+ * so what's at the bottom doesn't take most of the screen, and Close stays at the top.
+ */
+@media (max-height: 560px) {
+  .biz-panel__frame {
+    overflow-y: auto;
+  }
+
+  .biz-panel__top {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding-bottom: var(--space-1);
+  }
+
+  .biz-panel__body {
+    flex: none;
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .biz-panel__dock {
+    box-shadow: none;
+  }
 }
 
 /* ----------------------------------------------------- Appointment details */
@@ -966,6 +1020,21 @@
 .biz-fee .button,
 .biz-paid .button {
   justify-self: start;
+}
+
+.biz-fee__error > div {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+}
+
+.biz-fee__settings {
+  font-weight: 600;
+}
+
+/* What a status change did: at the top of what can be done, where the focus goes. */
+.biz-details__changed {
+  margin: 0;
 }
 
 /* ---------------------------------------------------------------- Checkout */
@@ -1297,18 +1366,28 @@
   width: 100%;
 }
 
-.biz-checkout__pay {
-  position: sticky;
-  bottom: calc(-1 * var(--space-8));
-  z-index: 1;
-  margin: var(--space-4) calc(-1 * var(--space-6)) calc(-1 * var(--space-8));
-  padding: 0 var(--space-6) calc(var(--space-5) + var(--safe-bottom));
-  background: var(--color-bg);
-  box-shadow: 0 -8px 16px rgba(255, 255, 255, 0.9);
-}
-
 .biz-checkout__pay .biz-section-title {
   margin-top: var(--space-3);
+}
+
+/* In the panel's dock, its own line is the top edge. */
+.biz-panel__dock .biz-total {
+  border-top: 0;
+}
+
+/* Everything that opens under "+ Service", "+ Product" and "+ Amount" scrolls fully into view. */
+.biz-checkout__picker {
+  scroll-margin-bottom: var(--space-4);
+}
+
+.biz-checkout__picker:empty {
+  display: none;
+}
+
+.biz-picker--error {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
 }
 
 .biz-total {

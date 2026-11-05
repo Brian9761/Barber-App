@@ -3,8 +3,9 @@
 // the barber's price, which can be changed since "From" prices vary; products with a
 // quantity, asking for a price when the product has none; and amounts), with the total.
 // Cash and other payments are recorded with POST /api/owner/sales; card payments happen
-// on the iPhone with Tap to Pay. The ticket's Idempotency-Key stays the same while what's
-// sent stays the same, so trying again after a lost answer can't record the sale twice.
+// on the iPhone with Tap to Pay. A sale's Idempotency-Key stays the same until the sale is
+// recorded, whichever ticket sends it, so trying again after a lost answer (on the same
+// ticket, or on a new one after the panel was closed) can't record the sale twice.
 
 import type { Offering } from '../../api/types';
 import { readJSON, writeJSON } from '../../lib/storage';
@@ -214,26 +215,36 @@ export function newSale(ticket: Ticket, method: 'cash' | 'other'): NewSale {
   };
 }
 
+/** How many sales sent without an answer keep their keys (the oldest is forgotten first). */
+const PENDING_SALES = 20;
+
 /**
- * The Idempotency-Key to send a sale with: the same as last time while it's the same sale
- * (a retry after a lost answer), a new one as soon as anything on it changes, and a new one
- * for the next sale once this one is recorded.
+ * The Idempotency-Key to send a sale with: the same one every time the same sale is sent
+ * until it's recorded (a retry after a lost answer, also from a new ticket once the panel
+ * was closed: the server then answers with the sale it already has), a new one for a sale
+ * that differs in anything, and a new one for the same sale rung up again once it's recorded.
  */
 export class SaleKeys {
-  private last: { body: string; key: string } | null = null;
+  /** What was sent (the body) → its key, for sales sent without a confirmed answer. */
+  private readonly pending = new Map<string, string>();
 
   constructor(private readonly make: () => string = () => newToken()) {}
 
   keyFor(sale: NewSale): string {
     const body = JSON.stringify(sale);
-    if (this.last?.body === body) return this.last.key;
+    const known = this.pending.get(body);
+    if (known) return known;
     const key = this.make();
-    this.last = { body, key };
+    this.pending.set(body, key);
+    if (this.pending.size > PENDING_SALES) this.pending.delete(this.pending.keys().next().value!);
     return key;
   }
 
-  /** Recorded: the next sale gets a new key. */
-  done(): void {
-    this.last = null;
+  /** Recorded: the same sale rung up again later is a new sale, with a new key. */
+  done(sale: NewSale): void {
+    this.pending.delete(JSON.stringify(sale));
   }
 }
+
+/** The keys of every ticket on this page, kept while it stays open (closing a ticket doesn't lose them). */
+export const saleKeys = new SaleKeys();

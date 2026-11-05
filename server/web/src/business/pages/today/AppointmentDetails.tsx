@@ -3,9 +3,14 @@
 // can do now: Check out (cash or other), Mark done, No-show once it has started, Cancel or
 // Reopen as the app allows, and charge the agreed fee to the card on file (asking first,
 // naming the card). A checked-out appointment changes only once its sale is voided.
+//
+// After a change, what happened ("Marked done.") takes the focus where the button was, so
+// it's read out and Tab goes on to what can be done now; a fee that couldn't be charged says
+// why next to its button, in sight, and offers Settings when Stripe isn't connected.
 
 import { useEffect, useRef, useState } from 'react';
-import { errorMessage } from '../../../api/errors';
+import { Link } from 'react-router-dom';
+import { errorMessage, isApiError } from '../../../api/errors';
 import { Dialog } from '../../../components/Dialog';
 import { Icon } from '../../../components/Icon';
 import { durationLabel } from '../../../lib/format';
@@ -27,6 +32,14 @@ import {
 import type { OwnerAppointment } from '../../types';
 
 type Status = 'booked' | 'completed' | 'noShow' | 'cancelled';
+
+/** What a status change did, in a few words. */
+const CHANGED: Record<Status, string> = {
+  completed: 'Marked done.',
+  noShow: 'Marked a no-show.',
+  cancelled: 'Cancelled. The time is open for other clients.',
+  booked: 'Reopened: it’s booked again.',
+};
 
 /** "10:00 – 10:45 AM" on the shop's clock. */
 export function timeRange(appointment: Pick<OwnerAppointment, 'start' | 'end'>, zone: string): string {
@@ -56,46 +69,78 @@ export function AppointmentDetails({
   /** The server's answer after a change: shown right away, and the day loads again. */
   onChanged: (appointment: OwnerAppointment) => void;
   onCheckOut: () => void;
-  /** Void the appointment's sale (Today's sales does the asking). */
-  onVoidSale: (saleId: string) => void;
+  /** Void the appointment's sale (Today's sales does the asking, once it has the sale). */
+  onVoidSale: (saleId: string) => void | Promise<void>;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [feeError, setFeeError] = useState<{ message: string; settings: boolean } | null>(null);
+  const [changed, setChanged] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState<string | null>(null);
   const [confirmFee, setConfirmFee] = useState<FeeConfirmation | null>(null);
 
   const outcome = useRef<HTMLDivElement>(null);
-  const [showOutcome, setShowOutcome] = useState(false);
+  const changedLine = useRef<HTMLParagraphElement>(null);
+  const feeErrorLine = useRef<HTMLDivElement>(null);
+  /** What takes the focus once the panel shows the change: the fee's outcome, what changed, or why the fee wasn't charged. */
+  const [focusNext, setFocusNext] = useState<'outcome' | 'changed' | 'feeError' | null>(null);
 
-  /** Makes the change; false when it didn't go through (the error shows at the top). */
-  const run = async (label: string, change: () => Promise<OwnerAppointment>): Promise<boolean> => {
-    setBusy(label);
+  const setStatus = async (status: Status) => {
+    setBusy(status);
     setError(null);
+    setFeeError(null);
+    setChanged(null);
     try {
-      onChanged(await change());
-      return true;
+      onChanged(await ownerApi.setStatus(appointment.id, status));
+      setChanged(CHANGED[status]);
+      setFocusNext('changed');
     } catch (caught) {
+      // Shown at the top of what can be done, where the buttons are.
       setError(errorMessage(caught));
-      return false;
     } finally {
       setBusy(null);
     }
   };
-  const setStatus = (status: Status) => run(status, () => ownerApi.setStatus(appointment.id, status));
+
   const chargeFee = async () => {
-    if (await run('fee', () => ownerApi.chargeFee(appointment.id))) setShowOutcome(true);
+    setBusy('fee');
+    setError(null);
+    setFeeError(null);
+    setChanged(null);
+    try {
+      onChanged(await ownerApi.chargeFee(appointment.id));
+      setFocusNext('outcome');
+    } catch (caught) {
+      // Next to the fee's button, where the owner is: Stripe not connected offers Settings.
+      setFeeError({ message: errorMessage(caught), settings: isApiError(caught) && caught.code === 'stripe_not_configured' });
+      setFocusNext('feeError');
+    } finally {
+      setBusy(null);
+    }
   };
 
-  // After a charge the button is gone: the outcome (charged, declined, waiting on the client)
-  // takes the focus, so it's read out, and comes into view.
+  const voidSale = async (saleId: string) => {
+    setBusy('void');
+    try {
+      await onVoidSale(saleId);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // After a change the button pressed may be gone: what happened takes the focus, so it's read
+  // out (the fee's outcome: charged, declined, waiting on the client; or why it wasn't charged),
+  // and comes into view.
   useEffect(() => {
-    if (!showOutcome || !outcome.current) return;
-    setShowOutcome(false);
-    outcome.current.focus({ preventScroll: true });
+    if (focusNext === null) return;
+    const target = focusNext === 'outcome' ? outcome.current : focusNext === 'changed' ? changedLine.current : feeErrorLine.current;
+    if (!target) return;
+    setFocusNext(null);
+    target.focus({ preventScroll: true });
     // (Optional: jsdom, where the unit tests run, has no scrolling.)
-    outcome.current.scrollIntoView?.({ block: 'nearest' });
-  }, [showOutcome, appointment]);
+    target.scrollIntoView?.({ block: 'nearest' });
+  }, [focusNext, appointment, feeError, changed]);
 
   const start = new Date(appointment.start);
   const panel = feePanel(appointment, now, zone);
@@ -128,6 +173,12 @@ export function AppointmentDetails({
       ) : null}
 
       <section className="biz-details__actions" aria-label="What you can do">
+        {changed ? (
+          <p className="biz-success biz-details__changed" role="status" tabIndex={-1} ref={changedLine} data-testid="status-changed">
+            <Icon name="check" className="biz-success__icon" />
+            <span>{changed}</span>
+          </p>
+        ) : null}
         {canCheckOut(appointment) ? (
           <div className="biz-checkout-call">
             <button type="button" className="button button--primary button--large button--block" onClick={onCheckOut} disabled={busy !== null}>
@@ -143,8 +194,8 @@ export function AppointmentDetails({
               {paid}
             </p>
             <p className="secondary small">To change this appointment (reopen, cancel or mark a no-show), void its sale first.</p>
-            <button type="button" className="button button--secondary" onClick={() => onVoidSale(appointment.sale!.id)}>
-              Void sale
+            <button type="button" className="button button--secondary" onClick={() => void voidSale(appointment.sale!.id)} disabled={busy !== null}>
+              {busy === 'void' ? 'Opening…' : 'Void sale'}
             </button>
           </div>
         ) : (
@@ -244,12 +295,30 @@ export function AppointmentDetails({
               <p>{panel.status.detail}</p>
             </div>
           )}
+          {feeError ? (
+            <div className="field__error biz-fee__error" role="alert" tabIndex={-1} ref={feeErrorLine} data-testid="fee-error">
+              <Icon name="error" />
+              <div>
+                <p>{feeError.message}</p>
+                {feeError.settings ? (
+                  <Link className="button button--secondary biz-fee__settings" to="/business/settings">
+                    Go to Settings
+                  </Link>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {panel.action ? (
             <button
               type="button"
               className="button button--secondary"
-              disabled={busy !== null}
-              onClick={() => (panel.action!.confirmation ? setConfirmFee(panel.action!.confirmation) : void chargeFee())}
+              // Not disabled while busy, only marked so: focus comes back to it when the question closes.
+              aria-disabled={busy !== null || undefined}
+              onClick={() => {
+                if (busy !== null) return;
+                if (panel.action!.confirmation) setConfirmFee(panel.action!.confirmation);
+                else void chargeFee();
+              }}
             >
               {busy === 'fee' ? (panel.action.confirmation ? 'Charging…' : 'Checking…') : panel.action.title}
             </button>

@@ -12,6 +12,7 @@ import { metricLabel, rankBy } from './leaderboard';
 import { compactMoney, editableMoney, moneyWithCommas, parseMoney, percent, priceFromLabel } from './money';
 import * as noShow from './noShow';
 import { stripeReturnLine, stripeView } from './stripe';
+import { blockTimeText } from '../pages/TodayPage';
 
 describe('amounts', () => {
   it('reads what the owner types', () => {
@@ -162,5 +163,25 @@ describe('this computer’s name in the app’s list', () => {
     ).toBe('Safari on iPhone');
     expect(computerName('Mozilla/5.0 (X11; Linux x86_64; rv:140.0) Gecko/20100101 Firefox/140.0')).toBe('Firefox on Linux');
     expect(computerName('Something else')).toBe('Computer');
+  });
+});
+
+describe('time off on Today', () => {
+  const zone = 'America/Los_Angeles';
+  const block = (start: string, end: string) => ({ id: 'b', barberId: 'carlos-rafael', start, end, reason: 'Vacation' });
+
+  it('says the times for time off within the day shown, as the app does', () => {
+    expect(blockTimeText(block('2026-11-04T21:00:00Z', '2026-11-04T22:00:00Z'), '2026-11-04', zone).replace(/\s/g, ' ')).toBe('1 – 2 PM');
+    // Up to midnight is still that day.
+    expect(blockTimeText(block('2026-11-05T04:00:00Z', '2026-11-05T08:00:00Z'), '2026-11-04', zone).replace(/\s/g, ' ')).toBe('8 PM – 12 AM');
+  });
+
+  it('says the days for time off that runs into other days, and "All day" for a day it covers whole', () => {
+    // Monday, November 2 at 6:50 PM to Friday, November 6 at 6:50 PM.
+    const vacation = block('2026-11-03T02:50:00Z', '2026-11-07T02:50:00Z');
+    const days = 'Mon, Nov 2 at 6:50 PM – Fri, Nov 6 at 6:50 PM';
+    expect(blockTimeText(vacation, '2026-11-02', zone).replace(/\s/g, ' ')).toBe(days);
+    expect(blockTimeText(vacation, '2026-11-04', zone)).toBe('All day');
+    expect(blockTimeText(vacation, '2026-11-06', zone).replace(/\s/g, ' ')).toBe(days);
   });
 });

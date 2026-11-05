@@ -134,11 +134,24 @@ describe('the sale it records', () => {
     const ticket = addAmount(walkInTicket('julian-ramos'), 'Gift card', 2500);
     const first = keys.keyFor(newSale(ticket, 'cash'));
     expect(keys.keyFor(newSale(ticket, 'cash'))).toBe(first);
-    const changed = keys.keyFor(newSale(ticket, 'other'));
+    const other = newSale(ticket, 'other');
+    const changed = keys.keyFor(other);
     expect(changed).not.toBe(first);
-    expect(keys.keyFor(newSale(ticket, 'other'))).toBe(changed);
-    keys.done();
-    expect(keys.keyFor(newSale(ticket, 'other'))).not.toBe(changed);
+    expect(keys.keyFor(other)).toBe(changed);
+    keys.done(other);
+    expect(keys.keyFor(other)).not.toBe(changed);
+  });
+
+  it('keeps a sale’s key until it’s recorded, also when the ticket was closed and the sale rung up again', () => {
+    let n = 0;
+    const keys = new SaleKeys(() => `key-${++n}`);
+    const walkIn = () => newSale(addAmount(walkInTicket('carlos-rafael'), 'Review twice', 1200), 'cash');
+    // The answer was lost; the owner closed the ticket, rang up another sale, then this one again.
+    const lost = keys.keyFor(walkIn());
+    const between = newSale(addAmount(walkInTicket('julian-ramos'), 'Tip', 500), 'cash');
+    expect(keys.keyFor(between)).not.toBe(lost);
+    keys.done(between);
+    expect(keys.keyFor(walkIn())).toBe(lost);
   });
 
   it('makes keys the server takes: 32 random bytes in base64url', () => {

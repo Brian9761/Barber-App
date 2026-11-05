@@ -216,6 +216,127 @@ describe('Today', () => {
     expect(api.calls.find((c) => c.method === 'POST')).toMatchObject({ path: `/api/owner/appointments/${noShow.id}/no-show-fee` });
   });
 
+  it('says why a fee wasn’t charged next to its button, with the way to Settings when Stripe isn’t connected', async () => {
+    signedIn();
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const noShow = { ...feeCharged.appointment, ...when, noShowFee: { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null } };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [noShow] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+      ['POST /api/owner/appointments/*', apiError('stripe_not_configured', 'Connect Stripe in Settings to take card payments.', 503)],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const panel = screen.getByTestId('side-panel');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Charge no-show fee ($35)' }));
+    await userEvent.click(within(screen.getByTestId('confirm-fee')).getByRole('button', { name: 'Charge $35' }));
+    const error = await within(panel).findByTestId('fee-error');
+    expect(error.textContent).toContain('Connect Stripe in Settings to take card payments.');
+    expect(within(error).getByRole('link', { name: 'Go to Settings' }).getAttribute('href')).toBe('/business/settings');
+    // In the fee's section, next to its button, with the focus, so it's read out where the owner is.
+    expect(within(screen.getByTestId('fee-panel')).getByTestId('fee-error')).toBe(error);
+    await waitFor(() => expect(document.activeElement).toBe(error));
+  });
+
+  it('says what a status change did, and gives it the focus the pressed button had', async () => {
+    signedIn();
+    const chris = ownerAppointments.appointments.find((a) => a.customer.name === 'Chris')!;
+    mockApi([...TODAY_ROUTES, ['PATCH /api/owner/appointments/*', { body: { appointment: { ...chris, status: 'completed' } } }]]);
+    renderApp('/business/today');
+    const card = (await screen.findAllByTestId('appointment')).find((c) => c.textContent?.includes('Chris'))!;
+    await userEvent.click(card);
+    const panel = screen.getByTestId('side-panel');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Mark done' }));
+    const changed = await within(panel).findByTestId('status-changed');
+    expect(changed.textContent).toBe('Marked done.');
+    await waitFor(() => expect(document.activeElement).toBe(changed));
+  });
+
+  it('voids a sale checked out on another day with that day’s own sale, and never makes one up', async () => {
+    signedIn();
+    // Andre's appointment on Tuesday, checked out (and paid) on Monday.
+    const andre = { ...ownerAppointments.appointments.find((a) => a.customer.name === 'Andre')!, start: '2026-11-03T18:20:00Z', end: '2026-11-03T19:05:00Z' };
+    const empty = { date: '2026-11-03', sales: [], totals: { totalCents: 0, count: 0 } };
+    const api = mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [andre] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', ({ search }: ApiCall) => ({ body: search.includes('2026-11-02') ? salesDay : empty })],
+    ]);
+    renderApp('/business/today?date=2026-11-03');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const panel = screen.getByTestId('side-panel');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Void sale' }));
+    await waitFor(() =>
+      expect(screen.getByTestId('confirm-void').textContent).toMatch(/Andre: Haircut, 2 × Matte pomade, Gift card, sold by Flowxbori on Mon, Nov 2 at 11:05\sAM\./),
+    );
+    expect(api.calls.some((c) => c.path === '/api/owner/sales' && c.search === '?date=2026-11-02')).toBe(true);
+    await userEvent.click(within(screen.getByTestId('confirm-void')).getByRole('button', { name: 'Keep the sale' }));
+
+    // That day's sales can't be read: the question names only the amount and how it was paid.
+    api.once('GET /api/owner/sales', 'offline');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Void sale' }));
+    await waitFor(() => expect(screen.getByTestId('confirm-void').textContent).toContain('Andre: a $96 cash sale.'));
+    expect(screen.getByTestId('confirm-void').textContent).not.toContain('sold by');
+  });
+
+  it('says the products didn’t load, with Try again, instead of saying there are none', async () => {
+    signedIn();
+    const api = mockApi([...TODAY_ROUTES, ['GET /api/owner/products', { body: ownerProducts }]]);
+    api.once('GET /api/owner/products', 'offline');
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByRole('button', { name: 'New sale' }));
+    const panel = screen.getByTestId('side-panel');
+    await userEvent.click(within(panel).getByRole('button', { name: '+ Product' }));
+    const failed = await within(panel).findByTestId('products-failed');
+    expect(failed.textContent).toContain("The products didn't load.");
+    expect(within(panel).queryByText(/No products yet/)).toBeNull();
+    await userEvent.click(within(failed).getByRole('button', { name: 'Try again' }));
+    expect(await within(panel).findByRole('button', { name: /Matte pomade/ })).toBeTruthy();
+  });
+
+  it('never records a walk-in twice after a lost answer, even when the ticket was closed and rung up again', async () => {
+    signedIn();
+    const api = mockApi([...TODAY_ROUTES, ['GET /api/owner/products', { body: ownerProducts }], ['POST /api/owner/sales', { status: 201, body: saleCreated }]]);
+    renderApp('/business/today');
+    const ringUp = async () => {
+      await userEvent.click(await screen.findByRole('button', { name: 'New sale' }));
+      const panel = screen.getByTestId('side-panel');
+      await userEvent.click(within(panel).getByRole('radio', { name: 'Carlos' }));
+      await userEvent.click(within(panel).getByRole('button', { name: '+ Amount' }));
+      await userEvent.type(within(panel).getByLabelText(/Name/), 'Review twice');
+      await userEvent.type(within(panel).getByLabelText('Amount'), '12');
+      await userEvent.click(within(panel).getByRole('button', { name: 'Add the amount' }));
+      // The list closed: the focus is back on the button that opened it.
+      expect(document.activeElement).toBe(within(panel).getByRole('button', { name: '+ Amount' }));
+      await userEvent.click(within(panel).getByRole('button', { name: 'Cash' }));
+      await userEvent.click(within(screen.getByTestId('confirm-sale')).getByRole('button', { name: 'Record sale' }));
+      return panel;
+    };
+    api.once('POST /api/owner/sales', 'offline');
+    const panel = await ringUp();
+    expect((await within(panel).findByTestId('ticket-failed')).textContent).toContain("Trying again is safe: the same sale can't be recorded twice.");
+    await userEvent.click(within(panel).getByRole('button', { name: 'Close' }));
+    await ringUp();
+    await within(panel).findByTestId('receipt');
+    const sent = api.calls.filter((c) => c.method === 'POST' && c.path === '/api/owner/sales');
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.headers['idempotency-key']).toBe(sent[0]!.headers['idempotency-key']);
+  });
+
+  it('says the sales couldn’t load when the day didn’t, instead of loading forever', async () => {
+    signedIn();
+    mockApi([
+      ['GET /api/owner/appointments', apiError('server_error', 'Something went wrong on our side. Try again in a moment.', 500)],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: salesDay }],
+    ]);
+    renderApp('/business/today');
+    expect(await screen.findByText("Couldn't load the day")).toBeTruthy();
+    expect(screen.getByTestId('sales-totals').textContent).toBe("Couldn't load the sales.");
+    expect(main().queryByText('Loading…')).toBeNull();
+  });
+
   it('shows a voided sale struck through, with its reason', async () => {
     signedIn();
     mockApi([...TODAY_ROUTES]);

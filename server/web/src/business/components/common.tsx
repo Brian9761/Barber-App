@@ -1,7 +1,7 @@
 // Pieces the Business pages share: a page's header, badges, skeletons while loading,
 // banners that say what went wrong (with Try again), and the side panel.
 
-import { Fragment, useEffect, useId, useRef, type ReactNode } from 'react';
+import { createContext, Fragment, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../../components/Icon';
 import type { Badge } from '../lib/fees';
 
@@ -19,20 +19,44 @@ export function PageHeader({ title, lead, children, eyebrow }: { title: ReactNod
   );
 }
 
-/** An appointment's badges: its status, what was paid, the card on file or its fee. */
-export function Badges({ badges, testId }: { badges: Badge[]; testId?: string }) {
+function BadgeText({ text }: { text: string }) {
+  return (
+    <span>
+      {text.split(' · ').map((part, index, parts) => (
+        <Fragment key={index}>
+          {index > 0 ? ' ' : null}
+          <span className="biz-badge__part">{index < parts.length - 1 ? `${part} ·` : part}</span>
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * An appointment's badges: its status, what was paid, the card on file or its fee. A list of
+ * them, or (`inline`, inside the appointment's button, where a list can't go) plain words.
+ */
+export function Badges({ badges, testId, inline = false }: { badges: Badge[]; testId?: string; inline?: boolean }) {
+  if (inline) {
+    return (
+      <span className="biz-badges" data-testid={testId}>
+        {badges.map((badge, index) => (
+          <Fragment key={badge.text}>
+            {/* Read as "Booked, Card on file · Visa •••• 4242". */}
+            {index > 0 ? <span className="visually-hidden">, </span> : null}
+            <span className={`biz-badge biz-badge--${badge.tone}`}>
+              <BadgeText text={badge.text} />
+            </span>
+          </Fragment>
+        ))}
+      </span>
+    );
+  }
   return (
     <ul className="biz-badges" aria-label="Status" data-testid={testId}>
       {badges.map((badge) => (
         <li key={badge.text} className={`biz-badge biz-badge--${badge.tone}`}>
-          <span>
-            {badge.text.split(' · ').map((part, index, parts) => (
-              <Fragment key={index}>
-                {index > 0 ? ' ' : null}
-                <span className="biz-badge__part">{index < parts.length - 1 ? `${part} ·` : part}</span>
-              </Fragment>
-            ))}
-          </span>
+          <BadgeText text={badge.text} />
         </li>
       ))}
     </ul>
@@ -88,9 +112,16 @@ export function SuccessLine({ children, testId }: { children: ReactNode; testId?
 }
 
 /**
+ * The bottom of the open side panel, below what scrolls: a view puts what must stay in sight
+ * there (checkout's total and how they're paying), so what scrolls is never under it.
+ */
+export const PanelDock = createContext<HTMLElement | null>(null);
+
+/**
  * A panel at the side of the screen (the whole screen on a phone), on the browser's own modal
  * <dialog>: focus stays inside, the page under it can't be reached, Escape and Close close it,
- * and focus goes back where it was.
+ * and focus goes back where it was. Another view in the open panel (Check out, the receipt)
+ * starts at its top, with the focus on its heading, so it's read out and Tab goes on from there.
  */
 export function SidePanel({
   open,
@@ -113,6 +144,10 @@ export function SidePanel({
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const bodyRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const [dock, setDock] = useState<HTMLDivElement | null>(null);
+  /** The view shown last while open: null once closed, so opening again starts afresh. */
+  const shown = useRef<string | null>(null);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -126,10 +161,17 @@ export function SidePanel({
     }
   }, [open]);
 
-  // A new view in the panel starts at its top.
+  // A new view in the panel starts at its top, and (when the panel was already open) with the
+  // focus on its heading: what was focused (Check out, a picked product) may be gone.
   useEffect(() => {
+    if (!open) {
+      shown.current = null;
+      return;
+    }
     bodyRef.current?.scrollTo?.({ top: 0 });
-  }, [title]);
+    if (shown.current !== null && shown.current !== title) headingRef.current?.focus({ preventScroll: true });
+    shown.current = title;
+  }, [open, title]);
 
   return (
     <dialog
@@ -143,29 +185,32 @@ export function SidePanel({
       }}
     >
       {open ? (
-        <div className="biz-panel__frame">
-          <div className="biz-panel__top">
-            {back ? (
-              <button type="button" className="text-button biz-panel__back" onClick={back.onBack}>
-                <Icon name="chevronLeft" />
-                {back.label}
+        <PanelDock.Provider value={dock}>
+          <div className="biz-panel__frame">
+            <div className="biz-panel__top">
+              {back ? (
+                <button type="button" className="text-button biz-panel__back" onClick={back.onBack}>
+                  <Icon name="chevronLeft" />
+                  {back.label}
+                </button>
+              ) : (
+                <span />
+              )}
+              <button type="button" className="biz-panel__close" onClick={onClose}>
+                <Icon name="close" />
+                <span>Close</span>
               </button>
-            ) : (
-              <span />
-            )}
-            <button type="button" className="biz-panel__close" onClick={onClose}>
-              <Icon name="close" />
-              <span>Close</span>
-            </button>
+            </div>
+            <div className="biz-panel__body" ref={bodyRef}>
+              <h2 id={titleId} className="biz-panel__title" ref={headingRef} tabIndex={-1}>
+                {title}
+              </h2>
+              {children}
+            </div>
+            <div className="biz-panel__dock" ref={setDock} />
+            {footer ? <div className="biz-panel__footer">{footer}</div> : null}
           </div>
-          <div className="biz-panel__body" ref={bodyRef}>
-            <h2 id={titleId} className="biz-panel__title">
-              {title}
-            </h2>
-            {children}
-          </div>
-          {footer ? <div className="biz-panel__footer">{footer}</div> : null}
-        </div>
+        </PanelDock.Provider>
       ) : null}
     </dialog>
   );
