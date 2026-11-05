@@ -23,7 +23,7 @@ TypeScript on Vercel Functions (Node 24), Postgres on Neon, region `pdx1`. One f
 | `src/db.ts`, `src/migrate.ts`, `migrations/*.sql`, `scripts/migrate.ts` | Postgres pool, migrations and the barber seed. |
 | `src/production.ts` | Real dependencies (pg pool, Stripe, Blob, fetch). Tests swap in fakes. |
 | `scripts/dev.ts`, `scripts/smoke.ts` | A local server without Vercel, and the end-to-end check to run after a deploy. |
-| `web/` | The shop's website (Vite, React, TypeScript): the pages and online booking, on the same origin as the API. See [`web/README.md`](web/README.md). |
+| `web/` | The shop's website (Vite, React, TypeScript): the pages and online booking, and Izzy Clipz Business for the owner on a computer, on the same origin as the API. See [`web/README.md`](web/README.md). |
 | `public/` | The website's build (`npm run build:web`), which Vercel serves next to the API. Build output only: it's in `.gitignore`, and the API works without it. |
 | `test/` | Vitest suites, fixtures and the contract fixtures the Swift Kit decodes. |
 
@@ -73,7 +73,7 @@ DATABASE_URL=postgres://… OWNER_KEY=… npm run dev       # http://localhost:3
 
 ## Website
 
-The shop's website lives in `web/` (Vite 6, React 18.3, TypeScript, React Router 6, every version pinned in `web/package-lock.json`): Home, Services, Barbers, Reviews, Visit, booking in five steps (with the card on file when the shop's no-show protection needs one), My appointments, and a placeholder for the Business area. It reads the same API as the apps, from the same origin, so it needs no settings of its own. [`web/README.md`](web/README.md) has the details.
+The shop's website lives in `web/` (Vite 6, React 18.3, TypeScript, React Router 6, every version pinned in `web/package-lock.json`): Home, Services, Barbers, Reviews, Visit, booking in five steps (with the card on file when the shop's no-show protection needs one), My appointments, and Izzy Clipz Business at `/business`: the owner signs in with a 6-digit code from the Business app (Settings → Use on a computer) and gets the day's schedule with checkout (cash and other payments; cards stay on the iPhone with Tap to Pay), analytics for the shop and each barber, products, and Settings (Stripe, no-show protection, the computers signed in). It installs as an app of its own. It reads the same API as the apps, from the same origin, so it needs no settings of its own. [`web/README.md`](web/README.md) has the details.
 
 ```sh
 cd server
