@@ -67,6 +67,8 @@ export const DEMO_STORE_KEY = 'izzy.demo.v1';
 /** Where the Business demo keeps what's changed in it (src/demo/owner/api.ts), and its sign-in (src/business/session.ts). */
 export const DEMO_BUSINESS_KEY = 'izzy.demo.business.v1';
 export const DEMO_BUSINESS_SESSION_KEY = 'izzy.demo.business.session.v1';
+/** Izzy Clipz Business's barber picked last at checkout (src/business/lib/ticket.ts), on this computer. */
+export const BUSINESS_LAST_BARBER_KEY = 'izzy.business.lastBarber.v1';
 /** How long a finished appointment stays listed, like the app. */
 export const KEEP_DAYS = 30;
 
@@ -167,6 +169,31 @@ export function removeAppointment(id: string, now: Date = new Date()): void {
 export function forgetAppointments(): void {
   removeKey('local', appointmentsKey());
   forgetCarried();
+}
+
+/**
+ * The demo's "Forget me", for Izzy Clipz Business: its sample shop as changed here, its sign-in and
+ * the barber picked last go too, so the demo leaves nothing behind (the Privacy Policy: "Forget me"
+ * and "Reset the demo" clear what the demo website stored on your device).
+ */
+export function forgetDemoBusiness(): void {
+  removeKey('local', DEMO_BUSINESS_KEY);
+  removeKey('local', DEMO_BUSINESS_SESSION_KEY);
+  removeKey('local', BUSINESS_LAST_BARBER_KEY);
+}
+
+/** Whether this browser keeps anything of the site's at all: any of its keys, in either storage. */
+export function keepsAnything(): boolean {
+  for (const area of ['local', 'session'] as const) {
+    try {
+      const store = storage(area);
+      if (!store) continue;
+      for (let i = 0; i < store.length; i += 1) if (store.key(i)?.startsWith('izzy.')) return true;
+    } catch {
+      // This storage is off: nothing kept in it.
+    }
+  }
+  return false;
 }
 
 /**

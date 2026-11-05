@@ -458,7 +458,7 @@ test.describe('in the demo', () => {
     await page.goto('/appointments');
     await page.getByRole('button', { name: 'Forget me on this computer' }).click();
     await page.getByTestId('confirm-forget').click();
-    await expect(page.getByTestId('forgotten-notice')).toHaveText('Done. This computer no longer keeps your details or the bookings made in the demo.');
+    await expect(page.getByTestId('forgotten-notice')).toHaveText('Done. This computer no longer keeps anything from the demo.');
     expect(await page.evaluate(() => localStorage.getItem('izzy.card.v1') ?? sessionStorage.getItem('izzy.card.v1'))).toBeNull();
     // Nothing more to say (no card behind the key), and nothing went to /api.
     await expect(page.getByTestId('card-removal')).toHaveCount(0);

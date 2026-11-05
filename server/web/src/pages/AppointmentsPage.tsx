@@ -26,6 +26,8 @@ import {
   dropCarried,
   forgetAppointments,
   forgetClient,
+  forgetDemoBusiness,
+  keepsAnything,
   loadAppointments,
   loadCard,
   loadRememberedDetails,
@@ -60,8 +62,13 @@ export function AppointmentsPage() {
 /** Up to a day after it ended, an appointment is still checked with the shop (it may be marked done). */
 const CHECK_AFTER_END_MS = 24 * 60 * 60_000;
 
-/** Whether this computer keeps anything of the client's: appointments, their details or a card. */
+/**
+ * Whether this computer keeps anything of the client's: appointments, their details or a card.
+ * In the demo, anything it kept here at all (a visit's count, Izzy Clipz Business's sample shop),
+ * so "Forget me" is always there to clear it.
+ */
 function remembersAnything(saved: SavedAppointment[]): boolean {
+  if (isDemo() && keepsAnything()) return true;
   return saved.length > 0 || loadRememberedDetails() !== null || loadCard() !== null;
 }
 
@@ -69,7 +76,8 @@ function remembersAnything(saved: SavedAppointment[]): boolean {
  * "Forget me on this computer": the name, number and email, the card, the booking in
  * progress and the appointments listed here. The appointments stay booked with the shop.
  * (In the demo, the bookings made in it go too: they only ever lived in this browser; and so
- * does what the Add to Home Screen bar kept, so the demo leaves nothing of the visit behind.)
+ * does what the Add to Home Screen bar kept, and Izzy Clipz Business's sample shop, sign-in and
+ * barber picked last, so the demo leaves nothing behind.)
  * Gives back the key of the card this browser held, if any, for the shop to delete it.
  */
 function forgetThisComputer(): string | null {
@@ -79,7 +87,10 @@ function forgetThisComputer(): string | null {
   clearDraft();
   forgetLastBooked();
   api.forgetHere();
-  if (isDemo()) forgetInstallHint();
+  if (isDemo()) {
+    forgetInstallHint();
+    forgetDemoBusiness();
+  }
   return card?.token ?? null;
 }
 
@@ -135,7 +146,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
       <Notice tone="success" role="status" testId="forgotten-notice">
         <p>
           {demo
-            ? `Done. This ${device} no longer keeps your details or the bookings made in the demo.`
+            ? `Done. This ${device} no longer keeps anything from the demo.`
             : `Done. This ${device} no longer keeps your details, card or appointments. Your appointments are still booked with the shop.`}
         </p>
         {cardLine && cardRemoval?.status !== 'failed' ? <p data-testid="card-removal">{cardLine}</p> : null}
@@ -291,7 +302,7 @@ function ForgetComputer({ catalog, device, onForget }: { catalog: Catalog; devic
       </h2>
       <p className="secondary">
         {demo
-          ? `This ${device} can forget your name and number, and the bookings made in the demo.`
+          ? `This ${device} can forget your name and number, the bookings made in the demo, and anything else the demo kept here.`
           : `This ${device} can forget your name, number, saved card and the appointments listed here. They stay booked with the shop.`}
       </p>
       <div>
@@ -324,7 +335,10 @@ function ForgetComputer({ catalog, device, onForget }: { catalog: Catalog; devic
         }
       >
         {demo ? (
-          <p>This {device} will forget your name and number, and the bookings made in the demo.</p>
+          <p>
+            This {device} will forget your name and number, the bookings made in the demo, and anything else the demo kept here, Izzy Clipz Business's
+            sample shop included.
+          </p>
         ) : (
           <>
             <p>This {device} will forget your name and number, your saved card, and the appointments listed here. The shop also deletes the saved card, as soon as no appointment needs it.</p>

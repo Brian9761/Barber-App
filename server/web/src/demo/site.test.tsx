@@ -70,14 +70,16 @@ describe('My appointments in the demo', () => {
     expect(localStorage.getItem(DEMO_STORE_KEY)).not.toBeNull();
     renderApp('/appointments');
     await screen.findByTestId('appointment-card');
-    expect(screen.getByTestId('forget-computer').textContent).toContain('the bookings made in the demo');
+    expect(screen.getByTestId('forget-computer').textContent).toContain('the bookings made in the demo, and anything else the demo kept here');
 
     await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
     const dialog = screen.getByTestId('forget-dialog');
-    expect(dialog.textContent).toContain('This computer will forget your name and number, and the bookings made in the demo.');
+    expect(dialog.textContent).toContain(
+      "This computer will forget your name and number, the bookings made in the demo, and anything else the demo kept here, Izzy Clipz Business's sample shop included.",
+    );
     expect(dialog.textContent).not.toContain('stay booked');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Forget me' }));
-    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps your details or the bookings made in the demo.');
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps anything from the demo.');
     expect(loadAppointments()).toEqual([]);
     expect(localStorage.getItem(DEMO_STORE_KEY)).toBeNull();
     // Nothing of the client's anywhere in this browser's storage.
@@ -94,7 +96,7 @@ describe('My appointments in the demo', () => {
     renderApp('/appointments');
     await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
     await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
-    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps your details or the bookings made in the demo.');
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps anything from the demo.');
     expect(loadCard()).toBeNull();
     await vi.waitFor(() => expect(deleteCard).toHaveBeenCalledTimes(1));
     await expect(deleteCard.mock.results[0]!.value).rejects.toMatchObject({ code: 'not_found', status: 404 });
@@ -118,6 +120,24 @@ describe('My appointments in the demo', () => {
     expect(Object.keys(localStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
     expect(Object.keys(sessionStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
     expect(document.cookie).toBe('');
+  });
+
+  it('clears Izzy Clipz Business’s sample shop, its sign-in and the barber picked last too, and is offered after only looking around', async () => {
+    // Someone who only opened the Business demo and looked around: no booking, no details.
+    localStorage.setItem('izzy.demo.business.v1', JSON.stringify({ version: 1 }));
+    localStorage.setItem('izzy.demo.business.session.v1', JSON.stringify({ token: 'x'.repeat(43), id: 'a', name: 'Chrome on Linux' }));
+    localStorage.setItem('izzy.business.lastBarber.v1', JSON.stringify('carlos-rafael'));
+    localStorage.setItem('izzy.visits.v1', '1');
+    renderApp('/appointments');
+    expect(await screen.findByText('No appointments booked on this computer yet.')).toBeTruthy();
+    expect(screen.getByTestId('forget-computer').textContent).toContain('anything else the demo kept here');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps anything from the demo.');
+    expect(Object.keys(localStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
+    expect(Object.keys(sessionStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
+    // Nothing left, so nothing more to forget.
+    expect(screen.queryByTestId('forget-computer')).toBeNull();
   });
 });
 

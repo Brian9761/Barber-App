@@ -8,7 +8,7 @@
 // ticket, or on a new one after the panel was closed) can't record the sale twice.
 
 import type { Offering } from '../../api/types';
-import { readJSON, removeKey, writeJSON } from '../../lib/storage';
+import { BUSINESS_LAST_BARBER_KEY, readJSON, removeKey, writeJSON } from '../../lib/storage';
 import { newToken } from '../../lib/tokens';
 import type { NewSale, NewSaleItem, OwnerAppointment, Product } from '../types';
 import { editableMoney, MAX_CENTS, moneyWithCommas, parseMoney, priceFromLabel } from './money';
@@ -50,7 +50,7 @@ export interface Ticket {
   nextKey: number;
 }
 
-const LAST_BARBER_KEY = 'izzy.business.lastBarber.v1';
+const LAST_BARBER_KEY = BUSINESS_LAST_BARBER_KEY;
 
 /** The barber chosen last on this computer, for the next walk-in. */
 export function lastBarber(): string | null {

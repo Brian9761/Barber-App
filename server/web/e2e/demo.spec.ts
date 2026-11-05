@@ -218,7 +218,7 @@ test('keeps none of the client’s details, and Forget me clears what the demo k
   await page.getByRole('link', { name: 'Manage or cancel' }).click();
   await page.getByRole('button', { name: 'Forget me on this computer' }).click();
   await page.getByTestId('confirm-forget').click();
-  await expect(page.getByTestId('forgotten-notice')).toHaveText('Done. This computer no longer keeps your details or the bookings made in the demo.');
+  await expect(page.getByTestId('forgotten-notice')).toHaveText('Done. This computer no longer keeps anything from the demo.');
   const left = await page.evaluate(() => Object.keys(localStorage));
   expect(left.filter((key) => key.startsWith('izzy.demo'))).toEqual([]);
 });
