@@ -177,7 +177,8 @@ export function demoAnalytics(source: FactsSource, query: AnalyticsQuery): Analy
         fee &&
         fee.lateCancelWindowMinutes !== null &&
         fee.customerCancelledAt !== null &&
-        cancelledLate(new Date(start), new Date(fee.customerCancelledAt), fee.lateCancelWindowMinutes)
+        // The fee's rule: inside the agreed window, and more than 15 minutes after booking.
+        cancelledLate(new Date(start), new Date(fee.customerCancelledAt), fee.lateCancelWindowMinutes, new Date(appointment.createdAt))
       ) {
         fact.lateCancellations += 1;
       }

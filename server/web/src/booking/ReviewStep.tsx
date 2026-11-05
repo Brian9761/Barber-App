@@ -7,7 +7,7 @@ import { Icon } from '../components/Icon';
 import { CallLink, Loading, NewTabLink, Notice } from '../components/ui';
 import { DemoNotice } from '../demo/DemoNotice';
 import { cardLabel, list, windowLabel } from '../lib/format';
-import { cancelledLate, feeLabel } from '../lib/lateCancel';
+import { cancelledLate, feeLabel, lateCancelNoticeText } from '../lib/lateCancel';
 import { leaveTo } from '../lib/leave';
 import { parseUSPhone, toE164 } from '../lib/phone';
 import { dateTimeLabel, localDate, timeLabel } from '../lib/shopTime';
@@ -291,9 +291,7 @@ export function bookNote(policy: NoShowPolicy, card: StoredCard | null, start: s
   const window = policy.lateCancelWindowMinutes;
   if (window === null) return 'Nothing is charged now. You can cancel online any time before your appointment starts.';
   const startsAt = new Date(start);
-  if (cancelledLate(startsAt, now, window)) {
-    return `Nothing is charged now. This time is less than ${windowLabel(window)} away, so cancelling it may be charged ${feeLabel(policy) ?? 'a fee'}.`;
-  }
+  if (cancelledLate(startsAt, now, window)) return `Nothing is charged now. ${lateCancelNoticeText(window, feeLabel(policy) ?? 'a fee')}`;
   const freeUntil = new Date(startsAt.getTime() - window * 60_000);
   const when = localDate(freeUntil, zone) === localDate(startsAt, zone) ? timeLabel(freeUntil, zone) : dateTimeLabel(freeUntil, zone);
   return `Nothing is charged now. Cancelling online is free until ${when} (${windowLabel(window)} before).`;

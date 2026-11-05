@@ -137,6 +137,36 @@ describe('cancelling', () => {
     expect(cancel).toMatchObject({ path: CANCEL_PATH, body: { acceptLateCancelFee: true } });
   });
 
+  it('doesn’t warn about a fee within 15 minutes of booking, even inside the window', async () => {
+    // Booked at 9:30 for 10 AM, so inside the 1-hour window from the start; cancelled at 9:40.
+    const bookedLate: Appointment = { ...fixtureAppointment, createdAt: '2026-11-03T17:30:00Z' };
+    at('2026-11-03T17:40:00Z');
+    saveAppointment(bookedLate, MANAGE);
+    const api = mockApi([
+      ['GET /api/appointments/*', { body: { appointment: bookedLate } }],
+      ['POST /api/appointments/*', { body: { appointment: { ...cancelledByClient('2026-11-03T17:40:00Z'), createdAt: bookedLate.createdAt } } }],
+    ]);
+    renderApp('/appointments');
+
+    const dialog = await openCancel();
+    expect(within(dialog).queryByTestId('late-cancel-warning')).toBeNull();
+    await userEvent.click(within(dialog).getByTestId('confirm-cancel'));
+    await screen.findByText('Appointment cancelled. The shop sees it right away.');
+    // Nothing to accept: the server doesn't ask either.
+    expect(api.calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([undefined]);
+  });
+
+  it('warns once the 15 minutes after booking are over', async () => {
+    const bookedLate: Appointment = { ...fixtureAppointment, createdAt: '2026-11-03T17:30:00Z' };
+    at('2026-11-03T17:46:00Z');
+    saveAppointment(bookedLate, MANAGE);
+    mockApi([['GET /api/appointments/*', { body: { appointment: bookedLate } }]]);
+    renderApp('/appointments');
+
+    const dialog = await openCancel();
+    expect(within(dialog).getByTestId('late-cancel-warning').textContent?.trim()).toBe(lateCancelFee.error.message);
+  });
+
   it('asks again with the shop’s warning when the shop’s clock says it’s late', async () => {
     at('2026-11-03T17:00:00Z'); // exactly an hour before: free here, but the minute turns
     saveAppointment(fixtureAppointment, MANAGE);

@@ -179,6 +179,6 @@ describe('booking, one question at a time', () => {
     await userEvent.click(await screen.findByTestId('time-2026-11-03T18:30:00Z'));
     expect(warning.textContent).not.toContain('less than 1 hour away');
     await userEvent.click(screen.getByTestId('time-2026-11-03T18:00:00Z'));
-    expect(within(screen.getByTestId('fee-warning')).getByText('This time is less than 1 hour away, so cancelling it may be charged $35.')).toBeTruthy();
+    expect(within(screen.getByTestId('fee-warning')).getByText('This time is less than 1 hour away, so cancelling it more than 15 minutes after booking may be charged $35.')).toBeTruthy();
   });
 });

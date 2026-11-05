@@ -35,7 +35,7 @@ export const policy35: NoShowPolicy = {
   warning: {
     title: 'Full Service Cancellation & No-Show Fee',
     message:
-      'Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($35). Cancelling in the app more than 1 hour before is free.',
+      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($35). Cancelling in the app more than 1 hour before is free.',
   },
 };
 

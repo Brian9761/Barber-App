@@ -166,19 +166,22 @@ describe('Visit', () => {
     expect(document.body.textContent).not.toContain('never online');
   });
 
-  it('lists the shop’s accessibility features when the catalog has them', () => {
-    renderApp('/visit');
-    expect(screen.getByTestId('visit-accessibility').textContent).toBe(catalog.shop.accessibility.join(' · '));
-  });
-
-  it('until the owner has checked them, asks people to call about getting in, with the number to call', () => {
+  it('lists the shop’s accessibility features once the owner has checked them and they are in the catalog', () => {
+    const checked = ['Step-free entrance', 'Parking at the door'];
     render(
       <MemoryRouter initialEntries={['/visit']} future={ROUTER_FUTURE}>
-        <CatalogProvider initial={{ ...catalog, shop: { ...catalog.shop, accessibility: [] } }}>
+        <CatalogProvider initial={{ ...catalog, shop: { ...catalog.shop, accessibility: checked } }}>
           <App />
         </CatalogProvider>
       </MemoryRouter>,
     );
+    expect(screen.getByTestId('visit-accessibility').textContent).toBe(checked.join(' · '));
+  });
+
+  it('until the owner has checked them, asks people to call about getting in, with the number to call', () => {
+    // The server's catalog lists none for now (data/catalog.json and its contract fixture).
+    expect(catalog.shop.accessibility).toEqual([]);
+    renderApp('/visit');
     const line = screen.getByTestId('visit-accessibility');
     expect(line.textContent).toBe("Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.");
     expect(within(line).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');

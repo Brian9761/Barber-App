@@ -583,7 +583,9 @@ export function createDemoApi(options: DemoOptions = {}): Api {
             ? {
                 ...fee,
                 customerCancelledAt: firstAsked,
-                reason: cancelledLate(new Date(current.start), new Date(firstAsked), fee.lateCancelWindowMinutes) ? 'lateCancel' : null,
+                reason: cancelledLate(new Date(current.start), new Date(firstAsked), fee.lateCancelWindowMinutes, new Date(current.createdAt))
+                  ? 'lateCancel'
+                  : null,
               }
             : null,
         };

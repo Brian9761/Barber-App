@@ -426,7 +426,7 @@ describe('the line under Book appointment', () => {
 
   it('says so when the time is already inside the window', () => {
     expect(bookNote(policy35, card, START, new Date('2026-11-03T17:30:00Z'), LA)).toBe(
-      'Nothing is charged now. This time is less than 1 hour away, so cancelling it may be charged $35.',
+      'Nothing is charged now. This time is less than 1 hour away, so cancelling it more than 15 minutes after booking may be charged $35.',
     );
   });
 
