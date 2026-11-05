@@ -40,13 +40,17 @@ describe('this computer’s session', () => {
     expect(session.current()).toMatchObject({ session: null, reason: 'expired' });
   });
 
-  it('forgets a session whose 30 days have run out', () => {
+  it('forgets a session whose 30 days have run out, and says why on the sign-in page', () => {
     localStorage.setItem(
       SESSION_KEY,
       JSON.stringify({ token: 'x'.repeat(43), id: 'a', name: 'Old', createdAt: '2020-01-01T00:00:00Z', expiresAt: '2020-01-31T00:00:00Z' }),
     );
-    expect(session.current().session).toBeNull();
+    expect(session.current()).toEqual({ session: null, reason: 'expired', note: null });
     expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it('opens on plain sign-in when this computer never signed in', () => {
+    expect(session.current()).toEqual({ session: null, reason: 'none', note: null });
   });
 
   it('follows another tab signing out', () => {

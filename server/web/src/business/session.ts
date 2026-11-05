@@ -52,15 +52,17 @@ function isStoredSession(value: unknown): value is StoredSession {
   );
 }
 
-function load(): StoredSession | null {
+/** The session kept here, or null; `expired` when one was kept but its 30 days have run out. */
+function load(): { session: StoredSession | null; expired: boolean } {
   const stored = readJSON('local', key());
-  if (!isStoredSession(stored)) return null;
-  // One that ran out is gone: the server would say so on the first call anyway.
+  if (!isStoredSession(stored)) return { session: null, expired: false };
+  // One that ran out is gone (the server would say so on the first call anyway), and the
+  // sign-in page says why, as it does when the server turns a session down.
   if (Date.parse(stored.expiresAt) <= Date.now()) {
     removeKey('local', key());
-    return null;
+    return { session: null, expired: true };
   }
-  return stored;
+  return { session: stored, expired: false };
 }
 
 let state: SessionState = { session: null, reason: 'none', note: null };
@@ -70,7 +72,8 @@ const listeners = new Set<() => void>();
 function ensureLoaded(): void {
   if (loaded) return;
   loaded = true;
-  state = { session: load(), reason: 'none', note: null };
+  const { session, expired } = load();
+  state = { session, reason: expired ? 'expired' : 'none', note: null };
 }
 
 function set(next: SessionState): void {
@@ -81,9 +84,9 @@ function set(next: SessionState): void {
 /** Another tab signed in or out: this one follows. */
 function onStorage(event: StorageEvent): void {
   if (event.key !== null && event.key !== key()) return;
-  const session = load();
+  const { session, expired } = load();
   if (session?.token === state.session?.token) return;
-  set({ session, reason: session ? 'none' : 'signedOut', note: null });
+  set({ session, reason: session ? 'none' : expired ? 'expired' : 'signedOut', note: null });
 }
 
 export const session = {

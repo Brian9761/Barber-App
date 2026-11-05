@@ -106,6 +106,18 @@ describe('signing in', () => {
     expect(JSON.stringify(localStorage)).not.toContain('the-owner-key-for-this-test');
   });
 
+  it('says this computer was signed out when its 30 days ran out while the page was closed', async () => {
+    localStorage.setItem(
+      'izzy.business.session.v1',
+      JSON.stringify({ token: 'x'.repeat(43), id: 'a', name: 'Chrome on Mac', createdAt: '2026-09-01T18:00:00Z', expiresAt: '2026-10-01T18:00:00Z' }),
+    );
+    const api = mockApi([]);
+    renderApp('/business/analytics');
+    expect((await screen.findByTestId('signed-out-line')).textContent).toContain('This computer was signed out.');
+    expect(screen.getByLabelText('6-digit code')).toBeTruthy();
+    expect(api.calls).toHaveLength(0);
+  });
+
   it('drops back to sign-in with a friendly line when the session was signed out from the iPhone', async () => {
     signedIn();
     mockApi([['GET /api/owner/*', apiError('unauthorized', "That owner key isn't right. Check it and sign in again.", 401)]]);

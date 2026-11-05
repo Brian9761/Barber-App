@@ -32,7 +32,11 @@ function SignedOutLine() {
   if (reason === 'expired') {
     return (
       <Notice tone="info" role="status" title="This computer was signed out." testId="signed-out-line">
-        <p>It was signed out from the iPhone app, or its 30 days ran out. To sign in again, get a new code in the app.</p>
+        <p>
+          {demo()
+            ? 'Its 30 days ran out. Open the demo again with the button below.'
+            : 'It was signed out from the iPhone app, or its 30 days ran out. To sign in again, get a new code in the app.'}
+        </p>
       </Notice>
     );
   }
