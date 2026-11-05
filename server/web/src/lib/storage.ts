@@ -232,6 +232,15 @@ export function carriedAppointments(now: Date = new Date()): CarriedAppointment[
     .filter((c) => ID_RE.test(c.id) && MANAGE_TOKEN_RE.test(c.manageToken) && Number.isFinite(c.until) && c.until > now.getTime());
 }
 
+/** Whether this browser has the cookie at all, whatever is in it (appointments that ran out, say). */
+function hasCarryCookie(): boolean {
+  try {
+    return (cookieDocument()?.cookie ?? '').split(/;\s*/).some((pair) => pair.startsWith(`${CARRY_COOKIE}=`));
+  } catch {
+    return false;
+  }
+}
+
 function writeCarried(list: CarriedAppointment[], now: Date): void {
   const doc = cookieDocument();
   if (!doc || isDemo()) return;
@@ -241,10 +250,13 @@ function writeCarried(list: CarriedAppointment[], now: Date): void {
     .slice(0, CARRY_MAX);
   const secure = doc.location?.protocol === 'https:' ? '; Secure' : '';
   const value = kept.map((c) => `${c.id}.${c.manageToken}.${Math.ceil(c.until / 1000).toString(36)}`).join('~');
+  // 60 days from now, but never past the moment its last appointment runs out (30 days after
+  // that appointment): the browser lets the cookie go then, even if the site isn't opened again.
+  const maxAge = kept.length > 0 ? Math.min(CARRY_MAX_AGE_DAYS * 86_400, Math.ceil((kept[0]!.until - now.getTime()) / 1000)) : 0;
   try {
     doc.cookie =
       kept.length > 0
-        ? `${CARRY_COOKIE}=${value}; Path=/; Max-Age=${CARRY_MAX_AGE_DAYS * 86_400}; SameSite=Strict${secure}`
+        ? `${CARRY_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; SameSite=Strict${secure}`
         : `${CARRY_COOKIE}=; Path=/; Max-Age=0; SameSite=Strict${secure}`;
   } catch {
     // Cookies are off: the app on the Home Screen starts with its own list instead.
@@ -263,11 +275,17 @@ export function carryAppointment(id: string, manageToken: string, end: string, n
  * Carries every appointment listed here, with those already carried: when the site opens, so the
  * cookie is fresh whenever someone adds the site to the Home Screen (Safari lets a cookie that
  * the page wrote last a week at most), and appointments booked before there was a cookie go too.
+ * Rewritten each time, so an appointment whose 30 days are up leaves the cookie itself, and a
+ * cookie with nothing left in it goes (the Privacy Policy: "each appointment in it is dropped
+ * 30 days after the appointment").
  */
 export function carryAppointments(list: SavedAppointment[], now: Date = new Date()): void {
   if (isDemo()) return;
   const carried = carriedAppointments(now);
-  if (list.length === 0 && carried.length === 0) return;
+  if (list.length === 0 && carried.length === 0) {
+    if (hasCarryCookie()) forgetCarried();
+    return;
+  }
   const listed = list
     .filter((s) => ID_RE.test(s.id) && MANAGE_TOKEN_RE.test(s.manageToken))
     .map((s) => ({ id: s.id, manageToken: s.manageToken, until: new Date(s.appointment.end).getTime() + KEEP_DAYS * 86_400_000 }))

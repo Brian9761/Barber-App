@@ -95,6 +95,46 @@ describe('carried into the app on the Home Screen', () => {
     document.cookie = `${CARRY_COOKIE}=not.a.token~${'x'.repeat(10)}; Path=/`;
     expect(carriedAppointments(NOW)).toEqual([]);
   });
+
+  it('clears the cookie itself once its last appointment’s 30 days are up, when the site next opens', () => {
+    const end = Date.parse(fixtureAppointment.end);
+    saveAppointment(fixtureAppointment, newToken(), NOW);
+    const later = new Date(end + 31 * DAY);
+    // Nothing reads it any more: the list let it go, and so does what's read from the cookie...
+    expect(loadAppointments(later)).toEqual([]);
+    expect(carriedAppointments(later)).toEqual([]);
+    // ...but its id and manage token were still in the cookie, sent with every request.
+    expect(cookieValue()).toContain(fixtureAppointment.id);
+    carryAppointments(loadAppointments(later), later); // main.tsx, when the site opens
+    expect(cookieValue()).toBeUndefined();
+  });
+
+  it('rewrites the cookie without the appointments that ran out, keeping the rest', () => {
+    const until = (date: string) => Math.ceil(Date.parse(date) / 1000).toString(36);
+    const [gone, kept] = [newToken(), newToken()];
+    document.cookie = `${CARRY_COOKIE}=appt-gone.${gone}.${until('2026-10-31T18:45:00Z')}~appt-kept.${kept}.${until('2026-12-03T18:45:00Z')}; Path=/`;
+    carryAppointments([], NOW);
+    expect(cookieValue()).toBe(`appt-kept.${kept}.${until('2026-12-03T18:45:00Z')}`);
+  });
+
+  it('lets the browser drop the cookie when its last appointment runs out, even if the site isn’t opened again', () => {
+    const written: string[] = [];
+    const cookie = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie')!;
+    const spy = vi.spyOn(Document.prototype, 'cookie', 'set').mockImplementation(function (this: Document, value: string) {
+      written.push(value);
+      cookie.set!.call(this, value);
+    });
+    try {
+      // Ends Nov 3 at 18:45: carried until Dec 3 at 18:45, 31 days and 1 hour 45 minutes from now.
+      saveAppointment(fixtureAppointment, newToken(), NOW);
+      expect(written.at(-1)).toContain(`; Max-Age=${31 * 86_400 + 6_300}; SameSite=Strict`);
+      // Ending in 50 days, its 30 days are up in 80: the cookie still lasts 60 days at most.
+      saveAppointment(appointment('appt-later', new Date(NOW.getTime() + 50 * DAY).toISOString()), newToken(), NOW);
+      expect(written.at(-1)).toContain(`; Max-Age=${60 * 86_400}; SameSite=Strict`);
+    } finally {
+      spy.mockRestore();
+    }
+  });
 });
 
 describe('the demo', () => {

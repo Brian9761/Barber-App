@@ -97,7 +97,7 @@ Once someone opens the demo, its service worker keeps opening it from its own co
 ## What the browser keeps
 
 - `localStorage` `izzy.appointments.v1`: each appointment booked here, with its manage token (what My appointments lists and cancels with), until 30 days after it ended. Not the client's name, number, email or note.
-- A cookie, `izzy_appointments`: the id and manage token of each of those appointments (ten at most, until 30 days after they ended), only so an app added to an iPhone's Home Screen can bring them in (see [The web app](#the-web-app)). The server never reads it; "Forget me" clears it.
+- A cookie, `izzy_appointments`: the id and manage token of each of those appointments (ten at most, until 30 days after they ended), only so an app added to an iPhone's Home Screen can bring them in (see [The web app](#the-web-app)). It's rewritten whenever the site opens, so an appointment whose 30 days are up leaves the cookie itself, and a cookie with nothing left goes; it lasts 60 days at most, and never past its last appointment's 30 days, so the browser drops it then even if the site isn't opened again. The server never reads it; "Forget me" clears it.
 - `localStorage` `izzy.details.v1`: name, number and email, only with "Remember me on this phone" (or computer).
 - `izzy.card.v1`: the card token, the card's brand and last four digits, and the number (E.164) of the client who added it, in `localStorage` with "Remember me", otherwise in `sessionStorage` until it's booked.
 - `sessionStorage`: the booking in progress (`izzy.booking.v1`, so a reload or the trip to Stripe's card page doesn't lose it), the card checkout in progress, the last booking for "You're booked", and whether this tab's visit is counted (`izzy.visitCounted.v1`).
