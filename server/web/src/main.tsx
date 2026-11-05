@@ -11,7 +11,7 @@ import './styles/app.css';
 import { App, ROUTER_FUTURE } from './App';
 import { CatalogProvider } from './data/catalog';
 import { isDemo } from './demo/mode';
-import { carryAppointments, forgetDemoLeftovers, loadAppointments } from './lib/storage';
+import { carryAppointments, forgetDemoLeftovers, loadAppointments, pruneAppointments } from './lib/storage';
 import { openOtherSitesOutside } from './pwa/externalLinks';
 import { listenForInstallPrompt } from './pwa/installPrompt';
 import { markStandalone } from './pwa/platform';
@@ -23,6 +23,8 @@ listenForInstallPrompt();
 markStandalone();
 openOtherSitesOutside();
 
+// Appointments that ended over 30 days ago go from this browser (the demo's too).
+pruneAppointments();
 if (!isDemo()) {
   // The real site, where the demo may have been before: the demo's bookings were never the shop's.
   forgetDemoLeftovers();

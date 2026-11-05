@@ -8,7 +8,7 @@
 // ticket, or on a new one after the panel was closed) can't record the sale twice.
 
 import type { Offering } from '../../api/types';
-import { readJSON, writeJSON } from '../../lib/storage';
+import { readJSON, removeKey, writeJSON } from '../../lib/storage';
 import { newToken } from '../../lib/tokens';
 import type { NewSale, NewSaleItem, OwnerAppointment, Product } from '../types';
 import { editableMoney, MAX_CENTS, moneyWithCommas, parseMoney, priceFromLabel } from './money';
@@ -60,6 +60,11 @@ export function lastBarber(): string | null {
 
 export function rememberBarber(barberId: string): void {
   writeJSON('local', LAST_BARBER_KEY, barberId);
+}
+
+/** "Reset the demo": the barber picked last goes too. */
+export function forgetLastBarber(): void {
+  removeKey('local', LAST_BARBER_KEY);
 }
 
 function withLine(ticket: Ticket, line: Omit<TicketLine, 'key'>): Ticket {

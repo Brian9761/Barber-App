@@ -13,6 +13,7 @@ import { parseUSPhone, toE164 } from '../lib/phone';
 import { dateTimeLabel, localDate, timeLabel } from '../lib/shopTime';
 import {
   cardValidOn,
+  clearPendingCheckout,
   forgetCard,
   loadAppointments,
   loadCardFor,
@@ -159,8 +160,10 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         navigate(STEP_PATHS.time, { state: { from: STEP_PATHS.review } });
         return;
       }
-      // Booked. With "Remember me" off the card goes too, like the name and number (the app does the same).
+      // Booked. With "Remember me" off the card goes too, like the name and number (the app does the same);
+      // and so does anything kept for coming back from Stripe's card page.
       if (!details.remember) forgetCard();
+      clearPendingCheckout();
       rememberLastBooked(confirmation.appointment.id);
       dispatch({ type: 'booked' });
       navigate('/book/confirmed', { replace: true, state: { appointment: confirmation.appointment, saved } });

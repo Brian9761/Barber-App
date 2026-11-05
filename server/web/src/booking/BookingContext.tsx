@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useReducer, type Dispatch, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { bookingReducer, EMPTY_DRAFT, loadDraft, previousStep, saveDraft, STEP_PATHS, type BookingAction, type BookingDraft, type Step } from './flow';
+import { bookingReducer, clearDraft, EMPTY_DRAFT, isEmptyDraft, loadDraft, previousStep, saveDraft, STEP_PATHS, type BookingAction, type BookingDraft, type Step } from './flow';
 
 interface BookingContextValue {
   draft: BookingDraft;
@@ -13,7 +13,9 @@ const BookingContext = createContext<BookingContextValue | null>(null);
 export function BookingProvider({ children, initial }: { children: ReactNode; initial?: BookingDraft }) {
   const [draft, dispatch] = useReducer(bookingReducer, initial, (given) => given ?? loadDraft() ?? EMPTY_DRAFT);
   useEffect(() => {
-    saveDraft(draft);
+    // Nothing picked (just booked, say): nothing kept, as the Privacy Policy says.
+    if (isEmptyDraft(draft)) clearDraft();
+    else saveDraft(draft);
   }, [draft]);
   return <BookingContext.Provider value={{ draft, dispatch }}>{children}</BookingContext.Provider>;
 }

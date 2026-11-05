@@ -135,6 +135,17 @@ function storeAppointments(list: SavedAppointment[]): boolean {
   );
 }
 
+/**
+ * When the site opens, the appointments that ended over 30 days ago go from this browser (nothing
+ * runs while the site is closed), as the Privacy Policy says: "30 days after each appointment".
+ */
+export function pruneAppointments(now: Date = new Date()): void {
+  const stored = readJSON('local', appointmentsKey());
+  if (!Array.isArray(stored)) return;
+  const kept = loadAppointments(now);
+  if (kept.length !== stored.length) storeAppointments(kept);
+}
+
 /** Keeps a booking with its manage token. False when this browser couldn't keep it. */
 export function saveAppointment(appointment: ListedAppointment, manageToken: string, now: Date = new Date()): boolean {
   const list = loadAppointments(now).filter((s) => s.id !== appointment.id);

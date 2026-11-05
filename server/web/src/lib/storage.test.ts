@@ -12,6 +12,7 @@ import {
   forgetAppointments,
   forgetDemoLeftovers,
   loadAppointments,
+  pruneAppointments,
   removeAppointment,
   saveAppointment,
 } from './storage';
@@ -116,5 +117,33 @@ describe('the demo', () => {
     forgetDemoLeftovers();
     expect(localStorage.getItem(DEMO_APPOINTMENTS_KEY)).toBeNull();
     expect(localStorage.getItem(DEMO_STORE_KEY)).toBeNull();
+  });
+});
+
+describe('when the site opens', () => {
+  it('lets the appointments that ended over 30 days ago go from this browser, as the Privacy Policy says', () => {
+    saveAppointment(appointment('old-1', '2026-10-01T18:45:00Z'), newToken(), NOW);
+    saveAppointment(appointment('recent-2', '2026-10-10T18:45:00Z'), newToken(), NOW);
+    // Kept as they were saved: the list is read with the old ones skipped, but they're still stored.
+    const stored = () => (JSON.parse(localStorage.getItem(APPOINTMENTS_KEY) ?? '[]') as { id: string }[]).map((s) => s.id);
+    const later = new Date('2026-11-05T17:00:00Z');
+    localStorage.setItem(
+      APPOINTMENTS_KEY,
+      JSON.stringify([...JSON.parse(localStorage.getItem(APPOINTMENTS_KEY) ?? '[]'), { id: 'junk' }]),
+    );
+    pruneAppointments(later);
+    // Oct 1 ended 35 days before Nov 5: gone. Oct 10 is 26 days back: kept. What isn't one goes too.
+    expect(stored()).toEqual(['recent-2']);
+    pruneAppointments(new Date('2026-11-20T17:00:00Z'));
+    expect(localStorage.getItem(APPOINTMENTS_KEY)).toBeNull();
+  });
+
+  it('leaves the list as it is when nothing has run out', () => {
+    saveAppointment(appointment('a-1'), newToken(), NOW);
+    const before = localStorage.getItem(APPOINTMENTS_KEY);
+    pruneAppointments(NOW);
+    expect(localStorage.getItem(APPOINTMENTS_KEY)).toBe(before);
+    pruneAppointments(NOW);
+    expect(localStorage.getItem(APPOINTMENTS_KEY)).toBe(before);
   });
 });

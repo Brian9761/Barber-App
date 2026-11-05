@@ -54,6 +54,11 @@ export const EMPTY_DRAFT: BookingDraft = {
   pending: null,
 };
 
+/** Nothing picked or typed yet (or any more, once booked). */
+export function isEmptyDraft(draft: BookingDraft): boolean {
+  return Object.values(draft).every((value) => value === null);
+}
+
 export function stepNumber(step: Step): number {
   return STEPS.indexOf(step) + 1;
 }

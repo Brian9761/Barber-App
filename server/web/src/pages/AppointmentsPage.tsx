@@ -14,6 +14,7 @@ import { DemoNotice } from '../demo/DemoNotice';
 import { isDemo } from '../demo/mode';
 import { cardLabel, durationLabel } from '../lib/format';
 import { useOnline } from '../pwa/connection';
+import { forgetInstallHint } from '../pwa/installHint';
 import { thisDevice, type DeviceWord } from '../pwa/platform';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { isCancellable, lateCancelWarning } from '../lib/lateCancel';
@@ -66,7 +67,8 @@ function remembersAnything(saved: SavedAppointment[]): boolean {
 /**
  * "Forget me on this computer": the name, number and email, the card, the booking in
  * progress and the appointments listed here. The appointments stay booked with the shop.
- * (In the demo, the bookings made in it go too: they only ever lived in this browser.)
+ * (In the demo, the bookings made in it go too: they only ever lived in this browser; and so
+ * does what the Add to Home Screen bar kept, so the demo leaves nothing of the visit behind.)
  */
 function forgetThisComputer(): void {
   forgetClient();
@@ -74,6 +76,7 @@ function forgetThisComputer(): void {
   clearDraft();
   forgetLastBooked();
   api.forgetHere();
+  if (isDemo()) forgetInstallHint();
 }
 
 /**

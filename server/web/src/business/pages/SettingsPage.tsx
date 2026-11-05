@@ -22,6 +22,7 @@ import { ErrorBanner, PageHeader, SkeletonCard, SuccessLine } from '../component
 import { useSignOut } from '../components/Frame';
 import { APP_NAME, demo, useBusinessTitle, useLoad } from '../hooks';
 import * as noShow from '../lib/noShow';
+import { forgetLastBarber } from '../lib/ticket';
 import { stripeReturnLine, stripeView } from '../lib/stripe';
 import { session, useSession } from '../session';
 import type { ComputerSession, NoShowSettings, StripeConnection } from '../types';
@@ -574,6 +575,8 @@ function DemoSection({ onReset, done }: { onReset: () => void; done: boolean }) 
     setBusy(true);
     try {
       await ownerApi.resetDemo();
+      // What the demo kept on this computer goes with it: the sample shop, and the barber picked last.
+      forgetLastBarber();
       onReset();
     } finally {
       setBusy(false);

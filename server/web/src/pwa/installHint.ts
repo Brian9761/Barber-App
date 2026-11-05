@@ -1,4 +1,4 @@
-import { readJSON, writeJSON } from '../lib/storage';
+import { readJSON, removeKey, writeJSON } from '../lib/storage';
 import type { Device } from './platform';
 
 // The small bar on phones: "Add Izzy Clipz to your Home Screen · How". It appears after the
@@ -55,4 +55,11 @@ export function showInstallHint(facts: HintFacts): boolean {
   if (facts.device === 'computer' || facts.standalone || facts.dismissed) return false;
   if (facts.pathname === '/app' || (facts.pathname.startsWith('/book') && facts.pathname !== '/book/confirmed')) return false;
   return facts.booked || facts.visits >= 2;
+}
+
+/** The demo's "Forget me": the bar's count of visits and whether it was closed go too (lib/storage.ts keeps the rest). */
+export function forgetInstallHint(): void {
+  removeKey('local', INSTALL_HINT_KEY);
+  removeKey('local', VISITS_KEY);
+  removeKey('session', VISIT_COUNTED_KEY);
 }

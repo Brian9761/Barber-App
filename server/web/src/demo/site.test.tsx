@@ -84,6 +84,24 @@ describe('My appointments in the demo', () => {
     const everything = JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }) + document.cookie;
     for (const detail of ['Private Person', '7605558271', 'private.person', 'gate code']) expect(everything, detail).not.toContain(detail);
   });
+
+  it('leaves nothing of the visit behind with “Forget me”: the Add to Home Screen bar’s count goes too', async () => {
+    await bookInDemo();
+    localStorage.setItem('izzy.visits.v1', '3');
+    localStorage.setItem('izzy.installHint.v1', JSON.stringify({ dismissed: true, at: '2026-11-04T20:00:00Z' }));
+    sessionStorage.setItem('izzy.visitCounted.v1', 'true');
+    sessionStorage.setItem('izzy.lastBooked.v1', JSON.stringify('x'));
+    localStorage.setItem('izzy.details.v1', JSON.stringify({ name: 'Private Person', phone: '(760) 555-8271', email: '' }));
+    renderApp('/appointments');
+    await screen.findByTestId('appointment-card');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    await screen.findByTestId('forgotten-notice');
+    // What the client side of the demo kept is all gone ("Reset the demo" does the same for Izzy Clipz Business).
+    expect(Object.keys(localStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
+    expect(Object.keys(sessionStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
+    expect(document.cookie).toBe('');
+  });
 });
 
 describe('Your details in the demo', () => {

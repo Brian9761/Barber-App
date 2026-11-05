@@ -105,8 +105,11 @@ describe('a card on file, on Stripe’s page', () => {
     expect(booking!.headers['x-card-token']).toBe(token);
     expect(isToken(booking!.headers['x-manage-token'])).toBe(true);
     expect(loadAppointments().map((s) => [s.id, s.manageToken])).toEqual([[created.appointment.id, created.manageToken]]);
-    // The booking is done: the next one starts fresh, without Ana's details.
-    expect(loadDraft()).toEqual(EMPTY_DRAFT);
+    // The booking is done: the next one starts fresh, and this tab keeps nothing of it, Ana's
+    // details and what coming back from Stripe needed included (as the Privacy Policy says).
+    expect(loadDraft()).toBeNull();
+    expect(sessionStorage.getItem('izzy.booking.v1')).toBeNull();
+    expect(loadPendingCheckout()).toBeNull();
     // "Remember me" was off: the card goes once it's booked, like the app.
     expect(loadCard()).toBeNull();
   });
