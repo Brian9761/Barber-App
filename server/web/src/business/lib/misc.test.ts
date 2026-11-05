@@ -13,6 +13,7 @@ import { compactMoney, editableMoney, moneyWithCommas, parseMoney, percent, pric
 import * as noShow from './noShow';
 import { stripeReturnLine, stripeView } from './stripe';
 import { blockTimeText } from '../pages/TodayPage';
+import { saleLine } from '../pages/today/SalesList';
 
 describe('amounts', () => {
   it('reads what the owner types', () => {
@@ -204,5 +205,16 @@ describe('time off on Today', () => {
     expect(blockTimeText(block('2026-11-05T05:00:00Z', '2026-11-05T09:00:00Z'), '2026-11-04', zone).replace(/\s/g, ' ')).toBe(
       'Wed, Nov 4 at 9 PM – Thu, Nov 5 at 1 AM',
     );
+  });
+});
+
+describe('what Void asks about a sale it only knows from its appointment', () => {
+  const zone = 'America/Los_Angeles';
+  const known = { id: 's', appointmentId: 'a', customerName: 'Luis Sample', totalCents: 125000 };
+
+  it('names the amount and how it was paid, in plain words, and nothing it can’t be sure of', () => {
+    expect(saleLine({ ...known, method: 'cash' }, zone, '2026-11-05')).toBe('Luis Sample: a $1,250 cash sale.');
+    expect(saleLine({ ...known, method: 'other' }, zone, '2026-11-05')).toBe('Luis Sample: a $1,250 sale paid another way.');
+    expect(saleLine({ ...known, method: 'card', customerName: null }, zone, null)).toBe('Walk-in: a $1,250 card sale.');
   });
 });

@@ -28,10 +28,16 @@ function isWholeSale(sale: SaleToVoid): sale is Sale {
   return 'items' in sale;
 }
 
-/** "Luis Sample: Haircut, sold by Izzy at 12:30 PM." (with the day when it was sold on another one). */
-function saleLine(sale: SaleToVoid, zone: string, day: string | null): string {
+/**
+ * "Luis Sample: Haircut, sold by Izzy at 12:30 PM." (with the day when it was sold on another one),
+ * or with only what the appointment knows: "Luis Sample: a $55 cash sale.", "… a $55 sale paid another way."
+ */
+export function saleLine(sale: SaleToVoid, zone: string, day: string | null): string {
   const who = sale.customerName ?? 'Walk-in';
-  if (!isWholeSale(sale)) return `${who}: a ${moneyWithCommas(sale.totalCents)} ${methodTitle(sale.method).toLowerCase()} sale.`;
+  if (!isWholeSale(sale)) {
+    const amount = moneyWithCommas(sale.totalCents);
+    return sale.method === 'other' ? `${who}: a ${amount} sale paid another way.` : `${who}: a ${amount} ${methodTitle(sale.method).toLowerCase()} sale.`;
+  }
   const soldAt = new Date(sale.soldAt);
   const when = day !== null && localDate(soldAt, zone) !== day ? `on ${dateTimeLabel(soldAt, zone)}` : `at ${timeLabel(soldAt, zone)}`;
   return `${who}: ${itemsSummary(sale)}, sold by ${sale.barberName} ${when}.`;
