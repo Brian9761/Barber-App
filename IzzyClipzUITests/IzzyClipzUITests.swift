@@ -1070,7 +1070,8 @@ final class IzzyClipzUITests: XCTestCase {
         openTab("Book", file: file, line: line)
         tap("bookService-haircut", file: file, line: line)
         tap("choose-\(Self.carlosHaircut)", file: file, line: line)
-        waitForTimes(file: file, line: line)
+        // The notice is checked before scrolling down to the times, so its screenshot shows it.
+        waitForPickedDay(file: file, line: line)
         if checkingTheTimeStepWarning {
             let warning = element("noShowWarning")
             XCTAssertTrue(warning.waitForExistence(timeout: 15), "No fee notice on Pick a day and time", file: file, line: line)
@@ -1130,16 +1131,16 @@ final class IzzyClipzUITests: XCTestCase {
             XCTFail("Unexpected time identifier \(identifier)", file: file, line: line)
             return nil
         }
-        let dayID = DateFormatter()
-        dayID.calendar = shopCalendar
-        dayID.timeZone = shopCalendar.timeZone
-        dayID.locale = Locale(identifier: "en_US_POSIX")
-        dayID.dateFormat = "'day-'yyyy-MM-dd"
+        // The picked day's heading, "Wednesday, November 4" (BookingCalendar.longLabel). Today's
+        // cell in the calendar can be off screen: scrolled past, or on another month's page.
+        let longDay = DateFormatter()
+        longDay.calendar = shopCalendar
+        longDay.timeZone = shopCalendar.timeZone
+        longDay.locale = Locale(identifier: "en_US_POSIX")
+        longDay.dateFormat = "EEEE, MMMM d"
         let now = Date()
         guard let start = shopCalendar.date(bySettingHour: hour, minute: minute, second: 0, of: now) else { return nil }
-        // Today's cell isn't on screen when the first open day is in another month.
-        let todayCell = element(dayID.string(from: now))
-        let isToday = todayCell.exists && todayCell.isSelected
+        let isToday = element("selectedDayLabel").label == longDay.string(from: now)
         let minutesAway = start.timeIntervalSince(now) / 60
         if isToday, abs(minutesAway - 60) < 1 { return nil }
         let expected = isToday && minutesAway < 60
@@ -1182,16 +1183,34 @@ final class IzzyClipzUITests: XCTestCase {
         }
     }
 
-    /// Waits for the day-and-time step to show a picked day with times.
+    /// Waits for the day-and-time step to show a picked day with times, scrolling down to them.
     private func waitForTimes(file: StaticString = #filePath, line: UInt = #line) {
+        waitForPickedDay(file: file, line: line)
+        XCTAssertTrue(revealFirstTime(), "The picked day has no times", file: file, line: line)
+    }
+
+    /// Waits for the day-and-time step to open with a day picked (the first day with times).
+    private func waitForPickedDay(file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element("continueToDetails").waitForExistence(timeout: 15), "The times didn't open", file: file, line: line)
         XCTAssertTrue(element("calendarMonthTitle").waitForExistence(timeout: 10), file: file, line: line)
         XCTAssertTrue(element("selectedDayLabel").waitForExistence(timeout: 20), "No day was picked to start with", file: file, line: line)
-        XCTAssertTrue(firstTime().waitForExistence(timeout: 20), "The picked day has no times", file: file, line: line)
     }
 
     private func firstTime() -> XCUIElement {
         app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "time-")).firstMatch
+    }
+
+    /// Scrolls down to the picked day's times, as a person would, until the first one is there,
+    /// and says whether it is. The times are a lazy grid that only makes the buttons near the
+    /// screen, and on a phone the fee notice (no-show protection) pushes them below it.
+    private func revealFirstTime(maxDrags: Int = 6) -> Bool {
+        let time = firstTime()
+        if time.waitForExistence(timeout: 3) { return true }
+        for _ in 0..<maxDrags {
+            drag(.up)
+            if time.waitForExistence(timeout: 2) { return true }
+        }
+        return time.waitForExistence(timeout: 10)
     }
 
     /// Picks the first day with open times at least `days` days after today in the shop, turning
@@ -1231,9 +1250,9 @@ final class IzzyClipzUITests: XCTestCase {
     /// Taps the earliest time on the picked day and returns its identifier.
     @discardableResult
     private func pickFirstTime(file: StaticString = #filePath, line: UInt = #line) -> String {
-        let time = firstTime()
-        XCTAssertTrue(time.waitForExistence(timeout: 20), "The picked day has no times", file: file, line: line)
-        let identifier = time.identifier
+        XCTAssertTrue(revealFirstTime(), "The picked day has no times", file: file, line: line)
+        let identifier = firstTime().identifier
+        let time = element(identifier)
         scroll(toReveal: time, file: file, line: line)
         time.tap()
         let next = element("continueToDetails")
