@@ -256,7 +256,7 @@ export function Footer() {
             <h2 className="globalfooter__heading">For the shop</h2>
             <ul className="globalfooter__list">
               <li>
-                <Link to="/business">Izzy Clipz Business</Link>
+                <Link to="/business/">Izzy Clipz Business</Link>
               </li>
               <li>
                 <a href={contact.instagram.url}>Instagram @{contact.instagram.handle}</a>

@@ -73,7 +73,7 @@ function GlobalBar({ signedIn, onSignOut }: { signedIn: boolean; onSignOut: () =
   return (
     <header className="biz-globalbar">
       <div className="container container--wide biz-globalbar__inner">
-        <Link to={signedIn ? '/business/today' : '/business'} className="biz-globalbar__home" aria-label={signedIn ? `${APP_NAME}: Today` : APP_NAME}>
+        <Link to={signedIn ? '/business/today' : '/business/'} className="biz-globalbar__home" aria-label={signedIn ? `${APP_NAME}: Today` : APP_NAME}>
           <Logo height={34} />
           <span className="biz-pill" aria-hidden="true">
             Business
@@ -131,13 +131,16 @@ function OfflineLine() {
 
 function DemoLine() {
   if (!demo()) return null;
+  // A region of its own (it sits between the nav and the page), named for screen readers' list of landmarks.
   return (
-    <p className="ribbon biz-demo-line" data-testid="biz-demo-notice">
-      <span className="container container--wide ribbon__text">
-        <Icon name="info" className="biz-demo-line__icon" />
-        {DEMO_LINE}
-      </span>
-    </p>
+    <section aria-label="Demo version">
+      <p className="ribbon biz-demo-line" data-testid="biz-demo-notice">
+        <span className="container container--wide ribbon__text">
+          <Icon name="info" className="biz-demo-line__icon" />
+          {DEMO_LINE}
+        </span>
+      </p>
+    </section>
   );
 }
 
