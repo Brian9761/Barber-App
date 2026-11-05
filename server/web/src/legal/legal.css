@@ -112,7 +112,11 @@
   letter-spacing: 0;
 }
 
-/* "To be added by the shop: …" in a draft: plainly a note, never mistaken for the policy's words. */
+/*
+ * "To be added by the shop: …" in a draft: plainly a note, never mistaken for the policy's words.
+ * Its padding and edge are only at its two ends (not repeated at each line break, where they'd
+ * stick out of the column on a narrow phone).
+ */
 .legal__placeholder {
   padding: 1px 6px;
   border: 1px dashed var(--color-warning-line);
@@ -120,8 +124,6 @@
   background: var(--color-warning-bg);
   color: var(--color-text);
   font-weight: 600;
-  -webkit-box-decoration-break: clone;
-  box-decoration-break: clone;
 }
 
 @media (forced-colors: active) {
