@@ -7,7 +7,8 @@
 //   service, product and custom items are services, products and other;
 // - a completed appointment with no live sale counts as its service, at its booked price,
 //   the day it started;
-// - a fee counts the day it was charged, for the appointment's barber;
+// - a fee counts the day it was charged, for the appointment's barber, however long after
+//   the visit that was (so every day that can hold appointments is looked at for fees);
 // - appointments count the day they start; open hours are each barber's opening hours on
 //   days up to today (the demo has no time off).
 
@@ -17,9 +18,6 @@ import { addDays, clockMinutes, localDate, weekdayOf, zonedInstant } from '../..
 import type { Analytics, AnalyticsQuery, Product } from '../../business/types';
 import { computeAnalytics, previousPeriod, seriesPeriods, type AnalyticsInput, type AppointmentFact, type MoneyFact, type SaleCountFact } from './analytics';
 import type { DayData } from './samples';
-
-/** How many days before the range a fee's appointment may have been (fees are charged after the visit). */
-const FEE_LOOKBACK_DAYS = 14;
 
 /**
  * Each barber's open minutes over `dates`: the shop's hours on each day up to and including
@@ -43,6 +41,11 @@ export interface FactsSource {
   catalog: Catalog;
   /** A shop day's appointments and sales. */
   day(date: string): DayData;
+  /**
+   * Every shop day that can hold appointments (the sample days and the days kept in the store):
+   * a fee charged today may be for a visit on any of them, weeks back.
+   */
+  days: readonly string[];
   /** The products as they are now (a product sold under another name shows its name now). */
   products: readonly Product[];
   now: Date;
@@ -77,9 +80,40 @@ export function demoAnalytics(source: FactsSource, query: AnalyticsQuery): Analy
     return fact;
   };
   const todayEnd = zonedInstant(addDays(today, 1), 0, zone)?.getTime() ?? Number.POSITIVE_INFINITY;
+  const days = new Map<string, DayData>();
+  const dayData = (date: string): DayData => {
+    let data = days.get(date);
+    if (!data) {
+      data = source.day(date);
+      days.set(date, data);
+    }
+    return data;
+  };
 
-  for (let date = addDays(previous.from, -FEE_LOOKBACK_DAYS); date <= query.to; date = addDays(date, 1)) {
-    const { appointments, sales } = source.day(date);
+  // Fees count the day Stripe charged them, whenever the visit was: every day that can hold
+  // appointments is looked at, not only the days in range (the server goes by
+  // payments.succeeded_at, whatever the appointment's date).
+  for (const date of new Set(source.days)) {
+    for (const appointment of dayData(date).appointments) {
+      const fee = appointment.noShowFee;
+      if (fee?.status !== 'charged') continue;
+      const feePeriod = periodOf(localDate(new Date(fee.chargedAt ?? appointment.start), zone));
+      if (feePeriod === null) continue;
+      money.push({
+        period: feePeriod,
+        barberId: appointment.barberId,
+        kind: 'fee',
+        visit: false,
+        itemId: null,
+        name: '',
+        count: 1,
+        cents: fee.amountCents,
+      });
+    }
+  }
+
+  for (let date = previous.from; date <= query.to; date = addDays(date, 1)) {
+    const { appointments, sales } = dayData(date);
     const period = periodOf(date);
 
     for (const sale of sales) {
@@ -110,26 +144,9 @@ export function demoAnalytics(source: FactsSource, query: AnalyticsQuery): Analy
       }
     }
 
+    if (period === null) continue;
     for (const appointment of appointments) {
-      // Fees count the day Stripe charged them.
       const fee = appointment.noShowFee;
-      if (fee?.status === 'charged') {
-        const chargedOn = localDate(new Date(fee.chargedAt ?? appointment.start), zone);
-        const feePeriod = periodOf(chargedOn);
-        if (feePeriod !== null) {
-          money.push({
-            period: feePeriod,
-            barberId: appointment.barberId,
-            kind: 'fee',
-            visit: false,
-            itemId: null,
-            name: '',
-            count: 1,
-            cents: fee.amountCents,
-          });
-        }
-      }
-      if (period === null) continue;
       // Marked Done without a checkout: the booked service at its booked price.
       if (appointment.status === 'completed' && appointment.sale === null) {
         money.push({

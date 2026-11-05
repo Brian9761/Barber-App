@@ -49,7 +49,7 @@ import { addDays, daysBetween, localDate, zonedInstant } from '../../lib/shopTim
 import { DEMO_BUSINESS_KEY, readJSON, removeKey, writeJSON } from '../../lib/storage';
 import { newToken } from '../../lib/tokens';
 import { demoAnalytics } from './facts';
-import { dayId, dayOfId, SAMPLE_PRODUCTS, sampleDay, type DayData, type DemoAppointment } from './samples';
+import { dayId, dayOfId, SAMPLE_PRODUCTS, sampleDay, sampleDays, type DayData, type DemoAppointment } from './samples';
 
 /** Where the Business demo keeps what's changed in it (this browser only). */
 export { DEMO_BUSINESS_KEY };
@@ -675,7 +675,17 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       if (query.barberId !== null && !catalog.barbers.some((b) => b.id === query.barberId)) throw invalid("That barber isn't on the team.");
       const store = load();
       signedIn(store);
-      return demoAnalytics({ catalog, day: (date) => day(store, date), products: products(store), now }, query);
+      return demoAnalytics(
+        {
+          catalog,
+          day: (date) => day(store, date),
+          // A fee charged now may be for any visit the demo holds: the sample days and the days kept.
+          days: [...sampleDays(shopToday), ...Object.keys(store.days)],
+          products: products(store),
+          now,
+        },
+        query,
+      );
     },
 
     async products(signal?: AbortSignal): Promise<Product[]> {

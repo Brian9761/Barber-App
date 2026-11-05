@@ -428,6 +428,47 @@ describe('analytics, with the definitions of docs/analytics.md, worked out by ha
     expect(year.series).toHaveLength(11);
   });
 
+  it('counts a fee the day it was charged, however long after the visit, in every period', async () => {
+    // Thursday, November 5 at 1:15 PM: an old no-show, weeks back, gets its fee charged now.
+    now = new Date('2026-11-05T21:15:00Z');
+    await api.connectStripe();
+    let old: OwnerAppointment | undefined;
+    for (let back = 56; back >= 15 && !old; back -= 1) {
+      const date = new Date(Date.parse('2026-11-05T12:00:00Z') - back * 86_400_000).toISOString().slice(0, 10);
+      old = (await api.appointments(date)).find((a) => a.status === 'noShow' && a.noShowFee?.status === 'none' && a.card && a.card.last4 !== '0002');
+    }
+    if (!old?.noShowFee) throw new Error('No old no-show with a fee to charge');
+    const fee = old.noShowFee.amountCents;
+    const periods = [
+      { from: '2026-11-05', to: '2026-11-05' }, // Today
+      { from: '2026-11-02', to: '2026-11-05' }, // This week
+      { from: '2026-11-01', to: '2026-11-05' }, // This month
+      { from: '2026-10-01', to: '2026-11-05' }, // A custom range that reaches back to October
+    ];
+    const feesOnNov5 = async () =>
+      Promise.all(
+        periods.map(async (range) => {
+          const a = await api.analytics({ ...range, barberId: null });
+          return a.series.find((s) => s.date === '2026-11-05')!.feesCents;
+        }),
+      );
+    const yearNovember = async () => (await api.analytics({ from: '2026-01-01', to: '2026-11-05', barberId: null })).series.find((s) => s.date === '2026-11')!;
+    const before = await feesOnNov5();
+    const novemberBefore = await yearNovember();
+
+    expect((await api.chargeFee(old.id)).noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-05T21:15:00Z' });
+
+    // The same day, the same fee, whichever period shows it.
+    expect((await feesOnNov5()).map((cents, i) => cents - before[i]!)).toEqual([fee, fee, fee, fee]);
+    expect((await yearNovember()).feesCents - novemberBefore.feesCents).toBe(fee);
+    const today = await api.analytics({ from: '2026-11-05', to: '2026-11-05', barberId: null });
+    expect(today.totals.feesCents).toBe(before[0]! + fee);
+    // For the barber of that appointment.
+    const his = await api.analytics({ from: '2026-11-05', to: '2026-11-05', barberId: old.barberId });
+    expect(his.totals.feesCents).toBeGreaterThanOrEqual(fee);
+    expect(today.leaderboard.find((e) => e.barberId === old!.barberId)!.salesCents).toBeGreaterThanOrEqual(fee);
+  });
+
   it('keeps a deleted product’s name, and turns down a range the server would', async () => {
     await api.createSale({ barberId: 'julian-ramos', method: 'cash', items: [{ kind: 'product', productId: POMADE.id }] }, newToken());
     await api.deleteProduct(POMADE.id);
