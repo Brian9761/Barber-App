@@ -267,7 +267,11 @@ async function markRemoved(db: Queryable, cardId: string, now: Date): Promise<vo
   );
 }
 
-async function markRequested(db: Queryable, cardId: string, now: Date): Promise<void> {
+/**
+ * The card can't book again, and the daily job deletes it at Stripe once no booking needs it. For
+ * DELETE /api/cards, the privacy tools, and a booking made without "Remember me" (booking.ts).
+ */
+export async function markRequested(db: Queryable, cardId: string, now: Date): Promise<void> {
   await db.query('UPDATE saved_cards SET delete_requested_at = COALESCE(delete_requested_at, $2) WHERE id = $1', [cardId, now]);
 }
 

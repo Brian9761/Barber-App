@@ -5,6 +5,7 @@ import type { Catalog, Offering } from './catalog.js';
 import { isOverlapConflict, type Queryable } from './db.js';
 import type { Deps } from './deps.js';
 import { ApiError } from './http.js';
+import { markRequested } from './retention.js';
 import type { AppointmentRow } from './serialize.js';
 import { addDays, addMinutes, dayBounds, localDate, wallClock, weekday } from './time.js';
 
@@ -103,6 +104,12 @@ export interface NewAppointment {
   idempotencyKey?: string | undefined;
   /** No-show protection: the card on file and the agreed policy (with its late-cancellation window). Stored only if the barber who gets it has a fee. */
   noShow?: NoShowTerms | null | undefined;
+  /**
+   * False when the client didn't ask to keep the card on file ("Remember me" off): it's marked for
+   * deletion with the booking, in the same transaction, so it books nothing else and the daily job
+   * deletes it once no booking needs it (like DELETE /api/cards). Customer bookings only.
+   */
+  keepCard?: boolean | undefined;
 }
 
 export const MAX_UPCOMING_PER_PHONE = 3;
@@ -294,5 +301,8 @@ async function insertAppointment(
   );
   const row = rows[0];
   if (!row) throw new Error('Insert returned no row');
+  // "Remember me" off: the card was for this booking only. Marked here, inside the booking's own
+  // transaction (and savepoint), so it can't be left saved by a connection lost after booking.
+  if (input.mode === 'customer' && input.noShow && input.keepCard === false) await markRequested(tx, input.noShow.card.id, now);
   return row;
 }

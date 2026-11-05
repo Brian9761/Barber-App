@@ -425,6 +425,89 @@ describe('DELETE /api/cards: the client removes their saved card', () => {
   });
 });
 
+describe('a booking made without “Remember me” (keepCard: false) is the only one its card is for', () => {
+  /** Books Flowxbori's haircut with the card saved under `token`, saying whether to keep the card. */
+  async function bookWith(token: string, keepCard: unknown, options: { start?: string; manageToken?: string; phone?: string } = {}) {
+    const policy = (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText;
+    return h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': token, ...(options.manageToken ? { 'x-manage-token': options.manageToken } : {}) },
+      body: {
+        offeringId: FLOW45,
+        start: options.start ?? TUE10,
+        customer: { name: 'Andre Sample', phone: options.phone ?? '4425550170' },
+        ...(typeof policy === 'string' ? { noShowPolicy: policy } : {}),
+        ...(keepCard === undefined ? {} : { keepCard }),
+      },
+      ip: '203.0.113.73',
+    });
+  }
+
+  it('marks the card for deletion in the booking itself, so a connection lost right after can’t leave it saved', async () => {
+    const token = await saveCard();
+    const manageToken = newManageToken();
+    const booked = await bookWith(token, false, { manageToken });
+    expect(booked.status, booked.text).toBe(201);
+    // No DELETE /api/cards was needed: the card is kept only while this booking needs it.
+    expect(await cardRow()).toMatchObject({ removed_at: null, delete_requested_at: new Date('2026-11-02T17:00:00Z') });
+    expect(stripeDeletes()).toEqual([]);
+    // The booking keeps its card and its terms, as any booking with a card on file.
+    expect(booked.body.appointment).toMatchObject({ card: { brand: 'visa', last4: '4242' }, noShowFee: { status: 'none' } });
+    // The answer was lost: the retry with the same manage token is the same booking.
+    const retry = await bookWith(token, false, { manageToken });
+    expect(retry.status).toBe(200);
+    expect(retry.body).toEqual(booked.body);
+    // It books nothing else.
+    const again = await bookWith(token, false, { start: '2026-11-04T18:00:00Z' });
+    expect(again.body.error).toEqual({ code: 'card_required', message: "We couldn't find your saved card. Add it again." });
+    // It can still be charged for this booking within the 7 days: the client didn't come…
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await setStatus(booked.body.appointment.id, 'noShow')).status).toBe(200);
+    h.setNow('2026-11-04T19:17:00Z');
+    expect((await cron()).body.savedCards).toEqual({ deleted: 0, stillNeeded: 1, failed: 0 });
+    expect((await h.call('POST', `/api/owner/appointments/${booked.body.appointment.id}/no-show-fee`, owner)).body.appointment.noShowFee.status).toBe('charged');
+    // …and then nothing needs it: the daily job deletes it at Stripe.
+    h.setNow('2026-11-05T19:17:00Z');
+    expect((await cron()).body.savedCards).toEqual({ deleted: 1, stillNeeded: 0, failed: 0 });
+    expect(stripeDeletes().map((c) => c.method)).toEqual(['paymentMethods.detach', 'customers.del']);
+  });
+
+  it('with “Remember me” (keepCard true, or left out as before), the card stays for later bookings', async () => {
+    const token = await saveCard();
+    expect((await bookWith(token, true)).status).toBe(201);
+    expect((await bookWith(token, undefined, { start: '2026-11-04T18:00:00Z' })).status).toBe(201);
+    expect((await cardRow()).delete_requested_at).toBeNull();
+    expect((await bookWith(token, false, { start: '2026-11-05T18:00:00Z' })).status).toBe(201);
+    expect((await cardRow()).delete_requested_at).toEqual(new Date('2026-11-02T17:00:00Z'));
+  });
+
+  it('a booking that doesn’t go through leaves the card as it was', async () => {
+    const taken = await saveCard();
+    expect((await bookWith(taken, undefined)).status).toBe(201);
+    const token = await saveCard('192.0.2.71');
+    const refused = await bookWith(token, false, { phone: '4425550171' });
+    expect(refused.status).toBe(409);
+    expect(refused.body.error.code).toBe('slot_taken');
+    const rows = (await h.database.pool.query('SELECT delete_requested_at FROM saved_cards ORDER BY created_at')).rows;
+    expect(rows.map((r) => r.delete_requested_at)).toEqual([null, null]);
+  });
+
+  it('keepCard is true or false', async () => {
+    const token = await saveCard();
+    const res = await bookWith(token, 'no');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toEqual({ code: 'invalid_request', message: 'keepCard must be true or false.' });
+  });
+
+  it('a booking that needs no card ignores it, as it ignores the card', async () => {
+    const token = await saveCard();
+    await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { enabled: false } });
+    const res = await bookWith(token, false);
+    expect(res.status, res.text).toBe(201);
+    expect(res.body.appointment.card).toBeNull();
+    expect((await cardRow()).delete_requested_at).toBeNull();
+  });
+});
+
 describe('the daily job deletes saved cards that are due', () => {
   it('expired: after its expiry month, once nothing needs it', async () => {
     await protectionOn(h);

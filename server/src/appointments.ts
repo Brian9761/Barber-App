@@ -75,6 +75,12 @@ const customerBooking = z.object({
   note: note.optional(),
   /** No-show protection: the policy text the client was shown and agreed to (from GET /api/no-show-policy). */
   noShowPolicy: z.string({ error: 'noShowPolicy must be text.' }).max(1200, { error: 'noShowPolicy is too long.' }).optional(),
+  /**
+   * The client's "Remember me" for the card on file (X-Card-Token): false when they didn't ask to
+   * keep it, so it's used for this booking only and deleted once no booking needs it. Left out,
+   * the card is kept, as before.
+   */
+  keepCard: z.boolean({ error: 'keepCard must be true or false.' }).optional(),
 });
 
 function preflight(ctx: Context, target: Target, start: Date, mode: 'customer' | 'shop'): void {
@@ -182,6 +188,7 @@ export async function postAppointment(ctx: Context): Promise<Response> {
       mode: 'customer',
       manageToken: token,
       noShow,
+      keepCard: body.keepCard,
     });
     return json({ appointment: customerAppointmentJSON(row), manageToken }, 201);
   } catch (error) {
