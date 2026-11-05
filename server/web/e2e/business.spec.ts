@@ -130,6 +130,7 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   // What + Product opens is in sight, never under the total and how they're paying.
   const pomade = panel.getByRole('button', { name: new RegExp(product.product.name.replace(/[()]/g, '\\$&')) });
   await expectInSight(pomade, 'the product to add');
+  await shot(page, testInfo, 'b12-checkout-products', { panel: true });
   await pomade.click();
   await expect(panel.getByTestId('ticket-total')).toHaveText('$53');
   await expectAccessible(page, 'checkout');
@@ -164,6 +165,7 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   await page.getByRole('radio', { name: 'Year' }).check();
   await expect(page.getByRole('heading', { name: 'Sales by month' })).toBeVisible();
   await expectAccessible(page, 'Analytics by month');
+  await shot(page, testInfo, 'b13-analytics-year');
 
   // Void it: the sale stops counting, and the appointment is unpaid again.
   await navLink(page, 'Today').click();

@@ -94,6 +94,7 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   await panel.getByRole('button', { name: '+ Product' }).click();
   // What + Product opens is in sight, above the total and how they're paying, never under them.
   await expectInSight(panel.getByRole('button', { name: /Sample pomade/ }), 'the first product');
+  await shot(page, testInfo, 'b13-checkout-products', { panel: true });
   await panel.getByRole('button', { name: /Sample pomade/ }).click();
   await expect(panel.getByRole('button', { name: '+ Product' })).toBeFocused();
   await expect(panel.getByTestId('ticket-total')).toHaveText('$63');
@@ -134,6 +135,7 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   await page.getByRole('radio', { name: 'Year' }).check();
   await expect(page.getByRole('heading', { name: 'Sales by month' })).toBeVisible();
   await expectAccessible(page, 'the demo’s Analytics by month');
+  await shot(page, testInfo, 'b15-analytics-year');
 
   // Void it: it stops counting as a sale; Ruben's appointment stays done, so it counts at its booked $45.
   await navLink(page, 'Today').click();
@@ -183,6 +185,7 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   await expect(refused).toContainText('Connect Stripe in Settings to take card payments.');
   await expect(refused).toBeFocused();
   await expectInSight(refused, 'why the fee wasn’t charged');
+  await shot(page, testInfo, 'b14-fee-refused', { panel: true });
   await refused.getByRole('link', { name: 'Go to Settings' }).click();
 
   await expect(page.getByTestId('stripe-status')).toContainText('Not connected');
