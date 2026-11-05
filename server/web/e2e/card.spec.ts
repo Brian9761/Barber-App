@@ -19,6 +19,39 @@ async function returnsToWebsite(request: APIRequestContext): Promise<boolean> {
   return ((await response.json()) as { web: boolean }).web;
 }
 
+interface CardState {
+  found: boolean;
+  deleteRequested: boolean;
+  removed: boolean;
+  deletedAtStripe: boolean;
+}
+
+/** What became of the card saved under `token`, at the server and at the stand-in for Stripe (serve.ts). */
+async function cardState(request: APIRequestContext, token: string): Promise<CardState> {
+  const response = await request.get(`/__e2e/card?token=${encodeURIComponent(token)}`);
+  expect(response.ok()).toBe(true);
+  return (await response.json()) as CardState;
+}
+
+/** The token of the card this browser keeps (with Remember me, or for this visit). */
+async function keptCardToken(page: Page): Promise<string> {
+  const token = await page.evaluate(() => {
+    const kept = window.localStorage.getItem('izzy.card.v1') ?? window.sessionStorage.getItem('izzy.card.v1');
+    return kept ? (JSON.parse(kept) as { token: string }).token : null;
+  });
+  expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  return token!;
+}
+
+/** Adds a card on the stand-in for Stripe's page, back at Review with it. */
+async function addCard(page: Page): Promise<void> {
+  await page.getByTestId('card-section').getByRole('button', { name: 'Add a card' }).click();
+  await expect(page.getByRole('heading', { name: 'Test card page' })).toBeVisible();
+  await page.getByRole('button', { name: 'Save card' }).click();
+  await expectStep(page, 5, 'Review and book');
+  await expect(page.getByTestId('card-label')).toHaveText('Visa •••• 4242');
+}
+
 /**
  * Carlos's haircut on the first open day next month (well outside the late-cancellation
  * window) for `name`, up to Review. Screenshots of the fee notice and of Review with `shots`.
@@ -107,13 +140,22 @@ test.describe('with no-show protection on', () => {
     await expectAccessible(page, 'step 5 with a card');
     await screenshot(page, testInfo, '24-book-5-review-card-added');
 
+    const token = await keptCardToken(page);
+    const deleted = page.waitForResponse((r) => r.url().endsWith('/api/cards') && r.request().method() === 'DELETE');
     await page.getByTestId('book-button').click();
     await expect(page.getByTestId('booked-title')).toHaveText("You're booked");
     await expect(page.getByTestId('booked-summary')).toContainText('Visa •••• 4242');
     await expect(page.getByTestId('booked-summary')).toContainText('Carlos');
     await screenshot(page, testInfo, '25-book-6-confirmed-with-card');
-    // "Remember me" was off: the card is gone from this browser once it's booked.
+    // "Remember me" was off: the card is gone from this browser once it's booked, and the shop is
+    // asked to delete it: it keeps it only while this booking can still be charged ("scheduled").
     expect(await page.evaluate(() => window.sessionStorage.getItem('izzy.card.v1') ?? window.localStorage.getItem('izzy.card.v1'))).toBeNull();
+    const answer = await deleted;
+    expect(answer.status()).toBe(200);
+    expect(await answer.json()).toEqual({
+      cardDeletion: { status: 'scheduled', message: 'Your card will be deleted as soon as your appointments no longer need it.' },
+    });
+    expect(await cardState(request, token)).toMatchObject({ found: true, deleteRequested: true, removed: false });
 
     await page.getByRole('link', { name: 'Manage or cancel' }).click();
     const card = page.getByTestId('appointment-card');
@@ -131,11 +173,12 @@ test.describe('with no-show protection on', () => {
     test.skip(!(await returnsToWebsite(request)), NO_WEB_RETURN);
     // Alex asks to be remembered and adds a card.
     await toReview(page, testInfo, { name: 'Alex Ames', phone, remember: true });
-    await page.getByTestId('card-section').getByRole('button', { name: 'Add a card' }).click();
-    await page.getByRole('button', { name: 'Save card' }).click();
-    await expect(page.getByTestId('card-label')).toHaveText('Visa •••• 4242');
+    await addCard(page);
+    const alexCard = await keptCardToken(page);
     await page.getByTestId('book-button').click();
     await expect(page.getByTestId('booked-title')).toHaveText("You're booked");
+    // Remembered: kept here, and at the shop.
+    expect(await cardState(request, alexCard)).toMatchObject({ found: true, deleteRequested: false, removed: false });
 
     // Bea, at the same computer: Alex's details are offered with "Not you?", and Alex's card isn't hers.
     await page.goto('/book?barber=carlos-rafael&service=haircut');
@@ -148,6 +191,11 @@ test.describe('with no-show protection on', () => {
     await page.getByRole('button', { name: 'Not you? Forget me on this computer' }).click();
     await expect(detailsFields(page).name).toHaveValue('');
     await expect(detailsFields(page).remember).not.toBeChecked();
+    // Alex's card is gone from here, and the shop deletes it once his appointment no longer needs it.
+    await expect(page.getByTestId('card-removal')).toHaveText(
+      'The shop will delete the saved card as soon as the appointments booked with it no longer need it.',
+    );
+    expect(await cardState(request, alexCard)).toMatchObject({ found: true, deleteRequested: true, removed: false });
     await screenshot(page, testInfo, '28-book-4-details-not-you');
     await fillDetails(page, { name: 'Bea Bell', phone: phone.replace(/\d$/, (d) => String((Number(d) + 1) % 10)) });
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -155,6 +203,46 @@ test.describe('with no-show protection on', () => {
     await expect(page.getByTestId('card-section')).toContainText('This time needs a card on file to hold it.');
     await expect(page.getByTestId('card-label')).toHaveCount(0);
     await expect(page.getByTestId('book-button')).toBeDisabled();
+  });
+});
+
+test.describe('removing a saved card', () => {
+  test.beforeAll(async ({ request }) => setProtection(request, true));
+  test.afterAll(async ({ request }) => setProtection(request, false));
+
+  test('“Forget me” deletes a card no booking needs, at Stripe too, and says so', async ({ page, phone, request }, testInfo) => {
+    test.skip(!(await returnsToWebsite(request)), NO_WEB_RETURN);
+    // Dana asks to be remembered and adds a card, then doesn't book after all.
+    await toReview(page, testInfo, { name: 'Dana Drew', phone, remember: true });
+    await addCard(page);
+    const token = await keptCardToken(page);
+    await page.goto('/appointments');
+    await page.getByRole('button', { name: /^Forget me on this (computer|phone)$/ }).click();
+    await expect(page.getByTestId('forget-dialog')).toContainText('The shop also deletes the saved card, as soon as no appointment needs it.');
+    await page.getByTestId('confirm-forget').click();
+    await expect(page.getByTestId('card-removal')).toHaveText("Your saved card is deleted. It can't be charged any more.");
+    expect(await page.evaluate(() => window.localStorage.getItem('izzy.card.v1') ?? window.sessionStorage.getItem('izzy.card.v1'))).toBeNull();
+    expect(await cardState(request, token)).toMatchObject({ found: true, removed: true, deletedAtStripe: true });
+    await expectAccessible(page, 'My appointments after Forget me');
+    await screenshot(page, testInfo, '29-appointments-forget-me-card-deleted');
+  });
+
+  test('“Forget me” forgets the card here even when the shop can’t be reached, and says to call', async ({ page, phone, request, browserConsole }, testInfo) => {
+    test.skip(!(await returnsToWebsite(request)), NO_WEB_RETURN);
+    browserConsole.allow(/Failed to load resource|ERR_FAILED/);
+    await toReview(page, testInfo, { name: 'Evan Ellis', phone, remember: true });
+    await addCard(page);
+    const token = await keptCardToken(page);
+    await page.route('**/api/cards', (route) => (route.request().method() === 'DELETE' ? route.abort('failed') : route.fallback()));
+    await page.goto('/appointments');
+    await page.getByRole('button', { name: /^Forget me on this (computer|phone)$/ }).click();
+    await page.getByTestId('confirm-forget').click();
+    await expect(page.getByTestId('card-removal')).toHaveText(
+      "We couldn't reach the shop to delete your saved card. To have it removed, call the shop at (442) 341-3053.",
+    );
+    expect(await page.evaluate(() => window.localStorage.getItem('izzy.card.v1') ?? window.sessionStorage.getItem('izzy.card.v1'))).toBeNull();
+    // The shop still has it, as the page says.
+    expect(await cardState(request, token)).toMatchObject({ found: true, deleteRequested: false, removed: false });
   });
 });
 

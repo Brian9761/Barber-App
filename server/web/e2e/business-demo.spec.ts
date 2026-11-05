@@ -11,9 +11,12 @@ import { expect, expectAccessible, isPhone, test } from './support.js';
 //
 // The clock is Wednesday, November 4, 2026 at 12:30 PM in Oceanside, so the sample shop is
 // the same every run: the morning's appointments are over (most checked out), Kim Sample's
-// 12 PM haircut has started, and the afternoon is still to come.
+// 12 PM haircut has started (it ends at 12:45; the test moves the clock on to 12:50 for her
+// no-show), and the afternoon is still to come.
 
 const NOON_THIRTY = new Date('2026-11-04T20:30:00Z');
+/** Once Kim Sample's 12 PM haircut (12 to 12:45) is over. */
+const TWELVE_FIFTY = new Date('2026-11-04T20:50:00Z');
 const DEMO_LINE = 'Demo version: sample data, nothing is sent anywhere.';
 
 /** Every request for /api this browser makes, from the pages and the service worker. */
@@ -169,8 +172,18 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   await expect(panel.getByTestId('detail-badges')).toContainText('Booked');
   await panel.getByRole('button', { name: 'Close' }).click();
 
-  // Kim didn't come to her 12 PM haircut: a no-show, and her card on file charged the agreed fee,
-  // once Stripe is connected (the demo pretends that step).
+  // Kim's 12 PM haircut has a card on file, so it can be marked a no-show only once it has ended,
+  // at 12:45: she may still come.
+  await appointment(page, 'Kim Sample').click();
+  await expect(panel.getByRole('button', { name: 'Mark no-show' })).toHaveCount(0);
+  await expect(panel.getByTestId('status-hint')).toContainText(
+    "You can mark a no-show once the appointment ends at 12:45 PM. A client who comes before then isn't a no-show.",
+  );
+  await panel.getByRole('button', { name: 'Close' }).click();
+  // At 12:50 she hasn't come: a no-show, and her card on file charged the agreed fee, once Stripe
+  // is connected (the demo pretends that step).
+  await page.clock.setFixedTime(TWELVE_FIFTY);
+  await page.reload();
   await appointment(page, 'Kim Sample').click();
   await panel.getByRole('button', { name: 'Mark no-show' }).click();
   await expect(panel.getByTestId('detail-badges')).toContainText('No-show');

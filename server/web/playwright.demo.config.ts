@@ -5,8 +5,9 @@ import { defineConfig } from '@playwright/test';
 // e2e/serve-demo.ts, with no API at all. The web app's tests (pwa.spec.ts) run
 // here as well as on the site with the real API, and the demo's own
 // (demo.spec.ts): booking and cancelling without a single request to /api;
-// Izzy Clipz Business's (business-demo.spec.ts), also without one; and the legal
-// pages and what they say the website does (legal.spec.ts), as on the real site.
+// Izzy Clipz Business's (business-demo.spec.ts), also without one; the legal
+// pages and what they say the website does (legal.spec.ts), as on the real site;
+// and the fee rules the Cancellation & No-Show Policy promises (fees.spec.ts).
 // Screenshots go to E2E_SHOTS_DIR (default test-results/shots), named
 // demo-desktop-… and demo-phone-….
 
@@ -15,7 +16,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: 'e2e',
-  testMatch: ['pwa.spec.ts', 'demo.spec.ts', 'business-demo.spec.ts', 'legal.spec.ts'],
+  testMatch: ['pwa.spec.ts', 'demo.spec.ts', 'business-demo.spec.ts', 'legal.spec.ts', 'fees.spec.ts'],
   outputDir: process.env.E2E_OUTPUT_DIR || 'test-results/demo',
   fullyParallel: false,
   workers: 1,
