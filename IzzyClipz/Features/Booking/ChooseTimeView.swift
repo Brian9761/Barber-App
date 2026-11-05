@@ -493,6 +493,10 @@ private struct ChooseTimeGroupView: View {
                     }
                 }
             }
+            // A new grid when the times change (a reload after a time was taken): on iOS 26 a lazy
+            // grid can keep a removed time's button out of sight, where VoiceOver and UI tests
+            // still find it.
+            .id(group.slots.map(\.start))
         }
     }
 }
