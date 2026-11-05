@@ -1082,6 +1082,14 @@
   list-style: none;
 }
 
+/* A page that couldn't be drawn (its script didn't download): what happened, and Try again. */
+.page-failed__inner {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-5);
+  text-align: center;
+}
+
 /* "Not you, or on a shared computer?" under My appointments */
 .forget-computer {
   display: grid;

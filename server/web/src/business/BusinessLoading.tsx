@@ -1,3 +1,4 @@
+import { PageLoadFailed } from '../components/PageError';
 import { Loading } from '../components/ui';
 
 /**
@@ -13,6 +14,18 @@ export function BusinessLoading() {
         <div className="container container--wide biz-page-loading">
           <Loading text="Opening Izzy Clipz Business…" />
         </div>
+      </main>
+    </>
+  );
+}
+
+/** When Izzy Clipz Business's own code couldn't be downloaded: its black bar, and what to do. */
+export function BusinessLoadFailed({ onRetry }: { onRetry: () => void }) {
+  return (
+    <>
+      <div className="biz-globalbar biz-globalbar--loading" aria-hidden="true" />
+      <main id="main" tabIndex={-1} className="biz-main">
+        <PageLoadFailed onRetry={onRetry} />
       </main>
     </>
   );

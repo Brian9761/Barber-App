@@ -1,8 +1,9 @@
 import { lazy, Suspense } from 'react';
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes, useLocation } from 'react-router-dom';
 import { BookingRoutes } from './booking/BookingRoutes';
-import { BusinessLoading } from './business/BusinessLoading';
+import { BusinessLoadFailed, BusinessLoading } from './business/BusinessLoading';
 import { Layout } from './components/Layout';
+import { PageErrorBoundary } from './components/PageError';
 import { Loading } from './components/ui';
 import { LEGAL_DOCUMENTS, type LegalDocumentId } from './legal/documents';
 import { AppointmentsPage } from './pages/AppointmentsPage';
@@ -45,18 +46,26 @@ function Legal({ id }: { id: LegalDocumentId }) {
  */
 export const ROUTER_FUTURE = { v7_startTransition: false, v7_relativeSplatPath: true } as const;
 
-/** The site's pages (the legal ones too), all under the global nav and footer; and Izzy Clipz Business, under its own. */
+/** Izzy Clipz Business, once its code has loaded; and if it couldn't be downloaded, a page that says so. */
+function Business() {
+  const { pathname } = useLocation();
+  return (
+    <PageErrorBoundary resetKey={pathname} fallback={(retry) => <BusinessLoadFailed onRetry={retry} />}>
+      <Suspense fallback={<BusinessLoading />}>
+        <BusinessApp />
+      </Suspense>
+    </PageErrorBoundary>
+  );
+}
+
+/**
+ * The site's pages (the legal ones too), all under the global nav and footer, where a page that
+ * can't be drawn says so (components/PageError.tsx); and Izzy Clipz Business, under its own.
+ */
 export function App() {
   return (
     <Routes>
-      <Route
-        path="business/*"
-        element={
-          <Suspense fallback={<BusinessLoading />}>
-            <BusinessApp />
-          </Suspense>
-        }
-      />
+      <Route path="business/*" element={<Business />} />
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="services" element={<ServicesPage />} />

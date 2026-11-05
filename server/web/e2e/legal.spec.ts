@@ -168,6 +168,33 @@ test('the legal pages open offline once the app is kept on this device', async (
   }
 });
 
+test.describe('without the app kept on this device', () => {
+  // No service worker: the legal pages' own script is downloaded when one is opened.
+  test.use({ serviceWorkers: 'block' });
+
+  test('a legal page whose script doesn’t download says so under the nav, with Try again, instead of a blank screen', async ({
+    page,
+    browserConsole,
+  }, testInfo) => {
+    browserConsole.allow(/Failed to load resource|dynamically imported module|Importing a module script failed/);
+    const script = /\/assets\/LegalPage-[^/]+\.js$/;
+    await page.route(script, (route) => route.fulfill({ status: 404, contentType: 'text/plain', body: 'Not found' }));
+    await page.goto('/services');
+    await page.getByRole('contentinfo').getByRole('link', { name: 'Privacy Policy' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: "This page didn't load." })).toBeVisible();
+    await expect(page.getByText('Check your connection and try again.')).toBeVisible();
+    // The rest of the site is still there.
+    await expect(page.getByRole('navigation', { name: 'Izzy Clipz' })).toBeVisible();
+    await expect(page.getByRole('contentinfo').getByRole('navigation', { name: 'Legal' })).toBeVisible();
+    await expectAccessible(page, 'a page whose script didn’t download');
+    await view(page, testInfo, 'legal-12-page-did-not-load');
+    // Once it can be downloaded, Try again opens the page.
+    await page.unroute(script);
+    await page.getByRole('button', { name: 'Try again' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible();
+  });
+});
+
 test('booking says what it agrees to right above Book appointment, the fee notice links its policy, and Your details says where the details go', async ({
   page,
   phone,

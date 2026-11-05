@@ -9,6 +9,7 @@ import { UpdateBar } from '../pwa/UpdateBar';
 import { hoursSummary } from '../lib/shopTime';
 import { Icon } from './Icon';
 import { Logo } from './Logo';
+import { PageErrorBoundary, PageLoadFailed } from './PageError';
 import { CallLink } from './ui';
 
 const NAV_LINKS = [
@@ -54,7 +55,10 @@ export function Layout() {
         <InstallHint />
       </div>
       <main id="main" tabIndex={-1} ref={mainRef}>
-        <Outlet />
+        {/* A page that can't be drawn (its script didn't download) says so here, under the nav. */}
+        <PageErrorBoundary resetKey={pathname} fallback={(retry) => <PageLoadFailed onRetry={retry} />}>
+          <Outlet />
+        </PageErrorBoundary>
       </main>
       <Footer />
       <UpdateBar />
