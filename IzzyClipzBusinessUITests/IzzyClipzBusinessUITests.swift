@@ -634,16 +634,19 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("noShowSettingsProblem"), containing: "Pick a flat fee from $0.50 to $500."))
         tap("saveNoShowSettings")
         XCTAssertTrue(waitForLabel(reveal("noShowSaveError"), containing: "Pick a flat fee from $0.50 to $500."))
-        // $25 for every booking: both messages go as soon as it's fixed.
+        // $25 for every booking: both messages go as soon as it's fixed, before any Save.
         reveal("noShowFlatAmount", searchingFirst: .up)
         replaceText(in: "noShowFlatAmount", with: "25")
         XCTAssertTrue(waitForDisappearance(of: element("noShowSettingsProblem")))
-        XCTAssertTrue(waitForDisappearance(of: element("noShowSaveError")), "The old Save message goes with the fix")
         closeKeyboard()
         XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $25"))
         let warning = reveal("noShowClientWarning")
         XCTAssertTrue(waitForLabel(warning, containing: "Late Cancellation & No-Show Fee"), "Got: \(warning.label)")
         XCTAssertTrue(warning.label.contains("is charged $25."), "Got: \(warning.label)")
+        // The Save message sits just above Stripe's costs. It's looked for with those on screen:
+        // under the keyboard, a busy simulator kept reporting it there after it had gone.
+        reveal("noShowCosts")
+        XCTAssertTrue(waitForDisappearance(of: element("noShowSaveError")), "The old Save message goes with the fix")
         tap("saveNoShowSettings")
         XCTAssertTrue(reveal("noShowSaved").exists, "Saved to the server")
         screenshot("O32-No-Show-Settings-Saved")

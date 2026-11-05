@@ -1349,7 +1349,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(tab.waitForExistence(timeout: 10), "Missing tab \(name)", file: file, line: line)
         guard !tab.isSelected else { return }
         tab.tap()
-        if !waitUntil(tab, toMatch: selected()), !tab.isSelected {
+        if !waitUntil(tab, toMatch: selected(), timeout: 10), !tab.isSelected {
             // Slow simulators occasionally drop a tap.
             tab.tap()
         }
@@ -1472,6 +1472,7 @@ final class IzzyClipzUITests: XCTestCase {
     /// the screen scroll down.
     private func scroll(toReveal target: XCUIElement, maxDrags: Int = 16, file: StaticString = #filePath, line: UInt = #line) {
         var drags = 0
+        var stillDrags = 0
         while drags < maxDrags, !isComfortablyVisible(target) {
             let before: CGRect? = target.exists ? target.frame : nil
             if let before = before, before.midY < app.frame.minY + app.frame.height * 0.25 {
@@ -1481,8 +1482,12 @@ final class IzzyClipzUITests: XCTestCase {
             }
             drags += 1
             if let before = before, target.exists, target.frame == before {
-                // The page can't scroll any further.
-                break
+                // The page didn't move: it can't scroll any further, or a busy simulator dropped
+                // the drag (as one did right after launch). Twice in a row is the end of the page.
+                stillDrags += 1
+                if stillDrags == 2 { break }
+            } else {
+                stillDrags = 0
             }
         }
         XCTAssertTrue(target.exists && target.isHittable, "Couldn't scroll to \(target)", file: file, line: line)
@@ -1528,7 +1533,9 @@ final class IzzyClipzUITests: XCTestCase {
         NSPredicate(format: "isHittable == true")
     }
 
-    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 10) -> Bool {
+    /// Waits for what's on screen to match. The default is long because a busy simulator can take
+    /// seconds to answer each look at the screen; a match ends the wait straight away.
+    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 20) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
@@ -1544,13 +1551,13 @@ final class IzzyClipzUITests: XCTestCase {
     ) {
         XCTAssertTrue(button.waitForExistence(timeout: 10), "Missing \(button)", file: file, line: line)
         button.tap()
-        if !waitForDisappearance(of: gone), gone.exists, button.exists {
+        if !waitForDisappearance(of: gone, timeout: 10), gone.exists, button.exists {
             button.tap()
         }
         XCTAssertTrue(waitForDisappearance(of: gone), message, file: file, line: line)
     }
 
-    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 20) -> Bool {
         waitUntil(element, toMatch: NSPredicate(format: "exists == false"), timeout: timeout)
     }
 
