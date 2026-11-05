@@ -279,6 +279,17 @@ export class FakeStripe implements StripeClient {
       const limit = params.limit ?? 10;
       return { object: 'list', url: '/v1/payment_intents', data: all.slice(0, limit), has_more: all.length > limit } as Stripe.ApiList<Stripe.PaymentIntent>;
     },
+    // Like Stripe: only on the account it was made on; receipt_email can be set after it succeeded (Stripe then emails a receipt).
+    update: async (id: string, params: Stripe.PaymentIntentUpdateParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'paymentIntents.update', params: { id, ...params }, options });
+      this.maybeFail();
+      const intent = this.intents.get(id);
+      if (!intent || !this.visible(id, options)) {
+        throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'intent', statusCode: 404 }, `No such payment_intent: '${id}'`);
+      }
+      if (params.receipt_email !== undefined) Object.assign(intent, { receipt_email: params.receipt_email || null });
+      return intent;
+    },
     retrieve: async (id: string, params?: Stripe.PaymentIntentRetrieveParams, options?: Stripe.RequestOptions) => {
       this.calls.push({ method: 'paymentIntents.retrieve', params: id, options });
       this.maybeFail();

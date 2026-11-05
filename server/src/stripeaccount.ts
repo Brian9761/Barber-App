@@ -364,7 +364,7 @@ export function stripeFailure(deps: Pick<Deps, 'log'>, error: unknown, what: Str
     message: redactSecrets(e.message),
   });
   const missing = e.code === 'resource_missing' || e.statusCode === 404;
-  if ((what === 'retrieve payment' || what === 'retrieve no-show fee') && missing) {
+  if ((what === 'retrieve payment' || what === 'retrieve no-show fee' || what === 'send receipt') && missing) {
     return new ApiError('not_found', "Stripe doesn't know that payment.");
   }
   if (what === 'retrieve card checkout' && missing) {

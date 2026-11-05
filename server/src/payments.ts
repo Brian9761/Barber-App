@@ -84,7 +84,14 @@ export async function connectionToken(ctx: Context): Promise<Response> {
   }
 }
 
-// POST /api/owner/payments { amountCents, description?, appointmentId?, receiptEmail?, sale? }
+// POST /api/owner/payments { amountCents, description?, appointmentId?, sale? }
+//
+// No email before the card payment: California's Song-Beverly Credit Card Act (Civil Code
+// §1747.08) bars asking for personal details recorded with a card payment, so the receipt is
+// offered once the payment went through (POST /api/owner/payments/:id/receipt), and the address
+// goes to Stripe only. An older app still sending `receiptEmail` gets a 400 saying so.
+
+export const RECEIPT_AFTER_PAYMENT_MESSAGE = "Take the card payment without an email. Once it goes through, you can email the client a receipt.";
 
 const paymentBody = z.object({
   amountCents: z
@@ -101,6 +108,7 @@ const paymentBody = z.object({
     })
     .refine((v) => v === null || charLength(v) <= 200, { error: 'Keep the note to 200 characters or fewer.' }),
   appointmentId: z.string({ error: 'appointmentId must be an appointment id.' }).nullish(),
+  /** Refused (a 400) when it's an address: the receipt is offered after the payment. Empty or null is ignored. */
   receiptEmail: email.optional(),
   /** A checkout's ticket (sales.ts): recorded as a card sale once this payment succeeds. */
   sale: cardSaleBody.optional(),
@@ -111,6 +119,7 @@ export async function createPayment(ctx: Context): Promise<Response> {
   await requireOwner(ctx, { keyOnly: true });
   const shop = await shopStripe(ctx.deps);
   const body = parse(paymentBody, await readJsonObject(ctx.request));
+  if (body.receiptEmail) throw new ApiError('invalid_request', RECEIPT_AFTER_PAYMENT_MESSAGE);
   const draft = body.sale ? await cardSaleDraft(ctx.deps.db, ctx.deps.catalog, body.sale, body) : null;
   const appointmentId = draft ? draft.appointmentId : (body.appointmentId ?? null);
   // A checkout's ticket has already found its appointment.
@@ -131,7 +140,6 @@ export async function createPayment(ctx: Context): Promise<Response> {
         allowed_payment_method_types: ['card_present'],
         capture_method: 'automatic',
         ...(body.description ? { description: body.description } : {}),
-        ...(body.receiptEmail ? { receipt_email: body.receiptEmail } : {}),
         metadata: { source: 'izzy-clipz-business', ...(appointmentId ? { appointment_id: appointmentId } : {}) },
       },
       requestOptions(shop),
@@ -146,19 +154,9 @@ export async function createPayment(ctx: Context): Promise<Response> {
   // another; and with the checkout's ticket, recorded as a sale once the payment succeeds.
   await ctx.deps.db.query(
     `INSERT INTO payments (id, amount_cents, description, appointment_id, status, receipt_email, created_at, updated_at, stripe_account_id, sale_draft)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9::jsonb)
+     VALUES ($1, $2, $3, $4, $5, NULL, $6, $6, $7, $8::jsonb)
      ON CONFLICT (id) DO NOTHING`,
-    [
-      intent.id,
-      body.amountCents,
-      body.description,
-      appointmentId,
-      intent.status,
-      body.receiptEmail ?? null,
-      now,
-      shop.stripeAccount ?? null,
-      draft ? JSON.stringify(draft) : null,
-    ],
+    [intent.id, body.amountCents, body.description, appointmentId, intent.status, now, shop.stripeAccount ?? null, draft ? JSON.stringify(draft) : null],
   );
   return json({ paymentIntentId: intent.id, clientSecret: intent.client_secret }, 201);
 }
@@ -252,6 +250,59 @@ export async function completePayment(ctx: Context): Promise<Response> {
   if (!row) throw notFound();
   // `status` is Stripe's: "succeeded" means the money is in. Anything else is not paid (yet).
   return json({ payment: paymentJSON(row) });
+}
+
+// POST /api/owner/payments/:id/receipt { email } — the owner key only, like taking the payment.
+//
+// After an in-person card payment went through, staff may offer an email receipt. The address is
+// set on the PaymentIntent at Stripe, on the account the payment was made on, and Stripe emails
+// the receipt (Stripe: "To trigger an automatic email receipt after the customer checks out,
+// update the PaymentIntent's receipt_email"). This server never stores the address, and never
+// logs it (Stripe's own error messages can quote it, so they're left out of the log).
+
+const receiptBody = z.object({ email });
+
+export async function sendPaymentReceipt(ctx: Context): Promise<Response> {
+  await requireOwner(ctx, { keyOnly: true });
+  if (stripeSetup(ctx.deps.config) === 'off') throw stripeOff();
+  const id = ctx.params.id ?? '';
+  const notFound = () => new ApiError('not_found', "We couldn't find that payment.");
+  if (!/^pi_[A-Za-z0-9_]+$/.test(id)) throw notFound();
+  const { email: address } = parse(receiptBody, await readJsonObject(ctx.request));
+  if (!address) throw new ApiError('invalid_request', "Enter the client's email address.");
+  const { rows } = await ctx.deps.db.query<{ kind: string; status: string; stripe_account_id: string | null }>(
+    'SELECT kind, status, stripe_account_id FROM payments WHERE id = $1',
+    [id],
+  );
+  const payment = rows[0];
+  if (!payment) throw notFound();
+  if (payment.kind !== 'in_person') throw new ApiError('invalid_request', 'Receipts are sent only for card payments taken at the shop.');
+  if (payment.status !== 'succeeded') {
+    throw new ApiError('invalid_request', "This payment hasn't gone through, so there's no receipt to send yet.");
+  }
+  const shop = await shopStripe(ctx.deps, { account: payment.stripe_account_id });
+  try {
+    await shop.stripe.paymentIntents.update(id, { receipt_email: address }, requestOptions(shop));
+  } catch (error) {
+    const e = (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
+    // Logged without the message of a request Stripe turned down, which may quote the address.
+    const logged = {
+      type: e.type,
+      code: e.code,
+      param: e.param,
+      statusCode: e.statusCode,
+      requestId: e.requestId,
+      message: e.type === 'StripeInvalidRequestError' ? undefined : e.message,
+    };
+    if (e.type === 'StripeInvalidRequestError' && e.param === 'receipt_email') {
+      stripeFailure(ctx.deps, logged, 'send receipt');
+      throw new ApiError('invalid_request', "Stripe didn't accept that email address. Check it and try again.");
+    }
+    throw stripeFailure(ctx.deps, logged, 'send receipt');
+  }
+  const { rows: current } = await ctx.deps.db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [id]);
+  if (!current[0]) throw notFound();
+  return json({ payment: paymentJSON(current[0]) });
 }
 
 // GET /api/owner/payments?date=YYYY-MM-DD — payments started that shop-local day, newest first.

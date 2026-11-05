@@ -85,6 +85,7 @@ describe('owner auth for every owner route (the router’s own list)', () => {
     'DELETE /api/owner/stripe/connect',
     'POST /api/owner/terminal/connection-token',
     'POST /api/owner/payments',
+    'POST /api/owner/payments/:id/receipt',
   ]);
   const ownerRoutes = createRouter()
     .list()

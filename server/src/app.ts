@@ -11,7 +11,7 @@ import {
 import { dailyCron } from './cron.js';
 import type { Deps } from './deps.js';
 import { json } from './http.js';
-import { completePayment, connectionToken, createPayment, listPayments, ownerMe, stripeWebhook } from './payments.js';
+import { completePayment, connectionToken, createPayment, listPayments, ownerMe, sendPaymentReceipt, stripeWebhook } from './payments.js';
 import { getNoShowPolicy, getNoShowSettings, patchNoShowSettings } from './noshow.js';
 import { chargeNoShowFee } from './noshowfee.js';
 import { createProduct, deleteProduct, listOwnerProducts, listPublicProducts, updateProduct, uploadProductPhoto } from './products.js';
@@ -68,6 +68,7 @@ export function createRouter(): Router {
       .on('POST', '/api/owner/payments', createPayment) // the owner key only
       .on('GET', '/api/owner/payments', listPayments)
       .on('POST', '/api/owner/payments/:id/complete', completePayment)
+      .on('POST', '/api/owner/payments/:id/receipt', sendPaymentReceipt) // the owner key only
       // Sales (checkout) and analytics
       .on('POST', '/api/owner/sales', postSale)
       .on('GET', '/api/owner/sales', listSales)

@@ -97,6 +97,9 @@ describe('every Stripe call for the shop goes to its connected account', () => {
     });
     h.stripe.succeed(intentId);
     await site('complete a payment', () => h.call('POST', `/api/owner/payments/${intentId}/complete`, owner));
+    await site('email a receipt after the payment', () =>
+      h.call('POST', `/api/owner/payments/${intentId}/receipt`, { ...owner, body: { email: 'client@example.com' } }),
+    );
     let token = '';
     await site('card checkout and save', async () => {
       token = await saveCard();
@@ -120,6 +123,7 @@ describe('every Stripe call for the shop goes to its connected account', () => {
       ['connection token', ['terminal.connectionTokens.create']],
       ['Tap to Pay payment', ['paymentIntents.create']],
       ['complete a payment', ['paymentIntents.retrieve']],
+      ['email a receipt after the payment', ['paymentIntents.update']],
       ['card checkout and save', ['customers.create', 'checkout.sessions.create', 'checkout.sessions.retrieve']],
       ['no-show fee', ['paymentIntents.create']],
       ['a fee Stripe is processing, checked again', ['paymentIntents.retrieve']],

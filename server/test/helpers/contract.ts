@@ -289,6 +289,8 @@ export const RESPONSES = {
   'connection-token': z.strictObject({ secret: z.string().min(1) }),
   'payment-created': z.strictObject({ paymentIntentId: z.string().regex(/^pi_/), clientSecret: z.string().min(1) }),
   'payment-completed': z.strictObject({ payment: Payment }),
+  // POST /api/owner/payments/:id/receipt: Stripe emails the receipt; the payment as it is.
+  'payment-receipt-sent': z.strictObject({ payment: Payment }),
   payments: z.strictObject({ payments: z.array(Payment) }),
   // No-show protection
   'no-show-policy': NoShowPolicy,

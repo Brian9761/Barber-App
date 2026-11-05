@@ -150,6 +150,10 @@ describe('contract fixtures (API v1)', () => {
     h.stripe.succeed(intent.paymentIntentId);
     h.advance(1);
     check('payment-completed', await h.call('POST', `/api/owner/payments/${intent.paymentIntentId}/complete`, owner));
+    check(
+      'payment-receipt-sent',
+      await h.call('POST', `/api/owner/payments/${intent.paymentIntentId}/receipt`, { ...owner, body: { email: 'client@example.com' } }),
+    );
     await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 500 } });
     check('payments', await h.call('GET', '/api/owner/payments?date=2026-11-02', owner));
 
