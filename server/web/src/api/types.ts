@@ -207,4 +207,9 @@ export interface NewAppointment {
   note?: string;
   /** The policy text the client was shown, exactly, when a card is required. */
   noShowPolicy?: string;
+  /**
+   * False when the card sent with it isn't to be kept ("Remember me" off): the server marks it for
+   * deletion with the booking, so it's used for this booking only.
+   */
+  keepCard?: false;
 }

@@ -169,6 +169,37 @@ test.describe('with no-show protection on', () => {
     await expect(card.getByTestId('appointment-status')).toHaveText('Cancelled');
   });
 
+  test('a card added without “Remember me” is for that booking only, even if the connection drops right after booking', async ({
+    page,
+    phone,
+    request,
+    browserConsole,
+  }, testInfo) => {
+    test.skip(!(await returnsToWebsite(request)), NO_WEB_RETURN);
+    browserConsole.allow(/Failed to load resource|ERR_FAILED/);
+    await toReview(page, testInfo, { name: 'Dee Dropped', phone, remember: false });
+    await addCard(page);
+    const token = await keptCardToken(page);
+    // The connection is lost as soon as the booking is made: the request asking the shop to delete
+    // the card never gets there (both tries).
+    let deletesTried = 0;
+    await page.route('**/api/cards', (route) => {
+      if (route.request().method() !== 'DELETE') return route.fallback();
+      deletesTried += 1;
+      return route.abort('failed');
+    });
+    const booked = page.waitForRequest((r) => r.url().endsWith('/api/appointments') && r.method() === 'POST');
+    await page.getByTestId('book-button').click();
+    await expect(page.getByTestId('booked-title')).toHaveText("You're booked");
+    // The booking itself said the card was for it only…
+    expect((await booked).postDataJSON()).toMatchObject({ keepCard: false });
+    await expect.poll(() => deletesTried).toBe(2);
+    // …so the shop has it marked for deletion all the same: kept only while this booking can be
+    // charged, then deleted. And this browser keeps no key to it.
+    expect(await cardState(request, token)).toMatchObject({ found: true, deleteRequested: true, removed: false });
+    expect(await page.evaluate(() => window.sessionStorage.getItem('izzy.card.v1') ?? window.localStorage.getItem('izzy.card.v1'))).toBeNull();
+  });
+
   test('on a shared computer, the next client never books with the last one’s card', async ({ page, phone, request }, testInfo) => {
     test.skip(!(await returnsToWebsite(request)), NO_WEB_RETURN);
     // Alex asks to be remembered and adds a card.

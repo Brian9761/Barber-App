@@ -128,6 +128,7 @@ export const httpApi = {
           customer: appointment.customer,
           ...(appointment.note ? { note: appointment.note } : {}),
           ...(appointment.noShowPolicy !== undefined ? { noShowPolicy: appointment.noShowPolicy } : {}),
+          ...(appointment.keepCard === false ? { keepCard: false } : {}),
         },
         headers: { 'X-Manage-Token': manageToken, ...(cardToken ? { 'X-Card-Token': cardToken } : {}) },
       });

@@ -151,6 +151,9 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
           customer: { name: details.name, phone, ...(details.email ? { email: details.email } : {}) },
           ...(details.note ? { note: details.note } : {}),
           ...(needsCard && policy.policyText ? { noShowPolicy: policy.policyText } : {}),
+          // "Remember me" off: the booking itself tells the shop the card is for this booking only,
+          // so it's marked for deletion with it, even if the connection drops right after.
+          ...(sentCard && !details.remember ? { keepCard: false as const } : {}),
         },
         token,
         sentCard?.token,
@@ -163,11 +166,13 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         return;
       }
       // Booked. With "Remember me" off the card goes too, like the name and number (the app does the same);
-      // and so does anything kept for coming back from Stripe's card page. The shop is asked to delete
-      // that card: it keeps it only while this booking can still be charged, then deletes it (the server
-      // can't see the box, so this is how "without Remember me, the card is used only for the booking
-      // you saved it for" stays true). Sent even as the page moves on, and tried again once if the
-      // connection drops; the key isn't kept here either way.
+      // and so does anything kept for coming back from Stripe's card page. The booking already told the
+      // shop the card it was made with is for it only (keepCard: false, above): the shop keeps it only
+      // while this booking can still be charged, then deletes it, which is how "without Remember me, the
+      // card is used only for the booking you saved it for" stays true. The shop is also asked to delete
+      // the card here (DELETE /api/cards), which covers one kept here but not sent with the booking (no
+      // card was needed after all); sent even as the page moves on, and tried again once if the
+      // connection drops. The key isn't kept here either way.
       if (!details.remember) {
         const kept = loadCard();
         forgetCard();

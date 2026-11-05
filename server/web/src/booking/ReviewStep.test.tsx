@@ -98,11 +98,14 @@ describe('a card on file, on Stripe’s page', () => {
     expect((await screen.findByTestId('booked-title')).textContent).toContain("You're booked");
 
     const [booking] = postsTo(api.calls, '/api/appointments');
+    // "Remember me" was off: the booking itself says the card is for it only, so the shop marks
+    // it for deletion with the booking (a connection lost right after can't leave it saved).
     expect(booking!.body).toEqual({
       offeringId: FLOW45,
       start: START,
       customer: { name: 'Ana Flores', phone: '+14425550123' },
       noShowPolicy: policy35.policyText,
+      keepCard: false,
     });
     expect(booking!.headers['x-card-token']).toBe(token);
     expect(isToken(booking!.headers['x-manage-token'])).toBe(true);
@@ -347,7 +350,8 @@ describe('on a shared computer', () => {
     await screen.findByTestId('booked-title');
     expect(postsTo(api.calls, '/api/appointments')[0]!.headers['x-card-token']).toBe(token);
     expect(JSON.parse(localStorage.getItem(CARD_KEY)!)).toEqual({ token, card: cardSaved.card, phone: PHONE });
-    // Kept for next time: the shop keeps it too.
+    // Kept for next time: the shop keeps it too (the booking doesn't say otherwise).
+    expect(postsTo(api.calls, '/api/appointments')[0]!.body).not.toHaveProperty('keepCard');
     expect(api.calls.filter((c) => c.method === 'DELETE')).toEqual([]);
   });
 
@@ -384,8 +388,10 @@ describe('on a shared computer', () => {
     await userEvent.click(bookButton());
     expect((await screen.findByTestId('booked-title')).textContent).toContain("You're booked");
     expect(loadCard()).toBeNull();
-    // Tried once more, quietly.
+    // Tried once more, quietly. It doesn't matter if both fail: the booking itself already told the
+    // shop the card was for it only, and the shop deletes it once this booking can't be charged.
     await waitFor(() => expect(api.calls.filter((c) => c.method === 'DELETE')).toHaveLength(2));
+    expect(postsTo(api.calls, '/api/appointments')[0]!.body).toMatchObject({ keepCard: false });
   });
 });
 
