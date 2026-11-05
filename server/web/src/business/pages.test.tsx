@@ -15,6 +15,7 @@ import salesDay from '../../../test/fixtures/contract/sales-day.json';
 import stripeActive from '../../../test/fixtures/contract/stripe-connection-active.json';
 import stripeLink from '../../../test/fixtures/contract/stripe-connect-link.json';
 import stripeNotConnected from '../../../test/fixtures/contract/stripe-connection-not-connected.json';
+import stripeOff from '../../../test/fixtures/contract/stripe-connection-off.json';
 import { leaveTo } from '../lib/leave';
 import { apiError, mockApi, renderApp, type ApiCall } from '../test/api';
 import { times } from '../test/text';
@@ -558,6 +559,20 @@ describe('Settings', () => {
     expect((await screen.findByTestId('stripe-status')).textContent).toContain('Connected · Izzy Clipz Barbershop');
     expect(screen.getByText('To disconnect, use the iPhone app.')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open Stripe Dashboard/ }).getAttribute('href')).toBe('https://dashboard.stripe.com/');
+  });
+
+  it('says where things stand once the status is checked again, never naming a button that isn’t there', async () => {
+    signedIn();
+    // Back with ?stripe=notConnected, on a server whose Stripe isn't set up at all: no Connect Stripe to click.
+    mockApi([
+      ['GET /api/owner/stripe', { body: stripeOff }],
+      ['GET /api/owner/no-show-settings', { body: noShowSettings }],
+      ['GET /api/owner/computer-sessions', { body: computersFixture }],
+    ]);
+    renderApp('/business/settings?stripe=notConnected');
+    expect((await screen.findByTestId('stripe-status')).textContent).toContain('Not set up on the server');
+    await waitFor(() => expect(screen.getByTestId('stripe-result').textContent).toBe("Stripe isn't set up on the server, so it can't be connected yet."));
+    expect(screen.queryByRole('button', { name: /Connect Stripe|Finish setting up/ })).toBeNull();
   });
 
   it('saves no-show protection, sending only what changed', async () => {

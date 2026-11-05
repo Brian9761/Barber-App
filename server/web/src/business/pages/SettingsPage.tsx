@@ -3,7 +3,7 @@
 // protection, the same settings as the app; this computer, and the other computers signed
 // in; how to put Izzy Clipz Business on this phone or computer; and in the demo, Reset.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { errorMessage } from '../../api/errors';
 import { Dialog } from '../../components/Dialog';
@@ -49,24 +49,35 @@ function StripeSection({ stripe, onChanged }: { stripe: ReturnType<typeof useLoa
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const returned = useRef<string | null>(params.get('stripe'));
-  const [result, setResult] = useState<{ text: string; good: boolean } | null>(() => (returned.current ? stripeReturnLine(returned.current) : null));
+  /**
+   * Back from Stripe: the status it came back with, and the status shown before (in the demo,
+   * which comes back without leaving the page, the one from before connecting).
+   */
+  const [returned, setReturned] = useState<{ status: string; before: StripeConnection | null } | null>(() => {
+    const status = params.get('stripe');
+    return status === null ? null : { status, before: stripe.data };
+  });
 
   // Back from Stripe (/business/settings?stripe=active): the status is checked again, and the address tidied.
   useEffect(() => {
     if (!params.has('stripe')) return;
-    const status = params.get('stripe') ?? '';
-    setResult(stripeReturnLine(status));
+    setReturned({ status: params.get('stripe') ?? '', before: stripe.data });
     const next = new URLSearchParams(params);
     next.delete('stripe');
     setParams(next, { replace: true });
     onChanged();
+    // (stripe.data is only what's shown at that moment: the status checked again comes after it.)
   }, [params, setParams, onChanged]);
+
+  // The line says where things stand once the status has been checked again, so the button it
+  // names is the one below (and what Stripe's return said until then).
+  const checked = returned !== null && stripe.data !== null && stripe.data !== returned.before ? stripe.data : null;
+  const result = returned ? stripeReturnLine(checked ? checked.status : returned.status) : null;
 
   const connect = async () => {
     setBusy(true);
     setError(null);
-    setResult(null);
+    setReturned(null);
     try {
       const link = await ownerApi.connectStripe();
       // The demo comes straight back to this page; the real thing opens Stripe's page.
