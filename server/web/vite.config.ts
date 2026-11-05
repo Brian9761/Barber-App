@@ -51,19 +51,45 @@ function absoluteSocialLinks(): Plugin {
 
 /**
  * The demo version answers the site's API calls in the browser: wherever the site imports
- * src/api/backend.ts (the shop's server, over the network), it gets src/demo/backend.ts. So the
- * demo has no code that calls /api, and the normal build has none of the demo's.
+ * src/api/backend.ts (the shop's server, over the network), it gets src/demo/backend.ts, and
+ * wherever Izzy Clipz Business imports src/business/api/backend.ts, src/demo/owner/backend.ts.
+ * So the demo has no code that calls /api, and the normal build has none of the demo's.
  */
 function demoBackend(): Plugin {
-  const real = here('./src/api/backend.ts');
-  const demo = here('./src/demo/backend.ts');
+  const swaps = new Map([
+    [here('./src/api/backend.ts'), here('./src/demo/backend.ts')],
+    [here('./src/business/api/backend.ts'), here('./src/demo/owner/backend.ts')],
+  ]);
   return {
     name: 'izzy-demo-backend',
     enforce: 'pre',
     async resolveId(source, importer, options) {
       if (!/(^|\/)backend(\.ts)?$/.test(source)) return null;
       const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
-      return resolved?.id === real ? demo : null;
+      return resolved ? (swaps.get(resolved.id) ?? null) : null;
+    },
+  };
+}
+
+/** Izzy Clipz Business's pages (/business and everything under it): its own page, with its own manifest and icons. */
+const BUSINESS_PAGE = /^\/business(\/[^.?]*)?(\?.*)?$/;
+
+/**
+ * In development, /business and its pages open business/index.html (the page that links Izzy
+ * Clipz Business's manifest), as the hosting does (vercel.json); every other page index.html.
+ */
+function businessPages(): Plugin {
+  const rewrite = (req: { url?: string }, _res: unknown, next: () => void) => {
+    if (req.url && BUSINESS_PAGE.test(req.url)) req.url = '/business/index.html';
+    next();
+  };
+  return {
+    name: 'izzy-business-pages',
+    configureServer(server) {
+      server.middlewares.use(rewrite);
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use(rewrite);
     },
   };
 }
@@ -145,6 +171,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       absoluteSocialLinks(),
+      businessPages(),
       ...(demo ? [demoBackend(), demoHosting()] : []),
       serviceWorker({ api: !demo, hosting: here(demo ? './vercel.json' : '../vercel.json') }),
     ],
@@ -152,6 +179,11 @@ export default defineConfig(({ mode }) => {
       outDir: demo ? 'dist-demo' : '../public',
       // ../public is outside this folder, so Vite only clears it when asked.
       emptyOutDir: true,
+      rollupOptions: {
+        // Two pages: the site's, and Izzy Clipz Business's (/business/), each linking its own
+        // manifest and icons. They share one script; Business's own code loads when it's opened.
+        input: { main: here('./index.html'), business: here('./business/index.html') },
+      },
     },
     server: {
       proxy,

@@ -12,6 +12,8 @@
   },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api" },
+    { "source": "/business", "destination": "/business/index.html" },
+    { "source": "/business/:path*", "destination": "/business/index.html" },
     { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [

@@ -1,15 +1,22 @@
+import { lazy, Suspense } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { BookingRoutes } from './booking/BookingRoutes';
+import { BusinessLoading } from './business/BusinessLoading';
 import { Layout } from './components/Layout';
 import { AppointmentsPage } from './pages/AppointmentsPage';
 import { BarbersPage } from './pages/BarbersPage';
-import { BusinessPage } from './pages/BusinessPage';
 import { GetTheAppPage } from './pages/GetTheAppPage';
 import { HomePage } from './pages/HomePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ReviewsPage } from './pages/ReviewsPage';
 import { ServicesPage } from './pages/ServicesPage';
 import { VisitPage } from './pages/VisitPage';
+
+/**
+ * Izzy Clipz Business (/business/…): the shop's own area, with its own layout. Its code loads
+ * only when it's opened, so the clients' pages never carry it.
+ */
+const BusinessApp = lazy(() => import('./business/BusinessApp'));
 
 /**
  * React Router's future flags, set so it doesn't warn. Navigation stays outside
@@ -19,10 +26,18 @@ import { VisitPage } from './pages/VisitPage';
  */
 export const ROUTER_FUTURE = { v7_startTransition: false, v7_relativeSplatPath: true } as const;
 
-/** The site's pages, all under the global nav and footer. */
+/** The site's pages, all under the global nav and footer; and Izzy Clipz Business, under its own. */
 export function App() {
   return (
     <Routes>
+      <Route
+        path="business/*"
+        element={
+          <Suspense fallback={<BusinessLoading />}>
+            <BusinessApp />
+          </Suspense>
+        }
+      />
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="services" element={<ServicesPage />} />
@@ -32,7 +47,6 @@ export function App() {
         <Route path="book/*" element={<BookingRoutes />} />
         <Route path="appointments" element={<AppointmentsPage />} />
         <Route path="app" element={<GetTheAppPage />} />
-        <Route path="business/*" element={<BusinessPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

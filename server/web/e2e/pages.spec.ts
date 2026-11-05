@@ -13,7 +13,6 @@ const PAGES = [
   { path: '/book', shot: '06-book', heading: 'Pick a service', title: 'Step 1 of 5: Pick a service · Izzy Clipz Barbershop' },
   { path: '/appointments', shot: '07-appointments-empty', heading: 'My appointments', title: 'My appointments · Izzy Clipz Barbershop' },
   { path: '/app', shot: '20-get-the-app', heading: 'Get the app.', title: 'Get the app · Izzy Clipz Barbershop' },
-  { path: '/business', shot: '08-business', heading: 'Izzy Clipz Business on your computer — coming next', title: 'Izzy Clipz Business · Izzy Clipz Barbershop' },
   { path: '/no-such-page', shot: '09-not-found', heading: "This page isn't here.", title: 'Page not found · Izzy Clipz Barbershop' },
 ] as const;
 
@@ -130,9 +129,9 @@ test('the nav goes to every page and back home', async ({ page }, testInfo) => {
   await nav.getByRole('link', { name: 'Izzy Clipz', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Fresh cuts. Booked in seconds.' })).toBeVisible();
 
-  // The footer's "For the shop".
+  // The footer's "For the shop": Izzy Clipz Business, signed in with a code from the app (e2e/business.spec.ts).
   await page.getByRole('contentinfo').getByRole('link', { name: 'Izzy Clipz Business' }).click();
-  await expect(page.getByRole('heading', { level: 1, name: /Izzy Clipz Business on your computer/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeVisible();
 });
 
 test('Home’s actions lead to booking and the services', async ({ page }) => {

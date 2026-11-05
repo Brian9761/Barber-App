@@ -443,3 +443,17 @@ html.is-standalone body {
   height: 56px;
   color: var(--color-success);
 }
+
+/* ------------------------------------------------------ Izzy Clipz Business */
+
+/*
+ * Business's black bar, here so it shows while Business's own code and styles load
+ * (src/business/business.css has the rest): the logo and the red "Business" pill, as on the
+ * app's icon. Opened from the Home Screen, it reaches up behind the status bar.
+ */
+.biz-globalbar {
+  height: var(--nav-total);
+  padding-top: var(--safe-top);
+  background: var(--color-black);
+  color: #fff;
+}

@@ -1102,24 +1102,13 @@
   color: var(--color-warning-line);
 }
 
-/* ------------------------------------------------------- Business and 404 */
+/* --------------------------------------------------------------------- 404 */
 
-.business__inner,
 .not-found__inner {
   display: grid;
   justify-items: center;
   gap: var(--space-5);
   text-align: center;
-}
-
-/* The logo, near-black on white. */
-.business__logo {
-  margin-bottom: var(--space-2);
-  color: var(--color-text);
-}
-
-.business h1 {
-  font-size: clamp(32px, 4vw, 48px);
 }
 
 .not-found__links {

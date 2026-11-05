@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cacheKey, isAppPage, routeFor, type RequestLike } from './routes';
+import { cacheKey, isAppPage, isBusinessPage, routeFor, type RequestLike } from './routes';
 
 // What the service worker answers from its cache, and what it never does: nothing with a token
 // or personal data, no reviews (Google's terms), and nothing from other sites.
@@ -7,6 +7,8 @@ import { cacheKey, isAppPage, routeFor, type RequestLike } from './routes';
 const ORIGIN = 'https://izzy-clipz.example';
 const FILES = new Map([
   ['/index.html', '/index.html?__rev=aaaa'],
+  ['/business/index.html', '/business/index.html?__rev=eeee'],
+  ['/business/manifest.webmanifest', '/business/manifest.webmanifest?__rev=ffff'],
   ['/offline.html', '/offline.html?__rev=bbbb'],
   ['/manifest.webmanifest', '/manifest.webmanifest?__rev=cccc'],
   ['/icon-192.png', '/icon-192.png?__rev=dddd'],
@@ -23,10 +25,20 @@ const page = (path: string) => route(path, { mode: 'navigate' });
 
 describe('pages', () => {
   it('opens every page of the site from this version’s own page, also offline', () => {
-    for (const path of ['/', '/?source=app', '/services', '/barbers', '/reviews', '/visit', '/app', '/appointments', '/book', '/book/time', '/book/confirmed', '/book/card-return?status=saved&session_id=cs_1', '/business', '/business/sales', '/visit/']) {
-      expect(page(path), path).toEqual({ kind: 'shell' });
+    for (const path of ['/', '/?source=app', '/services', '/barbers', '/reviews', '/visit', '/app', '/appointments', '/book', '/book/time', '/book/confirmed', '/book/card-return?status=saved&session_id=cs_1', '/visit/']) {
+      expect(page(path), path).toEqual({ kind: 'shell', page: '/index.html' });
     }
     expect(isAppPage('/booking')).toBe(false);
+  });
+
+  it('opens Izzy Clipz Business from its own page, with its own manifest, also offline', () => {
+    for (const path of ['/business', '/business/', '/business/today', '/business/today?source=app', '/business/analytics', '/business/settings?stripe=active', '/business/no-such-page']) {
+      expect(page(path), path).toEqual({ kind: 'shell', page: '/business/index.html' });
+    }
+    // Its own files are files, not pages.
+    expect(page('/business/manifest.webmanifest')).toEqual({ kind: 'file', key: '/business/manifest.webmanifest?__rev=ffff' });
+    expect(route('/business/manifest.webmanifest')).toEqual({ kind: 'file', key: '/business/manifest.webmanifest?__rev=ffff' });
+    expect(isBusinessPage('/businesses')).toBe(false);
   });
 
   it('asks the network for a page this version doesn’t know, so the offline page can answer when there’s none', () => {
@@ -77,6 +89,8 @@ describe('the API', () => {
     expect(route('/api/availability?offeringId=x&from=2026-11-05&days=14')).toEqual({ kind: 'browser' });
     expect(route('/api/no-show-policy?serviceId=haircut&barberId=any')).toEqual({ kind: 'browser' });
     expect(route('/api/owner/appointments', { headers: { Authorization: 'Bearer x' } })).toEqual({ kind: 'browser' });
+    expect(route('/api/owner/analytics?from=2026-11-01&to=2026-11-04', { headers: { Authorization: 'Bearer x' } })).toEqual({ kind: 'browser' });
+    expect(page('/api/owner/sales')).toEqual({ kind: 'browser' });
   });
 
   it('leaves bookings, cancellations and cards to the network', () => {

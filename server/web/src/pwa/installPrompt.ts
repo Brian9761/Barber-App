@@ -19,6 +19,15 @@ export interface InstallState {
   installed: boolean;
 }
 
+/**
+ * Izzy Clipz Business's pages link its own manifest, so the browser's offer there installs Izzy
+ * Clipz Business: that says nothing about the clients' app and its Add to Home Screen bar.
+ */
+function onBusinessPage(target: Window): boolean {
+  const path = target.location?.pathname ?? '';
+  return path === '/business' || path.startsWith('/business/');
+}
+
 let offer: BeforeInstallPromptEvent | null = null;
 let state: InstallState = { canInstall: false, installed: false };
 const listeners = new Set<() => void>();
@@ -38,8 +47,8 @@ export function listenForInstallPrompt(target: Window = window): () => void {
   };
   const onInstalled = () => {
     offer = null;
-    // The Add to Home Screen bar never needs to show again in this browser.
-    hintInstalled();
+    // The Add to Home Screen bar never needs to show again in this browser (once the clients' app is installed).
+    if (!onBusinessPage(target)) hintInstalled();
     changed({ canInstall: false, installed: true });
   };
   target.addEventListener('beforeinstallprompt', onOffer);
@@ -64,7 +73,7 @@ export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unava
     await event.prompt();
     const choice = await event.userChoice;
     if (choice.outcome === 'accepted') {
-      hintInstalled();
+      if (!onBusinessPage(window)) hintInstalled();
       changed({ installed: true });
     }
     return choice.outcome;

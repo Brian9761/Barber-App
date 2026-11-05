@@ -1,7 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
-  "rewrites": [{ "source": "/((?!api/|assets/).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/business", "destination": "/business/index.html" },
+    { "source": "/business/(.*)", "destination": "/business/index.html" },
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/sw.js",
@@ -12,6 +16,13 @@
     },
     {
       "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "content-type", "value": "application/manifest+json" },
+        { "key": "cache-control", "value": "no-cache" }
+      ]
+    },
+    {
+      "source": "/business/manifest.webmanifest",
       "headers": [
         { "key": "content-type", "value": "application/manifest+json" },
         { "key": "cache-control", "value": "no-cache" }

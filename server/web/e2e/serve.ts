@@ -16,6 +16,11 @@
 // server gave the Checkout Session, so the server's own way back to the website
 // (/api/cards/return and /api/cards/cancel with to=web) is part of the test.
 // There's no Stripe key: nothing leaves this machine.
+//
+// The owner routes are open with an owner key (E2E_OWNER_KEY, or a test key of
+// its own), for Izzy Clipz Business: its pages (/business/…) get their own page,
+// business/index.html, as on Vercel, and product photos are kept in memory and
+// served from /__e2e/blob/ in place of Vercel Blob.
 
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -37,6 +42,8 @@ import { migrate, seedBarbers } from '../../src/migrate.js';
 
 const PORT = Number(process.env.E2E_PORT) || 4173;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
+/** The owner key the end-to-end tests sign in with (32 characters or more, like the server needs). */
+const E2E_OWNER_KEY = process.env.E2E_OWNER_KEY || 'e2e-owner-key-for-local-tests-only';
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('../../public/', import.meta.url)));
 const FIXTURES = new URL('../../test/fixtures/', import.meta.url);
 
@@ -176,7 +183,25 @@ const reviewsFetch: typeof fetch = async (input) => {
   throw new TypeError(`fetch failed: nothing leaves this machine in the end-to-end tests (${url.host})`);
 };
 
-const config = configFromEnv({});
+const config = configFromEnv({ OWNER_KEY: E2E_OWNER_KEY });
+
+// ------------------------------------------------------- A stand-in for Vercel Blob
+
+/** Product photos, kept in memory and served from /__e2e/blob/ (nothing leaves this machine). */
+const photos = new Map<string, Uint8Array>();
+let photoVersion = 0;
+
+const blob = {
+  put: async (pathname: string, body: Uint8Array) => {
+    photoVersion += 1;
+    const path = `${pathname.replace(/\.jpg$/, '')}-r${photoVersion}.jpg`;
+    photos.set(path, body);
+    return { url: `${ORIGIN}/__e2e/blob/${path}` };
+  },
+  del: async (url: string) => {
+    photos.delete(url.replace(`${ORIGIN}/__e2e/blob/`, ''));
+  },
+};
 
 // Asserted rather than annotated: Deps grows as the server's other parts land (a computer's
 // sign-in code, say), and this keeps compiling either way.
@@ -188,7 +213,7 @@ const deps = {
   uuid: randomUUID,
   manageToken: newManageToken,
   stripe: () => stripe as unknown as StripeClient,
-  blob: { put: notHere, del: notHere },
+  blob,
   fetch: reviewsFetch,
   // Each test passes its own address, so the booking limits (5 an hour per network) are per test.
   clientIp: (request: Request) => request.headers.get('x-real-ip') ?? undefined,
@@ -236,6 +261,13 @@ let workerVersion = 0;
 
 async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
   const parts = url.pathname.split('/').filter(Boolean); // ['__e2e', …]
+  if (parts[1] === 'blob' && req.method === 'GET') {
+    const photo = photos.get(parts.slice(2).join('/'));
+    if (!photo) return send(res, 404, 'No such photo', 'text/plain');
+    res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'public, max-age=31536000, immutable' });
+    res.end(Buffer.from(photo));
+    return;
+  }
   if (parts[1] === 'new-version' && req.method === 'POST') {
     const { reset } = await readBody(req);
     workerVersion = reset ? 0 : workerVersion + 1;
@@ -353,6 +385,8 @@ const server = createServer(async (req, res) => {
     if (file) return serveFile(res, file);
     // A hashed file that isn't there is a real 404, not the page.
     if (url.pathname.startsWith('/assets/')) return send(res, 404, 'Not found', 'text/plain');
+    // Izzy Clipz Business's pages have their own page, with its own manifest and icons (vercel.json).
+    if (url.pathname === '/business' || url.pathname.startsWith('/business/')) return serveFile(res, join(PUBLIC_DIR, 'business', 'index.html'));
     return serveFile(res, join(PUBLIC_DIR, 'index.html'));
   } catch (error) {
     console.error(error);

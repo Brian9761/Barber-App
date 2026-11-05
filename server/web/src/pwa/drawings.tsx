@@ -4,6 +4,14 @@
 
 import type { ReactNode } from 'react';
 
+/** Which app the drawings show: Izzy Clipz, or Izzy Clipz Business (its own name and icon). */
+export interface AppIdentity {
+  name: string;
+  icon: string;
+}
+
+export const CLIENT_APP: AppIdentity = { name: 'Izzy Clipz', icon: '/icon-192.png' };
+
 const BLUE = '#1f4fd8';
 const LINE = '#d2d2d7';
 const TEXT = '#1d1d1f';
@@ -91,7 +99,7 @@ export function AddToHomeScreenDrawing() {
 }
 
 /** iPhone: "Add", at the top right, with the app's icon and name under it. */
-export function AddButtonDrawing() {
+export function AddButtonDrawing({ app = CLIENT_APP }: { app?: AppIdentity }) {
   return (
     <Drawing label="add">
       <rect x="12" y="10" width="256" height="100" rx="16" fill="#fff" />
@@ -104,9 +112,9 @@ export function AddButtonDrawing() {
       {/* Round "Add" with room on both sides: the word is about 31 wide, ending at 252. */}
       <Ring x={211} y={18} width={52} height={30} radius={10} />
       <path d="M12 54H268" stroke={LINE} />
-      <image href="/icon-192.png" x="28" y="64" width="36" height="36" />
+      <image href={app.icon} x="28" y="64" width="36" height="36" />
       <text x="76" y="88" fontSize="16" fill={TEXT}>
-        Izzy Clipz
+        {app.name}
       </text>
     </Drawing>
   );
@@ -150,16 +158,16 @@ export function InstallAppDrawing() {
 }
 
 /** Android and computers: the browser asks "Install app?", and Install says yes. */
-export function InstallDialogDrawing() {
+export function InstallDialogDrawing({ app = CLIENT_APP }: { app?: AppIdentity }) {
   return (
     <Drawing label="install">
       <rect x="22" y="6" width="236" height="108" rx="16" fill="#fff" />
       <text x="40" y="34" fontSize="16" fontWeight="600" fill={TEXT}>
         Install app?
       </text>
-      <image href="/icon-192.png" x="40" y="46" width="28" height="28" />
+      <image href={app.icon} x="40" y="46" width="28" height="28" />
       <text x="78" y="65" fontSize="15" fill={TEXT}>
-        Izzy Clipz
+        {app.name}
       </text>
       <text x="132" y="100" fontSize="15" fill={BLUE} textAnchor="middle">
         Cancel

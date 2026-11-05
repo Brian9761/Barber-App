@@ -25,7 +25,6 @@ describe('every page', () => {
     ['/barbers', 'Meet the barbers', 'Barbers · Izzy Clipz Barbershop'],
     ['/reviews', 'Reviews', 'Reviews · Izzy Clipz Barbershop'],
     ['/visit', 'Visit the shop', 'Visit · Izzy Clipz Barbershop'],
-    ['/business', 'Izzy Clipz Business on your computer — coming next', 'Izzy Clipz Business · Izzy Clipz Barbershop'],
     ['/no-such-page', "This page isn't here.", 'Page not found · Izzy Clipz Barbershop'],
   ])('%s opens with its heading and title', async (path, heading, title) => {
     mockApi([['GET /api/reviews', { body: reviews }]]);
@@ -183,7 +182,6 @@ describe('the logo', () => {
   it.each([
     ['/', 4], // the nav, the hero, the Visit tile and the footer
     ['/visit', 3], // the nav, the sticker on the storefront photo and the footer
-    ['/business', 3], // the nav, over the heading, and the footer
     ['/services', 2], // the nav and the footer
   ])('on %s, is the nav’s link home, named “Izzy Clipz”, and decoration everywhere else', (path, count) => {
     mockApi([['GET /api/reviews', { body: reviews }]]);

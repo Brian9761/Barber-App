@@ -2,7 +2,8 @@
 // the worker so the unit tests can check every rule:
 //
 // - The site's pages open from this version's own copy of the page (the "app
-//   shell"), also offline. A page this version doesn't know (a newer version's,
+//   shell"), also offline; Izzy Clipz Business's (/business/…) from its own page,
+//   which links its own manifest and icons. A page this version doesn't know (a newer version's,
 //   say) is asked for on the network, and the offline page answers when that fails.
 // - This version's files (scripts, styles, fonts, photos, icons) come from its cache.
 // - The API is never answered from a cache, except the shop's public catalog
@@ -22,8 +23,10 @@ export interface PrecacheEntry {
   revision: string | null;
 }
 
-/** The app shell: the site's one page, which opens every route. */
+/** The app shell: the site's page, which opens every route of the site. */
 export const SHELL = '/index.html';
+/** Izzy Clipz Business's page (/business/), which links its own manifest and icons: it opens every route under /business. */
+export const BUSINESS_SHELL = '/business/index.html';
 /** "You're offline. To book, call the shop." */
 export const OFFLINE_PAGE = '/offline.html';
 /** This version's files: one cache per version, the older ones deleted once a new one takes over. */
@@ -36,8 +39,8 @@ export const CATALOG_PATH = '/api/catalog';
 export const SKIP_WAITING = 'SKIP_WAITING';
 
 /** The site's pages (src/App.tsx). Anything else is a page this version doesn't know. */
-const PAGES = new Set(['/', '/services', '/barbers', '/reviews', '/visit', '/app', '/appointments', '/book', '/business', SHELL]);
-const SECTIONS = ['/book/', '/business/'];
+const PAGES = new Set(['/', '/services', '/barbers', '/reviews', '/visit', '/app', '/appointments', '/book', SHELL]);
+const SECTIONS = ['/book/'];
 
 /** Headers that say who's asking: a request with any of them is never answered from a cache. */
 const PERSONAL_HEADERS = ['authorization', 'x-manage-token', 'x-card-token'];
@@ -45,6 +48,11 @@ const PERSONAL_HEADERS = ['authorization', 'x-manage-token', 'x-card-token'];
 export function isAppPage(pathname: string): boolean {
   const path = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
   return PAGES.has(path) || SECTIONS.some((section) => path.startsWith(section));
+}
+
+/** Izzy Clipz Business's pages: /business and everything under it (its own files aside). */
+export function isBusinessPage(pathname: string): boolean {
+  return pathname === '/business' || pathname.startsWith('/business/');
 }
 
 /** Where a file is kept in the cache: its address, with its revision when its name doesn't change. */
@@ -55,8 +63,8 @@ export function cacheKey(entry: PrecacheEntry): string {
 export type Route =
   /** Not the worker's to answer: the browser does what it would without it. */
   | { kind: 'browser' }
-  /** One of the site's pages: this version's page, from its cache. */
-  | { kind: 'shell' }
+  /** One of the site's pages: this version's page (the site's, or Business's), from its cache. */
+  | { kind: 'shell'; page: typeof SHELL | typeof BUSINESS_SHELL }
   /** One of this version's files, from its cache. */
   | { kind: 'file'; key: string }
   /** A page this version doesn't know: the network, else the offline page. */
@@ -90,8 +98,9 @@ export function routeFor(request: RequestLike, origin: string, files: ReadonlyMa
   }
 
   if (request.mode === 'navigate') {
-    if (isAppPage(path)) return { kind: 'shell' };
     const key = files.get(path);
+    if (isBusinessPage(path) && !key) return { kind: 'shell', page: BUSINESS_SHELL };
+    if (isAppPage(path)) return { kind: 'shell', page: SHELL };
     return key ? { kind: 'file', key } : { kind: 'page' };
   }
 

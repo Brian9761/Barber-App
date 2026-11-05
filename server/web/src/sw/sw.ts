@@ -7,7 +7,7 @@
 // "A new version is ready · Reload", and only when someone taps Reload does it
 // take over (src/pwa/register.ts). Nothing reloads by itself.
 
-import { CATALOG_CACHE, CATALOG_PATH, cacheKey, OFFLINE_PAGE, PRECACHE_PREFIX, routeFor, SHELL, SKIP_WAITING, type PrecacheEntry } from './routes';
+import { CATALOG_CACHE, CATALOG_PATH, cacheKey, OFFLINE_PAGE, PRECACHE_PREFIX, routeFor, SKIP_WAITING, type PrecacheEntry } from './routes';
 
 declare const self: ServiceWorkerGlobalScope;
 /** This version's files, written in by the build. */
@@ -44,7 +44,7 @@ self.addEventListener('fetch', (event) => {
     case 'browser':
       return;
     case 'shell':
-      event.respondWith(shell(event.request));
+      event.respondWith(shell(event.request, route.page));
       return;
     case 'file':
       event.respondWith(file(route.key, event.request));
@@ -115,8 +115,8 @@ async function offlinePage(): Promise<Response> {
 }
 
 /** One of the site's pages: this version's page, so it opens offline and matches this version's files. */
-async function shell(request: Request): Promise<Response> {
-  const key = FILES.get(SHELL);
+async function shell(request: Request, shellPath: string): Promise<Response> {
+  const key = FILES.get(shellPath);
   const cached = key ? await fromCache(key) : undefined;
   return cached ?? page(request);
 }

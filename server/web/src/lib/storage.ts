@@ -64,6 +64,9 @@ export const APPOINTMENTS_KEY = 'izzy.appointments.v1';
 export const DEMO_APPOINTMENTS_KEY = 'izzy.demo.appointments.v1';
 /** Where the demo keeps the bookings made in it, as the shop's server would (src/demo/api.ts). */
 export const DEMO_STORE_KEY = 'izzy.demo.v1';
+/** Where the Business demo keeps what's changed in it (src/demo/owner/api.ts), and its sign-in (src/business/session.ts). */
+export const DEMO_BUSINESS_KEY = 'izzy.demo.business.v1';
+export const DEMO_BUSINESS_SESSION_KEY = 'izzy.demo.business.session.v1';
 /** How long a finished appointment stays listed, like the app. */
 export const KEEP_DAYS = 30;
 
@@ -162,6 +165,8 @@ export function forgetAppointments(): void {
 export function forgetDemoLeftovers(): void {
   removeKey('local', DEMO_STORE_KEY);
   removeKey('local', DEMO_APPOINTMENTS_KEY);
+  removeKey('local', DEMO_BUSINESS_KEY);
+  removeKey('local', DEMO_BUSINESS_SESSION_KEY);
 }
 
 // ------------------------------------------- Carried into the app on the Home Screen
