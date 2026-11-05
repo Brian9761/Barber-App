@@ -89,9 +89,9 @@ Our website and the Izzy Clipz app show reviews of the shop from Google, as Goog
 - **If you're viewing reviews:** reviewers' profile photos load directly from Google's servers, so Google receives your device's IP address and browser details, as it would for any picture.
 - **If you've reviewed the shop on Google:** your public review, with your name and photo as they appear on Google, may show on our website and in our app. We don't store reviews from Google. To change or remove your review, do it on Google.
 
-### Photos of our work
+### Photos
 
-Our website and app show photos of haircuts done at the shop. Anyone who can be recognized in them agreed to be shown (for anyone under 18, a parent or guardian agreed). If you're in one of these photos and want it taken down, contact us. We'll remove it from our website as soon as we can, and from the app in its next update.
+We show a photo in which someone can be recognized, such as a photo of a haircut done at the shop, only if that person agreed to be shown (for anyone under 18, a parent or guardian agreed). If you're in a photo on our website or in our app and want it taken down, contact us. We'll remove it from our website as soon as we can, and from the app in its next update.
 
 ## How we use your information
 

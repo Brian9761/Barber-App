@@ -873,7 +873,7 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 - **Now:** take the photos of identifiable people off the public demo and out of the app builds, the apparent minor first, until signed releases exist, or replace them with photos that show no faces (the owner checklist's "Do this now" item). Removal only after someone asks isn't enough under §3344.
 - **Before launch:** written permission from each person shown (from a parent or guardian for anyone under 18); confirm that the shop owns, or has a license to, every photo, since the Terms say the shop's photos belong to it or to its licensors; get each barber's OK to show their name, photo and bio, and remove them when they leave.
-- **Privacy Policy:** says that everyone who can be recognized in the photos agreed, and that anyone in one can ask for it to be taken down.
+- **Privacy Policy:** says that a photo in which someone can be recognized is shown only with that person's consent (a parent's or guardian's for anyone under 18), and that anyone in one can ask for it to be taken down. It doesn't say the website or apps show such photos, so it stays true while the gallery is off.
 
 ---
 

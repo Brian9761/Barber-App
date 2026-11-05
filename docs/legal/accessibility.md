@@ -10,7 +10,7 @@ Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") wants everyone to be able to bo
 
 - **Our goal** is for our website and apps to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at Level AA.
 - **We've worked toward it, but we haven't confirmed that everything meets it yet.** No outside expert has audited our website or apps.
-- **If anything gets in your way, contact us the way that works best for you:** call (442) 341-3053, call through a relay service by dialing 711, text us or email us (see "Other ways to book and get help"). We'll book your appointment for you and help with anything else you need.
+- **If anything gets in your way, contact us the way that works best for you:** call (442) 341-3053, call through a relay service by dialing 711, text us [TO FILL IN: remove "text us" unless texts are confirmed] or email us (see "Other ways to book and get help"). We'll book your appointment for you and help with anything else you need.
 - **Tell us about problems** and we'll get back to you within 5 business days.
 
 ## Our goal
@@ -59,7 +59,7 @@ You never have to use our website or apps to book.
 If something on our website or in our apps is hard to use, please tell us:
 
 - **Call:** (442) 341-3053, or dial 711 to call through a relay service
-- **Text:** (442) 341-3053
+- **Text:** (442) 341-3053 [TO FILL IN: keep this line only if texts are confirmed, as in "Other ways to book and get help"]
 - **Email:** [TO FILL IN: the shop's email address]
 - **Visit or write:** Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058
 
