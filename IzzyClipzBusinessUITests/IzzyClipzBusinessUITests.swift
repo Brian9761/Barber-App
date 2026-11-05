@@ -831,7 +831,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let tab = tabButton(name)
         XCTAssertTrue(tab.waitForExistence(timeout: 10), "Missing the \(name) tab", file: file, line: line)
         tab.tap()
-        if !waitUntil(tab, toMatch: NSPredicate(format: "isSelected == true")) {
+        if !waitUntil(tab, toMatch: NSPredicate(format: "isSelected == true"), timeout: 10) {
             // Slow simulators occasionally drop a tap.
             tab.tap()
         }
@@ -924,6 +924,9 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     /// Flips a switch row. The switch sits at the row's trailing end (a tap on the row's middle
     /// lands on its label and does nothing), so this taps the switch itself and checks it moved.
+    /// A busy simulator can take seconds to say what's on screen, so a wait can run out while the
+    /// switch has already moved: it's tapped again only if it still reads as before, since a second
+    /// tap on a switch that moved puts it back.
     private func flipSwitch(_ row: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         let inner = row.switches.firstMatch
         let control = inner.exists ? inner : row
@@ -936,10 +939,12 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         }
         guard let before, before == "0" || before == "1" else { return }
         let flipped = NSPredicate(format: "value == %@", before == "1" ? "0" : "1")
-        if !waitUntil(control, toMatch: flipped, timeout: 3) {
+        if waitUntil(control, toMatch: flipped, timeout: 10) { return }
+        if control.value as? String == before {
+            // The tap was lost: tap the switch's end of the row.
             trailingEnd.tap()
-            XCTAssertTrue(waitUntil(control, toMatch: flipped, timeout: 5), "The switch didn't move", file: file, line: line)
         }
+        XCTAssertTrue(waitUntil(control, toMatch: flipped, timeout: 10), "The switch didn't move", file: file, line: line)
     }
 
     /// The appointment's status, at the top of its details.
@@ -1010,16 +1015,18 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: question), "The dialog didn't close", file: file, line: line)
     }
 
-    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 10) -> Bool {
+    /// Waits for what's on screen to match. The default is long because a busy simulator can take
+    /// seconds to answer each look at the screen; a match ends the wait straight away.
+    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 20) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
         return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
     }
 
-    private func waitForLabel(_ element: XCUIElement, containing text: String, timeout: TimeInterval = 10) -> Bool {
+    private func waitForLabel(_ element: XCUIElement, containing text: String, timeout: TimeInterval = 20) -> Bool {
         waitUntil(element, toMatch: NSPredicate(format: "label CONTAINS %@", text), timeout: timeout)
     }
 
-    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 10) -> Bool {
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 20) -> Bool {
         waitUntil(element, toMatch: NSPredicate(format: "exists == false"), timeout: timeout)
     }
 

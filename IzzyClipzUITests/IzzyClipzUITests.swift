@@ -1162,6 +1162,9 @@ final class IzzyClipzUITests: XCTestCase {
 
     /// Flips a switch row. The switch sits at the row's trailing end (a tap on the row's middle
     /// lands on its label and does nothing), so this taps the switch itself and checks it moved.
+    /// A busy simulator can take seconds to say what's on screen, so a wait can run out while the
+    /// switch has already moved: it's tapped again only if it still reads as before, since a second
+    /// tap on a switch that moved puts it back.
     private func flipSwitch(_ row: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         let inner = row.switches.firstMatch
         let control = inner.exists ? inner : row
@@ -1177,10 +1180,12 @@ final class IzzyClipzUITests: XCTestCase {
             return
         }
         let flipped = NSPredicate(format: "value == %@", before == "1" ? "0" : "1")
-        if !waitUntil(control, toMatch: flipped, timeout: 3) {
+        if waitUntil(control, toMatch: flipped, timeout: 10) { return }
+        if control.value as? String == before {
+            // The tap was lost: tap the switch's end of the row.
             trailingEnd.tap()
-            XCTAssertTrue(waitUntil(control, toMatch: flipped, timeout: 5), "The switch didn't move", file: file, line: line)
         }
+        XCTAssertTrue(waitUntil(control, toMatch: flipped, timeout: 10), "The switch didn't move", file: file, line: line)
     }
 
     /// Waits for the day-and-time step to show a picked day with times, scrolling down to them.
