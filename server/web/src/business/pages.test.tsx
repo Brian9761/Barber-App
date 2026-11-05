@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import analyticsFixture from '../../../test/fixtures/contract/analytics.json';
@@ -378,8 +378,10 @@ describe('Analytics', () => {
     const api = mockApi([['GET /api/owner/analytics', { body: analyticsFixture }]]);
     renderApp('/business/analytics?period=custom&from=2026-11-01&to=2026-11-07');
     expect((await screen.findByTestId('total-sales-value')).textContent).toBe('$724');
-    // $724 against $120 the week before.
-    expect(screen.getByTestId('total-sales-change').textContent).toBe('▲ Up 503% from the week before');
+    // $724 against $120 the week before, named by its days, and what that is a click away.
+    expect(screen.getByTestId('total-sales-change').textContent).toBe('▲ Up 503% from Oct 25 – Oct 31');
+    await userEvent.click(screen.getByRole('button', { name: 'What the change compares with' }));
+    expect(screen.getByTestId('total-sales').textContent).toContain('Sales for the same number of days just before this period (Oct 25 – Oct 31)');
     expect(api.calls[0]!.search).toBe('?from=2026-11-01&to=2026-11-07');
     expect(screen.getByTestId('top-barber').textContent).toContain('Izzy$2153 services · 2 products');
     const live = screen.getByTestId('live').textContent ?? '';
@@ -434,8 +436,35 @@ describe('Analytics', () => {
     api.once('GET /api/owner/analytics', 'offline');
     await userEvent.click(screen.getByRole('radio', { name: 'Month' }));
     expect(await screen.findByText("Couldn't load the numbers")).toBeTruthy();
+    // Another period that never loaded isn't "Live" with the last period's time.
+    expect(screen.getByTestId('live').textContent).toBe('Not loaded yet');
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect((await screen.findByTestId('total-sales-value')).textContent).toBe('$724');
+  });
+
+  it('stops saying Live while refreshes fail, and says when the numbers are from', async () => {
+    signedIn();
+    const api = mockApi([['GET /api/owner/analytics', { body: analyticsFixture }]]);
+    renderApp('/business/analytics?period=week');
+    await screen.findByTestId('total-sales-value');
+    expect(screen.getByTestId('live').textContent).toMatch(/^Live · Updated /);
+    // The page comes back on screen, and the refresh it makes fails.
+    const visibility = (state: 'hidden' | 'visible') => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+      document.dispatchEvent(new Event('visibilitychange'));
+    };
+    try {
+      api.once('GET /api/owner/analytics', 'offline');
+      act(() => visibility('hidden'));
+      act(() => visibility('visible'));
+      expect(await screen.findByText("Couldn't refresh")).toBeTruthy();
+      expect(screen.getByTestId('live').textContent).toMatch(/^Last updated /);
+      expect(screen.getByTestId('live').querySelector('.biz-live__dot')?.className).toContain('is-waiting');
+      // The numbers from before stay.
+      expect(screen.getByTestId('total-sales-value').textContent).toBe('$724');
+    } finally {
+      delete (document as unknown as { visibilityState?: string }).visibilityState;
+    }
   });
 });
 
@@ -464,6 +493,11 @@ describe('Products', () => {
     const editor = screen.getByTestId('product-editor');
     await userEvent.click(within(editor).getByRole('button', { name: 'Add product' }));
     expect(within(editor).getByRole('alert').textContent).toBe('Give the product a name.');
+    // Under the Name field, which is marked, described by it, and has the focus.
+    const name = within(editor).getByLabelText('Name');
+    expect(name.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(name.getAttribute('aria-describedby')!)?.textContent).toBe('Give the product a name.');
+    expect(document.activeElement).toBe(name);
     await userEvent.type(within(editor).getByLabelText('Name'), 'Hair clay');
     await userEvent.type(within(editor).getByLabelText(/Description/), 'Strong hold.');
     await userEvent.click(within(editor).getByRole('button', { name: 'Add product' }));

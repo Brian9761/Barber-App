@@ -7,11 +7,12 @@ import { moneyWithCommas } from './money';
 
 export type Metric = 'sales' | 'services' | 'products' | 'clients';
 
-export const METRICS: { id: Metric; label: string }[] = [
+/** The metrics, with a shorter label for a phone's narrow picker where one is needed ("Clients"). */
+export const METRICS: { id: Metric; label: string; short?: string }[] = [
   { id: 'sales', label: 'Sales' },
   { id: 'services', label: 'Services' },
   { id: 'products', label: 'Products' },
-  { id: 'clients', label: 'Clients served' },
+  { id: 'clients', label: 'Clients served', short: 'Clients' },
 ];
 
 export function metricValue(entry: LeaderboardEntry, metric: Metric): number {

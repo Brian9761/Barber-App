@@ -35,11 +35,30 @@ export function stripeView(connection: Pick<StripeConnection, 'status'>): Stripe
   }
 }
 
-/** The line after coming back from Stripe (`/business/settings?stripe=<status>`). */
+/**
+ * The line after coming back from Stripe (`/business/settings?stripe=<status>`), each naming the
+ * button the status below offers, if any (the app's: "You're connected…", "Stripe still needs a
+ * few details: tap Finish setting up.").
+ */
 export function stripeReturnLine(status: string): { text: string; good: boolean } {
-  if (status === 'active') return { text: "You're connected. You can take card payments now.", good: true };
-  if (status === 'pending') return { text: 'Stripe is checking your details. This usually takes a few minutes.', good: true };
-  return { text: 'Stripe still needs a few details: click Finish setting up.', good: false };
+  switch (status) {
+    case 'active':
+      return { text: "You're connected. You can take card payments now.", good: true };
+    case 'pending':
+      return { text: 'Stripe is checking your details. This usually takes a few minutes.', good: true };
+    case 'needsInfo':
+      return { text: 'Stripe still needs a few details: click Finish setting up.', good: false };
+    case 'restricted':
+      return { text: 'Stripe paused card payments: click Finish setting up to fix it.', good: false };
+    case 'notConnected':
+      return { text: "Stripe wasn't connected. Click Connect Stripe to try again.", good: false };
+    case 'direct':
+      return { text: "Card payments use this server's own Stripe key, so there's nothing to connect.", good: true };
+    case 'off':
+      return { text: "Stripe isn't set up on the server, so it can't be connected yet.", good: false };
+    default:
+      return { text: 'Back from Stripe. The status below says where things stand.', good: false };
+  }
 }
 
 /** Whether Stripe takes card payments for the shop now (connected, or the server's own key). */

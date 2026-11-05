@@ -186,7 +186,11 @@ export function IPhoneSteps({ browser, url, app = CLIENT_APP }: { browser: Brows
           picture: <AddButtonDrawing app={app} />,
         },
       ]}
-      done={`${app.name} is now on your Home Screen. Tap it to open the app.`}
+      done={
+        app.homeScreenName
+          ? `${app.name} is now on your Home Screen, as ${app.homeScreenName}. Tap it to open the app.`
+          : `${app.name} is now on your Home Screen. Tap it to open the app.`
+      }
     />
   );
 }

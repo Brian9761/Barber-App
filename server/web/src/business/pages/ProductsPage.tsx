@@ -3,15 +3,14 @@
 // the server takes it (a JPEG, made in the browser from whatever photo is picked), and
 // delete, which asks first. Past sales keep a deleted product's name.
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { errorMessage } from '../../api/errors';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
-import { money } from '../../lib/format';
 import { ownerApi } from '../api/client';
 import { ErrorBanner, PageHeader, ProductPlaceholder, SidePanel, SkeletonCard, SuccessLine } from '../components/common';
 import { demo, useBusinessTitle, useLoad } from '../hooks';
-import { editableMoney, parseMoney } from '../lib/money';
+import { editableMoney, moneyWithCommas, parseMoney } from '../lib/money';
 import { PhotoProblem, photoAsJpeg } from '../lib/photo';
 import type { Product, ProductInput } from '../types';
 
@@ -33,17 +32,29 @@ function draftOf(product: Product | null): Draft {
   };
 }
 
-/** What's wrong with the product as typed, or null. */
-export function productProblem(draft: Draft): string | null {
-  if (draft.name.trim() === '') return 'Give the product a name.';
-  if ([...draft.name.trim()].length > 80) return 'Keep the name to 80 characters or fewer.';
-  if ([...draft.description.trim()].length > 500) return 'Keep the description to 500 characters or fewer.';
+type Field = 'name' | 'description' | 'price';
+
+/** What's wrong with the product as typed, and in which field, or null. */
+export function productProblem(draft: Draft): { field: Field; message: string } | null {
+  if (draft.name.trim() === '') return { field: 'name', message: 'Give the product a name.' };
+  if ([...draft.name.trim()].length > 80) return { field: 'name', message: 'Keep the name to 80 characters or fewer.' };
+  if ([...draft.description.trim()].length > 500) return { field: 'description', message: 'Keep the description to 500 characters or fewer.' };
   if (!draft.noPrice) {
     const cents = parseMoney(draft.priceText);
-    if (cents === null) return 'Type the price, like 18 or 17.50. Or tick "No price" to type it at checkout.';
-    if (cents > 1_000_000) return 'That price is too high.';
+    if (cents === null) return { field: 'price', message: 'Type the price, like 18 or 17.50. Or tick "No price" to type it at checkout.' };
+    if (cents > 1_000_000) return { field: 'price', message: 'That price is too high.' };
   }
   return null;
+}
+
+/** A field's own error, under it: what to fix there. */
+function FieldError({ id, message }: { id: string; message: string }) {
+  return (
+    <p className="field__error" id={id} role="alert">
+      <Icon name="error" />
+      <span>{message}</span>
+    </p>
+  );
 }
 
 function inputOf(draft: Draft): ProductInput {
@@ -68,12 +79,19 @@ function Editor({ product, onSaved, onCancel }: { product: Product | null; onSav
   const [draft, setDraft] = useState<Draft>(() => draftOf(product));
   const [photo, setPhoto] = useState<{ jpeg: Blob; preview: string } | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
+  /** What the server said went wrong (shown by the buttons). */
   const [error, setError] = useState<string | null>(null);
+  /** What's wrong in a field, shown under it. */
+  const [problem, setProblem] = useState<{ field: Field; message: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const fields = { name: useRef<HTMLInputElement>(null), description: useRef<HTMLTextAreaElement>(null), price: useRef<HTMLInputElement>(null) };
   const change = (patch: Partial<Draft>) => {
     setDraft({ ...draft, ...patch });
     setError(null);
+    setProblem(null);
   };
+  const invalid = (field: Field) =>
+    problem?.field === field ? { 'aria-invalid': true as const, 'aria-describedby': `product-${field}-error` } : {};
 
   const pick = async (file: File | undefined) => {
     setPhotoError(null);
@@ -89,9 +107,11 @@ function Editor({ product, onSaved, onCancel }: { product: Product | null; onSav
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
-    const problem = productProblem(draft);
-    if (problem) {
-      setError(problem);
+    const wrong = productProblem(draft);
+    if (wrong) {
+      // Said under the field, which takes the focus (and comes into view on a phone).
+      setProblem(wrong);
+      fields[wrong.field].current?.focus();
       return;
     }
     setBusy(true);
@@ -141,20 +161,32 @@ function Editor({ product, onSaved, onCancel }: { product: Product | null; onSav
         <label className="field__label" htmlFor="product-name">
           Name
         </label>
-        <input id="product-name" className="field__input" value={draft.name} maxLength={80} onChange={(e) => change({ name: e.target.value })} />
+        <input
+          ref={fields.name}
+          id="product-name"
+          className="field__input"
+          value={draft.name}
+          maxLength={80}
+          onChange={(e) => change({ name: e.target.value })}
+          {...invalid('name')}
+        />
+        {problem?.field === 'name' ? <FieldError id="product-name-error" message={problem.message} /> : null}
       </div>
       <div className="field">
         <label className="field__label" htmlFor="product-description">
           Description <span className="field__optional">(optional)</span>
         </label>
         <textarea
+          ref={fields.description}
           id="product-description"
           className="field__input"
           value={draft.description}
           maxLength={500}
           rows={3}
           onChange={(e) => change({ description: e.target.value })}
+          {...invalid('description')}
         />
+        {problem?.field === 'description' ? <FieldError id="product-description-error" message={problem.message} /> : null}
       </div>
       <div className="field">
         <label className="field__label" htmlFor="product-price">
@@ -163,15 +195,18 @@ function Editor({ product, onSaved, onCancel }: { product: Product | null; onSav
         <div className="biz-money-input">
           <span aria-hidden="true">$</span>
           <input
+            ref={fields.price}
             id="product-price"
             className="field__input"
             inputMode="decimal"
             value={draft.noPrice ? '' : draft.priceText}
             disabled={draft.noPrice}
-            placeholder={draft.noPrice ? 'No price' : '18'}
+            placeholder={draft.noPrice ? 'No price' : undefined}
             onChange={(e) => change({ priceText: e.target.value })}
+            {...invalid('price')}
           />
         </div>
+        {problem?.field === 'price' ? <FieldError id="product-price-error" message={problem.message} /> : null}
       </div>
       <label className="checkbox">
         <input type="checkbox" checked={draft.noPrice} onChange={(e) => change({ noPrice: e.target.checked })} />
@@ -215,7 +250,7 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
       )}
       <div className="biz-product__body">
         <h2 className="biz-product__name">{product.name}</h2>
-        <p className="biz-product__price">{product.priceCents === null ? 'No price' : money(product.priceCents)}</p>
+        <p className="biz-product__price">{product.priceCents === null ? 'No price' : moneyWithCommas(product.priceCents)}</p>
         {product.description ? <p className="biz-product__description">{product.description}</p> : null}
         <p className={`biz-badge ${product.visible ? 'biz-badge--completed' : 'biz-badge--cancelled'} biz-product__visibility`}>
           {product.visible ? 'Shown in the app' : 'Hidden from clients'}

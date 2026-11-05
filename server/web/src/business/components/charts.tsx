@@ -1,13 +1,12 @@
 // Analytics' charts, small and hand-written in SVG (no chart library): daily sales as
 // stacked columns, a one-whole-in-parts bar for the sales split, and horizontal bars for
-// rankings. Each says what it shows to screen readers, every column can be reached with
-// the keyboard and shows its numbers when picked, and each has a table alternative
-// ("Show as table"). Colors (validated for color-blind readers, in a fixed order):
-// services blue, products orange, other aqua, fees yellow; identity never rests on color
-// alone (a legend, and the numbers).
+// rankings. Each says what it shows to screen readers; the columns are one stop for the
+// keyboard (the arrow keys move between them) and show their numbers when picked; and
+// each chart has a table alternative ("Show as table"). Colors (validated for color-blind
+// readers, in a fixed order): services blue, products orange, other aqua, fees yellow;
+// identity never rests on color alone (a legend, and the numbers).
 
-import { useCallback, useId, useState, type ReactNode } from 'react';
-import { money } from '../../lib/format';
+import { useCallback, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { compactMoney, moneyWithCommas } from '../lib/money';
 import { seriesLabel, seriesTick } from '../lib/periods';
 import type { SeriesEntry } from '../types';
@@ -77,7 +76,7 @@ function stackOf(entry: SeriesEntry): Stack {
 /** What a column says when picked, and to screen readers. */
 export function columnDescription(entry: SeriesEntry): string {
   const s = stackOf(entry);
-  return `${seriesLabel(entry.date)}: ${moneyWithCommas(entry.salesCents)}. Services ${money(s.services)}, products ${money(s.products)}, other and fees ${money(s.otherAndFees)}.`;
+  return `${seriesLabel(entry.date)}: ${moneyWithCommas(entry.salesCents)}. Services ${moneyWithCommas(s.services)}, products ${moneyWithCommas(s.products)}, other and fees ${moneyWithCommas(s.otherAndFees)}.`;
 }
 
 const HEIGHT = 240;
@@ -111,11 +110,18 @@ function useWidth(fallback: number): [(element: HTMLElement | null) => void, num
 /**
  * Daily sales (by month for a year): stacked columns, services at the base, then products,
  * then other and fees, with a 2px gap between segments. Picking a column (click, tap, Enter
- * or Space) shows its numbers above the chart.
+ * or Space) shows its numbers above the chart, as pointing at one does for a moment. The
+ * columns are one Tab stop: the arrow keys, Home and End move between them. The day or month
+ * under each column is drawn apart from it, so a column's name is its own words alone.
  */
 export function DailyChart({ series }: { series: SeriesEntry[] }) {
   const [picked, setPicked] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  /** The column the Tab key stops at: the one moved to last. */
+  const [current, setCurrent] = useState(0);
+  const columns = useRef<(SVGGElement | null)[]>([]);
   const titleId = useId();
+  const hintId = useId();
   const [measure, width] = useWidth(720);
   const plotW = Math.max(120, width - PAD.left - PAD.right);
   const plotH = HEIGHT - PAD.top - PAD.bottom;
@@ -128,17 +134,39 @@ export function DailyChart({ series }: { series: SeriesEntry[] }) {
   // Labels that fit: about one every 40 pixels.
   const every = Math.max(1, Math.ceil(40 / band));
   const total = series.reduce((sum, e) => sum + e.salesCents, 0);
-  const pickedEntry = picked !== null ? series[picked] : undefined;
+  // What's shown above the chart: the column pointed at, else the one picked.
+  const shown = hovered ?? picked;
+  const shownEntry = shown !== null ? series[shown] : undefined;
   const best = series.reduce<SeriesEntry | null>((b, e) => (b === null || e.salesCents > b.salesCents ? e : b), null);
+  const tabStop = Math.min(current, Math.max(series.length - 1, 0));
+
+  const moveTo = (index: number) => {
+    const next = Math.max(0, Math.min(series.length - 1, index));
+    setCurrent(next);
+    columns.current[next]?.focus();
+  };
+  const onKey = (event: KeyboardEvent<SVGGElement>, i: number) => {
+    const moves: Record<string, number> = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: series.length - 1 };
+    if (event.key in moves) {
+      event.preventDefault();
+      moveTo(moves[event.key]!);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      setPicked(picked === i ? null : i);
+    }
+  };
 
   return (
     <div className="biz-daily" ref={measure}>
       <p className="biz-daily__picked" aria-live="polite" data-testid="daily-picked">
-        {pickedEntry
-          ? columnDescription(pickedEntry)
+        {shownEntry
+          ? columnDescription(shownEntry)
           : best && best.salesCents > 0
             ? `Best: ${seriesLabel(best.date)}, ${moneyWithCommas(best.salesCents)}. Pick a column to see its numbers.`
             : 'Pick a column to see its numbers.'}
+      </p>
+      <p className="visually-hidden" id={hintId}>
+        The arrow keys move between the columns; Enter picks one.
       </p>
       <svg
         className="biz-daily__svg"
@@ -147,6 +175,8 @@ export function DailyChart({ series }: { series: SeriesEntry[] }) {
         viewBox={`0 0 ${PAD.left + plotW + PAD.right} ${HEIGHT}`}
         role="group"
         aria-labelledby={titleId}
+        aria-describedby={hintId}
+        onMouseLeave={() => setHovered(null)}
       >
         <title id={titleId}>{`Sales by ${series[0]?.date.length === 7 ? 'month' : 'day'}: ${moneyWithCommas(total)} in all`}</title>
         {ticks.map((tick) => (
@@ -166,23 +196,26 @@ export function DailyChart({ series }: { series: SeriesEntry[] }) {
             { key: 'other', value: s.otherAndFees, color: SERIES.otherAndFees.color },
           ].filter((p) => p.value > 0);
           let base = 0;
-          const dim = picked !== null && picked !== i;
+          const dim = shown !== null && shown !== i;
           return (
             <g
               key={entry.date}
+              ref={(element) => {
+                columns.current[i] = element;
+              }}
               role="button"
-              tabIndex={0}
+              tabIndex={i === tabStop ? 0 : -1}
               aria-label={columnDescription(entry)}
               aria-pressed={picked === i}
               className={`biz-col${dim ? ' is-dim' : ''}`}
-              onClick={() => setPicked(picked === i ? null : i)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  setPicked(picked === i ? null : i);
-                }
+              onClick={() => {
+                setCurrent(i);
+                setPicked(picked === i ? null : i);
               }}
-              onMouseEnter={() => setPicked(i)}
+              onKeyDown={(event) => onKey(event, i)}
+              onFocus={() => setCurrent(i)}
+              // Pointing shows the numbers for a moment; only a click picks.
+              onMouseEnter={() => setHovered(i)}
             >
               <rect x={PAD.left + band * i} y={PAD.top} width={band} height={plotH} className="biz-col__hit" />
               {parts.map((part, index) => {
@@ -199,14 +232,19 @@ export function DailyChart({ series }: { series: SeriesEntry[] }) {
                   <rect key={part.key} x={x} y={y1} width={barW} height={height} fill={part.color} />
                 );
               })}
-              {i % every === 0 ? (
-                <text x={PAD.left + band * i + band / 2} y={HEIGHT - 8} textAnchor="middle" className="biz-axis" aria-hidden="true">
-                  {seriesTick(entry.date)}
-                </text>
-              ) : null}
             </g>
           );
         })}
+        {/* The days (or months) under the columns, apart from them: each column's name is its description. */}
+        <g aria-hidden="true">
+          {series.map((entry, i) =>
+            i % every === 0 ? (
+              <text key={entry.date} x={PAD.left + band * i + band / 2} y={HEIGHT - 8} textAnchor="middle" className="biz-axis">
+                {seriesTick(entry.date)}
+              </text>
+            ) : null,
+          )}
+        </g>
         <line x1={PAD.left} x2={PAD.left + plotW} y1={y(0)} y2={y(0)} className="biz-baseline" aria-hidden="true" />
       </svg>
       <Legend items={[SERIES.services, SERIES.products, SERIES.otherAndFees]} />
@@ -232,9 +270,9 @@ export function DailyTable({ series }: { series: SeriesEntry[] }) {
           {series.map((entry) => (
             <tr key={entry.date}>
               <th scope="row">{seriesLabel(entry.date)}</th>
-              <td>{money(entry.servicesCents)}</td>
-              <td>{money(entry.productsCents)}</td>
-              <td>{money(entry.otherCents + entry.feesCents)}</td>
+              <td>{moneyWithCommas(entry.servicesCents)}</td>
+              <td>{moneyWithCommas(entry.productsCents)}</td>
+              <td>{moneyWithCommas(entry.otherCents + entry.feesCents)}</td>
               <td>{moneyWithCommas(entry.salesCents)}</td>
             </tr>
           ))}

@@ -92,6 +92,15 @@ describe('Card payments (Stripe)', () => {
   it('says what happened once Stripe sends the owner back', () => {
     expect(stripeReturnLine('active')).toEqual({ text: "You're connected. You can take card payments now.", good: true });
     expect(stripeReturnLine('needsInfo')).toEqual({ text: 'Stripe still needs a few details: click Finish setting up.', good: false });
+    // Each names only a button its status offers.
+    expect(stripeReturnLine('notConnected')).toEqual({ text: "Stripe wasn't connected. Click Connect Stripe to try again.", good: false });
+    expect(stripeView({ status: 'notConnected' }).action).toBe('Connect Stripe');
+    expect(stripeReturnLine('restricted').text).toContain('Finish setting up');
+    expect(stripeView({ status: 'restricted' }).action).toBe('Finish setting up');
+    for (const status of ['off', 'direct', 'pending', 'somethingNew']) {
+      expect(stripeView({ status } as never).action).toBeNull();
+      expect(stripeReturnLine(status).text).not.toMatch(/click/i);
+    }
   });
 });
 

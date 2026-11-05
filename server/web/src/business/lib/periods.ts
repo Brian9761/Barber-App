@@ -57,10 +57,13 @@ function dayLabel(date: string, thisYear: number): string {
   return year === thisYear ? `${MONTH_SHORT[month - 1]} ${day}` : `${MONTH_SHORT[month - 1]} ${day}, ${year}`;
 }
 
-/** "Nov 2 – Nov 4", "Nov 4", "Dec 28, 2025 – Jan 3". */
+/** "Nov 2 – Nov 4", "Wed, Nov 4", "Dec 28, 2025 – Jan 3", "Feb 27 – Dec 31, 2025". */
 export function rangeLabel(range: Range, today: string): string {
   const thisYear = parseDate(today).year;
   if (range.from === range.to) return shortDateLabel(range.from);
+  const fromYear = parseDate(range.from).year;
+  // Both in the same other year: the year once, at the end.
+  if (fromYear !== thisYear && fromYear === parseDate(range.to).year) return `${dayLabel(range.from, fromYear)} – ${dayLabel(range.to, thisYear)}`;
   return `${dayLabel(range.from, thisYear)} – ${dayLabel(range.to, thisYear)}`;
 }
 
@@ -80,23 +83,29 @@ export function periodTitle(kind: PeriodKind, range: Range, today: string): stri
   }
 }
 
-/** What the change is measured from: "yesterday", "the week before", "the 3 days before". */
-export function comparedWith(range: Range, today: string): string {
-  const days = rangeDays(range);
-  if (days === 1) return range.from === today ? 'yesterday' : 'the day before';
-  if (days === 7) return 'the week before';
-  return `the ${days} days before`;
+/**
+ * What the change is measured from, by name: "yesterday" for Today, otherwise the days
+ * themselves ("Oct 28 – Oct 31", "Sun, Nov 1"): the same number of days just before the period
+ * (the server's `previous`).
+ */
+export function comparedWith(previous: Range, range: Range, today: string): string {
+  if (range.from === today && range.to === today) return 'yesterday';
+  return rangeLabel(previous, today);
 }
 
 /**
  * The change in sales from the same number of days just before (the server's `previous`,
- * docs/analytics.md): "Up 12% from yesterday", "Down 8% from the week before", "About the same
- * as the 3 days before", or "No sales yesterday" when there's nothing to compare with.
+ * docs/analytics.md), naming them: "Up 12% from yesterday", "Down 6% from Oct 28 – Oct 31",
+ * "About the same as Oct 26 – Nov 1", or "No sales yesterday" ("No sales Feb 27 – Dec 31, 2025")
+ * when there's nothing to compare with.
  */
-export function changeText(currentCents: number, previousCents: number, range: Range, today: string): string {
-  const before = comparedWith(range, today);
-  if (previousCents <= 0) return before === 'yesterday' ? 'No sales yesterday' : `No sales ${before === 'the day before' ? 'the day before' : `in ${before}`}`;
-  const change = Math.round(((currentCents - previousCents) / previousCents) * 100);
+export function changeText(currentCents: number, previous: Range & { salesCents: number }, range: Range, today: string): string {
+  const before = comparedWith(previous, range, today);
+  if (previous.salesCents <= 0) {
+    if (before === 'yesterday') return 'No sales yesterday';
+    return previous.from === previous.to ? `No sales on ${before}` : `No sales ${before}`;
+  }
+  const change = Math.round(((currentCents - previous.salesCents) / previous.salesCents) * 100);
   if (change === 0) return `About the same as ${before}`;
   return `${change > 0 ? 'Up' : 'Down'} ${Math.abs(change)}% from ${before}`;
 }

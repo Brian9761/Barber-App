@@ -250,6 +250,26 @@ html.is-standalone body {
   }
 }
 
+/* Very narrow (an older iPhone SE, or a page zoomed in a lot): the choices share the width, and a long one can wrap. */
+@media (max-width: 359px) {
+  .segmented {
+    display: flex;
+    width: 100%;
+  }
+
+  .segmented__option {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .segmented__label {
+    height: 100%;
+    padding: 10px 8px;
+    white-space: normal;
+    text-align: center;
+  }
+}
+
 @media (forced-colors: active) {
   .segmented__input:checked + .segmented__label {
     outline: 2px solid Highlight;

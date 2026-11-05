@@ -26,7 +26,8 @@ import { stripeReturnLine, stripeView } from '../lib/stripe';
 import { session, useSession } from '../session';
 import type { ComputerSession, NoShowSettings, StripeConnection } from '../types';
 
-const BUSINESS_APP: AppIdentity = { name: APP_NAME, icon: '/business/icon-192.png' };
+/** Izzy Clipz Business, called "IC Business" under its icon on a Home Screen (business/index.html's apple-mobile-web-app-title). */
+const BUSINESS_APP: AppIdentity = { name: APP_NAME, icon: '/business/icon-192.png', homeScreenName: 'IC Business' };
 const ZONE = 'America/Los_Angeles';
 
 function Section({ id, title, lead, children, testId }: { id: string; title: string; lead?: string; children: ReactNode; testId?: string }) {
@@ -111,7 +112,8 @@ function StripeSection({ stripe, onChanged }: { stripe: ReturnType<typeof useLoa
                 {view.label}
                 {connection.businessName && connection.status !== 'notConnected' ? ` · ${connection.businessName}` : ''}
               </p>
-              <p className="secondary">{connection.message}</p>
+              {/* "Not set up on the server" says it all; the server's "Stripe isn't set up on the server." would say it twice. */}
+              {connection.status !== 'off' ? <p className="secondary">{connection.message}</p> : null}
             </div>
           </div>
           <div className="biz-settings__actions">
@@ -507,7 +509,7 @@ function InstallSection() {
   const [device, setDevice] = useState<Device>(platform.device);
   const install = useInstallPrompt();
   const canInstall = device === platform.device && install.canInstall;
-  const url = `${window.location.origin}/business`;
+  const url = `${window.location.origin}/business/`;
   return (
     <Section
       id="install-title"
@@ -526,7 +528,14 @@ function InstallSection() {
             </Notice>
           ) : null}
           {canInstall ? <InstallNow app={BUSINESS_APP} onInstall={() => void promptInstall()} /> : null}
-          {device === 'iphone' ? <IPhoneSteps browser={platform.device === 'iphone' ? platform.browser : 'safari'} url={url} app={BUSINESS_APP} /> : null}
+          {device === 'iphone' ? (
+            <>
+              <p className="secondary small" data-testid="iphone-app-note">
+                On the iPhone with the Izzy Clipz Business app, use the app: it also takes card payments with Tap to Pay.
+              </p>
+              <IPhoneSteps browser={platform.device === 'iphone' ? platform.browser : 'safari'} url={url} app={BUSINESS_APP} />
+            </>
+          ) : null}
           {device === 'android' ? (
             <AndroidSteps orMenu={canInstall} browser={platform.device === 'android' ? platform.browser : 'chrome'} url={url} app={BUSINESS_APP} />
           ) : null}

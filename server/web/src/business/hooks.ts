@@ -87,15 +87,16 @@ export type LoadState<T> =
 /**
  * Loads `load(signal)` for `key`, and again on `reload()` or every `refreshMs` while the page is
  * on screen. A refresh never stacks on one still running, and what's shown stays while it runs;
- * a new `key` (another day, another period) starts from nothing. A refresh that fails keeps the
- * data and says so (`error`).
+ * a new `key` (another day, another period) starts from nothing, its time of loading too. A
+ * refresh that fails keeps the data and says so (`error`).
  */
 export function useLoad<T>(key: string, load: (signal: AbortSignal) => Promise<T>, options: { refreshMs?: number } = {}) {
   const [state, setState] = useState<{ key: string; value: LoadState<T> }>({ key, value: { status: 'loading', data: null, error: null } });
   const loadRef = useRef(load);
   loadRef.current = load;
   const running = useRef<{ key: string; controller: AbortController } | null>(null);
-  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  /** When `key`'s data last loaded, for "Updated 10:42 AM". */
+  const [updated, setUpdated] = useState<{ key: string; at: Date } | null>(null);
   const visible = usePageVisible();
 
   const run = useCallback(
@@ -113,7 +114,7 @@ export function useLoad<T>(key: string, load: (signal: AbortSignal) => Promise<T
         .then((data) => {
           if (controller.signal.aborted) return;
           setState({ key, value: { status: 'ready', data, error: null } });
-          setUpdatedAt(new Date());
+          setUpdated({ key, at: new Date() });
         })
         .catch((error: unknown) => {
           if (controller.signal.aborted || (error instanceof DOMException && error.name === 'AbortError')) return;
@@ -157,6 +158,7 @@ export function useLoad<T>(key: string, load: (signal: AbortSignal) => Promise<T
   const replace = useCallback((data: T) => setState({ key, value: { status: 'ready', data, error: null } }), [key]);
 
   const value: LoadState<T> = state.key === key ? state.value : { status: 'loading', data: null, error: null };
+  const updatedAt = updated?.key === key ? updated.at : null;
   return { ...value, updatedAt, reload, replace };
 }
 

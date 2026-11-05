@@ -276,6 +276,13 @@
   background: var(--color-bg);
 }
 
+/* Very narrow: a little less room around each card's content. */
+@media (max-width: 359px) {
+  .biz-card {
+    padding: var(--space-4);
+  }
+}
+
 .biz-card--skeleton {
   display: grid;
   gap: var(--space-3);
@@ -1569,6 +1576,8 @@
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: var(--space-5);
+  /* Each card as tall as what's in it, not stretched to its neighbor's height. */
+  align-items: start;
 }
 
 .biz-analytics-grid > * {
@@ -1610,6 +1619,25 @@
 .biz-change {
   margin: var(--space-2) 0 var(--space-4);
   font-weight: 600;
+}
+
+.biz-change-line {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 var(--space-3);
+}
+
+.biz-change-line .biz-change {
+  margin: 0;
+}
+
+.biz-change-line .biz-tile__info {
+  margin: 0;
+}
+
+.biz-total-sales > .biz-tile__explain {
+  margin: 0 0 var(--space-4);
 }
 
 .biz-change--up {
@@ -1729,8 +1757,40 @@
   padding: 10px 14px;
 }
 
-/* On a phone the four choices sit two by two, the same width, rather than three and one. */
+/* "Clients served" is "Clients" on a phone; its name for screen readers stays whole. */
+@media (max-width: 560px) {
+  .biz-metric__more {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* On a phone the four choices share one row, the same width each. */
 @media (max-width: 480px) {
+  .segmented--small {
+    display: flex;
+    flex-wrap: nowrap;
+    width: 100%;
+  }
+
+  .segmented--small .segmented__option {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .segmented--small .segmented__label {
+    padding: 10px 4px;
+    font-size: 16px;
+    text-align: center;
+  }
+}
+
+/* Too narrow even for that: two by two, the same width, rather than three and one. */
+@media (max-width: 359px) {
   .segmented--small {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1998,6 +2058,8 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
   gap: var(--space-3);
+  /* A tile's explanation makes only that tile taller, not its whole row. */
+  align-items: start;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -2393,6 +2455,8 @@
 }
 
 .biz-percent .biz-stepper__button {
+  /* Its full 44px, even beside a long value on a phone. */
+  flex: none;
   border: 1px solid var(--color-control-line);
 }
 

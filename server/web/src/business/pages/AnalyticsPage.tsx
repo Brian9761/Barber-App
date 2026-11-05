@@ -13,12 +13,11 @@ import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { Monogram } from '../../components/ui';
 import { useCatalog } from '../../data/catalog';
-import { money } from '../../lib/format';
 import { localDate, timeLabel } from '../../lib/shopTime';
 import { ownerApi } from '../api/client';
 import { ChartFrame, Crown, DailyChart, DailyTable, Legend, Medal, RowBar, SERIES, SplitBar } from '../components/charts';
 import { ErrorBanner, PageHeader, Skeleton } from '../components/common';
-import { useBusinessTitle, useClock, useLoad } from '../hooks';
+import { useBusinessTitle, useClock, useLoad, type LoadState } from '../hooks';
 import { METRICS, metricLabel, rankBy, type Metric } from '../lib/leaderboard';
 import { moneyWithCommas, percent } from '../lib/money';
 import { changeDirection, changeText, periodRange, periodTitle, rangeLabel, rangeProblem, type PeriodKind, type Range } from '../lib/periods';
@@ -176,11 +175,19 @@ function CustomDialog({
   );
 }
 
-function Live({ updatedAt, loading, zone }: { updatedAt: Date | null; loading: boolean; zone: string }) {
+/** "Live · Updated 10:42 AM" with a green dot; while refreshes fail, a gray one and "Last updated 10:42 AM". */
+function Live({ updatedAt, status, zone }: { updatedAt: Date | null; status: LoadState<unknown>['status']; zone: string }) {
+  const failing = status === 'error';
   return (
     <p className="biz-live" data-testid="live">
-      <span className={`biz-live__dot${updatedAt ? '' : ' is-waiting'}`} aria-hidden="true" />
-      {updatedAt ? `Live · Updated ${timeLabel(updatedAt, zone)}` : loading ? 'Loading…' : 'Not loaded yet'}
+      <span className={`biz-live__dot${updatedAt && !failing ? '' : ' is-waiting'}`} aria-hidden="true" />
+      {updatedAt
+        ? failing
+          ? `Last updated ${timeLabel(updatedAt, zone)}`
+          : `Live · Updated ${timeLabel(updatedAt, zone)}`
+        : status === 'loading'
+          ? 'Loading…'
+          : 'Not loaded yet'}
     </p>
   );
 }
@@ -195,6 +202,7 @@ function TotalSales({ data, range, today, isToday }: { data: Analytics; range: R
   ];
   const direction = changeDirection(t.salesCents, data.previous.salesCents);
   const empty = t.salesCents === 0;
+  const [explain, setExplain] = useState(false);
   return (
     <section className="biz-card biz-total-sales" aria-labelledby="total-sales-title" data-testid="total-sales">
       <h2 id="total-sales-title" className="biz-card__title">
@@ -203,25 +211,34 @@ function TotalSales({ data, range, today, isToday }: { data: Analytics; range: R
       <p className="biz-hero-number" data-testid="total-sales-value">
         {moneyWithCommas(t.salesCents)}
       </p>
-      <p className={`biz-change biz-change--${direction}`} data-testid="total-sales-change">
-        {direction !== 'none' ? <span aria-hidden="true">{direction === 'up' ? '▲ ' : '▼ '}</span> : null}
-        {changeText(t.salesCents, data.previous.salesCents, range, today)}
-      </p>
+      <div className="biz-change-line">
+        <p className={`biz-change biz-change--${direction}`} data-testid="total-sales-change">
+          {direction !== 'none' ? <span aria-hidden="true">{direction === 'up' ? '▲ ' : '▼ '}</span> : null}
+          {changeText(t.salesCents, data.previous, range, today)}
+        </p>
+        <button type="button" className="biz-tile__info" aria-expanded={explain} aria-controls="change-info" onClick={() => setExplain(!explain)}>
+          <Icon name="info" />
+          <span className="visually-hidden">What the change compares with</span>
+        </button>
+      </div>
+      {explain ? (
+        <p className="biz-tile__explain" id="change-info">
+          Sales for the same number of days just before this period ({rangeLabel(data.previous, today)}), for{' '}
+          {data.barberId ? 'the same barber' : 'the whole shop'}. For a week, that's the week before.
+        </p>
+      ) : null}
       {empty ? (
         <p className="biz-empty-line" data-testid="no-sales">
           {isToday ? 'No sales yet today. Sales show up here as you check clients out.' : 'No sales in this period.'}
         </p>
       ) : (
         <>
-          <SplitBar parts={parts} label={parts.map((p) => `${p.label} ${money(p.value)}`).join(', ')} />
+          <SplitBar parts={parts} label={parts.map((p) => `${p.label} ${moneyWithCommas(p.value)}`).join(', ')} />
           <Legend items={parts.map((p) => ({ label: p.label, color: p.color, value: moneyWithCommas(p.value) }))} />
         </>
       )}
+      {/* Clients served and the average ticket are productivity's tiles, below. */}
       <dl className="biz-mini-stats">
-        <div>
-          <dt>Clients served</dt>
-          <dd>{t.clientsServed}</dd>
-        </div>
         <div>
           <dt>Services</dt>
           <dd>{t.servicesCount}</dd>
@@ -229,10 +246,6 @@ function TotalSales({ data, range, today, isToday }: { data: Analytics; range: R
         <div>
           <dt>Products sold</dt>
           <dd>{t.productsCount}</dd>
-        </div>
-        <div>
-          <dt>Average ticket</dt>
-          <dd>{money(t.averageTicketCents)}</dd>
         </div>
       </dl>
     </section>
@@ -278,7 +291,17 @@ function Leaderboard({ data, selected }: { data: Analytics; selected: string | n
           {METRICS.map((m) => (
             <label key={m.id} className="segmented__option">
               <input type="radio" className="segmented__input" name="metric" checked={metric === m.id} onChange={() => setMetric(m.id)} />
-              <span className="segmented__label">{m.label}</span>
+              <span className="segmented__label">
+                {m.short ? (
+                  <>
+                    {m.short}
+                    {/* On a phone the label is short ("Clients"); its name stays whole. */}
+                    <span className="biz-metric__more">{m.label.slice(m.short.length)}</span>
+                  </>
+                ) : (
+                  m.label
+                )}
+              </span>
             </label>
           ))}
         </div>
@@ -463,14 +486,14 @@ function tiles(data: Analytics): TileSpec[] {
     {
       id: 'ticket',
       label: 'Average ticket',
-      value: money(data.totals.averageTicketCents),
+      value: moneyWithCommas(data.totals.averageTicketCents),
       caption: 'per checkout',
       info: 'Services, products and other, divided by checkouts (sales, plus appointments marked Done without a checkout). Fees aren’t part of it.',
     },
     {
       id: 'hourly',
       label: 'Sales per open hour',
-      value: money(p.salesPerHourCents),
+      value: moneyWithCommas(p.salesPerHourCents),
       caption: 'per open hour',
       info: 'Services, products and other, divided by the open hours.',
     },
@@ -613,7 +636,7 @@ export function AnalyticsPage() {
   return (
     <div className="container container--wide biz-page" data-testid="analytics-page">
       <PageHeader title="Analytics" lead="How the shop is doing, live: for the whole shop or one barber.">
-        <Live updatedAt={analytics.updatedAt} loading={analytics.status === 'loading'} zone={zone} />
+        <Live updatedAt={analytics.updatedAt} status={analytics.status} zone={zone} />
       </PageHeader>
 
       {catalog ? (

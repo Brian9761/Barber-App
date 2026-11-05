@@ -8,6 +8,8 @@ import type { ReactNode } from 'react';
 export interface AppIdentity {
   name: string;
   icon: string;
+  /** The shorter name an iPhone puts under the icon, when it isn't `name` ("IC Business"). */
+  homeScreenName?: string;
 }
 
 export const CLIENT_APP: AppIdentity = { name: 'Izzy Clipz', icon: '/icon-192.png' };
@@ -114,7 +116,7 @@ export function AddButtonDrawing({ app = CLIENT_APP }: { app?: AppIdentity }) {
       <path d="M12 54H268" stroke={LINE} />
       <image href={app.icon} x="28" y="64" width="36" height="36" />
       <text x="76" y="88" fontSize="16" fill={TEXT}>
-        {app.name}
+        {app.homeScreenName ?? app.name}
       </text>
     </Drawing>
   );
