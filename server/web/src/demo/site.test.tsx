@@ -101,5 +101,20 @@ describe('Your details in the demo', () => {
     const hint = document.getElementById(remember.getAttribute('aria-describedby')!)!;
     expect(hint.textContent).toBe('Your name and number fill in next time you book here. Leave it off on a shared computer.');
     expect(document.body.textContent).not.toMatch(/card you add|sent only to/);
+    // The number's hint doesn't say the shop will reach them: nothing reaches the shop.
+    expect(screen.getByText('A US number, like (442) 555-0123.')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/so the shop can reach you/);
+  });
+
+  it('forgets the remembered client without mentioning a saved card, which the demo never keeps', async () => {
+    const { EMPTY_DRAFT, saveDraft } = await import('../booking/flow');
+    const { rememberDetails } = await import('../lib/storage');
+    rememberDetails({ name: 'Demo Person', phone: '(442) 555-0123', email: '' });
+    const { days } = await api.availability({ offeringId: FLOW45 }, '2026-11-06', 1);
+    saveDraft({ ...EMPTY_DRAFT, serviceId: 'haircut', choice: { kind: 'offering', offeringId: FLOW45 }, start: days[0]!.slots[0]!.start });
+    renderApp('/book/details');
+    await userEvent.click(await screen.findByRole('button', { name: 'Not you? Forget me on this computer' }));
+    expect(screen.getByText('Done. This computer no longer keeps those details.')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/saved card/);
   });
 });

@@ -114,7 +114,8 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
       ) : null}
       {forgotten ? (
         <p className="remembered-note" role="status">
-          Done. This {device} no longer keeps those details or a saved card.
+          {/* The demo never keeps a card. */}
+          {demo ? `Done. This ${device} no longer keeps those details.` : `Done. This ${device} no longer keeps those details or a saved card.`}
         </p>
       ) : null}
       <form className="form details-form" noValidate onSubmit={submit}>
@@ -134,7 +135,13 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
             aria-describedby={problem('name') ? `${ids.name}-problem` : undefined}
           />
         </Field>
-        <Field id={ids.phone} label="Mobile number" problem={problem('phone')} hint="A US number, so the shop can reach you.">
+        <Field
+          id={ids.phone}
+          label="Mobile number"
+          problem={problem('phone')}
+          // In the demo nothing reaches the shop, so it can't reach anyone either.
+          hint={demo ? 'A US number, like (442) 555-0123.' : 'A US number, so the shop can reach you.'}
+        >
           <input
             ref={refs.phone}
             id={ids.phone}
