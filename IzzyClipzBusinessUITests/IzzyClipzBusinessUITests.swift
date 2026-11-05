@@ -776,8 +776,9 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let field = reveal(identifier, file: file, line: line)
         field.tap()
         // On a slow simulator the keyboard can still be with the previous field when typing starts,
-        // and typing then fails ("Neither element nor any descendant has keyboard focus").
-        if !waitForKeyboardFocus(on: field) {
+        // and typing then fails ("Neither element nor any descendant has keyboard focus"). A tap
+        // that was dropped is made again after 10 seconds, as elsewhere.
+        if !waitForKeyboardFocus(on: field, timeout: 10) {
             field.tap()
             XCTAssertTrue(waitForKeyboardFocus(on: field), "\(identifier) didn't get the keyboard", file: file, line: line)
         }
@@ -786,7 +787,12 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     /// Whether `field` has the keyboard within `timeout`. `hasKeyboardFocus` isn't in XCUIElement's
     /// public interface, so where it's missing this only waits for a keyboard to show.
-    private func waitForKeyboardFocus(on field: XCUIElement, timeout: TimeInterval = 5) -> Bool {
+    ///
+    /// While a keyboard comes up, one look at a busy simulator's screen can take over 4 seconds:
+    /// the product editor's Name field had the keyboard (the screen recording shows its cursor and
+    /// the keyboard), but each 5-second wait fit in only one look, which ended too late, twice. The
+    /// wait allows 20 seconds like the others; the field having the keyboard ends it at once.
+    private func waitForKeyboardFocus(on field: XCUIElement, timeout: TimeInterval = 20) -> Bool {
         guard field.responds(to: NSSelectorFromString("hasKeyboardFocus")) else {
             return app.keyboards.firstMatch.waitForExistence(timeout: timeout)
         }
@@ -797,28 +803,36 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     /// deletes what's there and types `text`.
     private func replaceText(in identifier: String, with text: String, file: StaticString = #filePath, line: UInt = #line) {
         let field = reveal(identifier, file: file, line: line)
-        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "No keyboard for \(identifier)", file: file, line: line)
+        let trailingEnd = field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+        trailingEnd.tap()
+        if !waitForKeyboardFocus(on: field, timeout: 10) {
+            trailingEnd.tap()
+            XCTAssertTrue(waitForKeyboardFocus(on: field), "No keyboard for \(identifier)", file: file, line: line)
+        }
         let value = field.value as? String ?? ""
         let current = value == field.placeholderValue ? "" : value
         // "\u{8}" is the keyboard's delete key (XCUIKeyboardKey.delete.rawValue).
         field.typeText(String(repeating: "\u{8}", count: current.count) + text)
     }
 
-    /// Closes the keyboard with the Done button above it (a decimal pad has no return key).
+    /// Closes the keyboard with the Done button above it (a decimal pad has no return key). A busy
+    /// simulator can take seconds to show Done, or to let the keyboard go after it, so Done is
+    /// looked for until it shows, and tapped once more if the keyboard is still up after 10
+    /// seconds: Done only ever closes the keyboard.
     private func closeKeyboard() {
         let keyboard = app.keyboards.firstMatch
         guard keyboard.exists else { return }
-        let done = element("flatAmountDone")
-        let labelled = app.toolbars.buttons["Done"]
-        if done.waitForExistence(timeout: 3) {
-            done.tap()
-        } else if labelled.exists {
-            labelled.tap()
-        } else {
+        let doneButtons = [element("flatAmountDone"), app.toolbars.buttons["Done"]]
+        guard let done = firstToShow(doneButtons, timeout: 10) else {
             drag(.up)
+            _ = waitForDisappearance(of: keyboard)
+            return
         }
-        _ = waitForDisappearance(of: keyboard, timeout: 5)
+        done.tap()
+        if !waitForDisappearance(of: keyboard, timeout: 10), let again = firstToShow(doneButtons, timeout: 2) {
+            again.tap()
+        }
+        _ = waitForDisappearance(of: keyboard)
     }
 
     /// The first text on screen that contains `fragment`: a dialog's title or message, a footer.
@@ -963,15 +977,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             button.tap()
             return
         }
-        // Menus and pickers can show their choices as menu items, cells or text.
-        for query in [app.menuItems, app.cells, app.staticTexts] {
-            let match = query.matching(predicate).firstMatch
-            if match.exists {
-                match.tap()
-                return
-            }
+        // Menus and pickers can show their choices as menu items, cells or text. A busy simulator
+        // can take longer than 5 seconds to show them, so all of these are looked for until one shows.
+        let choices = [button] + [app.menuItems, app.cells, app.staticTexts].map { $0.matching(predicate).firstMatch }
+        guard let choice = firstToShow(choices, timeout: 15) else {
+            XCTFail("Missing the \(label) button", file: file, line: line)
+            return
         }
-        XCTFail("Missing the \(label) button", file: file, line: line)
+        choice.tap()
     }
 
     /// Taps a button in a confirmation dialog: by identifier when SwiftUI
@@ -1006,16 +1019,32 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let byIdentifier = element(identifier)
         let byLabel = app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
         let outside = app.otherElements["PopoverDismissRegion"]
-        if byIdentifier.waitForExistence(timeout: 3) {
-            byIdentifier.tap()
-        } else if byLabel.exists {
-            byLabel.tap()
-        } else {
-            XCTAssertTrue(outside.exists, "No \(label) button, and no popover to tap outside of", file: file, line: line)
+        // A busy simulator can take seconds to show the dialog, so all three are looked for until
+        // one shows.
+        let shown = firstToShow([byIdentifier, byLabel, outside])
+        if shown === outside {
             // The popover is narrower than the screen: its left edge is clear of it.
             outside.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.5)).tap()
+        } else if let shown {
+            shown.tap()
+        } else {
+            XCTFail("No \(label) button, and no popover to tap outside of", file: file, line: line)
         }
         XCTAssertTrue(waitForDisappearance(of: question), "The dialog didn't close", file: file, line: line)
+    }
+
+    /// The first of `elements` that's on the screen, looking at each in turn until one is or
+    /// `timeout` runs out. One look at a busy simulator's screen can take seconds, so a single
+    /// look at each isn't enough to say none of them is coming.
+    private func firstToShow(_ elements: [XCUIElement], timeout: TimeInterval = 20) -> XCUIElement? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            if let shown = elements.first(where: { $0.exists }) {
+                return shown
+            }
+            guard Date() < deadline else { return nil }
+            Thread.sleep(forTimeInterval: 0.5)
+        }
     }
 
     /// Waits for what's on screen to match. The default is long because a busy simulator can take

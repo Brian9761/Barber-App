@@ -1293,7 +1293,9 @@ final class IzzyClipzUITests: XCTestCase {
         if !app.keyboards.firstMatch.waitForExistence(timeout: 5) {
             field.tap()
         }
-        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 10), "No keyboard for \(identifier)", file: file, line: line)
+        // While a keyboard comes up, one look at a busy simulator's screen can take over 4 seconds,
+        // so this allows 20 like the other waits; the keyboard showing ends it at once.
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 20), "No keyboard for \(identifier)", file: file, line: line)
         dismissKeyboardTip()
         field.typeText(text)
     }
