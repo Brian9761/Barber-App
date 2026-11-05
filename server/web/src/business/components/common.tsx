@@ -1,7 +1,7 @@
 // Pieces the Business pages share: a page's header, badges, skeletons while loading,
 // banners that say what went wrong (with Try again), and the side panel.
 
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { Fragment, useEffect, useId, useRef, type ReactNode } from 'react';
 import { Icon } from '../../components/Icon';
 import type { Badge } from '../lib/fees';
 
@@ -25,7 +25,14 @@ export function Badges({ badges, testId }: { badges: Badge[]; testId?: string })
     <ul className="biz-badges" aria-label="Status" data-testid={testId}>
       {badges.map((badge) => (
         <li key={badge.text} className={`biz-badge biz-badge--${badge.tone}`}>
-          {badge.text}
+          <span>
+            {badge.text.split(' · ').map((part, index, parts) => (
+              <Fragment key={index}>
+                {index > 0 ? ' ' : null}
+                <span className="biz-badge__part">{index < parts.length - 1 ? `${part} ·` : part}</span>
+              </Fragment>
+            ))}
+          </span>
         </li>
       ))}
     </ul>

@@ -4,7 +4,7 @@
 // Reopen as the app allows, and charge the agreed fee to the card on file (asking first,
 // naming the card). A checked-out appointment changes only once its sale is voided.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { errorMessage } from '../../../api/errors';
 import { Dialog } from '../../../components/Dialog';
 import { Icon } from '../../../components/Icon';
@@ -65,19 +65,37 @@ export function AppointmentDetails({
   const [confirmReopen, setConfirmReopen] = useState<string | null>(null);
   const [confirmFee, setConfirmFee] = useState<FeeConfirmation | null>(null);
 
-  const run = async (label: string, change: () => Promise<OwnerAppointment>) => {
+  const outcome = useRef<HTMLDivElement>(null);
+  const [showOutcome, setShowOutcome] = useState(false);
+
+  /** Makes the change; false when it didn't go through (the error shows at the top). */
+  const run = async (label: string, change: () => Promise<OwnerAppointment>): Promise<boolean> => {
     setBusy(label);
     setError(null);
     try {
       onChanged(await change());
+      return true;
     } catch (caught) {
       setError(errorMessage(caught));
+      return false;
     } finally {
       setBusy(null);
     }
   };
   const setStatus = (status: Status) => run(status, () => ownerApi.setStatus(appointment.id, status));
-  const chargeFee = () => run('fee', () => ownerApi.chargeFee(appointment.id));
+  const chargeFee = async () => {
+    if (await run('fee', () => ownerApi.chargeFee(appointment.id))) setShowOutcome(true);
+  };
+
+  // After a charge the button is gone: the outcome (charged, declined, waiting on the client)
+  // takes the focus, so it's read out, and comes into view.
+  useEffect(() => {
+    if (!showOutcome || !outcome.current) return;
+    setShowOutcome(false);
+    outcome.current.focus({ preventScroll: true });
+    // (Optional: jsdom, where the unit tests run, has no scrolling.)
+    outcome.current.scrollIntoView?.({ block: 'nearest' });
+  }, [showOutcome, appointment]);
 
   const start = new Date(appointment.start);
   const panel = feePanel(appointment, now, zone);
@@ -213,7 +231,7 @@ export function AppointmentDetails({
               </p>
             ) : null
           ) : (
-            <div className={`biz-fee__outcome biz-fee__outcome--${panel.status.kind}`} data-testid="fee-status">
+            <div ref={outcome} tabIndex={-1} className={`biz-fee__outcome biz-fee__outcome--${panel.status.kind}`} data-testid="fee-status">
               <p className="biz-fee__outcome-title">
                 {panel.status.kind === 'charged'
                   ? panel.status.title

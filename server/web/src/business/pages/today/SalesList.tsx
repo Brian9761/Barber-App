@@ -154,6 +154,10 @@ export function SalesList({
                 </span>
                 <span className="biz-sale__barber">{sale.barberName}</span>
                 <span className="biz-sale__method">{methodTitle(sale.method)}</span>
+                {/* On a phone the columns above give way to one line under the client. */}
+                <span className="biz-sale__meta">
+                  {timeLabel(new Date(sale.soldAt), zone)} · {sale.barberName} · {methodTitle(sale.method)}
+                </span>
                 <span className="biz-sale__total">
                   {voided ? <span className="visually-hidden">Voided: </span> : null}
                   <span className={voided ? 'biz-struck' : undefined}>{money(sale.totalCents)}</span>

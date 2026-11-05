@@ -5,6 +5,7 @@ import analyticsFixture from '../../../test/fixtures/contract/analytics.json';
 import codeSession from '../../../test/fixtures/contract/computer-session-created.json';
 import computersFixture from '../../../test/fixtures/contract/computer-sessions.json';
 import codeFixture from '../../../test/fixtures/contract/computer-code.json';
+import feeCharged from '../../../test/fixtures/contract/no-show-fee-charged.json';
 import noShowSettings from '../../../test/fixtures/contract/no-show-settings.json';
 import ownerAppointments from '../../../test/fixtures/contract/owner-appointments-with-sale.json';
 import ownerProducts from '../../../test/fixtures/contract/owner-products.json';
@@ -173,6 +174,34 @@ describe('Today', () => {
     expect((await screen.findByTestId('void-message')).textContent).toBe('The sale was voided, so it no longer counts in your sales.');
     const card = salesDay.sales.find((s) => s.method === 'card')!;
     expect(api.calls.find((c) => c.method === 'POST')).toMatchObject({ path: `/api/owner/sales/${card.id}/void`, body: { reason: 'Rang up twice' } });
+  });
+
+  it('charges the agreed no-show fee after asking, naming the card, and then shows what happened', async () => {
+    signedIn();
+    // This morning's no-show, the fee not charged yet; the server answers with it charged.
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const noShow = { ...feeCharged.appointment, ...when, noShowFee: { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null } };
+    const charged = { ...feeCharged.appointment, ...when };
+    let fee: typeof noShow | typeof charged = noShow;
+    const api = mockApi([
+      ['GET /api/owner/appointments', () => ({ body: { appointments: [fee] } })],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+      ['POST /api/owner/appointments/*', () => ((fee = charged), { body: { appointment: charged } })],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const panel = screen.getByTestId('side-panel');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Charge no-show fee ($35)' }));
+    const dialog = screen.getByTestId('confirm-fee');
+    expect(within(dialog).getByRole('heading').textContent).toBe("Charge $35 to Fixture Client's Visa •••• 4242?");
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Charge $35' }));
+    // The button is gone: what happened takes the focus, so it's read out.
+    const outcome = await within(panel).findByText('No-show fee charged');
+    await waitFor(() => expect(document.activeElement).toBe(within(panel).getByTestId('fee-status')));
+    expect(outcome).toBeTruthy();
+    expect(within(panel).queryByRole('button', { name: /Charge no-show fee/ })).toBeNull();
+    expect(api.calls.find((c) => c.method === 'POST')).toMatchObject({ path: `/api/owner/appointments/${noShow.id}/no-show-fee` });
   });
 
   it('shows a voided sale struck through, with its reason', async () => {
