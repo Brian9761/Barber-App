@@ -174,10 +174,16 @@ test('online, a legal page comes from the network first, so a version the shop p
   // Stands in for a newer deploy: the server's /terms is a new page. The worker asks the network
   // for it (its own fetch, which the browser context sees) instead of opening the copy it keeps.
   const published = '<!doctype html><html lang="en"><head><title>Terms of Service</title></head><body><main><h1>The Terms as the shop just published them</h1></main></body></html>';
-  await context.route(/\/terms$/, (route) => (route.request().resourceType() === 'document' ? route.fulfill({ status: 200, contentType: 'text/html', body: published }) : route.fallback()));
+  let askedByWorker = false;
+  await context.route(/\/terms$/, (route) => {
+    askedByWorker ||= route.request().serviceWorker() !== null;
+    return route.fulfill({ status: 200, contentType: 'text/html', body: published });
+  });
   try {
     await page.goto('/terms');
     await expect(page.getByRole('heading', { level: 1, name: 'The Terms as the shop just published them' })).toBeVisible();
+    // It was the worker that asked the network: the page didn't just skip it.
+    expect(askedByWorker).toBe(true);
   } finally {
     await context.unroute(/\/terms$/);
   }
