@@ -148,8 +148,8 @@ export const COMPLETED_MESSAGE = "The appointment is marked completed, so there'
  * - a no-show: it's marked a no-show and the client never cancelled (nor asked to).
  * Cancelling earlier than the window (or within 15 minutes of booking) is free, so is any
  * booking the shop cancelled, and a booking the client cancelled that the shop reopened is
- * never charged. The clock decides the rest (`chargeCase` in noshowfee.ts): a no-show also
- * needs its end to have passed, and nothing can be charged more than 7 days after the start.
+ * never charged. The clock decides the rest (`feeCaseAt`): a no-show also needs its end to
+ * have passed, and nothing can be charged more than 7 days after the start.
  */
 export function feeCase(row: FeeTerms): FeeCase {
   if (row.status === 'cancelled') {

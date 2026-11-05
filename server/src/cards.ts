@@ -8,10 +8,10 @@ import type { Deps } from './deps.js';
 import { ApiError, baseOf, httpUrl, json, readJsonObject, redirect } from './http.js';
 import { loadNoShowSettings, protectionFor } from './noshow.js';
 import { hit, ipKey } from './ratelimit.js';
+import { removeCard } from './retention.js';
 import type { Context } from './router.js';
 import { accountMatch, requestOptions, shopAccount, shopStripe, stripeFailure } from './stripeaccount.js';
 import { localDate } from './time.js';
-import { removeCard } from './retention.js';
 import { parse, shortId } from './validation.js';
 
 // Saving a card for no-show protection, with Stripe Checkout in setup mode: the
