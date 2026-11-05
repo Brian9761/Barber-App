@@ -244,6 +244,45 @@ describe('statuses and fees, like the server', () => {
     expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged' });
   });
 
+  it('never counts a cancellation within 15 minutes of booking as late, as the server rules', async () => {
+    await api.connectStripe();
+    const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+    expect(kim.noShowFee?.lateCancelWindowMinutes).toBe(60);
+    // The demo's owner can't cancel as the client, so the day is kept (the shop cancels it), and then
+    // written as the server would have it: Kim booked her 12 PM at 11:30 AM, inside the 1-hour cutoff,
+    // and cancelled it in the app at `cancelledAt`.
+    now = new Date('2026-11-04T19:50:00Z');
+    await api.setStatus(kim.id, 'cancelled');
+    const cancelledByKim = (cancelledAt: string) => {
+      const store = JSON.parse(localStorage.getItem(DEMO_BUSINESS_KEY)!) as { days: Record<string, { appointments: OwnerAppointment[] }> };
+      const kept = store.days['2026-11-04']!.appointments.find((a) => a.id === kim.id)!;
+      Object.assign(kept, {
+        createdAt: '2026-11-04T19:30:00Z',
+        cancelledBy: 'customer',
+        noShowFee: { ...kept.noShowFee!, customerCancelledAt: cancelledAt, reason: null },
+      });
+      localStorage.setItem(DEMO_BUSINESS_KEY, JSON.stringify(store));
+    };
+    const lateCancellations = async () =>
+      (await api.analytics({ from: '2026-11-04', to: '2026-11-04', barberId: null })).productivity.appointments.lateCancellations;
+    const before = await lateCancellations();
+
+    for (const [cancelledAt, late] of [
+      ['2026-11-04T19:44:00Z', false], // 14 minutes after booking
+      ['2026-11-04T19:45:00Z', false], // exactly 15 minutes: still free
+      ['2026-11-04T19:46:00Z', true], // 16 minutes: a late cancellation
+    ] as const) {
+      cancelledByKim(cancelledAt);
+      const found = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+      expect(found.noShowFee?.reason ?? null, cancelledAt).toBe(late ? 'lateCancel' : null);
+      expect(await lateCancellations(), cancelledAt).toBe(before + (late ? 1 : 0));
+      if (late) continue;
+      const grace = feeCases.cases.find((c) => c.refusal?.startsWith('The client cancelled within 15 minutes'))!;
+      expect(await rejects(api.chargeFee(kim.id)), cancelledAt).toEqual({ code: 'not_chargeable', status: 409, message: grace.refusal });
+    }
+    expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
   it('never makes a completed visit with a card on file a no-show, even once it’s reopened', async () => {
     const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
     now = new Date('2026-11-04T21:00:00Z');
