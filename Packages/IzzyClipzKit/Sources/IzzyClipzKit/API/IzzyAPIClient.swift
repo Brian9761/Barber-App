@@ -221,6 +221,10 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.completePayment(id: id)).payment
     }
 
+    public func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment {
+        try await send(try encoded { try IzzyAPI.Endpoints.sendReceipt(paymentId: paymentId, email: email) }).payment
+    }
+
     public func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment] {
         try await send(IzzyAPI.Endpoints.payments(on: date)).payments
     }

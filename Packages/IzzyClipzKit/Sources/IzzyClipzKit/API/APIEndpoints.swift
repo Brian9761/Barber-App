@@ -326,6 +326,15 @@ extension IzzyAPI {
             Endpoint(.post, "/api/owner/payments/" + segment(id) + "/complete", credential: .ownerKey)
         }
 
+        /// `POST /api/owner/payments/:id/receipt` `{ email }` → `{ payment }`: Stripe emails the receipt
+        /// (the owner key only, like taking the payment).
+        public static func sendReceipt(paymentId: String, email: String) throws -> Endpoint<PaymentResponse> {
+            Endpoint(
+                .post, "/api/owner/payments/" + segment(paymentId) + "/receipt",
+                body: try json(ReceiptBody(email: email.trimmed)), credential: .ownerKey
+            )
+        }
+
         /// `GET /api/owner/payments?date=YYYY-MM-DD` → `{ payments }`.
         public static func payments(on date: LocalDate) -> Endpoint<PaymentsResponse> {
             Endpoint(.get, "/api/owner/payments", query: [QueryItem("date", date.description)], credential: .ownerKey)

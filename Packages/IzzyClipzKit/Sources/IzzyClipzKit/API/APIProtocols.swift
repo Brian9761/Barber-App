@@ -179,6 +179,13 @@ public protocol OwnerAPI: Sendable {
     /// a ticket, records the sale: see `Payment.saleId`).
     func completePayment(id: String) async throws -> IzzyAPI.Payment
 
+    /// `POST /api/owner/payments/:id/receipt`: once a card payment went through, Stripe emails its
+    /// receipt to `email` (sending it again with another address sends a new one). Offer it only
+    /// after the payment, as optional and only for the receipt: the server never keeps the address.
+    /// The owner key only. 400 before the payment went through, for a fee, or for an address Stripe
+    /// turns down.
+    func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment
+
     /// `GET /api/owner/payments?date=`.
     func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment]
 
@@ -275,6 +282,8 @@ extension OwnerAPI {
     public func voidSale(id: String, reason: String?) async throws -> IzzyAPI.VoidedSale { throw unavailable() }
 
     public func analytics(_ query: IzzyAPI.AnalyticsQuery) async throws -> IzzyAPI.Analytics { throw unavailable() }
+
+    public func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment { throw unavailable() }
 
     /// `voidSale(id:reason:)` without a reason.
     public func voidSale(id: String) async throws -> IzzyAPI.VoidedSale {

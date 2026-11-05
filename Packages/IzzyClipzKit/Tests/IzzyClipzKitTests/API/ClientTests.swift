@@ -366,6 +366,11 @@ final class ClientTests: XCTestCase {
                 let payment = try await $0.completePayment(id: "pi_3SampleSampleSample01")
                 XCTAssertTrue(payment.isSucceeded)
             },
+            OwnerCall(name: "receipt", reply: .fixture("payment.json"), method: "POST", path: "/api/owner/payments/pi_3SampleSampleSample01/receipt",
+                      body: .object(["email": .string("client@example.com")])) {
+                let payment = try await $0.sendReceipt(paymentId: "pi_3SampleSampleSample01", email: " client@example.com ")
+                XCTAssertTrue(payment.isSucceeded)
+            },
             OwnerCall(name: "payments", reply: .fixture("payments.json"), method: "GET", path: "/api/owner/payments", query: "date=2026-11-02") {
                 let payments = try await $0.payments(on: day)
                 XCTAssertEqual(payments.count, 3)
