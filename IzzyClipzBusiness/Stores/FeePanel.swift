@@ -212,13 +212,16 @@ struct FeePanel: Equatable {
     }
 
     /// Under the status buttons of a booking with a card on file that hasn't ended: "Mark no-show"
-    /// isn't offered yet, because the client may still come (a client who comes before the end isn't
-    /// a no-show), and can cancel in the app until the start.
+    /// isn't offered yet, because until the start the client can still cancel in the app, and a
+    /// client who comes before the end isn't a no-show. Worded as the website's Business area does.
     static func noShowHint(for appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime) -> String? {
         guard appointment.status == .booked, !appointment.canMarkNoShow(at: now) else { return nil }
         let today = shopTime.day(containing: now) == shopTime.day(containing: appointment.end)
         let when = today ? "at \(shopTime.time(appointment.end))" : "on \(shopTime.dayAndTime(appointment.end))"
-        return "You can mark a no-show once the appointment ends \(when). Until then, the client may still come."
+        let why = appointment.start > now
+            ? "Until it starts, the client can still cancel in the app."
+            : "A client who comes before then isn't a no-show."
+        return "You can mark a no-show once the appointment ends \(when). \(why)"
     }
 
     /// Added to "Cancel appointment"'s question for a booking with a card on file: the shop

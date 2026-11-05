@@ -211,11 +211,12 @@ final class NoShowFeeTests: XCTestCase {
         let harness = Harness(options: cardsOnFile())
         // Nia's 2:30 PM haircut hasn't ended (it ends at 3:15 PM), before its start or after it.
         let nia = try XCTUnwrap(harness.appointment(named: "Nia Sample"))
-        for moment in [TestClock.now, TestClock.at(14, 35), TestClock.at(15, 14)] {
+        for moment in [TestClock.now, TestClock.at(14, 29), TestClock.at(14, 30), TestClock.at(15, 14)] {
             XCTAssertFalse(nia.canMarkNoShow(at: moment))
             XCTAssertEqual(
                 FeePanel.noShowHint(for: nia, now: moment, shopTime: TestClock.shopTime),
-                "You can mark a no-show once the appointment ends at 3:15 PM. Until then, the client may still come."
+                "You can mark a no-show once the appointment ends at 3:15 PM. "
+                    + (moment < nia.start ? "Until it starts, the client can still cancel in the app." : "A client who comes before then isn't a no-show.")
             )
             XCTAssertEqual(
                 panel(nia, at: moment)?.status,
@@ -1056,14 +1057,18 @@ final class NoShowFeeTests: XCTestCase {
         nia.end = TestClock.at(15, 15, on: tomorrow)
         XCTAssertEqual(
             FeePanel.noShowHint(for: nia, now: TestClock.now, shopTime: TestClock.shopTime),
-            "You can mark a no-show once the appointment ends on Tue, Nov 3 at 3:15 PM. Until then, the client may still come."
+            "You can mark a no-show once the appointment ends on Tue, Nov 3 at 3:15 PM. Until it starts, the client can still cancel in the app."
         )
         // A late appointment that ends after midnight: the day it ends.
         nia.start = TestClock.at(23, 30)
         nia.end = TestClock.at(0, 15, on: tomorrow)
         XCTAssertEqual(
             FeePanel.noShowHint(for: nia, now: TestClock.now, shopTime: TestClock.shopTime),
-            "You can mark a no-show once the appointment ends on Tue, Nov 3 at 12:15 AM. Until then, the client may still come."
+            "You can mark a no-show once the appointment ends on Tue, Nov 3 at 12:15 AM. Until it starts, the client can still cancel in the app."
+        )
+        XCTAssertEqual(
+            FeePanel.noShowHint(for: nia, now: TestClock.at(23, 45), shopTime: TestClock.shopTime),
+            "You can mark a no-show once the appointment ends on Tue, Nov 3 at 12:15 AM. A client who comes before then isn't a no-show."
         )
         // Not for a booking without a card, nor once it's not booked.
         var walkIn = nia
