@@ -15,7 +15,7 @@ import { isDemo } from '../demo/mode';
 import { cardLabel, durationLabel } from '../lib/format';
 import { useOnline } from '../pwa/connection';
 import { forgetInstallHint } from '../pwa/installHint';
-import { thisDevice, type DeviceWord } from '../pwa/platform';
+import { currentPlatform, thisDevice, type DeviceWord } from '../pwa/platform';
 import { deleteSavedCard, forgetMeCardLine, type CardRemovalState } from '../lib/cardRemoval';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { isCancellable, lateCancelWarning } from '../lib/lateCancel';
@@ -342,6 +342,10 @@ function ForgetComputer({ catalog, device, onForget }: { catalog: Catalog; devic
         ) : (
           <>
             <p>This {device} will forget your name and number, your saved card, and the appointments listed here. The shop also deletes the saved card, as soon as no appointment needs it.</p>
+            {/* On an iPhone or iPad, the app added to the Home Screen keeps website data of its own (lib/storage.ts). */}
+            {currentPlatform().device === 'iphone' ? (
+              <p data-testid="forget-home-screen">On this {device}, Safari and Izzy Clipz on your Home Screen each keep their own: if you use both, choose Forget me in each.</p>
+            ) : null}
             <p>
               Your appointments stay booked. To change one later, call the shop at <span className="nowrap">{catalog.shop.phone.display}</span>.
             </p>

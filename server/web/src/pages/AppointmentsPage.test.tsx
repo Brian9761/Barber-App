@@ -79,6 +79,25 @@ describe('My appointments', () => {
     expect(screen.getByRole('link', { name: 'Book another time' }).getAttribute('href')).toBe('/book?service=haircut');
   });
 
+  it('on an iPhone, says Safari and the app on the Home Screen each need their own Forget me', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(USER_AGENTS.iphoneSafari);
+    rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
+    mockApi([]);
+    renderApp('/appointments');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this phone' }));
+    expect(within(screen.getByTestId('forget-dialog')).getByTestId('forget-home-screen').textContent).toBe(
+      'On this phone, Safari and Izzy Clipz on your Home Screen each keep their own: if you use both, choose Forget me in each.',
+    );
+  });
+
+  it('says nothing of a Home Screen app on a computer', async () => {
+    rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
+    mockApi([]);
+    renderApp('/appointments');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    expect(screen.queryByTestId('forget-home-screen')).toBeNull();
+  });
+
   it('names the device it’s on: this phone, this computer', async () => {
     vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(USER_AGENTS.iphoneSafari);
     mockApi([]);
