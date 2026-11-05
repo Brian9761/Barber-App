@@ -218,10 +218,14 @@ test('booking says what it agrees to right above Book appointment, the fee notic
     await expectStep(page, 5, 'Review and book');
     const consent = page.getByTestId('book-consent');
     await expect(consent).toHaveText('By booking, you agree to our Terms of Service (opens in a new tab) and Cancellation & No-Show Policy (opens in a new tab).');
-    const book = page.getByTestId('book-button');
-    // Right above the button, with or without a card on file.
-    expect(await consent.evaluate((line) => line.nextElementSibling?.getAttribute('data-testid'))).toBe('book-button');
-    expect((await consent.boundingBox())!.y + (await consent.boundingBox())!.height).toBeLessThanOrEqual((await book.boundingBox())!.y);
+    // Right above the button, with or without a card on file (measured once the booking rules have loaded).
+    await expect(page.getByTestId('book-note')).not.toHaveText('');
+    const above = await consent.evaluate((line) => {
+      const button = line.nextElementSibling;
+      return { next: button?.getAttribute('data-testid'), gap: button ? button.getBoundingClientRect().top - line.getBoundingClientRect().bottom : -1 };
+    });
+    expect(above.next).toBe('book-button');
+    expect(above.gap, 'the line ends above the button').toBeGreaterThanOrEqual(0);
     if (!demo) await expect(page.getByTestId('fee-warning').getByRole('link', { name: /^Read the Cancellation & No-Show Policy/ })).toBeVisible();
     await expectAccessible(page, 'Review and book with the consent line');
     await whole(page, testInfo, 'legal-06-review');
