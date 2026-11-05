@@ -307,7 +307,11 @@
   padding-top: var(--space-5);
 }
 
-/* The shop's policies, after the copyright: every one in reach, none louder than the rest. */
+/* The shop's policies: every one in reach, none louder than the rest. */
+.globalfooter__policies {
+  flex: 1 0 100%;
+}
+
 .globalfooter__policies ul {
   display: flex;
   flex-wrap: wrap;
@@ -442,6 +446,13 @@
 
 .text-button:hover {
   text-decoration: underline;
+}
+
+/* Windows High Contrast draws buttons in one color with no background: underlined, these still read as buttons, not words. */
+@media (forced-colors: active) {
+  .text-button {
+    text-decoration: underline;
+  }
 }
 
 .text-button--danger {
@@ -1022,6 +1033,14 @@ textarea.field__input {
 .choice.is-selected {
   border: 2px solid var(--color-action);
   padding: calc(var(--space-4) - 1px) calc(var(--space-5) - 1px);
+}
+
+/* In Windows High Contrast, the picked choice's thicker edge takes the system's highlight too. */
+@media (forced-colors: active) {
+  .choice[aria-pressed='true'],
+  .choice.is-selected {
+    border-color: Highlight;
+  }
 }
 
 .choice__main {

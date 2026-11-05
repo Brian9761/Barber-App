@@ -122,19 +122,27 @@ function Contents({ headings }: { headings: Extract<Block, { kind: 'heading' }>[
  */
 function useScrollToSection(blocks: Block[]): void {
   const { hash } = useLocation();
+  useEffect(() => goToSection(hash), [hash, blocks]);
+  // A link within the page changes only the address's #section: the browser scrolls, this moves the focus.
   useEffect(() => {
-    if (!hash) return;
-    let id = hash.slice(1);
-    try {
-      id = decodeURIComponent(id);
-    } catch {
-      // Not encoded: as it is.
-    }
-    const target = document.getElementById(id);
-    if (!target || !target.closest('.legal')) return;
-    target.scrollIntoView?.({ block: 'start' });
-    target.focus({ preventScroll: true });
-  }, [hash, blocks]);
+    const onHashChange = () => goToSection(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+}
+
+function goToSection(hash: string): void {
+  if (!hash) return;
+  let id = hash.slice(1);
+  try {
+    id = decodeURIComponent(id);
+  } catch {
+    // Not encoded: as it is.
+  }
+  const target = document.getElementById(id);
+  if (!target || !target.closest('.legal')) return;
+  target.scrollIntoView?.({ block: 'start' });
+  target.focus({ preventScroll: true });
 }
 
 function BlockView({ block, dates = false }: { block: Block; dates?: boolean }) {

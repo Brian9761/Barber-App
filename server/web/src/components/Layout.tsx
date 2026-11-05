@@ -265,11 +265,8 @@ export function Footer() {
             </ul>
           </div>
         </nav>
-        {/* As on apple.com: the copyright, then the shop's policies (Privacy first), then where it is. */}
+        {/* The shop's policies (Privacy first) on a row of their own, then the copyright and where the shop is. */}
         <div className="globalfooter__legal">
-          <p>
-            Copyright © {year} {contact.fullName}. All rights reserved.
-          </p>
           <nav className="globalfooter__policies" aria-label="Legal">
             <ul>
               {LEGAL_DOCUMENTS.map((document) => (
@@ -279,6 +276,9 @@ export function Footer() {
               ))}
             </ul>
           </nav>
+          <p>
+            Copyright © {year} {contact.fullName}. All rights reserved.
+          </p>
           <p className="globalfooter__where">{contact.addressLines.join(', ')}</p>
         </div>
       </div>

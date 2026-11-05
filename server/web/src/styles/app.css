@@ -271,6 +271,11 @@ html.is-standalone body {
 }
 
 @media (forced-colors: active) {
+  /* Its gray background is gone in Windows High Contrast: a frame shows where the choices are. */
+  .segmented {
+    border: 1px solid CanvasText;
+  }
+
   .segmented__input:checked + .segmented__label {
     outline: 2px solid Highlight;
   }
