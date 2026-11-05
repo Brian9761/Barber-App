@@ -69,7 +69,7 @@ A **no-show** means you didn't come to your appointment and didn't cancel it bef
 
 - **Before your appointment starts, you can also cancel by calling us** at (442) 341-3053.
 - **When the shop cancels an appointment, there's no fee.** That includes an appointment we cancel because you called us, and one we cancel for any other reason.
-- **To change your appointment after the cutoff**, call us rather than cancelling online and booking again, which would count as a late cancellation. We'll move it if we can, or cancel it for you, with no fee.
+- **To change your appointment after the cutoff**, call us rather than cancelling online and booking again, which would count as a late cancellation unless it's within 15 minutes of booking. We'll move it if we can, or cancel it for you, with no fee.
 - If we have to cancel or change your appointment, we'll try to let you know as soon as we can, at the number you gave us.
 
 ### When and how a fee is charged

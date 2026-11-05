@@ -109,7 +109,7 @@ These were checked in the code on November 5, 2026. The data inventory (`data-in
 - **Agreement screen:**
   - App: "By booking, you agree to this:" plus the full policy text (`IzzyClipz/Features/Booking/NoShowViews.swift`).
   - Website: "What you agree to by booking" (`server/web/src/booking/ReviewStep.tsx`).
-  - Both sit above a button labelled **"Book appointment"**. Neither links to the full policy or to Terms yet.
+  - Both sit above a button labelled **"Book appointment"**. On the website, the line "By booking, you agree to our Terms of Service and Cancellation & No-Show Policy." sits right above the button, with both linked (the iPhone app gets the same line).
 - **Saved cards:**
   - The app's "Remember me on this iPhone" option **starts ticked** (`IzzyClipz/App/AppRouter.swift`). It keeps the card for later bookings.
   - The website's equivalent starts unticked.
