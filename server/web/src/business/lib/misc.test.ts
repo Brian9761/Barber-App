@@ -193,12 +193,16 @@ describe('time off on Today', () => {
     expect(blockTimeText(block('2026-11-05T04:00:00Z', '2026-11-05T08:00:00Z'), '2026-11-04', zone).replace(/\s/g, ' ')).toBe('8 PM – 12 AM');
   });
 
-  it('says the days for time off that runs into other days, and "All day" for a day it covers whole', () => {
+  it('says the days for time off that runs into other days, on each of them, as the app does', () => {
     // Monday, November 2 at 6:50 PM to Friday, November 6 at 6:50 PM.
     const vacation = block('2026-11-03T02:50:00Z', '2026-11-07T02:50:00Z');
     const days = 'Mon, Nov 2 at 6:50 PM – Fri, Nov 6 at 6:50 PM';
-    expect(blockTimeText(vacation, '2026-11-02', zone).replace(/\s/g, ' ')).toBe(days);
-    expect(blockTimeText(vacation, '2026-11-04', zone)).toBe('All day');
-    expect(blockTimeText(vacation, '2026-11-06', zone).replace(/\s/g, ' ')).toBe(days);
+    for (const date of ['2026-11-02', '2026-11-04', '2026-11-06']) {
+      expect(blockTimeText(vacation, date, zone).replace(/\s/g, ' ')).toBe(days);
+    }
+    // Past midnight runs into the next day too.
+    expect(blockTimeText(block('2026-11-05T05:00:00Z', '2026-11-05T09:00:00Z'), '2026-11-04', zone).replace(/\s/g, ' ')).toBe(
+      'Wed, Nov 4 at 9 PM – Thu, Nov 5 at 1 AM',
+    );
   });
 });

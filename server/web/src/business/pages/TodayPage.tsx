@@ -84,20 +84,14 @@ function blockDays(block: TimeOff, zone: string): { first: string; last: string 
 }
 
 /**
- * When time off is, as the app says it: "1 – 2 PM" when it's all on the day shown; "All day" for
- * a day it covers whole; otherwise with the days, "Mon, Nov 2 at 6:50 PM – Fri, Nov 6 at 6:50 PM".
+ * When time off is, in the app's words (ScheduleStore.timeText): "1 – 2 PM" when it's all on the
+ * day shown, otherwise with the days, "Mon, Nov 2 at 6:50 PM – Fri, Nov 6 at 6:50 PM", on each
+ * day it covers, so every one of them says when he's back.
  */
 export function blockTimeText(block: TimeOff, date: string, zone: string): string {
   const { first, last } = blockDays(block, zone);
   if (first === date && last === date) return timeRange(block, zone);
-  if (first < date && last > date) return 'All day';
   return `${dateTimeLabel(new Date(block.start), zone)} – ${dateTimeLabel(new Date(block.end), zone)}`;
-}
-
-/** "The shop is blocked …": the same, in the middle of a sentence. */
-function shopBlockText(block: TimeOff, date: string, zone: string): string {
-  const when = blockTimeText(block, date, zone);
-  return when === 'All day' ? 'all day' : when;
 }
 
 function BlockCard({ block, date, zone }: { block: TimeOff; date: string; zone: string }) {
@@ -395,7 +389,7 @@ export function TodayPage() {
               .filter((b) => b.barberId === null)
               .map((block) => (
                 <p key={block.id} className="notice notice--info biz-shop-block">
-                  The shop is blocked {shopBlockText(block, date, zone)}
+                  The shop is blocked {blockTimeText(block, date, zone)}
                   {block.reason ? `: ${block.reason}` : ''}.
                 </p>
               ))}
