@@ -11,6 +11,7 @@ import { Icon } from '../../components/Icon';
 import { Notice } from '../../components/ui';
 import { useCatalog } from '../../data/catalog';
 import { windowLabel } from '../../lib/format';
+import { leaveTo } from '../../lib/leave';
 import { dateTimeLabel } from '../../lib/shopTime';
 import type { AppIdentity } from '../../pwa/drawings';
 import { promptInstall, useInstallPrompt } from '../../pwa/installPrompt';
@@ -72,7 +73,7 @@ function StripeSection({ stripe, onChanged }: { stripe: ReturnType<typeof useLoa
         navigate(link.url, { replace: true });
         setBusy(false);
       } else {
-        window.location.assign(link.url);
+        leaveTo(link.url);
       }
     } catch (caught) {
       setError(errorMessage(caught));

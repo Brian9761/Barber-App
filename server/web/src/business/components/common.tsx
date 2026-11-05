@@ -173,3 +173,16 @@ export function Row({ label, children, testId }: { label: string; children: Reac
     </div>
   );
 }
+
+/** A jar, drawn, where a product has no photo yet. Decoration. */
+export function ProductPlaceholder({ className }: { className: string }) {
+  return (
+    <span className={className} aria-hidden="true">
+      <svg viewBox="0 0 64 64" focusable="false">
+        <rect x="20" y="8" width="24" height="10" rx="3" fill="currentColor" />
+        <path d="M16 24c0-3.3 2.7-6 6-6h20c3.3 0 6 2.7 6 6v28c0 3.3-2.7 6-6 6H22c-3.3 0-6-2.7-6-6z" fill="currentColor" opacity="0.75" />
+        <rect x="22" y="32" width="20" height="12" rx="2" fill="#fff" opacity="0.6" />
+      </svg>
+    </span>
+  );
+}

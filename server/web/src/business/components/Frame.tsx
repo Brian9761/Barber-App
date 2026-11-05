@@ -74,7 +74,7 @@ function GlobalBar({ signedIn, onSignOut }: { signedIn: boolean; onSignOut: () =
     <header className="biz-globalbar">
       <div className="container container--wide biz-globalbar__inner">
         <Link to={signedIn ? '/business/today' : '/business'} className="biz-globalbar__home" aria-label={signedIn ? `${APP_NAME}: Today` : APP_NAME}>
-          <Logo height={30} />
+          <Logo height={34} />
           <span className="biz-pill" aria-hidden="true">
             Business
           </span>
@@ -168,7 +168,8 @@ export function Frame({ signedIn, children }: { signedIn: boolean; children: Rea
       {signedIn ? <LocalNav onSignOut={signOut.ask} /> : null}
       <div className="app-ribbons">
         <OfflineLine />
-        <DemoLine />
+        {/* Signed out, the sign-in page says it's the demo itself, next to its one button. */}
+        {signedIn ? <DemoLine /> : null}
       </div>
       <main id="main" tabIndex={-1} ref={mainRef} className="biz-main">
         {children}

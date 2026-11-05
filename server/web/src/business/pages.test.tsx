@@ -1,0 +1,355 @@
+import { screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import analyticsFixture from '../../../test/fixtures/contract/analytics.json';
+import codeSession from '../../../test/fixtures/contract/computer-session-created.json';
+import computersFixture from '../../../test/fixtures/contract/computer-sessions.json';
+import codeFixture from '../../../test/fixtures/contract/computer-code.json';
+import noShowSettings from '../../../test/fixtures/contract/no-show-settings.json';
+import ownerAppointments from '../../../test/fixtures/contract/owner-appointments-with-sale.json';
+import ownerProducts from '../../../test/fixtures/contract/owner-products.json';
+import saleCreated from '../../../test/fixtures/contract/sale-created.json';
+import saleVoided from '../../../test/fixtures/contract/sale-voided.json';
+import salesDay from '../../../test/fixtures/contract/sales-day.json';
+import stripeActive from '../../../test/fixtures/contract/stripe-connection-active.json';
+import stripeLink from '../../../test/fixtures/contract/stripe-connect-link.json';
+import stripeNotConnected from '../../../test/fixtures/contract/stripe-connection-not-connected.json';
+import { leaveTo } from '../lib/leave';
+import { apiError, mockApi, renderApp, type ApiCall } from '../test/api';
+import { times } from '../test/text';
+import { session } from './session';
+
+vi.mock('../lib/leave', () => ({ leaveTo: vi.fn() }));
+
+// Izzy Clipz Business against the server's own contract fixtures: signing in with a code
+// (or the owner key), Today with its checkout and Void, Analytics, Products and Settings,
+// and a session signed out from the iPhone dropping back to sign-in.
+
+const TODAY_ROUTES: Parameters<typeof mockApi>[0] = [
+  ['GET /api/owner/appointments', { body: ownerAppointments }],
+  ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+  ['GET /api/owner/sales', { body: salesDay }],
+];
+
+function signedIn() {
+  session.signIn(codeSession as never);
+}
+
+const main = () => within(screen.getByRole('main'));
+
+beforeEach(() => {
+  session.reset();
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-02T20:00:00Z')); // Monday at noon at the shop
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  session.reset();
+});
+
+describe('signing in', () => {
+  it('takes the 6-digit code from the app, spaces and all, and opens Today', async () => {
+    const api = mockApi([['POST /api/computer-sessions', { status: 201, body: codeSession }], ...TODAY_ROUTES]);
+    renderApp('/business');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeTruthy();
+    const steps = screen.getByRole('list');
+    expect(within(steps).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      '1Open Izzy Clipz Business on your iPhone.',
+      '2Tap Settings → Use on a computer.',
+      '3Type the 6-digit code.',
+    ]);
+    await userEvent.type(screen.getByLabelText('6-digit code'), '483 920');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByText(times("Your shop's day: appointments, checkout and today's sales."))).toBeTruthy();
+    expect(api.calls[0]).toMatchObject({ path: '/api/computer-sessions', body: { code: '483920' } });
+    expect(session.current().session?.token).toBe(codeSession.token);
+    // Signed in: the local nav, with Sign out.
+    const nav = screen.getByRole('navigation', { name: 'Izzy Clipz Business' });
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Today', 'Analytics', 'Products', 'Settings']);
+    expect(within(nav).getByRole('button', { name: 'Sign out' })).toBeTruthy();
+  });
+
+  it('says what to do when the code is wrong, and checks the code has 6 digits first', async () => {
+    const api = mockApi([['POST /api/computer-sessions', apiError('wrong_code', "That code isn't right or has run out.", 400)]]);
+    renderApp('/business');
+    const field = await screen.findByLabelText('6-digit code');
+    await userEvent.type(field, '4839');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(screen.getByRole('alert').textContent).toBe('Type the 6 digits of the code, like 483 920.');
+    expect(api.calls).toHaveLength(0);
+    await userEvent.type(field, '20');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect((await screen.findByRole('alert')).textContent).toBe("That code isn't right or has run out. Get a new one in the app: Settings → Use on a computer.");
+    expect(field.getAttribute('aria-invalid')).toBe('true');
+  });
+
+  it('can use the owner key instead, which is never kept', async () => {
+    const api = mockApi([
+      ['POST /api/owner/computer-codes', { status: 201, body: codeFixture }],
+      ['POST /api/computer-sessions', { status: 201, body: codeSession }],
+      ...TODAY_ROUTES,
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByRole('button', { name: 'Use the owner key instead' }));
+    await userEvent.type(screen.getByLabelText('Owner key'), 'the-owner-key-for-this-test');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in with the key' }));
+    expect(await screen.findByText(times("Your shop's day: appointments, checkout and today's sales."))).toBeTruthy();
+    expect(api.calls.slice(0, 2).map((c) => c.path)).toEqual(['/api/owner/computer-codes', '/api/computer-sessions']);
+    expect(JSON.stringify(localStorage)).not.toContain('the-owner-key-for-this-test');
+  });
+
+  it('drops back to sign-in with a friendly line when the session was signed out from the iPhone', async () => {
+    signedIn();
+    mockApi([['GET /api/owner/*', apiError('unauthorized', "That owner key isn't right. Check it and sign in again.", 401)]]);
+    renderApp('/business/analytics');
+    expect(await screen.findByText('This computer was signed out.')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeTruthy();
+    // Never the server's words about a key, which the owner didn't type.
+    expect(screen.queryByText(/owner key isn't right/)).toBeNull();
+  });
+});
+
+describe('Today', () => {
+  it('lists the day’s appointments and sales, and checks an appointment out in cash with a product', async () => {
+    signedIn();
+    const api = mockApi([...TODAY_ROUTES, ['GET /api/owner/products', { body: ownerProducts }], ['POST /api/owner/sales', { status: 201, body: saleCreated }]]);
+    renderApp('/business/today');
+    const cards = await screen.findAllByTestId('appointment');
+    const chris = cards.find((card) => card.textContent?.includes('Chris'))!;
+    expect(chris.textContent).toContain('Booked');
+    expect(cards.find((card) => card.textContent?.includes('Andre'))!.textContent).toContain('Paid $96 · Cash');
+    expect(screen.getByTestId('sales-totals').textContent).toBe('3 sales · $184');
+
+    await userEvent.click(chris);
+    const panel = screen.getByTestId('side-panel');
+    expect(within(panel).getByRole('heading', { name: 'Chris' })).toBeTruthy();
+    await userEvent.click(within(panel).getByRole('button', { name: 'Check out' }));
+    // The appointment's service at its booked price, Sold by its barber.
+    expect(within(panel).getByText('Haircut')).toBeTruthy();
+    expect((within(panel).getByRole('radio', { name: 'Carlos' }) as HTMLInputElement).checked).toBe(true);
+    expect(within(panel).getByTestId('ticket-total').textContent).toBe('$45');
+    await userEvent.click(within(panel).getByRole('button', { name: '+ Product' }));
+    await userEvent.click(await within(panel).findByRole('button', { name: /Matte pomade/ }));
+    expect(within(panel).getByTestId('ticket-total').textContent).toBe('$63');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Cash' }));
+    const confirm = screen.getByTestId('confirm-sale');
+    expect(within(confirm).getByRole('heading').textContent).toBe('Record a $63 cash sale for Carlos?');
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Record sale' }));
+    // The receipt says what the server recorded.
+    expect((await within(panel).findByTestId('receipt')).textContent).toContain('Sold $96 · Cash · Flowxbori');
+
+    const sale = api.calls.find((c) => c.method === 'POST' && c.path === '/api/owner/sales')!;
+    expect(sale.body).toEqual({
+      barberId: 'carlos-rafael',
+      appointmentId: '00000000-0000-4000-8000-000000000003',
+      customerName: null,
+      method: 'cash',
+      items: [
+        { kind: 'service', serviceId: 'haircut', unitCents: 4500, quantity: 1 },
+        { kind: 'product', productId: '00000000-0000-4000-8000-000000000001', unitCents: 1800, quantity: 1 },
+      ],
+    });
+    expect(sale.headers['idempotency-key']).toMatch(/^[A-Za-z0-9_-]{43}$/);
+  });
+
+  it('asks before voiding, and tells to refund a card sale in Stripe', async () => {
+    signedIn();
+    const api = mockApi([...TODAY_ROUTES, ['POST /api/owner/sales/*', { body: saleVoided }]]);
+    renderApp('/business/today');
+    await screen.findByTestId('sales-totals');
+    await userEvent.click(await screen.findByRole('button', { name: 'Void the $63 sale to Chris' }));
+    const dialog = screen.getByTestId('confirm-void');
+    expect(within(dialog).getByRole('heading').textContent).toBe('Void this $63 sale?');
+    expect(dialog.textContent).toContain("Refund the card in your Stripe Dashboard: voiding doesn't refund it.");
+    await userEvent.type(within(dialog).getByLabelText(/Reason/), 'Rang up twice');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Void sale' }));
+    expect((await screen.findByTestId('void-message')).textContent).toBe('The sale was voided, so it no longer counts in your sales.');
+    const card = salesDay.sales.find((s) => s.method === 'card')!;
+    expect(api.calls.find((c) => c.method === 'POST')).toMatchObject({ path: `/api/owner/sales/${card.id}/void`, body: { reason: 'Rang up twice' } });
+  });
+
+  it('shows a voided sale struck through, with its reason', async () => {
+    signedIn();
+    mockApi([...TODAY_ROUTES]);
+    renderApp('/business/today');
+    const rows = await screen.findAllByTestId('sale-row');
+    const voided = rows.find((row) => row.textContent?.includes('Voided'))!;
+    expect(voided.className).toContain('is-voided');
+    expect(voided.querySelector('.biz-struck')?.textContent).toBe('$35');
+  });
+
+  it('says how to fill an empty day', async () => {
+    signedIn();
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    expect((await screen.findByTestId('day-empty')).textContent).toContain('Walk-ins can still be checked out with New sale.');
+    expect(screen.getByTestId('sales-totals').textContent).toBe('No sales yet. They show here as you check clients out.');
+  });
+});
+
+describe('Analytics', () => {
+  it('shows the totals, the change, the top barber, the leaderboard and productivity', async () => {
+    signedIn();
+    const api = mockApi([['GET /api/owner/analytics', { body: analyticsFixture }]]);
+    renderApp('/business/analytics?period=custom&from=2026-11-01&to=2026-11-07');
+    expect((await screen.findByTestId('total-sales-value')).textContent).toBe('$724');
+    // $724 against $120 the week before.
+    expect(screen.getByTestId('total-sales-change').textContent).toBe('▲ Up 503% from the week before');
+    expect(api.calls[0]!.search).toBe('?from=2026-11-01&to=2026-11-07');
+    expect(screen.getByTestId('top-barber').textContent).toContain('Izzy$2153 services · 2 products');
+    const live = screen.getByTestId('live').textContent ?? '';
+    expect(live).toMatch(/^Live · Updated \d{1,2}(:\d{2})?\u00a0(AM|PM)$/);
+
+    const leaderboard = screen.getByTestId('leaderboard');
+    const names = () => within(leaderboard).getAllByTestId('leaderboard-row').map((row) => row.querySelector('.biz-rank__name')?.textContent);
+    expect(names()).toEqual(['Izzy', 'Carlos', 'Flowxbori', 'Julian', 'Cristian']);
+    await userEvent.click(within(leaderboard).getByRole('radio', { name: 'Products' }));
+    expect(names()).toEqual(['Carlos', 'Flowxbori', 'Izzy', 'Cristian', 'Julian']);
+    expect(within(leaderboard).getAllByRole('img', { name: /place/ }).map((img) => img.getAttribute('aria-label'))).toEqual([
+      'First place',
+      'Second place',
+      'Second place',
+    ]);
+
+    // Each tile explains itself.
+    const chair = screen.getByTestId('tile-chair');
+    expect(chair.textContent).toContain('4%of open hours had a client');
+    await userEvent.click(within(chair).getByRole('button', { name: 'What chair time booked means' }));
+    expect(chair.textContent).toContain('Booked time divided by open hours.');
+    expect(screen.getByTestId('tile-attach').textContent).toContain('60%of sales included a product');
+
+    // The chart's table.
+    await userEvent.click(screen.getByRole('button', { name: 'Show daily sales as a table' }));
+    const table = within(screen.getByTestId('daily-sales')).getByRole('table');
+    expect(within(table).getAllByRole('row')).toHaveLength(8);
+    expect(within(table).getByRole('rowheader', { name: 'Sun, Nov 1' })).toBeTruthy();
+  });
+
+  it('asks for one barber’s numbers, and says the top barber is the whole shop’s', async () => {
+    signedIn();
+    const api = mockApi([['GET /api/owner/analytics', ({ search }: ApiCall) => ({ body: { ...analyticsFixture, barberId: search.includes('barberId') ? 'flowxbori' : null } })]]);
+    renderApp('/business/analytics');
+    await screen.findByTestId('total-sales-value');
+    await userEvent.click(screen.getByRole('radio', { name: 'Flowxbori' }));
+    await waitFor(() => expect(api.calls.at(-1)!.search).toBe('?from=2026-11-02&to=2026-11-02&barberId=flowxbori'));
+    expect((await screen.findByTestId('top-barber')).textContent).toContain('Top sales barber (whole shop)');
+    expect(screen.getByTestId('period-line').textContent).toBe('Today: Mon, Nov 2 · Flowxbori');
+  });
+
+  it('keeps the last numbers and offers Try again when a refresh fails', async () => {
+    signedIn();
+    const api = mockApi([['GET /api/owner/analytics', { body: analyticsFixture }]]);
+    renderApp('/business/analytics?period=week');
+    await screen.findByTestId('total-sales-value');
+    api.once('GET /api/owner/analytics', 'offline');
+    await userEvent.click(screen.getByRole('radio', { name: 'Month' }));
+    expect(await screen.findByText("Couldn't load the numbers")).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect((await screen.findByTestId('total-sales-value')).textContent).toBe('$724');
+  });
+});
+
+describe('Products', () => {
+  it('lists the products, and adds one after checking its fields', async () => {
+    signedIn();
+    const created = { id: '00000000-0000-4000-8000-000000000009', name: 'Hair clay', description: 'Strong hold.', priceCents: 2000, imageUrl: null, visible: true };
+    const api = mockApi([
+      ['GET /api/owner/products', { body: ownerProducts }],
+      ['POST /api/owner/products', { status: 201, body: { product: created } }],
+    ]);
+    renderApp('/business/products');
+    const cards = await screen.findAllByTestId('product');
+    expect(cards.map((c) => c.querySelector('h2')?.textContent)).toEqual(['Matte pomade', 'Beard oil', 'Hair tonic']);
+    expect(cards[2]!.textContent).toContain('No price');
+    expect(cards[2]!.textContent).toContain('Hidden from clients');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add a product' }));
+    const editor = screen.getByTestId('product-editor');
+    await userEvent.click(within(editor).getByRole('button', { name: 'Add product' }));
+    expect(within(editor).getByRole('alert').textContent).toBe('Give the product a name.');
+    await userEvent.type(within(editor).getByLabelText('Name'), 'Hair clay');
+    await userEvent.type(within(editor).getByLabelText(/Description/), 'Strong hold.');
+    await userEvent.click(within(editor).getByRole('button', { name: 'Add product' }));
+    expect(within(editor).getByRole('alert').textContent).toBe('Type the price, like 18 or 17.50. Or tick "No price" to type it at checkout.');
+    await userEvent.type(within(editor).getByLabelText('Price'), '20');
+    await userEvent.click(within(editor).getByRole('button', { name: 'Add product' }));
+    expect((await screen.findByTestId('products-message')).textContent).toBe('Saved Hair clay.');
+    expect(api.calls.find((c) => c.method === 'POST')!.body).toEqual({ name: 'Hair clay', description: 'Strong hold.', priceCents: 2000, visible: true });
+  });
+});
+
+describe('Settings', () => {
+  it('connects Stripe on Stripe’s own page, coming back to Settings here', async () => {
+    signedIn();
+    const api = mockApi([
+      ['GET /api/owner/stripe', { body: stripeNotConnected }],
+      ['POST /api/owner/stripe/connect', { body: stripeLink }],
+      ['GET /api/owner/no-show-settings', { body: noShowSettings }],
+      ['GET /api/owner/computer-sessions', { body: computersFixture }],
+    ]);
+    renderApp('/business/settings');
+    expect((await screen.findByTestId('stripe-status')).textContent).toContain('Not connected');
+    expect(screen.getByText('Payments go straight to your own Stripe account. Stripe charges its fees there.')).toBeTruthy();
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Stripe' }));
+    await waitFor(() => expect(leaveTo).toHaveBeenCalledWith(stripeLink.url));
+    expect(api.calls.find((c) => c.method === 'POST')!.body).toEqual({ returnTo: 'web' });
+  });
+
+  it('says what happened once Stripe sends the owner back, and that disconnecting is on the iPhone', async () => {
+    signedIn();
+    mockApi([
+      ['GET /api/owner/stripe', { body: stripeActive }],
+      ['GET /api/owner/no-show-settings', { body: noShowSettings }],
+      ['GET /api/owner/computer-sessions', { body: computersFixture }],
+    ]);
+    renderApp('/business/settings?stripe=active');
+    expect((await screen.findByTestId('stripe-result')).textContent).toBe("You're connected. You can take card payments now.");
+    expect((await screen.findByTestId('stripe-status')).textContent).toContain('Connected · Izzy Clipz Barbershop');
+    expect(screen.getByText('To disconnect, use the iPhone app.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Open Stripe Dashboard/ }).getAttribute('href')).toBe('https://dashboard.stripe.com/');
+  });
+
+  it('saves no-show protection, sending only what changed', async () => {
+    signedIn();
+    const api = mockApi([
+      ['GET /api/owner/stripe', { body: stripeActive }],
+      ['GET /api/owner/no-show-settings', { body: noShowSettings }],
+      ['PATCH /api/owner/no-show-settings', ({ body }: ApiCall) => ({ body: { noShowSettings: { ...noShowSettings.noShowSettings, ...(body as object) } } })],
+      ['GET /api/owner/computer-sessions', { body: computersFixture }],
+    ]);
+    renderApp('/business/settings');
+    const section = await screen.findByTestId('no-show-settings');
+    await userEvent.click(await within(section).findByRole('checkbox', { name: 'No-show protection' }));
+    await userEvent.click(within(section).getByRole('radio', { name: 'Flat amount' }));
+    const flat = within(section).getByLabelText('Flat fee');
+    await userEvent.clear(flat);
+    await userEvent.type(flat, '25');
+    await userEvent.click(within(section).getByRole('button', { name: 'Save' }));
+    expect((await within(section).findByTestId('no-show-saved')).textContent).toBe('Saved. New bookings use these settings.');
+    expect(api.calls.find((c) => c.method === 'PATCH')!.body).toEqual({ enabled: true, feeMode: 'flat', flatCents: 2500 });
+  });
+
+  it('lists this computer and the others, and signs them all out', async () => {
+    signedIn();
+    const api = mockApi([
+      ['GET /api/owner/stripe', { body: stripeActive }],
+      ['GET /api/owner/no-show-settings', { body: noShowSettings }],
+      ['GET /api/owner/computer-sessions', { body: computersFixture }],
+      ['DELETE /api/owner/computer-sessions', { status: 200, body: {} }],
+    ]);
+    renderApp('/business/settings');
+    expect((await screen.findByTestId('this-computer')).textContent).toContain('Chrome on Mac');
+    expect((await screen.findAllByTestId('computer')).map((c) => c.querySelector('.biz-computer__name')?.textContent)).toEqual(['Edge on Windows']);
+    await userEvent.click(screen.getByRole('button', { name: 'Sign out all computers' }));
+    const dialog = screen.getByTestId('confirm-sign-out-computer');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign out all' }));
+    expect(await screen.findByText('Every computer was signed out, this one too. Each needs a new code from the app to sign in again.')).toBeTruthy();
+    expect(api.calls.some((c) => c.method === 'DELETE' && c.path === '/api/owner/computer-sessions')).toBe(true);
+    expect(main().getByRole('heading', { level: 1 }).textContent).toBe('Izzy Clipz Business on your computer');
+  });
+});

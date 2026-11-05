@@ -1245,8 +1245,15 @@
 }
 
 .biz-picker__photo--empty {
-  display: block;
-  background: linear-gradient(145deg, #e8e8ed, #d2d2d7);
+  display: grid;
+  place-items: center;
+  background: linear-gradient(145deg, #f0f0f3, #dcdce1);
+  color: #b4b4ba;
+}
+
+.biz-picker__photo--empty svg {
+  width: 26px;
+  height: 26px;
 }
 
 .biz-picker__name {
@@ -1914,12 +1921,18 @@
 }
 
 .biz-product__placeholder {
-  display: block;
+  display: grid;
+  place-items: center;
   width: 100%;
   aspect-ratio: 4 / 3;
-  background:
-    radial-gradient(circle at 50% 45%, rgba(255, 255, 255, 0.7) 0 18%, transparent 19%),
-    linear-gradient(145deg, #ececf0, #d8d8de);
+  background: linear-gradient(145deg, #f0f0f3, #dcdce1);
+  color: #b4b4ba;
+}
+
+.biz-product__placeholder svg {
+  width: 30%;
+  max-width: 96px;
+  height: auto;
 }
 
 .biz-product__body {
@@ -2154,6 +2167,12 @@
   margin-bottom: 0;
 }
 
+/* A choice of two or four keeps its own width, not the card's. */
+.biz-fieldset > .segmented,
+.biz-metrics > .segmented {
+  justify-self: start;
+}
+
 .biz-percent {
   display: flex;
   align-items: center;
@@ -2209,6 +2228,10 @@
 .biz-install {
   display: grid;
   gap: var(--space-5);
+}
+
+.biz-install .install-steps__title {
+  font-size: 24px;
 }
 
 /* ----------------------------------------------------------------- Sign in */

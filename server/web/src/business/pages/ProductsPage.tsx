@@ -9,7 +9,7 @@ import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { money } from '../../lib/format';
 import { ownerApi } from '../api/client';
-import { ErrorBanner, PageHeader, SidePanel, SkeletonCard, SuccessLine } from '../components/common';
+import { ErrorBanner, PageHeader, ProductPlaceholder, SidePanel, SkeletonCard, SuccessLine } from '../components/common';
 import { demo, useBusinessTitle, useLoad } from '../hooks';
 import { editableMoney, parseMoney } from '../lib/money';
 import { PhotoProblem, photoAsJpeg } from '../lib/photo';
@@ -118,7 +118,11 @@ function Editor({ product, onSaved, onCancel }: { product: Product | null; onSav
   return (
     <form className="biz-editor" onSubmit={(event) => void save(event)} noValidate data-testid="product-editor">
       <div className="biz-editor__photo">
-        {shown ? <img src={shown} alt={`Photo of ${draft.name || 'the product'}`} width={160} height={160} /> : <span className="biz-product__placeholder biz-editor__placeholder" aria-hidden="true" />}
+        {shown ? (
+          <img src={shown} alt={`Photo of ${draft.name || 'the product'}`} width={160} height={160} />
+        ) : (
+          <ProductPlaceholder className="biz-product__placeholder biz-editor__placeholder" />
+        )}
         <div>
           <label className="button button--secondary biz-file">
             <input type="file" accept="image/*" className="visually-hidden" onChange={(e) => void pick(e.target.files?.[0])} />
@@ -200,7 +204,7 @@ function ProductCard({ product, onEdit, onDelete }: { product: Product; onEdit: 
       {product.imageUrl ? (
         <img className="biz-product__photo" src={product.imageUrl} alt="" width={320} height={240} loading="lazy" />
       ) : (
-        <span className="biz-product__placeholder" aria-hidden="true" />
+        <ProductPlaceholder className="biz-product__placeholder" />
       )}
       <div className="biz-product__body">
         <h2 className="biz-product__name">{product.name}</h2>

@@ -12,6 +12,7 @@ import { Monogram } from '../../../components/ui';
 import { durationLabel, money } from '../../../lib/format';
 import { dateTimeLabel } from '../../../lib/shopTime';
 import { ownerApi } from '../../api/client';
+import { ProductPlaceholder } from '../../components/common';
 import { methodTitle } from '../../lib/fees';
 import { moneyWithCommas, parseMoney } from '../../lib/money';
 import {
@@ -103,7 +104,7 @@ function ProductPicker({ products, onPick }: { products: Product[] | null; onPic
               {product.imageUrl ? (
                 <img className="biz-picker__photo" src={product.imageUrl} alt="" width={44} height={44} />
               ) : (
-                <span className="biz-picker__photo biz-picker__photo--empty" aria-hidden="true" />
+                <ProductPlaceholder className="biz-picker__photo biz-picker__photo--empty" />
               )}
               <span className="biz-picker__name">{product.name}</span>
               <span className="biz-picker__detail">{product.priceCents === null ? 'No price: you type it' : money(product.priceCents)}</span>

@@ -271,7 +271,7 @@ export function Medal({ place }: { place: 1 | 2 | 3 }) {
   const colors = { 1: '#c99a06', 2: '#8e9399', 3: '#a8652e' } as const;
   const words = { 1: 'First place', 2: 'Second place', 3: 'Third place' } as const;
   return (
-    <svg className="biz-medal" viewBox="0 0 24 24" width="24" height="24" role="img" aria-label={words[place]}>
+    <svg className="biz-medal" viewBox="0 0 24 24" width="30" height="30" role="img" aria-label={words[place]}>
       <path d="M7 2h4l2 6H9zM13 2h4l-2 6h-4z" fill={colors[place]} opacity="0.65" />
       <circle cx="12" cy="15" r="7" fill={colors[place]} />
       <text x="12" y="18.6" textAnchor="middle" fontSize="9.5" fontWeight="700" fill="#fff">
