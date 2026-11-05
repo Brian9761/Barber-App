@@ -1619,6 +1619,8 @@
 .biz-change {
   margin: var(--space-2) 0 var(--space-4);
   font-weight: 600;
+  /* "… from Oct 30 –" / "Nov 1", never "Nov" / "1" on its own line. */
+  text-wrap: pretty;
 }
 
 .biz-change-line {
