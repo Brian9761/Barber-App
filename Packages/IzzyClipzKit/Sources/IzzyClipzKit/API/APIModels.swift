@@ -841,8 +841,12 @@ extension IzzyAPI {
         public static let policyChanged = "policy_changed"
         /// 409: no fee (no-show or late cancellation) can be charged for this appointment (now).
         public static let notChargeable = "not_chargeable"
-        /// 409: a booking with a card on file can be marked a no-show only once it has started.
+        /// 409: a booking with a card on file can be marked a no-show only once it has ended (the
+        /// code keeps the name it had when the rule was the start).
         public static let notStarted = "not_started"
+        /// 409: a booking with a card on file that was marked completed (or checked out) can't
+        /// become a no-show, even after it's reopened.
+        public static let alreadyCompleted = "already_completed"
         /// 409: cancelling now, inside the agreed late-cancellation window, may be charged the fee.
         /// The message is the warning to show; cancel again with `acceptLateCancelFee` to go ahead.
         public static let lateCancelFee = "late_cancel_fee"
