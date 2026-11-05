@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { times, visibleText } from '../test/text';
 import created from '../../../test/fixtures/contract/appointment-created.json';
 import cardCheckout from '../../../test/fixtures/contract/card-checkout.json';
+import cardScheduled from '../../../test/fixtures/contract/card-deletion-scheduled.json';
 import cardSaved from '../../../test/fixtures/contract/card-saved.json';
 import cardRequired from '../../../test/fixtures/contract/errors/card_required.json';
 import policyChanged from '../../../test/fixtures/contract/errors/policy_changed.json';
@@ -78,6 +79,7 @@ describe('a card on file, on Stripe’s page', () => {
       ['POST /api/cards', { body: cardSaved }],
       ['GET /api/no-show-policy', { body: policy35 }],
       ['POST /api/appointments', { status: 201, body: created }],
+      ['DELETE /api/cards', { body: cardScheduled }],
     ]);
     renderApp(`/book/card-return?status=saved&session_id=${cardCheckout.sessionId}`);
 
@@ -110,8 +112,32 @@ describe('a card on file, on Stripe’s page', () => {
     expect(loadDraft()).toBeNull();
     expect(sessionStorage.getItem('izzy.booking.v1')).toBeNull();
     expect(loadPendingCheckout()).toBeNull();
-    // "Remember me" was off: the card goes once it's booked, like the app.
+    // "Remember me" was off: the card goes once it's booked, like the app, and the shop is asked to
+    // delete it, which it does once this booking can't be charged any more ("scheduled"). Sent so
+    // it goes even as the page moves on.
     expect(loadCard()).toBeNull();
+    await waitFor(() =>
+      expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ path: '/api/cards', headers: { 'x-card-token': token }, keepalive: true }]),
+    );
+    // After the booking, never before it.
+    expect(api.calls.findIndex((c) => c.method === 'DELETE')).toBeGreaterThan(api.calls.findIndex((c) => c.path === '/api/appointments'));
+  });
+
+  it('takes the place of a card kept before ("Change card"), which the shop deletes', async () => {
+    const before = newToken();
+    const token = newToken();
+    storeCard({ token: before, card: cardSaved.card, phone: PHONE }, false);
+    keptBooking();
+    savePendingCheckout({ token, remember: false, sessionId: cardCheckout.sessionId, phone: PHONE });
+    const api = mockApi([
+      ['POST /api/cards', { body: cardSaved }],
+      ['GET /api/no-show-policy', { body: policy35 }],
+      ['DELETE /api/cards', { body: cardScheduled }],
+    ]);
+    renderApp(`/book/card-return?status=saved&session_id=${cardCheckout.sessionId}`);
+    expect((await screen.findByTestId('card-label')).textContent).toContain('Visa •••• 4242');
+    expect(loadCard()?.token).toBe(token);
+    await waitFor(() => expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ headers: { 'x-card-token': before } }]));
   });
 
   it('says so when the client came back without adding one', async () => {
@@ -226,10 +252,12 @@ describe('when booking doesn’t go through', () => {
   });
 
   it('forgets a card the server can’t use and asks for another', async () => {
-    storeCard({ token: newToken(), card: cardSaved.card, phone: PHONE }, true);
-    mockApi([
+    const token = newToken();
+    storeCard({ token, card: cardSaved.card, phone: PHONE }, true);
+    const api = mockApi([
       ['GET /api/no-show-policy', { body: policy35 }],
       ['POST /api/appointments', apiError(cardRequired.error.code, cardRequired.error.message, 409)],
+      ['DELETE /api/cards', apiError('not_found', "We couldn't find that card.", 404)],
     ]);
     keptBooking();
     renderApp('/book/review');
@@ -241,6 +269,8 @@ describe('when booking doesn’t go through', () => {
     expect(within(section).getByRole('button', { name: 'Add a card' })).toBeTruthy();
     expect(loadCard()).toBeNull();
     expect(bookButton().disabled).toBe(true);
+    // Its key is gone from here: the shop deletes it, if it has it.
+    await waitFor(() => expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ headers: { 'x-card-token': token } }]));
   });
 
   it('shows a policy the shop just changed, and books with the new one', async () => {
@@ -317,6 +347,45 @@ describe('on a shared computer', () => {
     await screen.findByTestId('booked-title');
     expect(postsTo(api.calls, '/api/appointments')[0]!.headers['x-card-token']).toBe(token);
     expect(JSON.parse(localStorage.getItem(CARD_KEY)!)).toEqual({ token, card: cardSaved.card, phone: PHONE });
+    // Kept for next time: the shop keeps it too.
+    expect(api.calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+  });
+
+  it('asks the shop to delete a remembered card the client chose not to keep this time', async () => {
+    // Ana's card was remembered; this time she leaves "Remember me" off, so this computer forgets it
+    // once it's booked, and nobody could use it again: the shop deletes it once no booking needs it.
+    const token = newToken();
+    storeCard({ token, card: cardSaved.card, phone: PHONE }, false);
+    const api = mockApi([
+      ['GET /api/no-show-policy', { body: policy35 }],
+      ['POST /api/appointments', { status: 201, body: created }],
+      ['DELETE /api/cards', { body: cardScheduled }],
+    ]);
+    keptBooking();
+    renderApp('/book/review');
+    await waitFor(() => expect(bookButton().disabled).toBe(false));
+    await userEvent.click(bookButton());
+    await screen.findByTestId('booked-title');
+    expect(loadCard()).toBeNull();
+    await waitFor(() => expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ headers: { 'x-card-token': token } }]));
+  });
+
+  it('books even when the shop can’t be reached to delete the card afterwards, and keeps no key', async () => {
+    const token = newToken();
+    storeCard({ token, card: cardSaved.card, phone: PHONE }, false);
+    const api = mockApi([
+      ['GET /api/no-show-policy', { body: policy35 }],
+      ['POST /api/appointments', { status: 201, body: created }],
+      ['DELETE /api/cards', 'offline'],
+    ]);
+    keptBooking();
+    renderApp('/book/review');
+    await waitFor(() => expect(bookButton().disabled).toBe(false));
+    await userEvent.click(bookButton());
+    expect((await screen.findByTestId('booked-title')).textContent).toContain("You're booked");
+    expect(loadCard()).toBeNull();
+    // Tried once more, quietly.
+    await waitFor(() => expect(api.calls.filter((c) => c.method === 'DELETE')).toHaveLength(2));
   });
 });
 

@@ -109,11 +109,19 @@ Once someone opens the demo, its service worker keeps opening it from its own co
 
 Each of these ends when the Privacy Policy's table says it does: the appointments go 30 days after each one (when the site next opens), the booking in progress once it's booked, and in the demo "Forget me" and "Reset the demo" clear what it kept. `e2e/legal.spec.ts` checks that the browser keeps nothing else, and that the real site's only cookie is `izzy_appointments` (the demo sets none).
 
-A computer can be shared, so "Remember me" starts off unless this computer already remembers the client, a saved card is only ever offered to the number that added it, and a booking that's done (or a new one) doesn't carry the last client's details or note. "Not you? Forget me on this computer" on Your details, and "Forget me on this computer" on My appointments (each naming the device), clear what's kept here; the appointments stay booked with the shop.
+A computer can be shared, so "Remember me" starts off unless this computer already remembers the client, a saved card is only ever offered to the number that added it, and a booking that's done (or a new one) doesn't carry the last client's details or note. "Not you? Forget me on this computer" on Your details, and "Forget me on this computer" on My appointments (each naming the device), clear what's kept here; the appointments stay booked with the shop. They also delete the saved card at the shop (see [The card on file](#the-card-on-file)).
 
 ## The card on file
 
 When the shop's no-show protection needs a card, Review's "Add a card" makes a card token, calls `POST /api/cards/checkout` with `returnTo: "web"` and `X-Card-Token`, keeps the token and the booking in this tab, and sends the browser to Stripe's page. Stripe comes back through the server to `/book/card-return?status=saved&session_id=…` (or `?status=cancelled`); that page saves the card with `POST /api/cards` and goes back to Review, which then shows "Visa •••• 4242 · Change" and lets the client book. Only the card page this tab opened last is saved (an older one, reached through the browser's history, says so), and "Try again" shows only when trying again can work (the shop wasn't reached, or asked to wait). If the server answers `card_required` anyway (the shop turned protection on meanwhile), Review checks the policy again and forgets only a card it sent.
+
+The card's key exists only in this browser, so whenever the site lets go of it for good, it asks the shop to delete the card (`DELETE /api/cards` with `X-Card-Token`, `src/lib/cardRemoval.ts`), and forgets the key here whatever the answer:
+
+- **"Forget me" and "Not you?"**: the server deletes the card at Stripe now, or, while a booking still needs it (it's upcoming, or can still be charged a fee within 7 days), as soon as none does. The page says which in one plain line (on My appointments in the server's own words: "Your saved card is deleted. It can't be charged any more." or "Your card will be deleted as soon as your appointments no longer need it."). If the shop can't be reached (tried twice), it says to call the shop to have the card removed. This is what makes the Privacy Policy's and the Cancellation & No-Show Policy's "Forget me on our website" remove a saved card.
+- **Right after a booking made without "Remember me"**: the server can't see the box, so the site asks it then, with `keepalive` so it goes even as the page moves on. The server answers "scheduled": it keeps the card only while that booking can still be charged, then deletes it, which is how "without Remember me, the card is used only for the booking you saved it for" stays true. The same goes for a remembered card the client chose not to keep this time.
+- **A card nobody could use any more**: one replaced by a new card ("Change card"), another client's card dropped on Your details, or one the server turned down for a booking.
+
+The demo never saves a card; its in-browser API answers `deleteCard` as the server does for a key with no card (404), without a request.
 
 ## End-to-end tests
 

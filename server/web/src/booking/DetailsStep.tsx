@@ -4,7 +4,8 @@ import { Icon } from '../components/Icon';
 import { NewTabLink } from '../components/ui';
 import { isDemo } from '../demo/mode';
 import { displayPhone, emailProblem, MAX_NOTE_LENGTH, charLength, nameProblem, noteProblem, parseUSPhone, phoneProblem, toE164 } from '../lib/phone';
-import { forgetClient, forgetDetails, keepCardFor, loadRememberedDetails, rememberDetails } from '../lib/storage';
+import { deleteSavedCard, deleteSavedCardQuietly, notYouCardLine, type CardRemovalState } from '../lib/cardRemoval';
+import { forgetClient, forgetDetails, keepCardFor, loadCard, loadRememberedDetails, rememberDetails } from '../lib/storage';
 import { thisDevice } from '../pwa/platform';
 import { useBooking, useStepNavigation } from './BookingContext';
 import type { Details } from './flow';
@@ -22,7 +23,8 @@ const EMPTY_DETAILS: Details = { name: '', phone: '', email: '', note: '', remem
  *
  * A computer can be shared, so "Remember me" starts off, unless this computer
  * already remembers the client (they ticked it last time); then "Not you? Forget
- * me on this computer" clears it for whoever is booking now.
+ * me on this computer" clears it for whoever is booking now, and asks the shop to
+ * delete the saved card (a card this computer lets go of can't be used again).
  *
  * In the demo nothing reaches the shop, so the step says the details stay on this
  * device, and "Remember me" says nothing of a saved card (the demo never asks for one).
@@ -40,6 +42,7 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
   );
   const [showProblems, setShowProblems] = useState(false);
   const [forgotten, setForgotten] = useState(false);
+  const [cardRemoval, setCardRemoval] = useState<CardRemovalState | null>(null);
   const refs = { name: useRef<HTMLInputElement>(null), phone: useRef<HTMLInputElement>(null), email: useRef<HTMLInputElement>(null), note: useRef<HTMLTextAreaElement>(null) };
   const ids = { name: useId(), phone: useId(), email: useId(), note: useId(), remember: useId() };
 
@@ -73,22 +76,34 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
       forgetDetails();
     }
     // A card saved on this computer goes with the same choice (kept for next time, or for
-    // this visit only), and only for the client who added it: anyone else's is forgotten.
-    keepCardFor(toE164(parseUSPhone(details.phone)!), details.remember);
+    // this visit only), and only for the client who added it: anyone else's is forgotten here,
+    // and the shop deletes it (nobody could use it again).
+    const phone = toE164(parseUSPhone(details.phone)!);
+    const card = loadCard();
+    keepCardFor(phone, details.remember);
+    if (card && card.phone !== phone) deleteSavedCardQuietly(card.token);
     dispatch({ type: 'saveDetails', details });
     goTo('review');
   };
 
-  /** Someone else is booking: this computer forgets the remembered client, and the form starts empty. */
+  /**
+   * Someone else is booking: this computer forgets the remembered client, and the form starts
+   * empty. The saved card goes too, here at once, and at the shop (whatever the shop answers,
+   * or if it can't be reached, nothing of it is kept here).
+   */
   const forgetMe = () => {
+    const card = loadCard();
     forgetClient();
     dispatch({ type: 'forgetDetails' });
     setRemembered(null);
     setValues(EMPTY_DETAILS);
     setShowProblems(false);
     setForgotten(true);
+    setCardRemoval(card ? { status: 'asking' } : null);
+    if (card) void deleteSavedCard(card.token).then(setCardRemoval);
     refs.name.current?.focus();
   };
+  const cardLine = notYouCardLine(cardRemoval, catalog.shop.phone.display);
 
   const problem = (field: FieldName) => (showProblems ? problems[field] : null);
 
@@ -117,6 +132,12 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
         <p className="remembered-note" role="status">
           {/* The demo never keeps a card. */}
           {demo ? `Done. This ${device} no longer keeps those details.` : `Done. This ${device} no longer keeps those details or a saved card.`}
+          {cardLine ? (
+            <>
+              {' '}
+              <span data-testid="card-removal">{cardLine}</span>
+            </>
+          ) : null}
         </p>
       ) : null}
       <form className="form details-form" noValidate onSubmit={submit}>

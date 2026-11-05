@@ -48,6 +48,13 @@ afterEach(() => {
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
+describe('a saved card', () => {
+  it('is never kept by the demo, so deleting one answers like the server for a key with no card, without a request', async () => {
+    await expect(demo().deleteCard(newToken())).rejects.toMatchObject({ code: 'not_found', status: 404, message: "We couldn't find that card." });
+    await expect(demo().deleteCard('not a token')).rejects.toMatchObject({ code: 'invalid_request', status: 400 });
+  });
+});
+
 describe('the catalog', () => {
   it('is the shop’s real catalog, exactly what the server’s GET /api/catalog answers', async () => {
     // data/catalog.json lists none of the shop's accessibility features until the owner has

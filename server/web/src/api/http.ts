@@ -8,6 +8,7 @@ import type {
   BookingConfirmation,
   BookingTarget,
   CardCheckout,
+  CardDeletion,
   Catalog,
   NewAppointment,
   NoShowPolicy,
@@ -17,10 +18,24 @@ import type {
 import { ApiError, ErrorCode, errorFromResponse, isApiError, OFFLINE, OFFLINE_MESSAGE } from './errors';
 
 interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'DELETE';
   body?: unknown;
   headers?: Record<string, string>;
   signal?: AbortSignal;
+  /** Sent even if the page goes away meanwhile (a request made as the client leaves). */
+  keepalive?: boolean;
+}
+
+/** The server's words for each answer to DELETE /api/cards (server/src/cards.ts), should an answer come without them. */
+export const CARD_DELETED_MESSAGE = "Your saved card is deleted. It can't be charged any more.";
+export const CARD_SCHEDULED_MESSAGE = 'Your card will be deleted as soon as your appointments no longer need it.';
+
+/** DELETE /api/cards's answer as the site reads it: a status it doesn't know reads as scheduled, never as deleted (like the Kit). */
+export function cardDeletionOf(answer: { cardDeletion?: { status?: unknown; message?: unknown } } | null | undefined): CardDeletion {
+  const status = answer?.cardDeletion?.status === 'deleted' ? 'deleted' : 'scheduled';
+  const message = answer?.cardDeletion?.message;
+  const fallback = status === 'deleted' ? CARD_DELETED_MESSAGE : CARD_SCHEDULED_MESSAGE;
+  return { status, message: typeof message === 'string' && message.trim() !== '' ? message.trim() : fallback };
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -32,7 +47,14 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
   }
   let response: Response;
   try {
-    response = await fetch(path, { method: options.method ?? 'GET', headers, body, signal: options.signal, credentials: 'same-origin' });
+    response = await fetch(path, {
+      method: options.method ?? 'GET',
+      headers,
+      body,
+      signal: options.signal,
+      credentials: 'same-origin',
+      ...(options.keepalive ? { keepalive: true } : {}),
+    });
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new ApiError(OFFLINE, OFFLINE_MESSAGE, 0);
@@ -78,6 +100,18 @@ export const httpApi = {
     request<{ card: SavedCard }>('/api/cards', { method: 'POST', body: { sessionId }, headers: { 'X-Card-Token': cardToken } }).then(
       (r) => r.card,
     ),
+
+  /**
+   * Asks the shop to delete the card saved under this token ("Forget me", "Not you?", and right
+   * after a booking made without "Remember me"): deleted at Stripe now, or as soon as no booking
+   * needs it. A token with no card is a 404. `keepalive` sends it even as the page moves on.
+   */
+  deleteCard: (cardToken: string, options: { keepalive?: boolean } = {}) =>
+    request<{ cardDeletion?: { status?: unknown; message?: unknown } }>('/api/cards', {
+      method: 'DELETE',
+      headers: { 'X-Card-Token': cardToken },
+      keepalive: options.keepalive,
+    }).then(cardDeletionOf),
 
   /**
    * Books it with the manage token made for this booking (and the card, when one is required).

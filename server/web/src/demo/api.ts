@@ -31,6 +31,7 @@ import type {
   BookingConfirmation,
   BookingTarget,
   CardCheckout,
+  CardDeletion,
   Catalog,
   NewAppointment,
   NoShowPolicy,
@@ -497,6 +498,16 @@ export function createDemoApi(options: DemoOptions = {}): Api {
       await pause(latency);
       // No card page was ever opened, so there's no card to save.
       throw fail(ErrorCode.notFound, "We couldn't find that card. Add it again.", 404);
+    },
+
+    /**
+     * DELETE /api/cards, answered as the server would, with no request: the demo never saves a card
+     * (no-show protection is off), so whatever key this browser holds has no card behind it.
+     */
+    async deleteCard(cardToken: string): Promise<CardDeletion> {
+      await pause(latency);
+      if (!isToken(cardToken)) throw invalid('Send the card token as X-Card-Token.');
+      throw fail(ErrorCode.notFound, "We couldn't find that card.", 404);
     },
 
     async book(appointment: NewAppointment, manageToken: string, _cardToken?: string): Promise<BookingConfirmation> {

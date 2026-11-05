@@ -85,6 +85,23 @@ describe('My appointments in the demo', () => {
     for (const detail of ['Private Person', '7605558271', 'private.person', 'gate code']) expect(everything, detail).not.toContain(detail);
   });
 
+  it('asks its own stand-in to delete a card key this browser holds, with no request, and forgets it', async () => {
+    // The demo never saves a card; should this browser hold a key anyway (say, from the real site
+    // at this address), "Forget me" asks the demo's stand-in, which has no card behind it.
+    const { CARD_KEY, loadCard } = await import('../lib/storage');
+    localStorage.setItem(CARD_KEY, JSON.stringify({ token: newToken(), card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 }, phone: '+17605558271' }));
+    const deleteCard = vi.spyOn(api, 'deleteCard');
+    renderApp('/appointments');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps your details or the bookings made in the demo.');
+    expect(loadCard()).toBeNull();
+    await vi.waitFor(() => expect(deleteCard).toHaveBeenCalledTimes(1));
+    await expect(deleteCard.mock.results[0]!.value).rejects.toMatchObject({ code: 'not_found', status: 404 });
+    // Nothing more to say: there was no card to delete.
+    expect(screen.queryByTestId('card-removal')).toBeNull();
+  });
+
   it('leaves nothing of the visit behind with “Forget me”: the Add to Home Screen bar’s count goes too', async () => {
     await bookInDemo();
     localStorage.setItem('izzy.visits.v1', '3');

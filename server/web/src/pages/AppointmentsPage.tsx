@@ -16,6 +16,7 @@ import { cardLabel, durationLabel } from '../lib/format';
 import { useOnline } from '../pwa/connection';
 import { forgetInstallHint } from '../pwa/installHint';
 import { thisDevice, type DeviceWord } from '../pwa/platform';
+import { deleteSavedCard, forgetMeCardLine, type CardRemovalState } from '../lib/cardRemoval';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { isCancellable, lateCancelWarning } from '../lib/lateCancel';
 import { dateTimeLabel, longDateTimeLabel } from '../lib/shopTime';
@@ -69,14 +70,17 @@ function remembersAnything(saved: SavedAppointment[]): boolean {
  * progress and the appointments listed here. The appointments stay booked with the shop.
  * (In the demo, the bookings made in it go too: they only ever lived in this browser; and so
  * does what the Add to Home Screen bar kept, so the demo leaves nothing of the visit behind.)
+ * Gives back the key of the card this browser held, if any, for the shop to delete it.
  */
-function forgetThisComputer(): void {
+function forgetThisComputer(): string | null {
+  const card = loadCard();
   forgetClient();
   forgetAppointments();
   clearDraft();
   forgetLastBooked();
   api.forgetHere();
   if (isDemo()) forgetInstallHint();
+  return card?.token ?? null;
 }
 
 /**
@@ -109,6 +113,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
   const [saved, setSaved] = useState<SavedAppointment[]>(() => loadAppointments());
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [forgotten, setForgotten] = useState(false);
+  const [cardRemoval, setCardRemoval] = useState<CardRemovalState | null>(null);
   // The demo's stand-in for the shop is in this browser, so it can always be asked.
   const online = useOnline() || demo;
   // Offline, the page doesn't show what it last heard from the shop: it could have changed since.
@@ -116,18 +121,31 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
   const [attempt, setAttempt] = useState(0);
   const reload = useCallback(() => setSaved(loadAppointments()), []);
   const forget = () => {
-    forgetThisComputer();
+    // Everything goes from here at once; the card is also deleted at the shop (the Privacy Policy's
+    // "Forget me" on our website), and a problem reaching the shop never keeps anything here.
+    const cardToken = forgetThisComputer();
     setForgotten(true);
     reload();
+    setCardRemoval(cardToken ? { status: 'asking' } : null);
+    if (cardToken) void deleteSavedCard(cardToken).then(setCardRemoval);
   };
+  const cardLine = forgetMeCardLine(cardRemoval, catalog.shop.phone.display);
   const forgottenNotice = forgotten ? (
-    <Notice tone="success" role="status" testId="forgotten-notice">
-      <p>
-        {demo
-          ? `Done. This ${device} no longer keeps your details or the bookings made in the demo.`
-          : `Done. This ${device} no longer keeps your details, card or appointments. Your appointments are still booked with the shop.`}
-      </p>
-    </Notice>
+    <>
+      <Notice tone="success" role="status" testId="forgotten-notice">
+        <p>
+          {demo
+            ? `Done. This ${device} no longer keeps your details or the bookings made in the demo.`
+            : `Done. This ${device} no longer keeps your details, card or appointments. Your appointments are still booked with the shop.`}
+        </p>
+        {cardLine && cardRemoval?.status !== 'failed' ? <p data-testid="card-removal">{cardLine}</p> : null}
+      </Notice>
+      {cardLine && cardRemoval?.status === 'failed' ? (
+        <Notice tone="warning" role="alert" testId="card-removal">
+          <p>{cardLine}</p>
+        </Notice>
+      ) : null}
+    </>
   ) : null;
 
   // Check each one with the shop: it may have been cancelled by the shop, or completed. With no
@@ -309,7 +327,7 @@ function ForgetComputer({ catalog, device, onForget }: { catalog: Catalog; devic
           <p>This {device} will forget your name and number, and the bookings made in the demo.</p>
         ) : (
           <>
-            <p>This {device} will forget your name and number, your saved card, and the appointments listed here.</p>
+            <p>This {device} will forget your name and number, your saved card, and the appointments listed here. The shop also deletes the saved card, as soon as no appointment needs it.</p>
             <p>
               Your appointments stay booked. To change one later, call the shop at <span className="nowrap">{catalog.shop.phone.display}</span>.
             </p>

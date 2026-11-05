@@ -7,6 +7,8 @@ import lateCancelFee from '../../../test/fixtures/contract/errors/late_cancel_fe
 import notCancellable from '../../../test/fixtures/contract/errors/not_cancellable.json';
 import type { Appointment } from '../api/types';
 import cardSaved from '../../../test/fixtures/contract/card-saved.json';
+import cardDeleted from '../../../test/fixtures/contract/card-deletion.json';
+import cardScheduled from '../../../test/fixtures/contract/card-deletion-scheduled.json';
 import {
   APPOINTMENTS_KEY,
   carriedAppointments,
@@ -228,32 +230,80 @@ describe('on a shared computer', () => {
     expect(stored!.appointment).toMatchObject({ id: fixtureAppointment.id, serviceName: 'Haircut', barberName: 'Flowxbori' });
   });
 
-  it('forgets the client here when asked, after saying the appointments stay booked', async () => {
+  it('forgets the client here when asked, after saying the appointments stay booked, and the shop deletes the card', async () => {
     at('2026-11-02T17:00:00Z');
     saveAppointment(fixtureAppointment, MANAGE);
     rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
-    storeCard({ token: newToken(), card: cardSaved.card, phone: '+14425550123' }, true);
-    const api = mockApi([['GET /api/appointments/*', { body: { appointment: fixtureAppointment } }]]);
+    const token = newToken();
+    storeCard({ token, card: cardSaved.card, phone: '+14425550123' }, true);
+    const api = mockApi([
+      ['GET /api/appointments/*', { body: { appointment: fixtureAppointment } }],
+      ['DELETE /api/cards', { body: cardScheduled }],
+    ]);
     renderApp('/appointments');
     await screen.findByTestId('appointment-card');
 
     await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
     const dialog = screen.getByTestId('forget-dialog');
+    expect(dialog.textContent).toContain('The shop also deletes the saved card, as soon as no appointment needs it.');
     expect(dialog.textContent).toContain('Your appointments stay booked. To change one later, call the shop at (442) 341-3053.');
     // The safe answer comes first.
     await userEvent.click(within(dialog).getByRole('button', { name: 'Keep everything' }));
     expect(loadAppointments()).toHaveLength(1);
+    expect(api.calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 
     await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
     await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
-    expect((await screen.findByTestId('forgotten-notice')).textContent).toContain('Your appointments are still booked with the shop.');
+    const notice = await screen.findByTestId('forgotten-notice');
+    expect(notice.textContent).toContain('Your appointments are still booked with the shop.');
     expect(screen.getByText('No appointments booked on this computer yet.')).toBeTruthy();
     expect(loadAppointments()).toEqual([]);
     expect(loadRememberedDetails()).toBeNull();
     expect(loadCard()).toBeNull();
     expect(carriedAppointments()).toEqual([]);
+    // The card's appointment still needs it: the shop deletes it once none does, and says so.
+    await waitFor(() => expect(within(notice).getByTestId('card-removal').textContent).toBe(cardScheduled.cardDeletion.message));
+    expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ path: '/api/cards', headers: { 'x-card-token': token } }]);
     // Nothing was cancelled.
     expect(api.calls.filter((c) => c.method === 'POST')).toEqual([]);
+  });
+
+  it('says the card is deleted when no appointment needs it', async () => {
+    rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
+    storeCard({ token: newToken(), card: cardSaved.card, phone: '+14425550123' }, true);
+    mockApi([['DELETE /api/cards', { body: cardDeleted }]]);
+    renderApp('/appointments');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    const notice = await screen.findByTestId('forgotten-notice');
+    await waitFor(() => expect(within(notice).getByTestId('card-removal').textContent).toBe("Your saved card is deleted. It can't be charged any more."));
+  });
+
+  it('forgets the card here even when the shop can’t be reached, and says to call the shop', async () => {
+    rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
+    storeCard({ token: newToken(), card: cardSaved.card, phone: '+14425550123' }, true);
+    const api = mockApi([['DELETE /api/cards', 'offline']]);
+    renderApp('/appointments');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    expect(loadCard()).toBeNull();
+    expect(loadRememberedDetails()).toBeNull();
+    const problem = await screen.findByRole('alert');
+    expect(problem.textContent).toBe("We couldn't reach the shop to delete your saved card. To have it removed, call the shop at (442) 341-3053.");
+    expect(screen.getByTestId('forgotten-notice').textContent).toContain('no longer keeps your details, card or appointments');
+    // Tried once more, then left to the client.
+    expect(api.calls.filter((c) => c.method === 'DELETE')).toHaveLength(2);
+  });
+
+  it('asks the shop nothing when this computer keeps no card', async () => {
+    rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
+    const api = mockApi([]);
+    renderApp('/appointments');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toContain('Done.');
+    expect(screen.queryByTestId('card-removal')).toBeNull();
+    expect(api.calls).toEqual([]);
   });
 
   it('doesn’t offer to forget anything when nothing is kept', () => {

@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api, ErrorCode, errorMessage, isApiError } from '../api/client';
 import { Loading, Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
-import { clearPendingCheckout, loadPendingCheckout, storeCard } from '../lib/storage';
+import { deleteSavedCardQuietly } from '../lib/cardRemoval';
+import { clearPendingCheckout, loadCard, loadPendingCheckout, storeCard } from '../lib/storage';
 import { useBooking } from './BookingContext';
 import { firstOpenStep, STEP_PATHS } from './flow';
 import type { ReviewLocationState } from './ReviewStep';
@@ -71,8 +72,12 @@ export function CardReturnPage() {
     api
       .saveCard(pending.sessionId, pending.token)
       .then((card) => {
+        // The new card takes the place of any card this browser kept ("Change card", or another
+        // client's): that one's key is gone from here, so the shop deletes it.
+        const replaced = loadCard();
         storeCard({ token: pending.token, card, phone: pending.phone }, pending.remember);
         clearPendingCheckout();
+        if (replaced && replaced.token !== pending.token) deleteSavedCardQuietly(replaced.token);
         navigate(backTo, { replace: true });
       })
       .catch((error: unknown) => {

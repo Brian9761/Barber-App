@@ -45,6 +45,8 @@ export interface ApiCall {
   search: string;
   headers: Record<string, string>;
   body: unknown;
+  /** Sent with `keepalive`, so it goes even if the page moves on. */
+  keepalive: boolean;
 }
 
 type Reply = { status?: number; body?: unknown } | 'offline';
@@ -76,6 +78,7 @@ export function mockApi(routes: Route[]) {
       search: url.search,
       headers,
       body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      keepalive: init?.keepalive === true,
     };
     calls.push(call);
     const index = queue.findIndex(([match]) => {

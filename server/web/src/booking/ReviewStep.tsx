@@ -6,6 +6,7 @@ import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
 import { CallLink, Loading, NewTabLink, Notice } from '../components/ui';
 import { DemoNotice } from '../demo/DemoNotice';
+import { deleteSavedCardQuietly } from '../lib/cardRemoval';
 import { cardLabel, list, windowLabel } from '../lib/format';
 import { cancelledLate, feeLabel, lateCancelNoticeText } from '../lib/lateCancel';
 import { leaveTo } from '../lib/leave';
@@ -16,6 +17,7 @@ import {
   clearPendingCheckout,
   forgetCard,
   loadAppointments,
+  loadCard,
   loadCardFor,
   saveAppointment,
   savePendingCheckout,
@@ -161,8 +163,16 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         return;
       }
       // Booked. With "Remember me" off the card goes too, like the name and number (the app does the same);
-      // and so does anything kept for coming back from Stripe's card page.
-      if (!details.remember) forgetCard();
+      // and so does anything kept for coming back from Stripe's card page. The shop is asked to delete
+      // that card: it keeps it only while this booking can still be charged, then deletes it (the server
+      // can't see the box, so this is how "without Remember me, the card is used only for the booking
+      // you saved it for" stays true). Sent even as the page moves on, and tried again once if the
+      // connection drops; the key isn't kept here either way.
+      if (!details.remember) {
+        const kept = loadCard();
+        forgetCard();
+        if (kept) deleteSavedCardQuietly(kept.token, { keepalive: true });
+      }
       clearPendingCheckout();
       rememberLastBooked(confirmation.appointment.id);
       dispatch({ type: 'booked' });
@@ -183,6 +193,8 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
           if (sentCard) {
             forgetCard(sentCard.token);
             setCard(null);
+            // Its key is gone from here, so nobody could use it again: the shop deletes it (if it has it).
+            deleteSavedCardQuietly(sentCard.token);
           }
           reloadPolicy();
           setCardMessage(found.message);

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import cardDeleted from '../../../test/fixtures/contract/card-deletion.json';
+import cardScheduled from '../../../test/fixtures/contract/card-deletion-scheduled.json';
 import { apiError, FLOW45, mockApi } from '../test/api';
 import { api, ApiError, defaultMessage, errorFromResponse, OFFLINE_MESSAGE } from './client';
+import { CARD_DELETED_MESSAGE, CARD_SCHEDULED_MESSAGE, cardDeletionOf } from './http';
 
 const TOKEN = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE';
 
@@ -78,6 +81,23 @@ describe('the API client', () => {
     );
     expect(mock.calls[0]!.headers['x-card-token']).toBe('BgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgY');
     expect(mock.calls[0]!.body).toMatchObject({ note: 'Fade', noShowPolicy: 'The policy.', customer: { email: 'ana@example.com' } });
+  });
+
+  it('asks the shop to delete a saved card with its token, and reads what the shop did', async () => {
+    const mock = mockApi([['DELETE /api/cards', { body: cardScheduled }]]);
+    expect(await api.deleteCard(TOKEN)).toEqual(cardScheduled.cardDeletion);
+    expect(mock.calls[0]).toMatchObject({ method: 'DELETE', path: '/api/cards', headers: { 'x-card-token': TOKEN }, body: undefined, keepalive: false });
+    mock.once('DELETE /api/cards', { body: cardDeleted });
+    expect(await api.deleteCard(TOKEN, { keepalive: true })).toEqual(cardDeleted.cardDeletion);
+    expect(mock.calls[1]).toMatchObject({ method: 'DELETE', keepalive: true });
+  });
+
+  it('reads an answer it doesn’t know as scheduled, never as deleted, in the server’s words', () => {
+    expect(CARD_DELETED_MESSAGE).toBe(cardDeleted.cardDeletion.message);
+    expect(CARD_SCHEDULED_MESSAGE).toBe(cardScheduled.cardDeletion.message);
+    expect(cardDeletionOf({ cardDeletion: { status: 'later', message: 'Soon.' } })).toEqual({ status: 'scheduled', message: 'Soon.' });
+    expect(cardDeletionOf({ cardDeletion: { status: 'deleted' } })).toEqual(cardDeleted.cardDeletion);
+    expect(cardDeletionOf({})).toEqual(cardScheduled.cardDeletion);
   });
 
   it('starts Stripe’s card page coming back to the website', async () => {

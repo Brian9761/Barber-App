@@ -187,6 +187,16 @@ export interface SavedCard {
   expYear: number;
 }
 
+/**
+ * DELETE /api/cards: what became of the saved card. `deleted` at Stripe now, or `scheduled`: a
+ * booking still needs it (it's upcoming, or can still be charged a fee within 7 days), and it's
+ * deleted as soon as none does. Either way it can't book again. `message` says so in plain words.
+ */
+export interface CardDeletion {
+  status: 'deleted' | 'scheduled';
+  message: string;
+}
+
 /** Who a booking is for: one barber's offering, or a service with whoever is free first. */
 export type BookingTarget = { offeringId: string } | { serviceId: string; barberId: 'any' };
 
