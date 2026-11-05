@@ -90,7 +90,8 @@ test('the service worker controls the whole site from the first visit, and keeps
   for (const path of ['/index.html', '/offline.html', '/manifest.webmanifest', '/icon-192.png', '/apple-touch-icon.png']) {
     expect(files.some((key) => key.startsWith(`${path}?__rev=`)), path).toBe(true);
   }
-  expect(files.some((key) => /^\/assets\/index-.*\.js$/.test(key))).toBe(true);
+  // The script both pages share (the site's and Izzy Clipz Business's) is named after src/main.tsx.
+  expect(files.some((key) => /^\/assets\/main-.*\.js$/.test(key))).toBe(true);
   expect(files.some((key) => /^\/assets\/inter-latin-wght-normal-.*\.woff2$/.test(key))).toBe(true);
   expect(files.some((key) => /^\/assets\/storefront-.*\.webp$/.test(key))).toBe(true);
   const fromApi = Object.values(kept)

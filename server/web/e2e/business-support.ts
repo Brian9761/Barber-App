@@ -3,7 +3,7 @@
 // signing in on the website with a code from it, and the Business pages' own checks.
 
 import type { APIRequestContext, Page, TestInfo } from '@playwright/test';
-import { expect, isPhone } from './support.js';
+import { expect, isPhone, screenshot } from './support.js';
 
 /** The owner key e2e/serve.ts opens the owner routes with. */
 export const OWNER_KEY = process.env.E2E_OWNER_KEY || 'e2e-owner-key-for-local-tests-only';
@@ -46,6 +46,16 @@ export function signOutButton(page: Page, testInfo: TestInfo) {
     : page.getByRole('navigation', { name: 'Izzy Clipz Business' }).getByRole('button', { name: 'Sign out' });
 }
 
+/**
+ * A Business screenshot (support.ts's), with the pointer moved out of the way first, so no card
+ * shows the hover ring where the test last clicked. A side panel is shot as the screen shows
+ * it: on a whole-page shot the panel and its shade would stop at the first screenful.
+ */
+export async function shot(page: Page, testInfo: TestInfo, name: string, options: { panel?: boolean } = {}): Promise<void> {
+  await page.mouse.move(0, 0);
+  await screenshot(page, testInfo, name, { fullPage: !options.panel });
+}
+
 /** A tiny PNG (an 8×8 photo, red and blue), for the product photo: the page makes a JPEG of it. */
 export const PHOTO_PNG = Buffer.from(
   'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAIklEQVR4nGO8LiLDAAMe1nvgbCYGHIB0CUZ5/xtUMgqnBAA2TAObCafr/gAAAABJRU5ErkJggg==',
@@ -83,4 +93,7 @@ export async function expectBusinessInstallable(page: Page, request: APIRequestC
   expect(read.url).toBe(new URL('/business/manifest.webmanifest', page.url()).href);
   expect(read.errors).toEqual([]);
   expect((await cdp.send('Page.getInstallabilityErrors')).installabilityErrors).toEqual([]);
+  // Let go of it: while a second DevTools session is attached, Chromium keeps navigator.onLine
+  // true even after the test takes the browser offline.
+  await cdp.detach();
 }

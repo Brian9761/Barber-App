@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
-import { expectBusinessInstallable, navLink, newCode, ownerCall, PHOTO_PNG, signInWithCode, signOutButton } from './business-support.js';
-import { expect, expectAccessible, isPhone, screenshot, tabTo, test } from './support.js';
+import { expectBusinessInstallable, navLink, newCode, ownerCall, PHOTO_PNG, shot, signInWithCode, signOutButton } from './business-support.js';
+import { expect, expectAccessible, isPhone, tabTo, test } from './support.js';
 
 // Izzy Clipz Business on a computer, against the real API (e2e/serve.ts, with an owner key):
 // a code from the app (made here with the key, as the iPhone app does) signs the computer
@@ -98,7 +98,7 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   await page.goto('/business');
   await expect(page.getByText('Open Izzy Clipz Business on your iPhone.')).toBeVisible();
   await expectAccessible(page, 'sign-in');
-  await screenshot(page, testInfo, 'b01-signin');
+  await shot(page, testInfo, 'b01-signin');
   await signInWithCode(page, request);
   await expect(page).toHaveTitle('Today · Izzy Clipz Business');
 
@@ -113,7 +113,7 @@ test('a code from the app signs in; a cash checkout with a product turns the app
         .getByText(client),
     ).toBeVisible();
   await expectAccessible(page, 'Today');
-  await screenshot(page, testInfo, 'b02-today');
+  await shot(page, testInfo, 'b02-today');
 
   // Its details, then Check out: the haircut at its booked price, Sold by its barber.
   await card.click();
@@ -121,7 +121,7 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   await expect(panel.getByRole('heading', { name: client })).toBeVisible();
   await expect(panel.getByRole('link', { name: /Call \(760\) 555-0142/ })).toHaveAttribute('href', 'tel:+17605550142');
   await expectAccessible(page, 'an appointment');
-  await screenshot(page, testInfo, 'b03-appointment');
+  await shot(page, testInfo, 'b03-appointment', { panel: true });
   await panel.getByRole('button', { name: 'Check out' }).click();
   await expect(panel.getByTestId('ticket-total')).toHaveText('$35');
   await expect(panel.getByRole('radio', { name: barber.name })).toBeChecked();
@@ -130,13 +130,13 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   await panel.getByRole('button', { name: new RegExp(product.product.name.replace(/[()]/g, '\\$&')) }).click();
   await expect(panel.getByTestId('ticket-total')).toHaveText('$53');
   await expectAccessible(page, 'checkout');
-  await screenshot(page, testInfo, 'b04-checkout');
+  await shot(page, testInfo, 'b04-checkout', { panel: true });
   await panel.getByRole('button', { name: 'Cash', exact: true }).click();
   const confirm = page.getByTestId('confirm-sale');
   await expect(confirm.getByRole('heading')).toHaveText(`Record a $53 cash sale for ${barber.name}?`);
   await confirm.getByRole('button', { name: 'Record sale' }).click();
   await expect(panel.getByTestId('receipt')).toContainText(`Sold $53 · Cash · ${barber.name}`);
-  await screenshot(page, testInfo, 'b05-sold');
+  await shot(page, testInfo, 'b05-sold', { panel: true });
   await page.getByRole('button', { name: 'Done' }).click();
   await expect(card).toContainText('Paid $53 · Cash');
   await expect(page.getByTestId('sale-row').filter({ hasText: client })).toContainText('$53');
@@ -153,7 +153,7 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   await expect(page.getByTestId('product-row').filter({ hasText: product.product.name })).toContainText('1 sold');
   await expect(page.getByTestId('live')).toHaveText(/^Live · Updated /);
   await expectAccessible(page, 'Analytics');
-  await screenshot(page, testInfo, 'b06-analytics');
+  await shot(page, testInfo, 'b06-analytics');
   // The leaderboard by products: the barber who sold the pomade is up there.
   await page.getByTestId('leaderboard').getByRole('radio', { name: 'Products' }).check();
   await expect(row).toContainText(/\d+ products?/);
@@ -185,7 +185,7 @@ test('a product is added, given a photo, edited and deleted', async ({ page, req
   await editor.locator('input[type="file"]').setInputFiles({ name: 'clay.png', mimeType: 'image/png', buffer: PHOTO_PNG });
   await expect(editor.getByRole('img', { name: `Photo of ${name}` })).toBeVisible();
   await expectAccessible(page, 'the product editor');
-  await screenshot(page, testInfo, 'b08-product-editor');
+  await shot(page, testInfo, 'b08-product-editor', { panel: true });
   await editor.getByRole('button', { name: 'Add product' }).click();
   await expect(page.getByTestId('products-message')).toHaveText(`Saved ${name}.`);
   const card = page.getByTestId('product').filter({ hasText: name });
@@ -207,7 +207,7 @@ test('a product is added, given a photo, edited and deleted', async ({ page, req
   await expect(card).toContainText('No price');
   await expect(card).toContainText('Hidden from clients');
   await expectAccessible(page, 'Products');
-  await screenshot(page, testInfo, 'b07-products');
+  await shot(page, testInfo, 'b07-products');
 
   const { products } = await ownerCall<{ products: { name: string; priceCents: number | null; visible: boolean }[] }>(request, 'GET', '/api/owner/products');
   expect(products.find((p) => p.name === name)).toMatchObject({ priceCents: null, visible: false });
@@ -239,7 +239,7 @@ test('no-show protection saves, and Settings shows Stripe, this computer and the
     const saved = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
     expect(saved).toMatchObject({ enabled: true, feeMode: 'flat', flatCents: 2500, lateCancelWindowMinutes: 120 });
     await expectAccessible(page, 'Settings');
-    await screenshot(page, testInfo, 'b09-settings');
+    await shot(page, testInfo, 'b09-settings');
   } finally {
     // The other tests book online as clients do, with the shop's settings as they were.
     await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', before);
@@ -264,7 +264,7 @@ test('Sign out signs this computer out, and a computer signed out from the iPhon
   expect(await page.evaluate(() => localStorage.getItem('izzy.business.session.v1'))).toBeNull();
   const after = await ownerCall<{ sessions: unknown[] }>(request, 'GET', '/api/owner/computer-sessions');
   expect(after.sessions.length).toBe(signedIn.sessions.length - 1);
-  await screenshot(page, testInfo, 'b10-signed-out');
+  await shot(page, testInfo, 'b10-signed-out');
 
   // Signed in again, then signed out from the iPhone (every computer): the next page drops back to sign-in.
   await signInWithCode(page, request);
@@ -273,7 +273,7 @@ test('Sign out signs this computer out, and a computer signed out from the iPhon
   await expect(page.getByTestId('signed-out-line')).toContainText('This computer was signed out.');
   await expect(page.getByLabel('6-digit code')).toBeVisible();
   await expectAccessible(page, 'signed out from the iPhone');
-  await screenshot(page, testInfo, 'b11-signed-out-from-iphone');
+  await shot(page, testInfo, 'b11-signed-out-from-iphone');
 });
 
 test('works with the keyboard alone, and installs as Izzy Clipz Business', async ({ page, request }) => {
