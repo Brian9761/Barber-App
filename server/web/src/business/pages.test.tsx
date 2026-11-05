@@ -5,6 +5,7 @@ import analyticsFixture from '../../../test/fixtures/contract/analytics.json';
 import codeSession from '../../../test/fixtures/contract/computer-session-created.json';
 import computersFixture from '../../../test/fixtures/contract/computer-sessions.json';
 import codeFixture from '../../../test/fixtures/contract/computer-code.json';
+import alreadyCompleted from '../../../test/fixtures/contract/errors/already_completed.json';
 import feeCharged from '../../../test/fixtures/contract/no-show-fee-charged.json';
 import noShowSettings from '../../../test/fixtures/contract/no-show-settings.json';
 import ownerAppointments from '../../../test/fixtures/contract/owner-appointments-with-sale.json';
@@ -238,6 +239,97 @@ describe('Today', () => {
     // In the fee's section, next to its button, with the focus, so it's read out where the owner is.
     expect(within(screen.getByTestId('fee-panel')).getByTestId('fee-error')).toBe(error);
     await waitFor(() => expect(document.activeElement).toBe(error));
+  });
+
+  it('offers no charge more than 7 days after the appointment, and says why in a plain line', async () => {
+    signedIn();
+    // A no-show eight days ago (Sunday, October 25 at 10 AM), its fee never charged.
+    const when = { start: '2026-10-25T17:00:00Z', end: '2026-10-25T17:45:00Z', createdAt: '2026-10-20T17:00:00Z' };
+    const noShow = { ...feeCharged.appointment, ...when, noShowFee: { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null } };
+    const api = mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [noShow] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-10-25', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today?date=2026-10-25');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const fee = within(screen.getByTestId('side-panel')).getByTestId('fee-panel');
+    expect(within(fee).getByTestId('fee-status').textContent).toBe("It's more than 7 days after the appointment, so the fee can't be charged.");
+    expect(within(fee).queryByRole('button')).toBeNull();
+    expect(api.calls.filter((c) => c.method === 'POST')).toEqual([]);
+  });
+
+  it('says until when a fee can be charged, 7 days after the appointment', async () => {
+    signedIn();
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const noShow = { ...feeCharged.appointment, ...when, noShowFee: { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null } };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [noShow] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const fee = within(screen.getByTestId('side-panel')).getByTestId('fee-panel');
+    expect(within(fee).getByRole('button', { name: 'Charge no-show fee ($35)' })).toBeTruthy();
+    expect(fee.textContent).toContain(times('It can be charged until Mon, Nov 9 at 9 AM, 7 days after the appointment.'));
+  });
+
+  it('offers "Mark no-show" for a booking with a card on file only once it has ended, and says when', async () => {
+    signedIn();
+    // 11:30 AM to 12:15 PM, with a card on file; it's noon.
+    const when = { start: '2026-11-02T19:30:00Z', end: '2026-11-02T20:15:00Z' };
+    const booked = { ...feeCharged.appointment, ...when, status: 'booked', noShowFee: { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null, reason: null } };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [booked] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const panel = screen.getByTestId('side-panel');
+    expect(within(panel).queryByRole('button', { name: 'Mark no-show' })).toBeNull();
+    expect(within(panel).getByTestId('status-hint').textContent).toBe(
+      times("Cancelling frees the time for other clients. You can mark a no-show once the appointment ends at 12:15 PM. A client who comes before then isn't a no-show."),
+    );
+    expect(within(panel).getByTestId('fee-status').textContent).toBe(
+      "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee.",
+    );
+  });
+
+  it('shows the server’s answer when a visit that was completed is marked a no-show after being reopened', async () => {
+    signedIn();
+    // Reopened after it was marked done: only the server remembers that it was.
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const reopened = { ...feeCharged.appointment, ...when, status: 'booked', noShowFee: { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null, reason: null } };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [reopened] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+      ['PATCH /api/owner/appointments/*', apiError(alreadyCompleted.error.code, alreadyCompleted.error.message, 409)],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const panel = screen.getByTestId('side-panel');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Mark no-show' }));
+    expect((await within(panel).findByRole('alert')).textContent).toBe("This appointment was marked completed, so it can't become a no-show.");
+  });
+
+  it('says first that reopening a completed visit with a card on file won’t make it a no-show', async () => {
+    signedIn();
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const done = { ...feeCharged.appointment, ...when, status: 'completed', noShowFee: { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null, reason: null } };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [done] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    await userEvent.click(within(screen.getByTestId('side-panel')).getByRole('button', { name: 'Reopen' }));
+    expect(screen.getByTestId('confirm-reopen').textContent).toContain(
+      "It was marked done, so even once it's reopened, it can't be marked a no-show or charged a no-show fee: the client came.",
+    );
   });
 
   it('says what a status change did, and gives it the focus the pressed button had', async () => {

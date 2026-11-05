@@ -1,13 +1,19 @@
 // An appointment's card on file and its fee (for a no-show or a late cancellation), with
 // the owner app's rules and words (IzzyClipzBusiness/Stores/FeePanel.swift and the Kit's
-// NoShow.swift), which mirror the server's (server/src/feecase.ts): which fee can be
-// charged now, what the details say about it, the badges on a schedule row, and what
-// Reopen and Cancel say first. Checked against the server's own examples
-// (server/test/fixtures/fee-cases.json).
+// NoShow.swift), which mirror the server's (server/src/feecase.ts and appointments.ts):
+// which fee can be charged now, when a no-show can be marked, what the details say about
+// it, the badges on a schedule row, and what Reopen and Cancel say first. Checked against
+// the server's own examples (server/test/fixtures/fee-cases.json) and its contract
+// fixtures, in the server's words.
+//
+// The rules the shop's Cancellation & No-Show Policy promises: a no-show only once the
+// appointment has ended (for a booking with a card on file), never for a booking that was
+// completed, a late cancellation only more than 15 minutes after booking, and nothing
+// charged more than 7 days after the appointment.
 
 import type { NoShowFee } from '../../api/types';
 import { cardLabel, windowLabel } from '../../lib/format';
-import { cancelledLate } from '../../lib/lateCancel';
+import { cancelledLate, LATE_CANCEL_GRACE_MINUTES } from '../../lib/lateCancel';
 import { dateTimeLabel, localDate, timeLabel } from '../../lib/shopTime';
 import type { OwnerAppointment } from '../types';
 import { moneyWithCommas } from './money';
@@ -16,8 +22,23 @@ export type FeeReason = 'noShow' | 'lateCancel';
 
 export type FeeCase = { kind: 'chargeable'; reason: FeeReason } | { kind: 'refused'; message: string };
 
+/** A fee can be charged until 7 days (of 24 hours) after the appointment's start, never later. */
+export const FEE_DEADLINE_DAYS = 7;
+const FEE_DEADLINE_MS = FEE_DEADLINE_DAYS * 24 * 60 * 60_000;
+
+// The server's words (feecase.ts, noshowfee.ts and appointments.ts).
 export const NO_CARD_MESSAGE = "This booking has no card on file, so there's no fee to charge.";
-export const NOT_STARTED_MESSAGE = "The appointment hasn't started yet, so it can't be a no-show.";
+/** A no-show fee before the appointment's end: a client who comes before the end isn't a no-show. */
+export const NOT_ENDED_MESSAGE = "The appointment hasn't ended yet, so it can't be a no-show.";
+/** Once the 7 days after the start are over. */
+export const FEE_DEADLINE_MESSAGE = `It's more than ${FEE_DEADLINE_DAYS} days after the appointment, so the fee can't be charged.`;
+/** Why a completed booking can't be charged: the client came. */
+export const COMPLETED_MESSAGE = "The appointment is marked completed, so there's no fee to charge.";
+/** The server's 409 `not_started`: a booking with a card on file marked a no-show before it ends. */
+export const NO_SHOW_BEFORE_END_MESSAGE = 'You can mark a no-show once the appointment has ended.';
+/** The server's 409 `already_completed`: a booking with a card on file that was completed, marked a no-show. */
+export const COMPLETED_NO_SHOW_MESSAGE = "This appointment was marked completed, so it can't become a no-show.";
+const WITHIN_GRACE = `The client cancelled within ${LATE_CANCEL_GRACE_MINUTES} minutes of booking, so there's no fee.`;
 const CANCELLED_IN_APP = "The client cancelled this booking in the app, so there's no fee.";
 const SHOP_CANCELLED = "The shop cancelled this booking, so there's no fee.";
 const MARK_NO_SHOW = 'Mark the appointment as a no-show first.';
@@ -33,12 +54,13 @@ export function feeTitle(fee: NoShowFee): string {
 }
 
 /** What these rules read of an appointment. */
-type Booking = Pick<OwnerAppointment, 'status' | 'cancelledBy' | 'start' | 'card' | 'noShowFee'>;
+type Booking = Pick<OwnerAppointment, 'status' | 'cancelledBy' | 'start' | 'end' | 'createdAt' | 'card' | 'noShowFee'>;
 
 /**
- * The server's rule, ignoring the clock (the Kit's `NoShowRule.feeCase`): a late cancellation
- * (cancelled by the client inside the agreed window, still cancelled), or a no-show (marked, and
- * the client never cancelled nor asked to).
+ * The server's rule, ignoring the clock (its `feeCase`, the Kit's `NoShowRule.feeCase`): a late
+ * cancellation (cancelled by the client inside the agreed window and, given `createdAt`, more
+ * than 15 minutes after booking; still cancelled), or a no-show (marked, and the client never
+ * cancelled nor asked to). A completed booking has no fee.
  */
 export function ruleFeeCase(
   status: OwnerAppointment['status'],
@@ -46,36 +68,79 @@ export function ruleFeeCase(
   start: Date,
   customerCancelledAt: Date | null,
   lateCancelWindowMinutes: number | null,
+  createdAt: Date | null = null,
 ): FeeCase {
   if (status === 'cancelled') {
     if (cancelledBy !== 'customer') return { kind: 'refused', message: SHOP_CANCELLED };
-    if (cancelledLate(start, customerCancelledAt, lateCancelWindowMinutes)) return { kind: 'chargeable', reason: 'lateCancel' };
+    if (cancelledLate(start, customerCancelledAt, lateCancelWindowMinutes, createdAt)) return { kind: 'chargeable', reason: 'lateCancel' };
     if (lateCancelWindowMinutes !== null && customerCancelledAt !== null) {
+      // Inside the window, but within 15 minutes of booking: the grace period.
+      if (cancelledLate(start, customerCancelledAt, lateCancelWindowMinutes)) return { kind: 'refused', message: WITHIN_GRACE };
       return { kind: 'refused', message: `The client cancelled at least ${windowLabel(lateCancelWindowMinutes)} before, so there's no fee.` };
     }
     return { kind: 'refused', message: CANCELLED_IN_APP };
   }
   if (customerCancelledAt !== null) return { kind: 'refused', message: CANCELLED_IN_APP };
+  // The client came: a completed booking with a card on file can't become a no-show.
+  if (status === 'completed') return { kind: 'refused', message: COMPLETED_MESSAGE };
   if (status !== 'noShow') return { kind: 'refused', message: MARK_NO_SHOW };
   return { kind: 'chargeable', reason: 'noShow' };
+}
+
+/** The last moment a fee for an appointment starting at `start` can be charged: 7 days (of 24 hours) later. */
+export function feeDeadline(start: Date): Date {
+  return new Date(start.getTime() + FEE_DEADLINE_MS);
+}
+
+/** Whether it's too late at `now` to charge a fee for an appointment that started at `start` (exactly 7 days later still isn't). */
+export function pastFeeDeadline(start: Date, now: Date): boolean {
+  return now.getTime() > start.getTime() + FEE_DEADLINE_MS;
+}
+
+/** What the rule at a given moment reads of a booking with a card on file. */
+export interface FeeTerms {
+  status: OwnerAppointment['status'];
+  cancelledBy: OwnerAppointment['cancelledBy'];
+  start: Date;
+  end: Date;
+  /** When it was booked: cancelling within 15 minutes of it is free. */
+  createdAt: Date;
+  customerCancelledAt: Date | null;
+  lateCancelWindowMinutes: number | null;
+}
+
+/**
+ * The server's rule at `now` (its `feeCaseAt`): the rule above, then the clock. Nothing more than
+ * 7 days after the start (a booking still marked booked then hears that too, rather than to mark a
+ * no-show first), and a no-show only once the appointment has ended.
+ */
+export function ruleFeeCaseAt(terms: FeeTerms, now: Date): FeeCase {
+  const found = ruleFeeCase(terms.status, terms.cancelledBy, terms.start, terms.customerCancelledAt, terms.lateCancelWindowMinutes, terms.createdAt);
+  const tooLate = pastFeeDeadline(terms.start, now);
+  if (found.kind === 'refused') return found.message === MARK_NO_SHOW && tooLate ? { kind: 'refused', message: FEE_DEADLINE_MESSAGE } : found;
+  if (tooLate) return { kind: 'refused', message: FEE_DEADLINE_MESSAGE };
+  if (found.reason === 'noShow' && terms.end.getTime() > now.getTime()) return { kind: 'refused', message: NOT_ENDED_MESSAGE };
+  return found;
+}
+
+/** The terms `ruleFeeCaseAt` reads, from an appointment with its fee. */
+export function feeTerms(appointment: Booking, fee: NoShowFee): FeeTerms {
+  return {
+    status: appointment.status,
+    cancelledBy: appointment.cancelledBy,
+    start: new Date(appointment.start),
+    end: new Date(appointment.end),
+    createdAt: new Date(appointment.createdAt),
+    customerCancelledAt: fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null,
+    lateCancelWindowMinutes: fee.lateCancelWindowMinutes,
+  };
 }
 
 /** Which fee the server lets the owner charge now, or why not (the Kit's `Appointment.feeCase(at:)`). */
 export function feeCase(appointment: Booking, now: Date): FeeCase {
   const fee = appointment.noShowFee;
   if (!appointment.card || !fee) return { kind: 'refused', message: NO_CARD_MESSAGE };
-  const start = new Date(appointment.start);
-  const found = ruleFeeCase(
-    appointment.status,
-    appointment.cancelledBy,
-    start,
-    fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null,
-    fee.lateCancelWindowMinutes,
-  );
-  if (found.kind === 'chargeable' && found.reason === 'noShow' && start.getTime() > now.getTime()) {
-    return { kind: 'refused', message: NOT_STARTED_MESSAGE };
-  }
-  return found;
+  return ruleFeeCaseAt(feeTerms(appointment, fee), now);
 }
 
 /**
@@ -97,19 +162,33 @@ export function isFeePending(appointment: Booking): boolean {
 }
 
 /**
- * Whether "Mark no-show" is offered: once the appointment has started, whatever the card (on the
- * website a no-show is only ever marked after the start, which the server also needs for a
- * booking with a card on file, so the client can still cancel until then).
+ * When "Mark no-show" can be offered for a booked appointment: a booking with a card on file once
+ * it has ended, as the server needs (a client who comes before the end isn't a no-show, and until
+ * the start they can still cancel in the app); any other once it has started.
  */
-export function canMarkNoShow(appointment: Pick<OwnerAppointment, 'status' | 'start'>, now: Date): boolean {
-  return appointment.status === 'booked' && new Date(appointment.start).getTime() <= now.getTime();
+export function noShowFrom(appointment: Pick<OwnerAppointment, 'start' | 'end' | 'card'>): Date {
+  return new Date(appointment.card ? appointment.end : appointment.start);
 }
 
-/** The client cancelled in the app less than the agreed window before the start: a late cancellation. */
+/**
+ * Whether "Mark no-show" is offered: a booked appointment, from `noShowFrom`. (A booking with a card
+ * on file that was marked completed never becomes a no-show, even once it's reopened: the server
+ * says so, with `COMPLETED_NO_SHOW_MESSAGE`, since only it knows it was.)
+ */
+export function canMarkNoShow(appointment: Pick<OwnerAppointment, 'status' | 'start' | 'end' | 'card'>, now: Date): boolean {
+  return appointment.status === 'booked' && noShowFrom(appointment).getTime() <= now.getTime();
+}
+
+/** The client cancelled in the app less than the agreed window before the start, more than 15 minutes after booking: a late cancellation. */
 export function isCancelledLate(appointment: Booking): boolean {
   const fee = appointment.noShowFee;
   if (appointment.status !== 'cancelled' || appointment.cancelledBy !== 'customer' || !appointment.card || !fee) return false;
-  return cancelledLate(new Date(appointment.start), fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null, fee.lateCancelWindowMinutes);
+  return cancelledLate(
+    new Date(appointment.start),
+    fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null,
+    fee.lateCancelWindowMinutes,
+    new Date(appointment.createdAt),
+  );
 }
 
 /** "$40", or "$40 (the full service price)". */
@@ -168,11 +247,12 @@ function feeNote(appointment: OwnerAppointment, now: Date): string | null {
   const found = feeCase(appointment, now);
   if (found.kind !== 'refused') return null;
   // A client who cancelled in the app (or asked to) is never charged a no-show fee: said first.
-  if (appointment.noShowFee?.customerCancelledAt) return found.message;
+  // And once the 7 days are over, that's why, whatever else.
+  if (appointment.noShowFee?.customerCancelledAt || found.message === FEE_DEADLINE_MESSAGE) return found.message;
   switch (appointment.status) {
     case 'booked':
-      return new Date(appointment.start).getTime() > now.getTime()
-        ? "If the client doesn't come, you can mark a no-show once the appointment has started. Then you can charge the fee."
+      return new Date(appointment.end).getTime() > now.getTime()
+        ? "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee."
         : "If the client didn't come, mark a no-show. Then you can charge the fee.";
     case 'completed':
       return null;
@@ -181,10 +261,15 @@ function feeNote(appointment: OwnerAppointment, now: Date): string | null {
   }
 }
 
+/** "Tue, Nov 10 at 10 AM": the last moment the fee can be charged, 7 days after the start. */
+function deadlineLabel(appointment: OwnerAppointment, zone: string): string {
+  return dateTimeLabel(feeDeadline(new Date(appointment.start)), zone);
+}
+
 function whyNotAgain(appointment: OwnerAppointment, now: Date): string | null {
   const note = feeNote(appointment, now);
   if (note) return note;
-  return appointment.status === 'completed' ? "The appointment is marked completed, so there's no fee to charge." : null;
+  return appointment.status === 'completed' ? COMPLETED_MESSAGE : null;
 }
 
 function confirmationMessage(appointment: OwnerAppointment, fee: NoShowFee, reason: FeeReason, zone: string): string {
@@ -222,7 +307,9 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
     }
     case 'declined':
       status = { kind: 'declined', detail: text(fee.message, 'The bank declined the card.') };
-      footer = chargeable ? 'You can try the card again later, or ask the client to pay at the shop.' : whyNotAgain(appointment, now);
+      footer = chargeable
+        ? `You can try the card again until ${deadlineLabel(appointment, zone)}, 7 days after the appointment, or ask the client to pay at the shop.`
+        : whyNotAgain(appointment, now);
       break;
     case 'needsAction':
       status = { kind: 'needsClient', detail: text(fee.message, "The client's bank wants them to approve this charge. Ask them to pay at the shop.") };
@@ -234,7 +321,9 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
       break;
     default:
       status = { kind: 'notCharged', note: feeNote(appointment, now) };
-      footer = chargeable ? 'Nothing is charged until you confirm, and a fee is only ever charged once.' : null;
+      footer = chargeable
+        ? `Nothing is charged until you confirm, and a fee is only ever charged once. It can be charged until ${deadlineLabel(appointment, zone)}, 7 days after the appointment.`
+        : null;
   }
 
   let action: FeeAction | null = null;
@@ -288,18 +377,29 @@ export function reopenWarning(appointment: OwnerAppointment, now: Date): string 
       if (appointment.status === 'cancelled' && appointment.card && fee.customerCancelledAt) {
         return "The client cancelled this booking in the app, so once it's reopened, it can't be charged a no-show fee. To keep a no-show fee, ask them to book again in the app instead.";
       }
+      if (appointment.status === 'completed' && appointment.card) {
+        return "It was marked done, so even once it's reopened, it can't be marked a no-show or charged a no-show fee: the client came.";
+      }
       return null;
   }
 }
 
-/** Under the status buttons of a booked appointment that hasn't started: when "Mark no-show" shows. */
+/**
+ * Under the status buttons of a booked appointment that can't be marked a no-show yet: when "Mark
+ * no-show" shows. With a card on file, once it ends (until the start the client can still cancel
+ * in the app, and a client who comes before the end isn't a no-show); without, once it starts.
+ */
 export function noShowHint(appointment: OwnerAppointment, now: Date, zone: string): string | null {
   if (appointment.status !== 'booked' || canMarkNoShow(appointment, now)) return null;
-  const start = new Date(appointment.start);
-  const today = localDate(now, zone) === localDate(start, zone);
-  const when = today ? `at ${timeLabel(start, zone)}` : `on ${dateTimeLabel(start, zone)}`;
-  const tail = appointment.card ? ' Until then, the client can still cancel in the app.' : '';
-  return `You can mark a no-show once the appointment starts ${when}.${tail}`;
+  const from = noShowFrom(appointment);
+  const today = localDate(now, zone) === localDate(from, zone);
+  const when = today ? `at ${timeLabel(from, zone)}` : `on ${dateTimeLabel(from, zone)}`;
+  if (!appointment.card) return `You can mark a no-show once the appointment starts ${when}.`;
+  const tail =
+    new Date(appointment.start).getTime() > now.getTime()
+      ? ' Until it starts, the client can still cancel in the app.'
+      : " A client who comes before then isn't a no-show.";
+  return `You can mark a no-show once the appointment ends ${when}.${tail}`;
 }
 
 /** Added to "Cancel appointment"'s question for a booking with a card on file. */

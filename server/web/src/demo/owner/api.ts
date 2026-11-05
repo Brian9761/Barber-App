@@ -9,8 +9,11 @@
 //   services, prices, barbers and hours; the products are samples.
 // - Checking out, voiding, marking and fees follow the server's rules (server/src/sales.ts,
 //   appointments.ts, noshowfee.ts): a checked-out appointment can't be reopened, cancelled
-//   or marked a no-show until its sale is voided; a no-show with a card on file is marked
-//   only once it has started; an Idempotency-Key sent again gets the same sale back.
+//   or marked a no-show until its sale is voided; a booking with a card on file becomes a
+//   no-show only once it has ended, and never once it was completed; a fee is charged
+//   within 7 days of the appointment, never more than the service's price, and not for a
+//   cancellation within 15 minutes of booking; an Idempotency-Key sent again gets the same
+//   sale back.
 // - Analytics are worked out from the demo's own data with the server's own definitions
 //   (./facts.ts, ./analytics.ts).
 // - "Connect Stripe" connects after a short pretend step; the no-show settings save.
@@ -24,7 +27,15 @@ import catalogData from '../../../../data/catalog.json';
 import { ApiError } from '../../api/errors';
 import type { Catalog } from '../../api/types';
 import type { OwnerApi } from '../../business/api/http';
-import { ruleFeeCase, type FeeReason } from '../../business/lib/fees';
+import {
+  COMPLETED_NO_SHOW_MESSAGE,
+  feeTerms,
+  NO_CARD_MESSAGE,
+  NO_SHOW_BEFORE_END_MESSAGE,
+  ruleFeeCase,
+  ruleFeeCaseAt,
+  type FeeReason,
+} from '../../business/lib/fees';
 import { session } from '../../business/session';
 import type {
   Analytics,
@@ -142,7 +153,7 @@ function pause(ms: number, signal?: AbortSignal): Promise<void> {
 
 /** An appointment as the API answers it: without what only the demo keeps, and with its fee's reason now. */
 function answered(appointment: DemoAppointment): OwnerAppointment {
-  const { priceCents: _price, cardPayment: _card, ...rest } = appointment;
+  const { priceCents: _price, cardPayment: _card, completedAt: _completed, ...rest } = appointment;
   const fee = rest.noShowFee;
   if (!fee) return structuredClone(rest);
   let reason: FeeReason | null = fee.status !== 'none' && fee.reason ? fee.reason : null;
@@ -153,6 +164,7 @@ function answered(appointment: DemoAppointment): OwnerAppointment {
       new Date(rest.start),
       fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null,
       fee.lateCancelWindowMinutes,
+      new Date(rest.createdAt),
     );
     reason = found.kind === 'chargeable' ? found.reason : null;
   }
@@ -445,8 +457,11 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       if (current.sale !== null && status !== 'completed') {
         throw fail('already_checked_out', 'This appointment was checked out. Void its sale first, then change it.', 409);
       }
-      if (status === 'noShow' && current.card && Date.parse(current.start) > now.getTime()) {
-        throw fail('not_started', 'You can mark a no-show once the appointment has started.', 409);
+      // A booking with a card on file becomes a no-show only once it has ended, and never once it was
+      // completed (even reopened since): the client came.
+      if (status === 'noShow' && current.card && current.status !== 'noShow') {
+        if (current.status === 'completed' || current.completedAt) throw fail('already_completed', COMPLETED_NO_SHOW_MESSAGE, 409);
+        if (Date.parse(current.end) > now.getTime()) throw fail('not_started', NO_SHOW_BEFORE_END_MESSAGE, 409);
       }
       const kept = keep(store, found.date);
       const appointment = kept.appointments.find((a) => a.id === id)!;
@@ -468,6 +483,7 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       }
       appointment.status = status;
       appointment.cancelledBy = status === 'cancelled' ? (appointment.cancelledBy ?? 'shop') : null;
+      if (status === 'completed') appointment.completedAt ??= iso(now);
       save(store);
       return answered(appointment);
     },
@@ -481,20 +497,12 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       const fee = found.appointment.noShowFee;
       if (fee?.status === 'charged') return answered(found.appointment);
       if (store.stripe.connectedAt === null) throw fail('stripe_not_configured', 'Connect Stripe in Settings to take card payments.', 503);
-      if (!found.appointment.card || !fee) throw fail('not_chargeable', "This booking has no card on file, so there's no fee to charge.", 409);
-      const now = clock();
-      const appointmentNow = answered(found.appointment);
-      const rule = ruleFeeCase(
-        appointmentNow.status,
-        appointmentNow.cancelledBy,
-        new Date(appointmentNow.start),
-        fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null,
-        fee.lateCancelWindowMinutes,
-      );
+      if (!found.appointment.card || !fee) throw fail('not_chargeable', NO_CARD_MESSAGE, 409);
+      // The server's rule at this moment: a no-show once it has ended, a late cancellation more than
+      // 15 minutes after booking, never a completed visit, and nothing after the 7 days.
+      const rule = ruleFeeCaseAt(feeTerms(found.appointment, fee), clock());
       if (rule.kind === 'refused') throw fail('not_chargeable', rule.message, 409);
-      if (rule.reason === 'noShow' && Date.parse(appointmentNow.start) > now.getTime()) {
-        throw fail('not_chargeable', "The appointment hasn't started yet, so it can't be a no-show.", 409);
-      }
+      const now = clock();
       const kept = keep(store, found.date);
       const appointment = kept.appointments.find((a) => a.id === id)!;
       // The demo's declined card: like Stripe's test card that ends in 0002.
@@ -620,6 +628,7 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       if (appointment && appointmentDate) {
         const kept = keep(store, appointmentDate).appointments.find((a) => a.id === appointment!.id)!;
         kept.status = 'completed';
+        kept.completedAt ??= sale.soldAt;
         kept.cancelledBy = null;
         kept.sale = { id: sale.id, totalCents: total, method: sale.method };
         // Paid with the sale's total, unless a card payment paid it already (then the card's numbers stay).

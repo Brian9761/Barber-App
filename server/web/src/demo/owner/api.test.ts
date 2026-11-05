@@ -5,6 +5,9 @@ import { session } from '../../business/session';
 import type { OwnerAppointment } from '../../business/types';
 import { DEMO_BUSINESS_KEY } from '../../lib/storage';
 import { newToken } from '../../lib/tokens';
+import feeCases from '../../../../test/fixtures/fee-cases.json';
+import alreadyCompleted from '../../../../test/fixtures/contract/errors/already_completed.json';
+import notStarted from '../../../../test/fixtures/contract/errors/not_started.json';
 import { createDemoOwnerApi } from './api';
 import { dayId, dayOfId, sampleDay, SAMPLE_PRODUCTS } from './samples';
 
@@ -204,14 +207,18 @@ describe('checking out, like the server', () => {
 });
 
 describe('statuses and fees, like the server', () => {
-  it('marks a no-show with a card on file only once it has started, and charges the fee once Stripe is connected', async () => {
+  it('marks a no-show with a card on file only once it has ended, and charges the fee once Stripe is connected', async () => {
     const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
     expect(kim.card).not.toBeNull();
-    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toMatchObject({
-      code: 'not_started',
-      message: 'You can mark a no-show once the appointment has started.',
+    expect([kim.start, kim.end]).toEqual(['2026-11-04T20:00:00Z', '2026-11-04T20:45:00Z']); // 12 PM to 12:45 PM
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toEqual({
+      code: notStarted.error.code,
+      status: 409,
+      message: notStarted.error.message,
     });
-    now = new Date('2026-11-04T20:30:00Z'); // 12:30 PM, Kim's 12 PM appointment has started
+    now = new Date('2026-11-04T20:30:00Z'); // 12:30 PM: started, but Kim may still come
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toMatchObject({ code: 'not_started' });
+    now = new Date('2026-11-04T20:45:00Z'); // the end
     expect((await api.setStatus(kim.id, 'noShow')).noShowFee).toMatchObject({ status: 'none', reason: 'noShow' });
     expect(await rejects(api.chargeFee(kim.id))).toMatchObject({
       code: 'stripe_not_configured',
@@ -221,9 +228,39 @@ describe('statuses and fees, like the server', () => {
     expect(await api.connectStripe()).toMatchObject({ url: '/business/settings?stripe=active' });
     expect(await api.stripe()).toMatchObject({ status: 'active', businessName: 'Izzy Clipz Barbershop' });
     const charged = await api.chargeFee(kim.id);
-    expect(charged.noShowFee).toMatchObject({ status: 'charged', amountCents: 3500, reason: 'noShow', chargedAt: '2026-11-04T20:30:00Z' });
+    expect(charged.noShowFee).toMatchObject({ status: 'charged', amountCents: 3500, reason: 'noShow', chargedAt: '2026-11-04T20:45:00Z' });
     // Charging again changes nothing.
     expect(await api.chargeFee(kim.id)).toEqual(charged);
+  });
+
+  it('charges nothing more than 7 days after the appointment, as the server says', async () => {
+    await api.connectStripe();
+    const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+    now = new Date('2026-11-04T21:00:00Z');
+    await api.setStatus(kim.id, 'noShow');
+    now = new Date('2026-11-11T20:01:00Z'); // 7 days and a minute after the 12 PM start
+    expect(await rejects(api.chargeFee(kim.id))).toEqual({ code: 'not_chargeable', status: 409, message: feeCases.deadline.message });
+    now = new Date('2026-11-11T20:00:00Z'); // exactly 7 days: still in time
+    expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged' });
+  });
+
+  it('never makes a completed visit with a card on file a no-show, even once it’s reopened', async () => {
+    const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+    now = new Date('2026-11-04T21:00:00Z');
+    expect(await api.setStatus(kim.id, 'completed')).toMatchObject({ status: 'completed' });
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toEqual({ code: alreadyCompleted.error.code, status: 409, message: alreadyCompleted.error.message });
+    expect(await api.setStatus(kim.id, 'booked')).toMatchObject({ status: 'booked' });
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toMatchObject({ code: 'already_completed' });
+    // Nor one done on a day of history (checked out, its sale voided since).
+    const lee = byName(await api.appointments('2026-11-03'), 'Lee Sample', 'israel-flores');
+    expect(lee).toMatchObject({ status: 'completed' });
+    if (lee.sale) await api.voidSale(lee.sale.id, null);
+    expect(await rejects(api.setStatus(lee.id, 'noShow'))).toMatchObject({ code: 'already_completed' });
+    // Without a card on file, marking is the shop's call.
+    const nate = byName(await api.appointments('2026-11-04'), 'Nate Sample');
+    expect(nate.card).toBeNull();
+    await api.setStatus(nate.id, 'completed');
+    expect(await api.setStatus(nate.id, 'noShow')).toMatchObject({ status: 'noShow' });
   });
 
   it('turns down a fee there is nothing to charge for, and declines the card that ends in 0002', async () => {
@@ -236,7 +273,7 @@ describe('statuses and fees, like the server', () => {
     const gabe = byName(today, 'Gabe Sample');
     expect(gabe.card?.last4).toBe('0002');
     expect(await rejects(api.chargeFee(gabe.id))).toMatchObject({ code: 'not_chargeable', message: 'Mark the appointment as a no-show first.' });
-    now = new Date('2026-11-04T19:00:00Z');
+    now = new Date('2026-11-04T19:20:00Z'); // Gabe's 10:30 ended at 11:15
     await api.setStatus(gabe.id, 'noShow');
     expect((await api.chargeFee(gabe.id)).noShowFee).toMatchObject({
       status: 'declined',
@@ -341,8 +378,9 @@ describe('analytics, with the definitions of docs/analytics.md, worked out by ha
     await api.setStatus(byName(today, 'Carlos Sample').id, 'completed');
     // Brandon's appointment cancelled by the shop.
     await api.setStatus(byName(today, 'Brandon Sample').id, 'cancelled');
-    // At 12:30 PM Kim didn't come: a no-show, and her $35 fee charged to her card.
-    now = new Date('2026-11-04T20:30:00Z');
+    // At 12:50 PM Kim hadn't come to her 12 PM, which ended at 12:45: a no-show, and her $35 fee
+    // charged to her card.
+    now = new Date('2026-11-04T20:50:00Z');
     const kim = byName(today, 'Kim Sample');
     await api.setStatus(kim.id, 'noShow');
     await api.connectStripe();
@@ -428,45 +466,47 @@ describe('analytics, with the definitions of docs/analytics.md, worked out by ha
     expect(year.series).toHaveLength(11);
   });
 
-  it('counts a fee the day it was charged, however long after the visit, in every period', async () => {
-    // Thursday, November 5 at 1:15 PM: an old no-show, weeks back, gets its fee charged now.
-    now = new Date('2026-11-05T21:15:00Z');
+  it('counts a fee the day it was charged, days after the visit, in every period', async () => {
     await api.connectStripe();
-    let old: OwnerAppointment | undefined;
-    for (let back = 56; back >= 15 && !old; back -= 1) {
-      const date = new Date(Date.parse('2026-11-05T12:00:00Z') - back * 86_400_000).toISOString().slice(0, 10);
-      old = (await api.appointments(date)).find((a) => a.status === 'noShow' && a.noShowFee?.status === 'none' && a.card && a.card.last4 !== '0002');
-    }
-    if (!old?.noShowFee) throw new Error('No old no-show with a fee to charge');
-    const fee = old.noShowFee.amountCents;
+    // Kim didn't come to her 12 PM on Wednesday, November 4: a no-show, marked once it ended.
+    const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+    now = new Date('2026-11-04T21:00:00Z');
+    await api.setStatus(kim.id, 'noShow');
+    const fee = kim.noShowFee!.amountCents;
+    // Her fee is charged the next Tuesday, November 10 at 11 AM: within the 7 days.
+    now = new Date('2026-11-10T19:00:00Z');
     const periods = [
-      { from: '2026-11-05', to: '2026-11-05' }, // Today
-      { from: '2026-11-02', to: '2026-11-05' }, // This week
-      { from: '2026-11-01', to: '2026-11-05' }, // This month
-      { from: '2026-10-01', to: '2026-11-05' }, // A custom range that reaches back to October
+      { from: '2026-11-10', to: '2026-11-10' }, // Today
+      { from: '2026-11-09', to: '2026-11-10' }, // This week
+      { from: '2026-11-01', to: '2026-11-10' }, // This month
+      { from: '2026-10-01', to: '2026-11-10' }, // A custom range that reaches back to October
     ];
-    const feesOnNov5 = async () =>
+    const feesOn = async (date: string) =>
       Promise.all(
-        periods.map(async (range) => {
-          const a = await api.analytics({ ...range, barberId: null });
-          return a.series.find((s) => s.date === '2026-11-05')!.feesCents;
-        }),
+        periods
+          .filter((range) => range.from <= date)
+          .map(async (range) => {
+            const a = await api.analytics({ ...range, barberId: null });
+            return a.series.find((s) => s.date === date)!.feesCents;
+          }),
       );
-    const yearNovember = async () => (await api.analytics({ from: '2026-01-01', to: '2026-11-05', barberId: null })).series.find((s) => s.date === '2026-11')!;
-    const before = await feesOnNov5();
+    const yearNovember = async () => (await api.analytics({ from: '2026-01-01', to: '2026-11-10', barberId: null })).series.find((s) => s.date === '2026-11')!;
+    const before = await feesOn('2026-11-10');
+    const visitDayBefore = await feesOn('2026-11-04');
     const novemberBefore = await yearNovember();
 
-    expect((await api.chargeFee(old.id)).noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-05T21:15:00Z' });
+    expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged', chargedAt: '2026-11-10T19:00:00Z' });
 
-    // The same day, the same fee, whichever period shows it.
-    expect((await feesOnNov5()).map((cents, i) => cents - before[i]!)).toEqual([fee, fee, fee, fee]);
+    // The same day, the same fee, whichever period shows it; nothing on the day of the visit.
+    expect((await feesOn('2026-11-10')).map((cents, i) => cents - before[i]!)).toEqual([fee, fee, fee, fee]);
+    expect(await feesOn('2026-11-04')).toEqual(visitDayBefore);
     expect((await yearNovember()).feesCents - novemberBefore.feesCents).toBe(fee);
-    const today = await api.analytics({ from: '2026-11-05', to: '2026-11-05', barberId: null });
+    const today = await api.analytics({ from: '2026-11-10', to: '2026-11-10', barberId: null });
     expect(today.totals.feesCents).toBe(before[0]! + fee);
     // For the barber of that appointment.
-    const his = await api.analytics({ from: '2026-11-05', to: '2026-11-05', barberId: old.barberId });
+    const his = await api.analytics({ from: '2026-11-10', to: '2026-11-10', barberId: kim.barberId });
     expect(his.totals.feesCents).toBeGreaterThanOrEqual(fee);
-    expect(today.leaderboard.find((e) => e.barberId === old!.barberId)!.salesCents).toBeGreaterThanOrEqual(fee);
+    expect(today.leaderboard.find((e) => e.barberId === kim.barberId)!.salesCents).toBeGreaterThanOrEqual(fee);
   });
 
   it('keeps a deleted product’s name, and turns down a range the server would', async () => {

@@ -28,6 +28,12 @@ export interface DemoAppointment extends OwnerAppointment {
   priceCents: number;
   /** A card payment that paid it (Tap to Pay), which voiding a cash sale doesn't undo. */
   cardPayment: { amountCents: number; paidAt: string } | null;
+  /**
+   * When it was first marked completed or checked out, as the server keeps it (`completed_at`), and
+   * never sent: a booking with a card on file that was completed can't become a no-show, even after
+   * it's reopened. Missing in what an older demo kept: then only its status says.
+   */
+  completedAt?: string | null;
 }
 
 export interface DayData {
@@ -274,6 +280,7 @@ function bookedAppointment(catalog: Catalog, date: string, barberId: string, sta
     sale: null,
     priceCents: offering.priceCents,
     cardPayment: null,
+    completedAt: null,
   };
 }
 
@@ -307,6 +314,7 @@ function outcome(appointment: DemoAppointment, random: () => number, ctx: Sample
   if (roll < 0.78) {
     const sale = checkoutSale(appointment, random, ctx.catalog.timeZone);
     appointment.status = 'completed';
+    appointment.completedAt = sale.soldAt;
     appointment.sale = { id: sale.id, totalCents: sale.totalCents, method: sale.method };
     appointment.payment = { status: 'paid', amountCents: sale.totalCents, paidAt: sale.soldAt };
     if (sale.method === 'card') appointment.cardPayment = { amountCents: sale.totalCents, paidAt: sale.soldAt };
@@ -315,12 +323,14 @@ function outcome(appointment: DemoAppointment, random: () => number, ctx: Sample
   if (roll < 0.85) {
     // Marked Done without a checkout: it counts at its booked price.
     appointment.status = 'completed';
+    appointment.completedAt = appointment.end;
     return null;
   }
   const fee = appointment.noShowFee;
   if (roll < 0.92) {
     appointment.status = 'noShow';
-    const chargedAt = start + 25 * 60_000;
+    // A no-show fee is charged only once the appointment has ended (the Cancellation & No-Show Policy).
+    const chargedAt = Date.parse(appointment.end) + 10 * 60_000;
     if (fee && appointment.card?.last4 !== '0002' && random() < 0.6 && chargedAt <= ctx.historyBefore) {
       appointment.noShowFee = { ...fee, status: 'charged', chargedAt: iso(chargedAt), reason: 'noShow' };
     }

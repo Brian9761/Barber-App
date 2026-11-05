@@ -109,6 +109,9 @@ describe('No-show protection', () => {
   const saved = noShowSettings.noShowSettings as NoShowSettings;
 
   it('works out the fee, the policy and the notice exactly as the server does', () => {
+    // The fixture has a flat fee over the service's price (the cap), and says "may be charged".
+    expect(rule.fees.some((f) => f.settings.feeMode === 'flat' && f.settings.flatCents > f.priceCents && f.feeCents === f.priceCents)).toBe(true);
+    expect(rule.policies.every((p) => p.warning === null || p.warning.message.includes('may be charged'))).toBe(true);
     for (const fee of rule.fees) {
       expect(noShow.feeCents(fee.priceCents, fee.priceKind === 'includedWithCut', fee.settings as NoShowSettings), JSON.stringify(fee)).toBe(fee.feeCents);
     }
@@ -143,6 +146,10 @@ describe('No-show protection', () => {
   it('shows an example and sums it up like the app', () => {
     const on = { ...saved, enabled: true };
     expect(noShow.examples(on, catalog)).toEqual(['A $40 haircut: $40', 'A $5 hot lather shave: $5']);
+    // A flat fee is never more than the service's price: $25 on a $5 shave is $5, as the server charges it.
+    const flat = { ...on, feeMode: 'flat' as const, flatCents: 2500 };
+    expect(noShow.examples(flat, catalog)).toEqual(['A $40 haircut: $25', 'A $5 hot lather shave: $5']);
+    expect(noShow.feeCents(500, false, flat)).toBe(500);
     expect(noShow.summary(on)).toBe('On: the full service price for no-shows and cancellations less than 1 hour before');
     expect(noShow.summary(saved)).toBe('Off: clients book online without a card');
     expect(noShow.costsText(4000)).toContain('about $1.46 of a $40 fee');

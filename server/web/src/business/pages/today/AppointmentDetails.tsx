@@ -1,8 +1,10 @@
 // One appointment, as the owner app's details show it: the client (tap to call), what and
 // when, the note, the card on file and its fee, the payment or sale, and what the owner
-// can do now: Check out (cash or other), Mark done, No-show once it has started, Cancel or
-// Reopen as the app allows, and charge the agreed fee to the card on file (asking first,
-// naming the card). A checked-out appointment changes only once its sale is voided.
+// can do now: Check out (cash or other), Mark done, No-show (once it has ended with a card
+// on file, once it has started without), Cancel or Reopen as the app allows, and charge the
+// agreed fee to the card on file (asking first, naming the card) within 7 days of the
+// appointment, as the server allows. A checked-out appointment changes only once its sale is
+// voided.
 //
 // After a change, what happened ("Marked done.") takes the focus where the button was, so
 // it's read out and Tab goes on to what can be done now; a fee that couldn't be charged says

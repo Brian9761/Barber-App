@@ -6,6 +6,7 @@
 
 import type { Catalog } from '../../api/types';
 import { money, windowLabel } from '../../lib/format';
+import { LATE_CANCEL_GRACE_MINUTES } from '../../lib/lateCancel';
 import type { NoShowSettings, StripeConnection } from '../types';
 import { editableMoney, parseMoney } from './money';
 
@@ -115,14 +116,14 @@ export const ON_FOOTER =
   'Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation.';
 export const OFF_FOOTER = "Off: new online bookings don't need a card. Bookings already made with a card keep their fee, and you can still charge it.";
 export const FEE_FOOTER =
-  'The same fee for a no-show and a late cancellation. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings.';
+  "The same fee for a no-show and a late cancellation, and never more than the service's price. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings.";
 
 export function lateCancellationFooter(draft: NoShowDraft): string {
   if (!draft.lateCancelEnabled) {
     return 'Off: new bookings can be cancelled in the app for free until the start, and only no-shows can be charged. Bookings already made keep the window they were booked with.';
   }
   const window = windowLabel(draft.lateCancelWindowMinutes);
-  return `A client who cancels in the app less than ${window} before the start can be charged the fee. Cancelling earlier is free, and there's never a fee when the shop cancels.`;
+  return `A client who cancels in the app less than ${window} before the start can be charged the fee. Cancelling earlier, or within ${LATE_CANCEL_GRACE_MINUTES} minutes of booking, is free, and there's never a fee when the shop cancels.`;
 }
 
 /** The windows to pick from, with the one on screen among them. */
@@ -132,10 +133,14 @@ export function windowChoices(current: number): number[] {
 
 // --------------------------------------------------------------- The fee rule
 
-/** The fee in cents for an item priced `priceCents`, or null: no fee for items included with a cut, free ones, or under 50¢. */
+/**
+ * The fee in cents for an item priced `priceCents`, or null: no fee for items included with a cut,
+ * free ones, or under 50¢. Never more than the item's price, a flat fee included: a $20 flat fee
+ * on a $16 service is $16 (the server's `noShowFeeCents`).
+ */
 export function feeCents(priceCents: number, includedWithCut: boolean, settings: NoShowSettings): number | null {
   if (includedWithCut || priceCents <= 0) return null;
-  const fee = settings.feeMode === 'flat' ? settings.flatCents : Math.floor((priceCents * settings.percent + 50) / 100);
+  const fee = settings.feeMode === 'flat' ? Math.min(settings.flatCents, priceCents) : Math.floor((priceCents * settings.percent + 50) / 100);
   return fee >= MIN_FEE_CENTS ? fee : null;
 }
 
@@ -155,7 +160,7 @@ export function policyText(minCents: number, maxCents: number, settings: NoShowS
   return `No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge ${fee} to this card. Cancelling in the app before your appointment is free.`;
 }
 
-/** The notice clients see while booking, as the server words it. */
+/** The notice clients see while booking, as the server words it: the fee "may be charged", like the policy's "may charge". */
 export function clientNotice(minCents: number, maxCents: number, settings: NoShowSettings): { title: string; message: string } {
   const fee = feeRangeLabel(minCents, maxCents);
   const fullPrice = settings.feeMode === 'percent' && settings.percent === 100;
@@ -164,10 +169,10 @@ export function clientNotice(minCents: number, maxCents: number, settings: NoSho
     const window = windowLabel(settings.lateCancelWindowMinutes);
     return {
       title: fullPrice ? 'Full Service Cancellation & No-Show Fee' : 'Late Cancellation & No-Show Fee',
-      message: `Cancelling less than ${window} before your appointment, or not showing up, is charged ${amount}. Cancelling in the app more than ${window} before is free.`,
+      message: `Cancelling less than ${window} before your appointment, or not showing up, may be charged ${amount}. Cancelling in the app more than ${window} before is free.`,
     };
   }
-  return { title: 'No-Show Fee', message: `Not showing up is charged ${amount}. Cancelling in the app before your appointment is free.` };
+  return { title: 'No-Show Fee', message: `Not showing up may be charged ${amount}. Cancelling in the app before your appointment is free.` };
 }
 
 /** "A" or "An", as "$8", "$11", "$18" and "$80" are said. */
