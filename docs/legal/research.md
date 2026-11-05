@@ -591,7 +591,7 @@ It must match the server exactly:
   - **Late cancellation:** cancelling less than the window before the start. Exactly the window before is still free. The app and website ask the client to confirm first.
   - **No-show:** not coming and not cancelling.
   - The Policy must also say whether lateness counts. Owner decision. The documents say a client who arrives after the appointment time has ended is a no-show, and otherwise the barber fits them in if possible; a no-show fee can be charged only after the end time, which the code must enforce (§8.3 item 12).
-  - **Booking after the cutoff has passed:** the booking screens warn about it, and cancelling within 15 minutes of booking is free (§8.3 item 11).
+  - **Booking after the cutoff has passed:** the booking screens warn about it. Cancelling within 15 minutes of booking is free for every booking, as the server enforces it (§8.3 item 11).
 - **How much:**
   - Exactly the amount shown at booking: a percentage of the service price, default 100%, or a flat amount.
   - **Never more than the service price**, once the cap above is built.
@@ -903,7 +903,7 @@ The documents are written for the live version, and they're not in effect until 
 3. **Cap every fee at the booked service's price** (§8.2–8.3).
 4. **Stop charging fees 7 days after the appointment** (§8.3 item 10, §9.2).
 5. **A no-show only after the end time:** a booking with a card on file can be marked a no-show, and charged, only after its end time, and a completed one can't become a no-show (§8.3 item 12).
-6. **The 15-minute grace period** for bookings made after the cutoff has passed, also on the booking screens (§8.3 item 11).
+6. **The 15-minute grace period:** cancelling within 15 minutes of booking is never a late cancellation, for any booking; the booking screens mention it for a time already past the cutoff (§8.3 item 11).
 7. **Remove clients' contact details after 12 months** with the daily job (§17).
 8. **Delete saved cards** when they expire, go 12 months unused, or are removed, and once the booking is over for a card saved without "Remember me" (§17).
 9. **Tools to answer privacy requests:** find, export, correct and delete one person's data (§3).
@@ -942,3 +942,7 @@ Two independent reviews checked the drafts against the law and the code. Every f
 - **Terms:** both price exceptions ("From" and "any barber"), a warning not to cancel online inside the cutoff to rebook, cancelling only on the device used to book, a refund line for the owner to fill in, the consumer's own county kept available (§15), and Apple's standard license agreement brought into "the whole agreement" (§11).
 - **Accessibility Statement:** relay calls, texts (once confirmed) and email; the phone-size and High Contrast claims worded as the tests really check them; the Visit page's "ADA-compliant" line made a launch item (§10).
 - **Owner checklist:** a "do this now" step for the gallery photos (§16); must-dos for the shop email, texts and relay, a refund policy, Yelp, the older website and Squire, a developer agreement, providers' data protection terms, no card fees, and the age signal.
+
+### Later the same day: the 15-minute grace period for every booking
+
+The server implements the grace period as the drafter's rule reads (a client cancellation counts as late only when it's after the cutoff and more than 15 minutes after booking), so it covers every booking, not only those made after the cutoff had passed. That's never stricter than the earlier wording, and simpler to explain, so the Cancellation & No-Show Policy, the Terms and the owner checklist now say "cancelling within 15 minutes of booking is always free".

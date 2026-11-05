@@ -16,7 +16,7 @@ This folder has four documents for clients: the [Privacy Policy](privacy.md), th
 ## 1. Before going live: must do
 
 - [ ] **Have a California attorney review the four documents. This is strongly recommended.** Ask them to look in particular at:
-  - the no-show and late-cancellation fee: whether the amount (100% of the price by default) and the cutoff hold up under California's rule for fees in consumer contracts (Civil Code §1671), the "agreed estimate of that loss, not a penalty" wording, the 15-minute grace period for bookings made after the cutoff has passed, the rule that a no-show fee is charged only after the appointment's end time, and whether to add an "I agree" checkbox;
+  - the no-show and late-cancellation fee: whether the amount (100% of the price by default) and the cutoff hold up under California's rule for fees in consumer contracts (Civil Code §1671), the "agreed estimate of that loss, not a penalty" wording, the 15-minute grace period (cancelling within 15 minutes of booking is always free), the rule that a no-show fee is charged only after the appointment's end time, and whether to add an "I agree" checkbox;
   - the limit on liability (Terms, section 13), the choice of no arbitration, the courts clause (section 14), and how the Terms fit with Apple's standard license agreement for the iPhone app (section 17), or whether to give the app a custom license agreement instead;
   - the refund policy you choose (Terms, section 4);
   - the retention periods (12 months) and the request process in the Privacy Policy;
@@ -56,7 +56,7 @@ This folder has four documents for clients: the [Privacy Policy](privacy.md), th
 | The fee amount | What you set in the app: a percentage of the service's price (100% unless you lower it) or a set amount, **never more than the service's price** | Cancellation & No-Show Policy |
 | The cutoff for free cancelling | What you set in the app: 1 hour unless you change it (30 minutes to 48 hours) | Cancellation & No-Show Policy |
 | Late cancellations | Charged like a no-show, unless you turn late cancellations off in the app | Cancellation & No-Show Policy |
-| Booking after the cutoff has passed | Cancelling within 15 minutes of booking is free; after that, it's a late cancellation | Cancellation & No-Show Policy, Terms |
+| Changing their mind | Cancelling within 15 minutes of booking is always free, even past the cutoff (for example, a time booked 30 minutes ahead); after that, the usual rules apply | Cancellation & No-Show Policy, Terms |
 | No-shows and late arrivals | A client who arrives before the appointment's end time isn't a no-show, and you fit them in if you can. A no-show fee can be charged only after the end time | Cancellation & No-Show Policy, Terms |
 | A client who came | Never charged a no-show fee: once an appointment with a card on file is marked completed, it can't become a no-show | Cancellation & No-Show Policy |
 | The deadline to charge a fee | Within 7 days after the appointment, or not at all | Cancellation & No-Show Policy |
@@ -71,7 +71,7 @@ This folder has four documents for clients: the [Privacy Policy](privacy.md), th
 | Reviews | Google's reviews are shown; Yelp is only linked | Privacy Policy, Terms, Accessibility Statement |
 | Receipt emails at the counter | Offered only after the card payment goes through, never needed to pay, passed to Stripe and not kept | Privacy Policy |
 
-**Write down why you chose the fee amount, and keep the note.** For example: "When a client doesn't come or cancels within an hour, the barber's chair usually stays empty, because it's too late to book someone else." If a client ever challenges the fee, the question is whether it was a reasonable estimate of the shop's loss when you set it. Long cutoffs at 100% (say, 24 hours or more) are harder to defend than short ones, because a slot cancelled a day ahead can often be filled. The 15-minute grace period is there for the same reason: when someone books a time after the cutoff has passed and cancels straight away, the shop has lost nothing, because the time was free a moment earlier.
+**Write down why you chose the fee amount, and keep the note.** For example: "When a client doesn't come or cancels within an hour, the barber's chair usually stays empty, because it's too late to book someone else." If a client ever challenges the fee, the question is whether it was a reasonable estimate of the shop's loss when you set it. Long cutoffs at 100% (say, 24 hours or more) are harder to defend than short ones, because a slot cancelled a day ahead can often be filled. The 15-minute grace period is there for the same reason: when someone cancels straight after booking, the shop has lost almost nothing, because the time was free a moment earlier.
 
 ## 3. Code changes the documents depend on
 
@@ -82,7 +82,7 @@ Your developer has the exact details (research.md §18 lists them). **Ship them 
 3. **Never let the fee be more than the price of the service** (today the set-amount option can charge $20 on a $5 service).
 4. **Stop fees from being charged more than 7 days after the appointment.**
 5. **No-shows only after the end time:** a booking with a card on file can be marked a no-show, and charged, only after its end time; and once it's marked completed, it can't become a no-show.
-6. **The 15-minute grace period:** a client who books a time after the cutoff has passed can cancel free for 15 minutes, and the booking screens say so.
+6. **The 15-minute grace period:** cancelling within 15 minutes of booking is always free, and the booking screens say so when a time is already past the cutoff.
 7. **Remove clients' names, numbers, emails and notes automatically** 12 months after the appointment.
 8. **Delete saved cards at Stripe** when they expire, go 12 months unused, or the client removes them, and once the booking is over for a card saved without "Remember me".
 9. **Simple tools to find, correct and delete one person's information** when they ask, including a copy of the cancellation terms they agreed to.
