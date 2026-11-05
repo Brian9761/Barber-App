@@ -359,7 +359,7 @@ interface SaleItemRow {
   total_cents: number;
 }
 
-interface LoadedSale {
+export interface LoadedSale {
   row: SaleRow;
   items: SaleItemRow[];
 }
@@ -368,7 +368,7 @@ const SALE_COLUMNS = `s.id, s.barber_id, b.name AS barber_name, s.appointment_id
   s.total_cents, s.sold_at, s.voided_at, s.void_reason`;
 
 /** Sales matching `where` (on `sales s`), in `order`, with their items: two queries in all. */
-async function loadSales(db: Queryable, where: string, values: unknown[], order = 's.sold_at DESC, s.id DESC'): Promise<LoadedSale[]> {
+export async function loadSales(db: Queryable, where: string, values: unknown[], order = 's.sold_at DESC, s.id DESC'): Promise<LoadedSale[]> {
   const { rows } = await db.query<SaleRow>(`SELECT ${SALE_COLUMNS} FROM sales s JOIN barbers b ON b.id = s.barber_id WHERE ${where} ORDER BY ${order}`, values);
   if (rows.length === 0) return [];
   const { rows: items } = await db.query<SaleItemRow>(

@@ -58,6 +58,8 @@ export interface AppointmentRow {
    * booking with a card on file that was completed can't become a no-show, even after it's reopened.
    */
   completed_at: Date | null;
+  /** When the client's details were removed, 12 months on or on request (migrations/008, retention.ts). */
+  anonymized_at: Date | null;
   /** The appointment's live sale (migrations/006), copied from `sales`: all three set, or all null. */
   sale_id: string | null;
   sale_total_cents: number | null;
