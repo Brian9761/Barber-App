@@ -263,7 +263,7 @@ describe('on a shared computer', () => {
     expect(carriedAppointments()).toEqual([]);
     // The card's appointment still needs it: the shop deletes it once none does, and says so.
     await waitFor(() => expect(within(notice).getByTestId('card-removal').textContent).toBe(cardScheduled.cardDeletion.message));
-    expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ path: '/api/cards', headers: { 'x-card-token': token } }]);
+    expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ path: '/api/cards', headers: { 'x-card-token': token }, keepalive: true }]);
     // Nothing was cancelled.
     expect(api.calls.filter((c) => c.method === 'POST')).toEqual([]);
   });

@@ -18,6 +18,8 @@ describe('deleting a saved card at the shop', () => {
       ['DELETE', '/api/cards', token],
       ['DELETE', '/api/cards', token],
     ]);
+    // Sent so it still goes if the client closes the tab right after: the key is gone from here.
+    expect(mock.calls.map((c) => c.keepalive)).toEqual([true, true]);
   });
 
   it('says there was nothing to delete when the shop has no card with that key', async () => {

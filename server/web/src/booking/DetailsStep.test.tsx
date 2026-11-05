@@ -101,7 +101,7 @@ describe('Remember me on this computer', () => {
         'Done. This computer no longer keeps those details or a saved card. The shop will delete the saved card as soon as the appointments booked with it no longer need it.',
       ),
     );
-    expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ path: '/api/cards', headers: { 'x-card-token': token } }]);
+    expect(api.calls.filter((c) => c.method === 'DELETE')).toMatchObject([{ path: '/api/cards', headers: { 'x-card-token': token }, keepalive: true }]);
   });
 
   it('says the shop deleted the card, or to call the shop when it couldn’t be reached; forgets it here either way', async () => {

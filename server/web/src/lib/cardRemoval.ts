@@ -4,7 +4,9 @@
 // only in this browser, so once it's forgotten nobody could use the card again; the shop's
 // server deletes it at Stripe now, or as soon as no booking needs it (that's its job).
 //
-// The key is forgotten here whatever the answer: a network problem never keeps it.
+// The key is forgotten here whatever the answer: a network problem never keeps it. The request
+// is sent with `keepalive`, so it still reaches the shop when the client closes the tab or
+// leaves the site right after (once the key is gone, nothing here could send it again).
 
 import { api, ErrorCode, isApiError } from '../api/client';
 import type { CardDeletion } from '../api/types';
@@ -17,11 +19,15 @@ export type CardRemoval =
   /** The shop couldn't be reached, or answered with a problem: the client should call. */
   | { status: 'failed' };
 
-/** Asks the shop to delete the card saved under `token`. Never throws; a lost connection is tried once more. */
+/**
+ * Asks the shop to delete the card saved under `token`. Never throws; a lost connection is tried
+ * once more. Sent with `keepalive` unless told otherwise.
+ */
 export async function deleteSavedCard(token: string, options: { keepalive?: boolean } = {}): Promise<CardRemoval> {
+  const keepalive = options.keepalive ?? true;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      return await api.deleteCard(token, options);
+      return await api.deleteCard(token, { keepalive });
     } catch (error) {
       if (isApiError(error) && error.code === ErrorCode.notFound) return { status: 'none' };
       if (!(isApiError(error) && error.isOffline)) return { status: 'failed' };
