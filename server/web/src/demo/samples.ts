@@ -3,9 +3,9 @@ import { FALLBACK_SHOP } from '../data/fallback';
 
 /**
  * The demo's reviews: SAMPLES, not the shop's rating and not anyone's real words (the real site
- * shows the shop's reviews live from Google and Yelp). They're named "Sample reviewer" and say
- * what they are, and there's no rating or count, so the demo never shows a made-up score as
- * Google's. Like the apps' FakeShopAPI, Yelp isn't set up.
+ * shows the shop's reviews live from Google, and only links to Yelp). They're named "Sample
+ * reviewer" and say what they are, and there's no rating or count, so the demo never shows a
+ * made-up score as Google's. Yelp isn't set up: the site never shows Yelp's reviews.
  */
 export function sampleReviews(shop: Shop, now: Date): Reviews {
   return {

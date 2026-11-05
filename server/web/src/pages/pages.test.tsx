@@ -68,7 +68,8 @@ describe('Home', () => {
     const rating = await screen.findByTestId('home-rating');
     expect(rating.textContent).toContain('4.9');
     expect(rating.textContent).toContain('59 reviews on Google');
-    expect(screen.getByText('4.5 on Yelp · 12 reviews')).toBeTruthy();
+    // Never Yelp's rating, even though the server sent one (Yelp's reviews are only linked).
+    expect(document.body.textContent).not.toMatch(/on Yelp|4\.5|12 reviews/);
   });
 
   it('links to the reviews where they were written when they can’t be shown', async () => {
@@ -77,7 +78,7 @@ describe('Home', () => {
     await waitFor(() => expect(api.calls.some((c) => c.path === '/api/reviews')).toBe(true));
     expect(screen.queryByTestId('home-rating')).toBeNull();
     expect(screen.getByText('Read them where clients wrote them.')).toBeTruthy();
-    expect(screen.getByRole('link', { name: 'Yelp reviews' }).getAttribute('href')).toBe(reviewsUnavailable.yelp.url);
+    expect(screen.getByRole('link', { name: 'Yelp reviews' }).getAttribute('href')).toBe('https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside');
   });
 });
 
@@ -105,19 +106,43 @@ describe('Barbers', () => {
 });
 
 describe('Reviews', () => {
-  it('shows Google’s reviews with Google’s attribution, and Yelp’s', async () => {
+  it('shows Google’s reviews with Google’s attribution, and only links to Yelp, whatever the server sends', async () => {
     mockApi([['GET /api/reviews', { body: reviews }]]);
     renderApp('/reviews');
     expect(await screen.findByText('Fixture Reviewer One')).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Reviews from Google Maps' })).toBeTruthy();
-    expect(screen.getByText('Fixture A.')).toBeTruthy();
+    // The server sent Yelp's rating and three of its reviews: none of it shows, not even who wrote them.
+    expect(screen.queryByText('Fixture A.')).toBeNull();
+    expect(reviews.yelp.available).toBe(true);
+    expect(reviews.yelp.reviews.length).toBeGreaterThan(0);
+    for (const review of reviews.yelp.reviews) expect(document.body.textContent).not.toContain(review.text!.slice(0, 30));
+    expect(screen.queryByTestId('yelp-reviews')).toBeNull();
+    expect(screen.queryByText(/Reviews from Yelp/)).toBeNull();
+    // Yelp's 4.5 from 12 reviews, nowhere.
+    expect(document.body.textContent).not.toMatch(/4\.5|12 reviews/);
+    // A plain link instead, to the shop's page on Yelp (not the address with Yelp's API tracking).
+    const elsewhere = screen.getByTestId('reviews-elsewhere');
+    expect(within(elsewhere).getByRole('heading', { name: 'More reviews' })).toBeTruthy();
+    expect(within(elsewhere).getByRole('link', { name: 'Read our reviews on Yelp' }).getAttribute('href')).toBe(
+      'https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside',
+    );
+    expect(document.querySelectorAll('a[href*="yelp.com"]')).toHaveLength(1);
   });
 
-  it('says so, with links, when neither can be shown', async () => {
+  it('says so, with links, when Google’s can’t be shown', async () => {
     mockApi([['GET /api/reviews', { body: reviewsUnavailable }]]);
     renderApp('/reviews');
     expect(await screen.findByText("Reviews can't be shown here right now")).toBeTruthy();
     expect(screen.queryByRole('heading', { name: 'Reviews from Google Maps' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'See our reviews on Google Maps' }).getAttribute('href')).toBe(reviewsUnavailable.google.url);
+    expect(screen.getByRole('link', { name: 'Read our reviews on Yelp' })).toBeTruthy();
+  });
+
+  it('says it shows Google’s reviews, not Google’s and Yelp’s', async () => {
+    mockApi([['GET /api/reviews', { body: reviews }]]);
+    renderApp('/reviews');
+    expect(screen.getByText('What clients say about Izzy Clipz on Google, as they wrote it.')).toBeTruthy();
+    await waitFor(() => expect(document.querySelector('meta[name="description"]')?.getAttribute('content')).not.toContain('Google and Yelp'));
   });
 });
 

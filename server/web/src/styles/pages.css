@@ -225,8 +225,7 @@
   color: #ffb340;
 }
 
-.rating-tile__count,
-.rating-tile__yelp {
+.rating-tile__count {
   color: var(--color-smoke);
 }
 

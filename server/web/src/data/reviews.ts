@@ -2,10 +2,11 @@ import { useEffect, useState } from 'react';
 import { api, errorMessage } from '../api/client';
 import type { Reviews } from '../api/types';
 
-// Reviews come live from Google and Yelp through the server. Like the app, they're
-// kept only in memory (Google's terms don't allow storing them), and asked for at
-// most once every five minutes per visit, since every answer from Google counts
-// against the server's daily limit.
+// Reviews come live from Google through the server (the site only links to Yelp's,
+// and never shows any the server sends). Like the app, they're kept only in memory
+// (Google's terms don't allow storing them), and asked for at most once every five
+// minutes per visit, since every answer from Google counts against the server's
+// daily limit.
 
 const MAX_AGE_MS = 5 * 60_000;
 

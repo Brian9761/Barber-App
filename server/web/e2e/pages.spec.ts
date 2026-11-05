@@ -17,7 +17,7 @@ const PAGES = [
 ] as const;
 
 test.describe('every page', () => {
-  // As the shop has it: live reviews from Google and Yelp (the server's own test fixtures).
+  // As the shop has it: live reviews from the server (its own test fixtures, Google's and Yelp's); the site shows Google's and links to Yelp.
   test.beforeAll(async ({ request }) => setLiveReviews(request, true));
   test.afterAll(async ({ request }) => setLiveReviews(request, false));
 
@@ -35,11 +35,19 @@ test.describe('every page', () => {
         // The rating loads once its tile comes near the screen.
         await tab.getByRole('heading', { name: 'What clients say' }).scrollIntoViewIfNeeded();
         await expect(tab.getByTestId('home-rating')).toContainText('4.9');
+        // Never Yelp's rating, though the server sends one: Yelp's reviews are only linked.
+        await expect(tab.locator('main')).not.toContainText('on Yelp');
         await tab.evaluate(() => window.scrollTo(0, 0));
       }
       if (page.path === '/reviews') {
         await expect(tab.getByTestId('google-reviews')).toContainText('Reviews from Google Maps');
-        await expect(tab.getByTestId('yelp-reviews')).toContainText('Reviews from Yelp');
+        // The server sends Yelp's reviews and rating too (its own fixtures): only a plain link shows.
+        await expect(tab.getByTestId('yelp-reviews')).toHaveCount(0);
+        await expect(tab.getByText('Fixture A.')).toHaveCount(0);
+        await expect(tab.getByTestId('reviews-elsewhere').getByRole('link', { name: /Read our reviews on Yelp/ })).toHaveAttribute(
+          'href',
+          'https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside',
+        );
       }
       await expectAccessible(tab, page.path);
       await expectLogosStandOut(tab, page.path);

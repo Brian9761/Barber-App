@@ -226,7 +226,7 @@ test('keeps none of the client’s details, and Forget me clears what the demo k
 test('shows sample reviews as samples, with none of Google’s labels and no made-up rating', async ({ page }, testInfo) => {
   await page.goto('/reviews');
   await expect(page.getByTestId('demo-notice')).toHaveText(
-    "Demo version: these reviews are samples, not the shop's. The real site shows the shop's reviews from Google and Yelp.",
+    "Demo version: these reviews are samples, not the shop's. The real site shows the shop's reviews from Google, and links to Yelp.",
   );
   await expect(page.getByRole('heading', { level: 2, name: 'Sample reviews' })).toBeVisible();
   await expect(page.getByText('Sample reviewer A')).toBeVisible();

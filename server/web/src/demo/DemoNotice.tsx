@@ -19,7 +19,7 @@ export function DemoNotice({ about = 'booking', onDark = false }: { about?: 'boo
     <p className={`demo-notice${onDark ? ' demo-notice--on-dark' : ''}`} data-testid="demo-notice">
       <Icon name="info" className="demo-notice__icon" />
       {about === 'reviews' ? (
-        <span>Demo version: these reviews are samples, not the shop's. The real site shows the shop's reviews from Google and Yelp.</span>
+        <span>Demo version: these reviews are samples, not the shop's. The real site shows the shop's reviews from Google, and links to Yelp.</span>
       ) : (
         <span>
           {DEMO_NOTICE} To book for real, call{' '}

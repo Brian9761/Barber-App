@@ -9,18 +9,22 @@ import { DemoNotice } from '../demo/DemoNotice';
 import { isDemo } from '../demo/mode';
 import { MONTH_SHORT, localDate, parseDate } from '../lib/shopTime';
 
-// Live reviews from Google and Yelp, each in its own section with its own
-// attribution, never mixed or averaged together (Google's and Yelp's terms).
+// Live reviews from Google, with Google's attribution, as Google provides them. Yelp's are
+// only linked, never shown: Yelp's API terms make showing its reviews (or its rating) on
+// this commercial site a problem, and the Privacy Policy and Terms say the site shows
+// Google's and links to Yelp. So even when the server sends Yelp's, none of it is shown.
 //
-// The demo has no reviews from Google or Yelp, only samples that say so: they're
-// shown as "Sample reviews", with none of Google's labels, attribution or terms,
-// and links to the shop's real reviews.
+// The demo has no reviews from Google, only samples that say so: they're shown as
+// "Sample reviews", with none of Google's labels, attribution or terms, and links to the
+// shop's real reviews.
 
 const GOOGLE_TERMS = 'https://maps.google.com/help/terms_maps/';
 const GOOGLE_PRIVACY = 'https://policies.google.com/privacy';
+/** The shop's page on Yelp, linked as it is (not the address Yelp's API gives, with its tracking). */
+const YELP_URL = FALLBACK_SHOP.yelpUrl;
 
 export function ReviewsPage() {
-  usePageMeta('Reviews', 'What clients say about Izzy Clipz Barbershop in Oceanside, live from Google and Yelp.');
+  usePageMeta('Reviews', 'What clients say about Izzy Clipz Barbershop in Oceanside, live from Google, and where to read more on Yelp.');
   const reviews = useReviews();
   const catalog = useCatalog();
   const googleMaps = catalog?.shop.googleMapsUrl ?? FALLBACK_SHOP.googleMapsUrl;
@@ -34,8 +38,8 @@ export function ReviewsPage() {
         <h1>Reviews</h1>
         <p className="lead secondary">
           {demo
-            ? 'On the real site, this page shows what clients say about Izzy Clipz on Google and Yelp.'
-            : 'What clients say about Izzy Clipz on Google and Yelp, as they wrote it.'}
+            ? 'On the real site, this page shows what clients say about Izzy Clipz on Google, and links to Yelp.'
+            : 'What clients say about Izzy Clipz on Google, as they wrote it.'}
         </p>
         <PreferToCall className="page-header__call" />
       </header>
@@ -49,7 +53,7 @@ export function ReviewsPage() {
               <a className="button button--secondary" href={googleMaps}>
                 See our reviews on Google Maps
               </a>
-              <a className="button button--secondary" href={FALLBACK_SHOP.yelpUrl}>
+              <a className="button button--secondary" href={YELP_URL}>
                 Read our reviews on Yelp
               </a>
             </div>
@@ -59,33 +63,27 @@ export function ReviewsPage() {
         {reviews.status === 'ready' && !demo ? (
           <>
             {reviews.reviews.google.available ? <GoogleSection source={reviews.reviews.google} zone={zone} /> : null}
-            {reviews.reviews.yelp.available ? <YelpSection source={reviews.reviews.yelp} zone={zone} /> : null}
-            {!reviews.reviews.google.available || !reviews.reviews.yelp.available ? (
-              <section className="review-source" aria-labelledby="reviews-elsewhere" data-testid="reviews-elsewhere">
-                <h2 id="reviews-elsewhere" className="review-source__title">
-                  {!reviews.reviews.google.available && !reviews.reviews.yelp.available
-                    ? "Reviews can't be shown here right now"
-                    : 'More reviews'}
-                </h2>
-                <p>
-                  {!reviews.reviews.google.available && !reviews.reviews.yelp.available
-                    ? 'Read them on Google Maps or Yelp instead, where clients wrote them.'
-                    : 'Read more of what clients wrote, on the site itself.'}
-                </p>
-                <div className="review-source__links">
-                  {!reviews.reviews.google.available ? (
-                    <a className="button button--secondary" href={reviews.reviews.google.url}>
-                      See our reviews on Google Maps <Icon name="external" className="button__icon" />
-                    </a>
-                  ) : null}
-                  {!reviews.reviews.yelp.available ? (
-                    <a className="button button--secondary" href={reviews.reviews.yelp.url}>
-                      Read our reviews on Yelp <Icon name="external" className="button__icon" />
-                    </a>
-                  ) : null}
-                </div>
-              </section>
-            ) : null}
+            {/* Yelp's reviews are only ever linked, whatever the server sends. */}
+            <section className="review-source" aria-labelledby="reviews-elsewhere" data-testid="reviews-elsewhere">
+              <h2 id="reviews-elsewhere" className="review-source__title">
+                {reviews.reviews.google.available ? 'More reviews' : "Reviews can't be shown here right now"}
+              </h2>
+              <p>
+                {reviews.reviews.google.available
+                  ? 'Clients review the shop on Yelp too.'
+                  : 'Read them on Google Maps or Yelp instead, where clients wrote them.'}
+              </p>
+              <div className="review-source__links">
+                {!reviews.reviews.google.available ? (
+                  <a className="button button--secondary" href={reviews.reviews.google.url}>
+                    See our reviews on Google Maps <Icon name="external" className="button__icon" />
+                  </a>
+                ) : null}
+                <a className="button button--secondary" href={YELP_URL}>
+                  Read our reviews on Yelp <Icon name="external" className="button__icon" />
+                </a>
+              </div>
+            </section>
           </>
         ) : null}
       </div>
@@ -143,9 +141,9 @@ function GoogleSection({ source, zone }: { source: ReviewSource; zone: string })
   );
 }
 
-/** The demo's samples: not Google's or Yelp's, so under a heading of their own, with links to the real ones. */
+/** The demo's samples: not Google's, so under a heading of their own, with links to the real ones. */
 function SampleSection({ reviews, zone }: { reviews: Reviews; zone: string }) {
-  const samples = [...reviews.google.reviews, ...reviews.yelp.reviews];
+  const samples = reviews.google.reviews;
   return (
     <section className="review-source" aria-labelledby="sample-reviews" data-testid="sample-reviews">
       <h2 id="sample-reviews" className="review-source__title">
@@ -162,31 +160,10 @@ function SampleSection({ reviews, zone }: { reviews: Reviews; zone: string }) {
         <a className="button button--secondary" href={reviews.google.url}>
           See our reviews on Google Maps <Icon name="external" className="button__icon" />
         </a>
-        <a className="button button--secondary" href={reviews.yelp.url}>
+        <a className="button button--secondary" href={YELP_URL}>
           Read our reviews on Yelp <Icon name="external" className="button__icon" />
         </a>
       </div>
-    </section>
-  );
-}
-
-function YelpSection({ source, zone }: { source: ReviewSource; zone: string }) {
-  return (
-    <section className="review-source" aria-labelledby="yelp-reviews" data-testid="yelp-reviews">
-      <h2 id="yelp-reviews" className="review-source__title">
-        Reviews from Yelp
-      </h2>
-      {source.rating != null ? <Score rating={source.rating} count={source.count} site="Yelp" /> : null}
-      {source.reviews.length > 0 ? (
-        <ol className="review-list">
-          {source.reviews.map((review, index) => (
-            <ReviewItem key={`${review.author}-${index}`} review={review} site="Yelp" linkTitle="Read more on Yelp" zone={zone} />
-          ))}
-        </ol>
-      ) : null}
-      <a className="button button--secondary" href={source.url}>
-        Read our reviews on Yelp <Icon name="external" className="button__icon" />
-      </a>
     </section>
   );
 }

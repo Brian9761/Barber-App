@@ -89,7 +89,7 @@ describe('the demo notice', () => {
     mockApi([['GET /api/reviews', { body: reviewsUnavailable }]]);
     renderApp('/reviews');
     expect((await screen.findByTestId('demo-notice')).textContent).toBe(
-      "Demo version: these reviews are samples, not the shop's. The real site shows the shop's reviews from Google and Yelp.",
+      "Demo version: these reviews are samples, not the shop's. The real site shows the shop's reviews from Google, and links to Yelp.",
     );
   });
 });
@@ -102,7 +102,7 @@ describe('the demo’s sample reviews', () => {
     renderApp('/reviews');
     const samples = await screen.findByTestId('sample-reviews');
     expect(within(samples).getByRole('heading', { level: 2 }).textContent).toBe('Sample reviews');
-    expect(screen.getByText('On the real site, this page shows what clients say about Izzy Clipz on Google and Yelp.')).toBeTruthy();
+    expect(screen.getByText('On the real site, this page shows what clients say about Izzy Clipz on Google, and links to Yelp.')).toBeTruthy();
     expect(within(samples).getByRole('link', { name: /See our reviews on Google Maps/ })).toBeTruthy();
     expect(within(samples).getByRole('link', { name: /Read our reviews on Yelp/ })).toBeTruthy();
     for (const label of ['Reviews from Google Maps', 'Most relevant on Google', "Up to five reviews that Google picks, in Google's order.", 'Reviews from Yelp']) {
@@ -112,6 +112,8 @@ describe('the demo’s sample reviews', () => {
     expect(screen.queryByText(/Google checks for and removes fake content/)).toBeNull();
     expect(screen.queryByText(/This site shows content from Google Maps/)).toBeNull();
     expect(within(samples).queryByRole('link', { name: /View on Google Maps|Read more on Yelp/ })).toBeNull();
+    // Nothing of Yelp's, even as a sample.
+    expect(document.body.textContent).not.toContain('Fixture Yelp excerpt');
   });
 });
 

@@ -180,24 +180,26 @@ function HomeTiles({ catalog }: { catalog: Catalog }) {
   );
 }
 
-/** The rating from Google (and Yelp), loaded when the tile comes near the screen; quiet when it can't be shown. */
+/**
+ * The rating from Google, loaded when the tile comes near the screen; quiet when it can't be
+ * shown. Never Yelp's: Yelp's reviews are only linked (ReviewsPage.tsx says why).
+ */
 function ReviewsTile() {
   const ref = useRef<HTMLElement>(null);
   const near = useNearScreen(ref);
   const reviews = useReviews(near);
   const google = reviews.status === 'ready' && reviews.reviews.google.available ? reviews.reviews.google : null;
-  const yelp = reviews.status === 'ready' && reviews.reviews.yelp.available ? reviews.reviews.yelp : null;
   return (
     <article ref={ref} className="tile tile--dark on-dark" aria-labelledby="tile-reviews">
       <h2 id="tile-reviews" className="tile__title">
         What clients say
       </h2>
-      <p className="tile__text">Reviews from Google and Yelp, in their own words.</p>
+      <p className="tile__text">Reviews from Google, in clients' own words.</p>
       <div className="actions actions--center tile__links">
         <MoreLink to="/reviews">Read reviews</MoreLink>
       </div>
       <div className="tile__body rating-tile" aria-live="polite">
-        {google?.rating == null && yelp?.rating == null ? (
+        {google?.rating == null ? (
           <div className="rating-tile__links">
             <span className="rating-tile__quote" aria-hidden="true">
               “
@@ -207,7 +209,7 @@ function ReviewsTile() {
               <a className="button button--secondary" href={reviews.status === 'ready' ? reviews.reviews.google.url : FALLBACK_SHOP.googleMapsUrl}>
                 Google reviews
               </a>
-              <a className="button button--secondary" href={reviews.status === 'ready' ? reviews.reviews.yelp.url : FALLBACK_SHOP.yelpUrl}>
+              <a className="button button--secondary" href={FALLBACK_SHOP.yelpUrl}>
                 Yelp reviews
               </a>
             </div>
@@ -221,11 +223,6 @@ function ReviewsTile() {
               {google.count != null ? `${google.count} reviews on Google` : 'On Google'}
             </span>
           </div>
-        ) : null}
-        {yelp?.rating != null ? (
-          <p className="rating-tile__yelp">
-            {yelp.rating.toFixed(1)} on Yelp{yelp.count != null ? ` · ${yelp.count} reviews` : ''}
-          </p>
         ) : null}
       </div>
     </article>
