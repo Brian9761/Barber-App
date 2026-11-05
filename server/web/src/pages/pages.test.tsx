@@ -157,24 +157,24 @@ describe('the phone number', () => {
 });
 
 describe('Home’s photos', () => {
-  it('open with a cut the gallery doesn’t start with, and no other shop’s name', () => {
+  // The six photos of clients' cuts are off until the shop has each person's written permission
+  // (docs/legal/OWNER-CHECKLIST.md). Only the storefront is shown.
+  it('show only the storefront in the hero', () => {
     mockApi([['GET /api/reviews', { body: reviews }]]);
     renderApp('/');
     const hero = screen.getByRole('heading', { level: 1 }).closest('section') as HTMLElement;
-    expect(within(hero).getByRole('img', { name: 'Blue color with a fade, cut at Izzy Clipz' })).toBeTruthy();
+    const images = within(hero).getAllByRole('img').filter((img) => img.tagName === 'IMG' && img.getAttribute('alt'));
+    expect(images.map((img) => img.getAttribute('alt'))).toContain(
+      "The Izzy Clipz storefront at 1919 Mission Ave, with the shop's sign over the windows",
+    );
+    expect(within(hero).queryByRole('img', { name: /cut at Izzy Clipz/ })).toBeNull();
   });
 
-  it('say each gallery cut once to screen readers: by its caption', () => {
+  it('have no gallery of clients', () => {
     mockApi([['GET /api/reviews', { body: reviews }]]);
     renderApp('/');
-    const gallery = screen.getByRole('heading', { name: 'Fresh from the chair.' }).closest('section') as HTMLElement;
-    const figures = within(gallery).getAllByRole('figure');
-    expect(figures).toHaveLength(6);
-    expect(figures[0]!.textContent).toBe('Textured crop with a fade');
-    for (const figure of figures) {
-      expect(figure.querySelector('img')!.getAttribute('alt')).toBe('');
-      expect(figure.querySelector('figcaption')!.textContent).not.toBe('');
-    }
+    expect(screen.queryByRole('heading', { name: 'Fresh from the chair.' })).toBeNull();
+    expect(document.querySelector('img[src*="gallery"]')).toBeNull();
   });
 });
 

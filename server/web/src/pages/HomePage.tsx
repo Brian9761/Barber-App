@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { Link } from 'react-router-dom';
 import type { Catalog } from '../api/types';
-import { GALLERY, STOREFRONT } from '../assets/images';
+import { STOREFRONT } from '../assets/images';
 import { useNearScreen, useNow } from '../components/hooks';
 import { Logo } from '../components/Logo';
 import { DemoNotice } from '../demo/DemoNotice';
@@ -12,9 +12,6 @@ import { FALLBACK_SHOP } from '../data/fallback';
 import { useReviews } from '../data/reviews';
 import { monogramTone, servicePrice } from '../lib/catalog';
 import { hoursSummary, openStatus } from '../lib/shopTime';
-
-/** The hero's cut: the blue color (not the gallery's first photo, so the two don't repeat side by side). */
-const HERO_CUT = GALLERY.find((photo) => photo.caption === 'Blue color with a fade') ?? GALLERY[0]!;
 
 export function HomePage() {
   usePageMeta(
@@ -57,17 +54,7 @@ export function HomePage() {
               alt={STOREFRONT.alt}
               width={STOREFRONT.width}
               height={STOREFRONT.height}
-              sizes="(min-width: 834px) 66vw, 100vw"
-              eager
-            />
-          </div>
-          <div className="photo hero__photo hero__photo--tall">
-            <Photo
-              sources={HERO_CUT.sources}
-              alt={`${HERO_CUT.caption}, cut at Izzy Clipz`}
-              width={750}
-              height={1000}
-              sizes="(min-width: 834px) 33vw, 1px"
+              sizes="(min-width: 1100px) 1100px, 100vw"
               eager
             />
           </div>
@@ -77,33 +64,6 @@ export function HomePage() {
 
       {catalog ? <HomeTiles catalog={catalog} /> : null}
 
-      <section className="band band--gray" aria-labelledby="gallery-title">
-        <div className="container">
-          <header className="band__header">
-            <h2 id="gallery-title">Fresh from the chair.</h2>
-            <p className="lead secondary">A few recent cuts from the crew.</p>
-          </header>
-          <ul className="gallery">
-            {GALLERY.map((photo) => (
-              <li key={photo.caption} className="gallery__item">
-                <figure>
-                  <div className="photo gallery__photo">
-                    {/* The caption under it says what it is; alt text too would read it twice. */}
-                    <Photo
-                      sources={photo.sources}
-                      alt=""
-                      width={photo.width}
-                      height={photo.height}
-                      sizes="(min-width: 834px) 33vw, 50vw"
-                    />
-                  </div>
-                  <figcaption className="gallery__caption">{photo.caption}</figcaption>
-                </figure>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </section>
 
       <section className="band band--dark on-dark closing-band" aria-labelledby="ready-title">
         <div className="container closing-band__inner">
