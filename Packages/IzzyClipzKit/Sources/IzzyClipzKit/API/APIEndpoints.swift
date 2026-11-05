@@ -197,6 +197,12 @@ extension IzzyAPI {
             Endpoint(.post, "/api/cards", body: try json(SaveCardBody(sessionId: sessionId)), cardToken: token)
         }
 
+        /// `DELETE /api/cards` with `X-Card-Token` → `{ cardDeletion: { status, message } }`; 404 for a
+        /// token with no card.
+        public static func deleteCard(token: CardToken) -> Endpoint<CardDeletionResponse> {
+            Endpoint(.delete, "/api/cards", cardToken: token)
+        }
+
         // MARK: Owner
 
         /// `GET /api/owner/me` → `{ ok, stripe, connection }`.

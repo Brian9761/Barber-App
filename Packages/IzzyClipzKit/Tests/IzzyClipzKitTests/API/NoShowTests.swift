@@ -922,6 +922,57 @@ final class NoShowClientTests: XCTestCase {
         }
     }
 
+    func testRemovingTheCardSendsTheTokenAndReadsWhatHappened() async throws {
+        let token = IzzyAPI.CardToken.generate()
+        StubURLProtocol.reply { _ in .fixture("card-deletion.json") }
+        let scheduled = try await client.deleteCard(token: token)
+        XCTAssertEqual(scheduled, IzzyAPI.CardDeletion(status: .scheduled, message: "Your card will be deleted as soon as your appointments no longer need it."))
+        let sent = try only()
+        XCTAssertEqual(sent.method, "DELETE")
+        XCTAssertEqual(sent.path, "/api/cards")
+        XCTAssertEqual(sent.header("X-Card-Token"), token.rawValue)
+        XCTAssertNil(sent.header("Authorization"), "public, even from a client with an owner key")
+        XCTAssertNil(sent.body)
+
+        StubURLProtocol.reply { _ in .json(200, #"{"cardDeletion":{"status":"deleted","message":"Your saved card is deleted. It can't be charged any more."}}"#) }
+        let deleted = try await client.deleteCard(token: token)
+        XCTAssertEqual(deleted.status, .deleted)
+        // A status this version doesn't know never reads as deleted.
+        StubURLProtocol.reply { _ in .json(200, #"{"cardDeletion":{"status":"queued","message":"Soon."}}"#) }
+        let unknown = try await client.deleteCard(token: token)
+        XCTAssertEqual(unknown.status, .scheduled)
+        // No card under that token: the server's 404, as an APIError.
+        StubURLProtocol.reply { _ in .json(404, #"{"error":{"code":"not_found","message":"We couldn't find that card."}}"#) }
+        do {
+            _ = try await client.deleteCard(token: token)
+            XCTFail("expected an error")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .server(code: "not_found", message: "We couldn't find that card.", status: 404))
+        }
+    }
+
+    /// A conformer (an app's fake) that doesn't implement it yet answers like a server without it.
+    func testAShopAPIWithoutCardDeletionAnswersNotFound() async throws {
+        struct Older: ShopAPI {
+            func health() async throws -> IzzyAPI.Health { throw CancellationError() }
+            func availability(_ query: IzzyAPI.AvailabilityQuery) async throws -> IzzyAPI.AvailabilityResponse { throw CancellationError() }
+            func book(_ appointment: IzzyAPI.NewAppointment, token: IzzyAPI.ManageToken) async throws -> IzzyAPI.BookingConfirmation { throw CancellationError() }
+            func appointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment { throw CancellationError() }
+            func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment { throw CancellationError() }
+            func reviews() async throws -> IzzyAPI.ReviewsResponse { throw CancellationError() }
+            func products() async throws -> [IzzyAPI.Product] { throw CancellationError() }
+            func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy { throw CancellationError() }
+            func startCardCheckout(for target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardCheckout { throw CancellationError() }
+            func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard { throw CancellationError() }
+        }
+        do {
+            _ = try await Older().deleteCard(token: .generate())
+            XCTFail("expected an error")
+        } catch let error as APIError {
+            XCTAssertEqual(error, .server(code: IzzyAPI.ErrorCode.notFound, message: "This isn't available here yet.", status: 404))
+        }
+    }
+
     func testAProtectedBookingSendsTheCardTokenAndTheExactPolicy() async throws {
         StubURLProtocol.reply { _ in .fixture("booking-confirmation.json", status: 201) }
         let manage = IzzyAPI.ManageToken.generate()

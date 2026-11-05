@@ -129,6 +129,10 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(try encoded { try IzzyAPI.Endpoints.saveCard(sessionId: sessionId, token: token) }).card
     }
 
+    public func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion {
+        try await send(IzzyAPI.Endpoints.deleteCard(token: token)).cardDeletion
+    }
+
     // MARK: OwnerAPI
 
     public func ownerStatus() async throws -> IzzyAPI.OwnerStatus {

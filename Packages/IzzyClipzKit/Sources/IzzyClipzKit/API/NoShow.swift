@@ -530,6 +530,41 @@ extension IzzyAPI {
             self.card = card
         }
     }
+
+    /// What happened to a card the client removed (`DELETE /api/cards`): `{ status, message }`.
+    public struct CardDeletion: Codable, Hashable, Sendable {
+        public enum Status: String, Codable, CaseIterable, Hashable, Sendable {
+            /// Deleted at Stripe: it can't be charged any more.
+            case deleted
+            /// An appointment booked with it still needs it (it's upcoming, or could still be charged a
+            /// fee within 7 days); it's deleted as soon as none does.
+            case scheduled
+
+            /// A status this version doesn't know reads as `scheduled`: never as deleted.
+            public init(from decoder: Decoder) throws {
+                let raw = try decoder.singleValueContainer().decode(String.self)
+                self = Status(rawValue: raw) ?? .scheduled
+            }
+        }
+
+        public var status: Status
+        /// In plain words for the client: "Your saved card is deleted. It can't be charged any more."
+        public var message: String
+
+        public init(status: Status, message: String) {
+            self.status = status
+            self.message = message
+        }
+    }
+
+    /// `DELETE /api/cards` → `{ cardDeletion }`.
+    public struct CardDeletionResponse: Codable, Hashable, Sendable {
+        public var cardDeletion: CardDeletion
+
+        public init(cardDeletion: CardDeletion) {
+            self.cardDeletion = cardDeletion
+        }
+    }
 }
 
 // MARK: - The owner's settings
