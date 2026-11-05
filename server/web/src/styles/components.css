@@ -1270,6 +1270,14 @@ textarea.field__input {
   font-size: var(--text-small);
 }
 
+/* How far ahead, and how soon before a time, the shop takes bookings online. */
+.calendar__note {
+  margin-top: var(--space-2);
+  padding: 0 var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--text-small);
+}
+
 .calendar__legend-dot {
   display: inline-block;
   width: 8px;

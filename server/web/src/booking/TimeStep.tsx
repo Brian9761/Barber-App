@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { BookingTarget, Catalog, NoShowPolicy, Slot } from '../api/types';
 import { useNow } from '../components/hooks';
 import { CallLink, Loading, NewTabLink, Notice } from '../components/ui';
-import { plural } from '../lib/format';
+import { plural, windowLabel } from '../lib/format';
 import { lateCancelNotice } from '../lib/lateCancel';
 import { dateTimeLabel, dayPart, localDate, longDateLabel, monthsBetween, timeLabel, wallClock, WEEKDAY_NAMES, weekdayOf, zoneOffsetMinutes } from '../lib/shopTime';
 import { useBooking, useStepNavigation } from './BookingContext';
@@ -132,6 +132,7 @@ function TimePicker({ catalog, target }: { catalog: Catalog; target: BookingTarg
         onPrevious={() => setMonthId(pages[pageIndex - 1]!.id)}
         onNext={() => setMonthId(pages[pageIndex + 1]!.id)}
         onSelect={selectDay}
+        note={bookingWindowNote(catalog)}
       />
 
       {/* One short line for screen readers when the day changes, not every time read out. */}
@@ -197,6 +198,17 @@ function TimePicker({ catalog, target }: { catalog: Catalog; target: BookingTarg
       </div>
     </BookingLayout>
   );
+}
+
+/**
+ * How far ahead, and how soon before a time, the shop takes bookings online (the Terms: "The
+ * booking screens tell you when a limit applies"), from the catalog the server applies them with:
+ * "We take bookings up to 60 days ahead, for times at least 30 minutes away. For anything sooner,
+ * call the shop."
+ */
+export function bookingWindowNote(catalog: Pick<Catalog, 'windowDays' | 'leadTimeMinutes'>): string {
+  const soonest = catalog.leadTimeMinutes > 0 ? `, for times at least ${windowLabel(catalog.leadTimeMinutes)} away. For anything sooner, call the shop.` : '.';
+  return `We take bookings up to ${catalog.windowDays} days ahead${soonest}`;
 }
 
 /** The no-show notice from the shop's policy, when this booking needs a card: hard to miss. */

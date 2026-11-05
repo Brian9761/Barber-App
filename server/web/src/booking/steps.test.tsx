@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { times } from '../test/text';
 import { availability, catalog, mockApi, policy35, policyNotRequired, renderApp } from '../test/api';
 import { loadDraft } from './flow';
+import { bookingWindowNote } from './TimeStep';
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
@@ -155,6 +156,25 @@ describe('booking, one question at a time', () => {
     await userEvent.click(screen.getByTestId('any-barber'));
     expect(await screen.findByTestId('time-2026-11-03T19:00:00Z')).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId('time-2026-11-03T19:00:00Z').getAttribute('aria-pressed')).toBe('true'));
+  });
+
+  it('says under the calendar how far ahead, and how soon before a time, the shop takes bookings', async () => {
+    mockApi([
+      ['GET /api/availability', { body: availability }],
+      ['GET /api/no-show-policy', { body: policy35 }],
+    ]);
+    renderApp('/book');
+    await userEvent.click(screen.getByTestId('service-haircut'));
+    await userEvent.click(screen.getByTestId('any-barber'));
+    // The catalog's limits, which the server applies: 60 days ahead, 30 minutes before.
+    expect((await screen.findByTestId('booking-window')).textContent).toBe(
+      `We take bookings up to ${catalog.windowDays} days ahead, for times at least ${catalog.leadTimeMinutes} minutes away. For anything sooner, call the shop.`,
+    );
+    expect([catalog.windowDays, catalog.leadTimeMinutes]).toEqual([60, 30]);
+    expect(bookingWindowNote({ windowDays: 30, leadTimeMinutes: 60 })).toBe(
+      'We take bookings up to 30 days ahead, for times at least 1 hour away. For anything sooner, call the shop.',
+    );
+    expect(bookingWindowNote({ windowDays: 14, leadTimeMinutes: 0 })).toBe('We take bookings up to 14 days ahead.');
   });
 
   it('shows the shop’s fee notice on the times when the booking needs a card', async () => {

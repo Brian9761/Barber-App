@@ -23,7 +23,10 @@ export function Calendar({
   onPrevious,
   onNext,
   onSelect,
+  note,
 }: {
+  /** A line under the legend: how far ahead, and how soon before a time, it can be booked. */
+  note?: string;
   page: MonthPage;
   today: string;
   selectedDay: string | null;
@@ -147,6 +150,11 @@ export function Calendar({
         </span>
         <span>Gray days can't be booked</span>
       </p>
+      {note ? (
+        <p className="calendar__note" data-testid="booking-window">
+          {note}
+        </p>
+      ) : null}
     </div>
   );
 }
