@@ -1,7 +1,8 @@
 // The legal documents' placeholders, like "[TO FILL IN: the shop's email address]": what the
 // shop still has to add before the documents can be published. The build (tools/legal.ts)
 // refuses to publish the site for real while any is left; until then the pages are drafts and
-// show each one as a note ("To be added by the shop: the shop's email address").
+// show each one as a note ("To be added by the shop: the shop's email address", or "To be
+// confirmed by the shop" where it's an instruction to the owner).
 //
 // No imports: the build reads this file in Node, the site in the browser.
 
@@ -54,10 +55,29 @@ export function placeholderText(raw: string): string {
   return kept.trim().replace(/[\s.;,:]+$/, '');
 }
 
-/** The note a draft shows in a placeholder's place. */
+/**
+ * A placeholder that tells the owner what to do with the words around it ("keep this line only
+ * once you've confirmed…", "remove "text us" unless…"), rather than naming something to add.
+ */
+const INSTRUCTION = /^(?:keep|remove|delete|drop|replace|choose|decide|confirm|check)\b/i;
+
+export function isInstruction(raw: string): boolean {
+  return INSTRUCTION.test(raw.replace(/^\[TO FILL IN:?\s*/, ''));
+}
+
+/** What a draft says in place of an instruction to the owner: visitors never read the instruction itself. */
+export const TO_BE_CONFIRMED = 'To be confirmed by the shop';
+
+/**
+ * The note a draft shows in a placeholder's place: "To be added by the shop: the shop's email
+ * address", or, for an instruction to the owner, "To be confirmed by the shop". A placeholder
+ * that ended its sentence ("…see section 2 of OWNER-CHECKLIST.md.]") still ends it, so the next
+ * sentence doesn't run on from the note.
+ */
 export function placeholderNote(raw: string): string {
   const what = placeholderText(raw);
-  return what ? `To be added by the shop: ${what}` : 'To be added by the shop';
+  const note = isInstruction(raw) ? TO_BE_CONFIRMED : what ? `To be added by the shop: ${what}` : 'To be added by the shop';
+  return /[.!?]\]$/.test(raw.trim()) ? `${note}.` : note;
 }
 
 /** The lines that date a document; in a draft they read "Not in effect yet". */

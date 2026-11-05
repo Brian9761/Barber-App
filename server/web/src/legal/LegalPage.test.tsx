@@ -55,9 +55,27 @@ describe('the legal pages, as drafts', () => {
     renderApp('/terms');
     await screen.findByRole('heading', { level: 1, name: 'Terms of Service' });
     const notes = Array.from(document.querySelectorAll('mark.legal__placeholder')).map((mark) => mark.textContent);
-    expect(notes).toContain("To be added by the shop: the shop's refund policy for services and for products");
+    expect(notes).toContain("To be added by the shop: the shop's refund policy for services and for products.");
     expect(notes).toContain("To be added by the shop: the shop's email address");
     expect(notes.every((note) => note?.startsWith('To be added by the shop'))).toBe(true);
+    // The refund note ends its sentence: the next one doesn't run on from it.
+    expect(screen.getByText(/^To be added by the shop: the shop's refund policy/).closest('li')?.textContent).toBe(
+      "Refunds. To be added by the shop: the shop's refund policy for services and for products. Card refunds go back to the card you paid with.",
+    );
+  });
+
+  it('shows an instruction to the owner only as “To be confirmed by the shop”', async () => {
+    renderApp('/accessibility');
+    await screen.findByRole('heading', { level: 1, name: 'Accessibility Statement' });
+    const words = screen.getByTestId('legal-page').textContent ?? '';
+    expect(words).not.toMatch(/keep this line|remove "text us"|otherwise delete|you've confirmed/);
+    const notes = Array.from(document.querySelectorAll('mark.legal__placeholder')).map((mark) => mark.textContent);
+    expect(notes.filter((note) => note?.startsWith('To be confirmed by the shop'))).toEqual([
+      'To be confirmed by the shop',
+      'To be confirmed by the shop.',
+      'To be confirmed by the shop',
+    ]);
+    expect(words).toContain('call through a relay service by dialing 711, text us To be confirmed by the shop or email us');
   });
 
   it('in the demo, says it’s the demo too', async () => {
