@@ -509,7 +509,7 @@ function tiles(data: Analytics): TileSpec[] {
       label: 'Late cancellations',
       value: String(a.lateCancellations),
       caption: `of ${a.cancelled} ${a.cancelled === 1 ? 'cancellation' : 'cancellations'}`,
-      info: 'Clients who cancelled in the app later than their booking’s policy allowed for free (for example, less than 1 hour before).',
+      info: 'Clients who cancelled in the app later than their booking’s policy allowed for free (for example, less than 1 hour before), and more than 15 minutes after booking: cancelling within 15 minutes of booking is always free.',
     },
     {
       id: 'completion',

@@ -520,6 +520,10 @@ describe('Analytics', () => {
     await userEvent.click(within(chair).getByRole('button', { name: 'What chair time booked means' }));
     expect(chair.textContent).toContain('Booked time divided by open hours.');
     expect(screen.getByTestId('tile-attach').textContent).toContain('60%of sales included a product');
+    // Late cancellations as docs/analytics.md defines them: within 15 minutes of booking is never late.
+    const late = screen.getByTestId('tile-late');
+    await userEvent.click(within(late).getByRole('button', { name: 'What late cancellations means' }));
+    expect(late.textContent).toContain('and more than 15 minutes after booking: cancelling within 15 minutes of booking is always free.');
 
     // The chart's table.
     await userEvent.click(screen.getByRole('button', { name: 'Show daily sales as a table' }));
