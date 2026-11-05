@@ -17,7 +17,7 @@ export type FeeCase = { kind: 'chargeable'; reason: FeeReason } | { kind: 'refus
 
 export const NO_CARD_MESSAGE = "This booking has no card on file, so there's no fee to charge.";
 export const NOT_STARTED_MESSAGE = "The appointment hasn't started yet, so it can't be a no-show.";
-const CANCELLED_IN_APP = 'The client cancelled this booking in the app, so there\'s no fee.';
+const CANCELLED_IN_APP = "The client cancelled this booking in the app, so there's no fee.";
 const SHOP_CANCELLED = "The shop cancelled this booking, so there's no fee.";
 const MARK_NO_SHOW = 'Mark the appointment as a no-show first.';
 
@@ -152,8 +152,10 @@ export interface FeePanel {
   footer: string | null;
 }
 
-const PENDING = "Stripe hasn't confirmed this charge yet. Check again finishes it: if it went through, it shows as charged, and if Stripe never got it, it's sent now. To not charge it, reopen the appointment first.";
-const PENDING_CHECK_ONLY = "Stripe hasn't confirmed this charge yet. Check again asks Stripe how it went: if it went through, it shows as charged, and if not, nothing is charged.";
+const PENDING =
+  "Stripe hasn't confirmed this charge yet. Check again finishes it: if it went through, it shows as charged, and if Stripe never got it, it's sent now. To not charge it, reopen the appointment first.";
+const PENDING_CHECK_ONLY =
+  "Stripe hasn't confirmed this charge yet. Check again asks Stripe how it went: if it went through, it shows as charged, and if not, nothing is charged.";
 
 function text(message: string | null | undefined, fallback: string): string {
   const trimmed = message?.trim() ?? '';
@@ -239,7 +241,8 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
     action = { title: 'Check again', confirmation: null };
   } else if (chargeable) {
     const amount = money(fee.amountCents);
-    const title = fee.status === 'declined' || fee.status === 'needsAction' ? `Charge again (${amount})` : `Charge ${reasonTitle(chargeable).toLowerCase()} (${amount})`;
+    const title =
+      fee.status === 'declined' || fee.status === 'needsAction' ? `Charge again (${amount})` : `Charge ${reasonTitle(chargeable).toLowerCase()} (${amount})`;
     action = {
       title,
       confirmation: {

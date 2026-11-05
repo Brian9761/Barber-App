@@ -60,7 +60,21 @@ interface StepItem {
   picture?: ReactNode;
 }
 
-function Steps({ id, title, before, steps, done, after }: { id: string; title: string; before?: ReactNode; steps: StepItem[]; done: string; after?: ReactNode }) {
+function Steps({
+  id,
+  title,
+  before,
+  steps,
+  done,
+  after,
+}: {
+  id: string;
+  title: string;
+  before?: ReactNode;
+  steps: StepItem[];
+  done: string;
+  after?: ReactNode;
+}) {
   return (
     <section className="install-steps" aria-labelledby={`${id}-steps-title`} data-testid={`${id}-steps`}>
       <h2 id={`${id}-steps-title`} className="install-steps__title">
@@ -127,8 +141,7 @@ export function IPhoneSteps({ browser, url, app = CLIENT_APP }: { browser: Brows
     before = (
       <Notice tone="info" testId="other-iphone-browser">
         <p>
-          In Chrome, Edge or Firefox, tap the Share button next to the address bar, then <strong>Add to Home Screen</strong>. Or follow these steps in
-          Safari.
+          In Chrome, Edge or Firefox, tap the Share button next to the address bar, then <strong>Add to Home Screen</strong>. Or follow these steps in Safari.
         </p>
       </Notice>
     );
@@ -139,14 +152,39 @@ export function IPhoneSteps({ browser, url, app = CLIENT_APP }: { browser: Brows
       title="On an iPhone or iPad"
       before={before}
       steps={[
-        { text: <>Open this page in <strong>Safari</strong>.</> },
         {
-          text: <>Tap the <strong>Share</strong> button.</>,
+          text: (
+            <>
+              Open this page in <strong>Safari</strong>.
+            </>
+          ),
+        },
+        {
+          text: (
+            <>
+              Tap the <strong>Share</strong> button.
+            </>
+          ),
           note: "It's at the bottom of the screen, or at the top on an iPad. Don't see it? Tap ⋯ first, then Share.",
           picture: <ShareButtonDrawing />,
         },
-        { text: <>Scroll down and tap <strong>Add to Home Screen</strong>.</>, picture: <AddToHomeScreenDrawing /> },
-        { text: <>Tap <strong>Add</strong>.</>, note: 'If you see Open as Web App, leave it on.', picture: <AddButtonDrawing app={app} /> },
+        {
+          text: (
+            <>
+              Scroll down and tap <strong>Add to Home Screen</strong>.
+            </>
+          ),
+          picture: <AddToHomeScreenDrawing />,
+        },
+        {
+          text: (
+            <>
+              Tap <strong>Add</strong>.
+            </>
+          ),
+          note: 'If you see Open as Web App, leave it on.',
+          picture: <AddButtonDrawing app={app} />,
+        },
       ]}
       done={`${app.name} is now on your Home Screen. Tap it to open the app.`}
     />
@@ -167,17 +205,45 @@ export function AndroidSteps({ orMenu, browser, url, app = CLIENT_APP }: { orMen
         ) : null
       }
       steps={[
-        { text: <>Open this page in <strong>Chrome</strong>.</> },
-        { text: <>Tap the menu <span className="nowrap">⋮</span> at the top right.</>, picture: <AndroidMenuDrawing /> },
         {
-          text: <>Tap <strong>Install app</strong>.</>,
+          text: (
+            <>
+              Open this page in <strong>Chrome</strong>.
+            </>
+          ),
+        },
+        {
+          text: (
+            <>
+              Tap the menu <span className="nowrap">⋮</span> at the top right.
+            </>
+          ),
+          picture: <AndroidMenuDrawing />,
+        },
+        {
+          text: (
+            <>
+              Tap <strong>Install app</strong>.
+            </>
+          ),
           note: 'Some phones say Install and create shortcut, or Add to Home screen.',
           picture: <InstallAppDrawing />,
         },
-        { text: <>Tap <strong>Install</strong>.</>, picture: <InstallDialogDrawing app={app} /> },
+        {
+          text: (
+            <>
+              Tap <strong>Install</strong>.
+            </>
+          ),
+          picture: <InstallDialogDrawing app={app} />,
+        },
       ]}
       done={`${app.name} is now on your Home Screen and with your other apps.`}
-      after={<p className="secondary install-steps__more">Using another browser, like Samsung Internet or Firefox? Look for Install or Add to Home screen in its menu.</p>}
+      after={
+        <p className="secondary install-steps__more">
+          Using another browser, like Samsung Internet or Firefox? Look for Install or Add to Home screen in its menu.
+        </p>
+      }
     />
   );
 }
@@ -195,7 +261,17 @@ function otherBrowserNote(browser: Browser, windows: boolean): ReactNode {
   return "This browser can't install apps. Use Chrome or Edge, like this:";
 }
 
-export function ComputerSteps({ orAddressBar, browser, windows, app = CLIENT_APP }: { orAddressBar: boolean; browser: Browser; windows: boolean; app?: AppIdentity }) {
+export function ComputerSteps({
+  orAddressBar,
+  browser,
+  windows,
+  app = CLIENT_APP,
+}: {
+  orAddressBar: boolean;
+  browser: Browser;
+  windows: boolean;
+  app?: AppIdentity;
+}) {
   return (
     <Steps
       id="computer"
@@ -208,13 +284,30 @@ export function ComputerSteps({ orAddressBar, browser, windows, app = CLIENT_APP
         ) : null
       }
       steps={[
-        { text: <>Open this page in <strong>Chrome</strong> or <strong>Edge</strong>.</> },
         {
-          text: <>Click the <strong>install</strong> button at the right end of the address bar.</>,
+          text: (
+            <>
+              Open this page in <strong>Chrome</strong> or <strong>Edge</strong>.
+            </>
+          ),
+        },
+        {
+          text: (
+            <>
+              Click the <strong>install</strong> button at the right end of the address bar.
+            </>
+          ),
           note: "In Edge it says App available. Don't see it? Open the browser's menu and look for Install.",
           picture: <AddressBarInstallDrawing />,
         },
-        { text: <>Click <strong>Install</strong>.</>, picture: <InstallDialogDrawing app={app} /> },
+        {
+          text: (
+            <>
+              Click <strong>Install</strong>.
+            </>
+          ),
+          picture: <InstallDialogDrawing app={app} />,
+        },
       ]}
       done={`${app.name} opens in its own window, and you'll find it with your other apps.`}
       after={

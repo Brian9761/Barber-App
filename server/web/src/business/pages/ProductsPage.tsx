@@ -147,7 +147,14 @@ function Editor({ product, onSaved, onCancel }: { product: Product | null; onSav
         <label className="field__label" htmlFor="product-description">
           Description <span className="field__optional">(optional)</span>
         </label>
-        <textarea id="product-description" className="field__input" value={draft.description} maxLength={500} rows={3} onChange={(e) => change({ description: e.target.value })} />
+        <textarea
+          id="product-description"
+          className="field__input"
+          value={draft.description}
+          maxLength={500}
+          rows={3}
+          onChange={(e) => change({ description: e.target.value })}
+        />
       </div>
       <div className="field">
         <label className="field__label" htmlFor="product-price">
@@ -303,7 +310,12 @@ export function ProductsPage() {
         </ul>
       )}
 
-      <SidePanel open={editing !== null} title={editing === 'new' ? 'Add a product' : editing ? `Edit ${editing.name}` : ''} onClose={() => setEditing(null)} testId="product-panel">
+      <SidePanel
+        open={editing !== null}
+        title={editing === 'new' ? 'Add a product' : editing ? `Edit ${editing.name}` : ''}
+        onClose={() => setEditing(null)}
+        testId="product-panel"
+      >
         {editing !== null ? (
           <Editor
             key={editing === 'new' ? 'new' : editing.id}

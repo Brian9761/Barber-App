@@ -1278,13 +1278,26 @@
   width: 100%;
 }
 
+.biz-checkout__pay {
+  position: sticky;
+  bottom: calc(-1 * var(--space-8));
+  z-index: 1;
+  margin: var(--space-4) calc(-1 * var(--space-6)) calc(-1 * var(--space-8));
+  padding: 0 var(--space-6) calc(var(--space-5) + var(--safe-bottom));
+  background: var(--color-bg);
+  box-shadow: 0 -8px 16px rgba(255, 255, 255, 0.9);
+}
+
+.biz-checkout__pay .biz-section-title {
+  margin-top: var(--space-3);
+}
+
 .biz-total {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-3);
-  margin-top: var(--space-4);
-  padding-top: var(--space-4);
+  padding-top: var(--space-3);
   border-top: 2px solid var(--color-text);
 }
 
@@ -1295,7 +1308,7 @@
 
 .biz-total__value {
   font-family: var(--font-display);
-  font-size: 44px;
+  font-size: 40px;
   font-weight: 700;
   line-height: 1;
 }
@@ -2096,8 +2109,10 @@
   cursor: pointer;
 }
 
+/* The real checkbox, invisible, on top of the drawn switch, so a click or tap lands on it. */
 .biz-switch__input {
   position: absolute;
+  z-index: 1;
   width: 51px;
   height: 31px;
   margin: 0;

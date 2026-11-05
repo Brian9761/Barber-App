@@ -4,7 +4,8 @@ import { defineConfig } from '@playwright/test';
 // dist-demo/ served as the static site its vercel.json describes, by
 // e2e/serve-demo.ts, with no API at all. The web app's tests (pwa.spec.ts) run
 // here as well as on the site with the real API, and the demo's own
-// (demo.spec.ts): booking and cancelling without a single request to /api.
+// (demo.spec.ts): booking and cancelling without a single request to /api;
+// and Izzy Clipz Business's (business-demo.spec.ts), also without one.
 // Screenshots go to E2E_SHOTS_DIR (default test-results/shots), named
 // demo-desktop-… and demo-phone-….
 
@@ -13,7 +14,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: 'e2e',
-  testMatch: ['pwa.spec.ts', 'demo.spec.ts'],
+  testMatch: ['pwa.spec.ts', 'demo.spec.ts', 'business-demo.spec.ts'],
   outputDir: process.env.E2E_OUTPUT_DIR || 'test-results/demo',
   fullyParallel: false,
   workers: 1,

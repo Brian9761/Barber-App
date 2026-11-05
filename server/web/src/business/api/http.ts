@@ -94,8 +94,7 @@ const enc = encodeURIComponent;
 
 export const httpOwnerApi = {
   /** POST /api/computer-sessions: the 6-digit code from the app buys this computer a session. */
-  signIn: (code: string, name: string) =>
-    ownerRequest<SignedIn>('/api/computer-sessions', { method: 'POST', body: { code, name }, auth: { kind: 'none' } }),
+  signIn: (code: string, name: string) => ownerRequest<SignedIn>('/api/computer-sessions', { method: 'POST', body: { code, name }, auth: { kind: 'none' } }),
 
   /**
    * "Use the owner key instead": the key makes a code (POST /api/owner/computer-codes, which only
@@ -117,23 +116,17 @@ export const httpOwnerApi = {
     ownerRequest<{ timeOff: TimeOff[] }>(`/api/owner/time-off?date=${enc(date)}`, { signal }).then((r) => r.timeOff),
 
   setStatus: (id: string, status: 'booked' | 'completed' | 'noShow' | 'cancelled') =>
-    ownerRequest<{ appointment: OwnerAppointment }>(`/api/owner/appointments/${enc(id)}`, { method: 'PATCH', body: { status } }).then(
-      (r) => r.appointment,
-    ),
+    ownerRequest<{ appointment: OwnerAppointment }>(`/api/owner/appointments/${enc(id)}`, { method: 'PATCH', body: { status } }).then((r) => r.appointment),
 
   /** Charges the fee agreed at booking (a no-show or a late cancellation) to the card on file. */
   chargeFee: (id: string) =>
-    ownerRequest<{ appointment: OwnerAppointment }>(`/api/owner/appointments/${enc(id)}/no-show-fee`, { method: 'POST', body: {} }).then(
-      (r) => r.appointment,
-    ),
+    ownerRequest<{ appointment: OwnerAppointment }>(`/api/owner/appointments/${enc(id)}/no-show-fee`, { method: 'POST', body: {} }).then((r) => r.appointment),
 
   sales: (date: string, signal?: AbortSignal) => ownerRequest<SalesDay>(`/api/owner/sales?date=${enc(date)}`, { signal }),
 
   /** A cash or other sale, with the ticket's Idempotency-Key: sending it again can't record it twice. */
   createSale: (sale: NewSale, idempotencyKey: string) =>
-    ownerRequest<{ sale: Sale }>('/api/owner/sales', { method: 'POST', body: sale, headers: { 'Idempotency-Key': idempotencyKey } }).then(
-      (r) => r.sale,
-    ),
+    ownerRequest<{ sale: Sale }>('/api/owner/sales', { method: 'POST', body: sale, headers: { 'Idempotency-Key': idempotencyKey } }).then((r) => r.sale),
 
   voidSale: (id: string, reason: string | null) =>
     ownerRequest<VoidedSale>(`/api/owner/sales/${enc(id)}/void`, { method: 'POST', body: reason ? { reason } : {} }),
@@ -146,8 +139,7 @@ export const httpOwnerApi = {
 
   products: (signal?: AbortSignal) => ownerRequest<{ products: Product[] }>('/api/owner/products', { signal }).then((r) => r.products),
 
-  createProduct: (input: ProductInput) =>
-    ownerRequest<{ product: Product }>('/api/owner/products', { method: 'POST', body: input }).then((r) => r.product),
+  createProduct: (input: ProductInput) => ownerRequest<{ product: Product }>('/api/owner/products', { method: 'POST', body: input }).then((r) => r.product),
 
   updateProduct: (id: string, input: Partial<ProductInput>) =>
     ownerRequest<{ product: Product }>(`/api/owner/products/${enc(id)}`, { method: 'PATCH', body: input }).then((r) => r.product),
@@ -171,8 +163,7 @@ export const httpOwnerApi = {
   updateNoShowSettings: (patch: Partial<NoShowSettings>) =>
     ownerRequest<{ noShowSettings: NoShowSettings }>('/api/owner/no-show-settings', { method: 'PATCH', body: patch }).then((r) => r.noShowSettings),
 
-  computerSessions: (signal?: AbortSignal) =>
-    ownerRequest<{ sessions: ComputerSession[] }>('/api/owner/computer-sessions', { signal }).then((r) => r.sessions),
+  computerSessions: (signal?: AbortSignal) => ownerRequest<{ sessions: ComputerSession[] }>('/api/owner/computer-sessions', { signal }).then((r) => r.sessions),
 
   signOutComputer: (id: string) => ownerRequest<void>(`/api/owner/computer-sessions/${enc(id)}`, { method: 'DELETE' }),
 

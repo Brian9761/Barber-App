@@ -99,7 +99,14 @@ export function appointmentTicket(appointment: OwnerAppointment, offerings: read
 
 /** "+ Service": one of the barber's services, at that barber's price (which can be changed). */
 export function addService(ticket: Ticket, offering: Offering, name: string): Ticket {
-  return withLine(ticket, { kind: 'service', serviceId: offering.serviceId, productId: null, name, priceText: editableMoney(offering.priceCents), quantity: 1 });
+  return withLine(ticket, {
+    kind: 'service',
+    serviceId: offering.serviceId,
+    productId: null,
+    name,
+    priceText: editableMoney(offering.priceCents),
+    quantity: 1,
+  });
 }
 
 /** "+ Product": one more if it's on the ticket already; a product with no price asks for one. */
@@ -119,7 +126,14 @@ export function addProduct(ticket: Ticket, product: Product): Ticket {
 /** "+ Amount": a custom item, "Other" unless named. */
 export function addAmount(ticket: Ticket, name: string, cents: number): Ticket {
   const trimmed = name.trim();
-  return withLine(ticket, { kind: 'custom', serviceId: null, productId: null, name: trimmed === '' ? 'Other' : trimmed, priceText: editableMoney(cents), quantity: 1 });
+  return withLine(ticket, {
+    kind: 'custom',
+    serviceId: null,
+    productId: null,
+    name: trimmed === '' ? 'Other' : trimmed,
+    priceText: editableMoney(cents),
+    quantity: 1,
+  });
 }
 
 export function setQuantity(ticket: Ticket, key: string, quantity: number): Ticket {
@@ -171,7 +185,8 @@ export function ticketProblem(ticket: Ticket): string | null {
   if (ticket.lines.length === 0) return 'Add at least one item: a service, a product or an amount.';
   if (ticket.lines.length > MAX_ITEMS) return `A sale can have at most ${MAX_ITEMS} items.`;
   for (const line of ticket.lines) {
-    if (unitCents(line) === null) return line.priceText.trim() === '' ? `Enter the price of ${line.name}.` : `Check the price of ${line.name}: type an amount like 25 or 17.50.`;
+    if (unitCents(line) === null)
+      return line.priceText.trim() === '' ? `Enter the price of ${line.name}.` : `Check the price of ${line.name}: type an amount like 25 or 17.50.`;
   }
   const total = ticketTotal(ticket) ?? 0;
   if (total > MAX_CENTS) return `A sale can be at most ${moneyWithCommas(MAX_CENTS)}. Split it into two sales.`;

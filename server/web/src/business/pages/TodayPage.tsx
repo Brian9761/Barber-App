@@ -93,7 +93,10 @@ function Board({ catalog, view, onOpen }: { catalog: Catalog; view: DayView; onO
         const blocks = view.timeOff.filter((b) => b.barberId === barber.id);
         const booked = appointments.filter((a) => a.status !== 'cancelled').length;
         const items = [
-          ...appointments.map((a) => ({ start: a.start, node: <AppointmentCard key={a.id} appointment={a} zone={zone} onOpen={() => onOpen(a.id)} showBarber={false} /> })),
+          ...appointments.map((a) => ({
+            start: a.start,
+            node: <AppointmentCard key={a.id} appointment={a} zone={zone} onOpen={() => onOpen(a.id)} showBarber={false} />,
+          })),
           ...blocks.map((b) => ({ start: b.start, node: <BlockCard key={b.id} block={b} zone={zone} /> })),
         ].sort((a, b) => a.start.localeCompare(b.start));
         return (
@@ -191,7 +194,11 @@ export function TodayPage() {
   const day = useLoad<DayView>(
     `day|${date}`,
     async (signal) => {
-      const [appointments, timeOff, sales] = await Promise.all([ownerApi.appointments(date, signal), ownerApi.timeOff(date, signal), ownerApi.sales(date, signal)]);
+      const [appointments, timeOff, sales] = await Promise.all([
+        ownerApi.appointments(date, signal),
+        ownerApi.timeOff(date, signal),
+        ownerApi.sales(date, signal),
+      ]);
       return { appointments, timeOff, sales };
     },
     { refreshMs: 60_000 },
@@ -254,7 +261,17 @@ export function TodayPage() {
           method: appointment.sale.method,
           paymentIntentId: null,
           totalCents: appointment.sale.totalCents,
-          items: [{ kind: 'service', serviceId: appointment.serviceId, productId: null, name: appointment.serviceName, quantity: 1, unitCents: appointment.sale.totalCents, totalCents: appointment.sale.totalCents }],
+          items: [
+            {
+              kind: 'service',
+              serviceId: appointment.serviceId,
+              productId: null,
+              name: appointment.serviceName,
+              quantity: 1,
+              unitCents: appointment.sale.totalCents,
+              totalCents: appointment.sale.totalCents,
+            },
+          ],
           soldAt: appointment.payment.paidAt ?? appointment.end,
           voidedAt: null,
           voidReason: null,
@@ -347,7 +364,11 @@ export function TodayPage() {
                   {block.reason ? `: ${block.reason}` : ''}.
                 </p>
               ))}
-            {wide ? <Board catalog={catalog} view={view} onOpen={(id) => setPanel({ kind: 'appointment', id })} /> : <List catalog={catalog} view={view} onOpen={(id) => setPanel({ kind: 'appointment', id })} />}
+            {wide ? (
+              <Board catalog={catalog} view={view} onOpen={(id) => setPanel({ kind: 'appointment', id })} />
+            ) : (
+              <List catalog={catalog} view={view} onOpen={(id) => setPanel({ kind: 'appointment', id })} />
+            )}
           </>
         )
       ) : loading && day.status !== 'error' ? (

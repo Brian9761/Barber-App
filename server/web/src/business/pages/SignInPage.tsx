@@ -236,9 +236,7 @@ function DemoSignIn() {
           <span>{error}</span>
         </p>
       ) : null}
-      <p className="secondary small">
-        In the real one, you sign in with a 6-digit code from Izzy Clipz Business on your iPhone: Settings → Use on a computer.
-      </p>
+      <p className="secondary small">In the real one, you sign in with a 6-digit code from Izzy Clipz Business on your iPhone: Settings → Use on a computer.</p>
     </div>
   );
 }

@@ -397,39 +397,42 @@ export function Checkout({
         ) : null}
       </section>
 
-      <div className="biz-total" aria-live="polite">
-        <span className="biz-total__label">Total</span>
-        <span className="biz-total__value" data-testid="ticket-total">
-          {totalText}
-        </span>
-      </div>
-
-      <section aria-labelledby="ticket-paying">
-        <h3 id="ticket-paying" className="biz-section-title">
-          How are they paying?
-        </h3>
-        <div className="biz-pay">
-          <button type="button" className="biz-pay__button" onClick={() => pay('cash')} disabled={busy}>
-            <span className="biz-pay__title">Cash</span>
-          </button>
-          <button type="button" className="biz-pay__button" onClick={() => pay('other')} disabled={busy}>
-            <span className="biz-pay__title">Other</span>
-            <span className="biz-pay__subtitle">Squire, Zelle, Cash App…</span>
-          </button>
+      {/* The total and how they're paying stay at the bottom of the panel while the items scroll. */}
+      <div className="biz-checkout__pay">
+        <div className="biz-total" aria-live="polite">
+          <span className="biz-total__label">Total</span>
+          <span className="biz-total__value" data-testid="ticket-total">
+            {totalText}
+          </span>
         </div>
-        {problem ? (
-          <p className="field__error" role="alert" data-testid="ticket-problem">
-            <Icon name="error" />
-            <span>{problem}</span>
-          </p>
-        ) : null}
-        {failed ? (
-          <p className="field__error" role="alert" data-testid="ticket-failed">
-            <Icon name="error" />
-            <span>{failed}</span>
-          </p>
-        ) : null}
-      </section>
+
+        <section aria-labelledby="ticket-paying">
+          <h3 id="ticket-paying" className="biz-section-title">
+            How are they paying?
+          </h3>
+          <div className="biz-pay">
+            <button type="button" className="biz-pay__button" onClick={() => pay('cash')} disabled={busy}>
+              <span className="biz-pay__title">Cash</span>
+            </button>
+            <button type="button" className="biz-pay__button" onClick={() => pay('other')} disabled={busy}>
+              <span className="biz-pay__title">Other</span>
+              <span className="biz-pay__subtitle">Squire, Zelle, Cash App…</span>
+            </button>
+          </div>
+          {problem ? (
+            <p className="field__error" role="alert" data-testid="ticket-problem">
+              <Icon name="error" />
+              <span>{problem}</span>
+            </p>
+          ) : null}
+          {failed ? (
+            <p className="field__error" role="alert" data-testid="ticket-failed">
+              <Icon name="error" />
+              <span>{failed}</span>
+            </p>
+          ) : null}
+        </section>
+      </div>
 
       <Dialog
         open={asking !== null}

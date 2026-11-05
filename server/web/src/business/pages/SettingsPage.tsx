@@ -102,7 +102,10 @@ function StripeSection({ stripe, onChanged }: { stripe: ReturnType<typeof useLoa
       {connection && view ? (
         <>
           <div className={`biz-status biz-status--${view.tone}`} data-testid="stripe-status">
-            <Icon name={view.tone === 'good' ? 'check' : view.tone === 'problem' ? 'warning' : view.tone === 'waiting' ? 'clock' : 'info'} className="biz-status__icon" />
+            <Icon
+              name={view.tone === 'good' ? 'check' : view.tone === 'problem' ? 'warning' : view.tone === 'waiting' ? 'clock' : 'info'}
+              className="biz-status__icon"
+            />
             <div>
               <p className="biz-status__label">
                 {view.label}
@@ -131,9 +134,7 @@ function StripeSection({ stripe, onChanged }: { stripe: ReturnType<typeof useLoa
               <span>{error}</span>
             </p>
           ) : null}
-          {connection.mode === 'connect' && connection.status !== 'notConnected' ? (
-            <p className="secondary small">To disconnect, use the iPhone app.</p>
-          ) : null}
+          {connection.mode === 'connect' && connection.status !== 'notConnected' ? <p className="secondary small">To disconnect, use the iPhone app.</p> : null}
         </>
       ) : stripe.status !== 'error' ? (
         <SkeletonCard lines={2} label="Loading the Stripe status…" />
@@ -161,7 +162,11 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
   if (!current || !draft || !catalog) {
     return (
       <Section id="no-show-title" title="No-show protection" testId="no-show-settings">
-        {settings.status === 'error' ? <ErrorBanner title="Couldn't load the settings" message={settings.error} onRetry={settings.reload} /> : <SkeletonCard label="Loading the settings…" />}
+        {settings.status === 'error' ? (
+          <ErrorBanner title="Couldn't load the settings" message={settings.error} onRetry={settings.reload} />
+        ) : (
+          <SkeletonCard label="Loading the settings…" />
+        )}
       </Section>
     );
   }
@@ -201,7 +206,12 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
   };
 
   return (
-    <Section id="no-show-title" title="No-show protection" lead="A card on file for online bookings, and the fee for no-shows and late cancellations." testId="no-show-settings">
+    <Section
+      id="no-show-title"
+      title="No-show protection"
+      lead="A card on file for online bookings, and the fee for no-shows and late cancellations."
+      testId="no-show-settings"
+    >
       <label className="biz-switch">
         <input type="checkbox" className="biz-switch__input" checked={draft.enabled} onChange={(e) => change({ enabled: e.target.checked })} />
         <span className="biz-switch__track" aria-hidden="true" />
@@ -218,7 +228,13 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
         <legend className="biz-section-title">Fee</legend>
         <div className="segmented">
           <label className="segmented__option">
-            <input type="radio" className="segmented__input" name="fee-mode" checked={draft.feeMode === 'percent'} onChange={() => change({ feeMode: 'percent' })} />
+            <input
+              type="radio"
+              className="segmented__input"
+              name="fee-mode"
+              checked={draft.feeMode === 'percent'}
+              onChange={() => change({ feeMode: 'percent' })}
+            />
             <span className="segmented__label">% of the service</span>
           </label>
           <label className="segmented__option">
@@ -277,7 +293,12 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
             <label className="field__label" htmlFor="late-window">
               Cancelling less than
             </label>
-            <select id="late-window" className="field__input" value={draft.lateCancelWindowMinutes} onChange={(e) => change({ lateCancelWindowMinutes: Number(e.target.value) })}>
+            <select
+              id="late-window"
+              className="field__input"
+              value={draft.lateCancelWindowMinutes}
+              onChange={(e) => change({ lateCancelWindowMinutes: Number(e.target.value) })}
+            >
               {noShow.windowChoices(draft.lateCancelWindowMinutes).map((minutes) => (
                 <option key={minutes} value={minutes}>
                   {windowLabel(minutes)} before
@@ -310,7 +331,9 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
                 <p>{notice.message}</p>
               </Notice>
               <p className="secondary small">{policy}</p>
-              <p className="secondary small">For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.</p>
+              <p className="secondary small">
+                For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.
+              </p>
             </div>
           ) : null}
         </div>
@@ -407,11 +430,18 @@ function ComputersSections() {
         </div>
       </Section>
 
-      <Section id="other-computers-title" title="Other computers" lead="Computers signed in with a code from the app. Sign out any you don't use." testId="other-computers">
+      <Section
+        id="other-computers-title"
+        title="Other computers"
+        lead="Computers signed in with a code from the app. Sign out any you don't use."
+        testId="other-computers"
+      >
         {message ? <SuccessLine>{message}</SuccessLine> : null}
         {computers.status === 'error' ? <ErrorBanner message={computers.error} onRetry={computers.reload} /> : null}
         {list === null ? (
-          computers.status !== 'error' ? <SkeletonCard lines={2} label="Loading the computers…" /> : null
+          computers.status !== 'error' ? (
+            <SkeletonCard lines={2} label="Loading the computers…" />
+          ) : null
         ) : others.length === 0 ? (
           <p className="biz-empty-line">No other computers are signed in.</p>
         ) : (
@@ -479,7 +509,12 @@ function InstallSection() {
   const canInstall = device === platform.device && install.canInstall;
   const url = `${window.location.origin}/business`;
   return (
-    <Section id="install-title" title={`Put ${APP_NAME} on this phone or computer`} lead="It opens in its own window, like an app, with its own icon." testId="install-business">
+    <Section
+      id="install-title"
+      title={`Put ${APP_NAME} on this phone or computer`}
+      lead="It opens in its own window, like an app, with its own icon."
+      testId="install-business"
+    >
       {standalone ? (
         <SuccessLine>You're using the app.</SuccessLine>
       ) : (
@@ -492,7 +527,9 @@ function InstallSection() {
           ) : null}
           {canInstall ? <InstallNow app={BUSINESS_APP} onInstall={() => void promptInstall()} /> : null}
           {device === 'iphone' ? <IPhoneSteps browser={platform.device === 'iphone' ? platform.browser : 'safari'} url={url} app={BUSINESS_APP} /> : null}
-          {device === 'android' ? <AndroidSteps orMenu={canInstall} browser={platform.device === 'android' ? platform.browser : 'chrome'} url={url} app={BUSINESS_APP} /> : null}
+          {device === 'android' ? (
+            <AndroidSteps orMenu={canInstall} browser={platform.device === 'android' ? platform.browser : 'chrome'} url={url} app={BUSINESS_APP} />
+          ) : null}
           {device === 'computer' ? (
             <ComputerSteps
               orAddressBar={canInstall}

@@ -61,7 +61,8 @@ export function draftProblem(draft: NoShowDraft): string | null {
     if (cents === null) return 'Enter the flat fee in dollars, like 20 or 17.50.';
     if (cents < FLAT_MIN || cents > FLAT_MAX) return `Pick a flat fee from ${money(FLAT_MIN)} to ${money(FLAT_MAX)}.`;
   }
-  if (draft.lateCancelWindowMinutes < WINDOW_MIN || draft.lateCancelWindowMinutes > WINDOW_MAX) return 'Pick a late-cancellation window from 30 minutes to 48 hours.';
+  if (draft.lateCancelWindowMinutes < WINDOW_MIN || draft.lateCancelWindowMinutes > WINDOW_MAX)
+    return 'Pick a late-cancellation window from 30 minutes to 48 hours.';
   return null;
 }
 
@@ -112,8 +113,7 @@ export function percentLabel(percent: number): string {
 
 export const ON_FOOTER =
   'Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation.';
-export const OFF_FOOTER =
-  "Off: new online bookings don't need a card. Bookings already made with a card keep their fee, and you can still charge it.";
+export const OFF_FOOTER = "Off: new online bookings don't need a card. Bookings already made with a card keep their fee, and you can still charge it.";
 export const FEE_FOOTER =
   'The same fee for a no-show and a late cancellation. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings.';
 
@@ -218,7 +218,12 @@ export function costsText(fee: number | null): string {
 /** "Off: clients book online without a card", or "On: the full service price for no-shows and cancellations less than 1 hour before". */
 export function summary(settings: NoShowSettings): string {
   if (!settings.enabled) return 'Off: clients book online without a card';
-  const fee = settings.feeMode === 'percent' ? (settings.percent === 100 ? 'the full service price' : `${settings.percent}% of the service`) : `${money(settings.flatCents)} flat`;
+  const fee =
+    settings.feeMode === 'percent'
+      ? settings.percent === 100
+        ? 'the full service price'
+        : `${settings.percent}% of the service`
+      : `${money(settings.flatCents)} flat`;
   const cases = settings.lateCancelEnabled ? `no-shows and cancellations less than ${windowLabel(settings.lateCancelWindowMinutes)} before` : 'no-shows';
   return `On: ${fee} for ${cases}`;
 }

@@ -49,7 +49,10 @@ describe('signing in', () => {
 
   it('says what to do with a wrong code', async () => {
     mockApi([
-      ['POST /api/computer-sessions', apiError('wrong_code', "That code isn't right or has run out. Open Izzy Clipz Business → Settings → Use on a computer for a new one.", 400)],
+      [
+        'POST /api/computer-sessions',
+        apiError('wrong_code', "That code isn't right or has run out. Open Izzy Clipz Business → Settings → Use on a computer for a new one.", 400),
+      ],
     ]);
     const error = await httpOwnerApi.signIn('000000', 'Chrome on Mac').catch((e: unknown) => e);
     expect(isApiError(error) && error.code).toBe('wrong_code');
@@ -104,7 +107,12 @@ describe('the owner’s calls', () => {
 
   it('send a product photo as a JPEG', async () => {
     signIn();
-    const api = mockApi([['POST /api/owner/products/*', { body: { product: { id: 'p', name: 'Pomade', description: null, priceCents: 1800, imageUrl: 'https://x/p.jpg', visible: true } } }]]);
+    const api = mockApi([
+      [
+        'POST /api/owner/products/*',
+        { body: { product: { id: 'p', name: 'Pomade', description: null, priceCents: 1800, imageUrl: 'https://x/p.jpg', visible: true } } },
+      ],
+    ]);
     await httpOwnerApi.uploadProductPhoto('00000000-0000-4000-8000-000000000001', new Blob([new Uint8Array([0xff, 0xd8, 0xff])], { type: 'image/jpeg' }));
     expect(api.calls[0]!.headers['content-type']).toBe('image/jpeg');
     expect(api.calls[0]!.path).toBe('/api/owner/products/00000000-0000-4000-8000-000000000001/photo');

@@ -1,5 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { changeDirection, changeText, comparedWith, mondayOf, periodRange, periodTitle, rangeDays, rangeLabel, rangeProblem, seriesLabel, seriesTick } from './periods';
+import {
+  changeDirection,
+  changeText,
+  comparedWith,
+  mondayOf,
+  periodRange,
+  periodTitle,
+  rangeDays,
+  rangeLabel,
+  rangeProblem,
+  seriesLabel,
+  seriesTick,
+} from './periods';
 
 // Analytics' periods on the shop's calendar: weeks start on Monday, months on the 1st,
 // years on January 1, all up to today; a custom range is at most 366 days.
@@ -29,7 +41,9 @@ describe('periods', () => {
     expect(rangeProblem({ from: '2026-10-01', to: '2026-10-31' }, today)).toBeNull();
     expect(rangeProblem({ from: '2025-11-05', to: '2026-11-05' }, today)).toBeNull(); // 366 days
     expect(rangeProblem({ from: '2025-11-04', to: '2026-11-05' }, today)).toBe('Pick at most 366 days (about a year).');
-    expect(rangeProblem({ from: '2026-11-05', to: '2026-11-01' }, today)).toBe('The end date is before the start date. Pick an end date on or after the start.');
+    expect(rangeProblem({ from: '2026-11-05', to: '2026-11-01' }, today)).toBe(
+      'The end date is before the start date. Pick an end date on or after the start.',
+    );
     expect(rangeProblem({ from: '', to: '2026-11-01' }, today)).toBe('Pick both dates.');
     expect(rangeProblem({ from: '2010-01-01', to: '2010-01-02' }, today)).toBe('Pick dates within 10 years of today.');
   });

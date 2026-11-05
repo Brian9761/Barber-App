@@ -59,7 +59,17 @@ function Scope({ catalog, barberId, onChange }: { catalog: Catalog; barberId: st
   );
 }
 
-function Periods({ kind, onChange, onCustom, customLabel }: { kind: PeriodKind; onChange: (kind: Exclude<PeriodKind, 'custom'>) => void; onCustom: () => void; customLabel: string | null }) {
+function Periods({
+  kind,
+  onChange,
+  onCustom,
+  customLabel,
+}: {
+  kind: PeriodKind;
+  onChange: (kind: Exclude<PeriodKind, 'custom'>) => void;
+  onCustom: () => void;
+  customLabel: string | null;
+}) {
   return (
     <div className="biz-periods">
       <fieldset className="biz-periods__set">
@@ -73,14 +83,31 @@ function Periods({ kind, onChange, onCustom, customLabel }: { kind: PeriodKind; 
           ))}
         </div>
       </fieldset>
-      <button type="button" className={`button button--secondary biz-periods__custom${kind === 'custom' ? ' is-on' : ''}`} aria-pressed={kind === 'custom'} onClick={onCustom}>
+      <button
+        type="button"
+        className={`button button--secondary biz-periods__custom${kind === 'custom' ? ' is-on' : ''}`}
+        aria-pressed={kind === 'custom'}
+        onClick={onCustom}
+      >
         {kind === 'custom' && customLabel ? customLabel : 'Custom…'}
       </button>
     </div>
   );
 }
 
-function CustomDialog({ open, initial, today, onApply, onClose }: { open: boolean; initial: Range; today: string; onApply: (range: Range) => void; onClose: () => void }) {
+function CustomDialog({
+  open,
+  initial,
+  today,
+  onApply,
+  onClose,
+}: {
+  open: boolean;
+  initial: Range;
+  today: string;
+  onApply: (range: Range) => void;
+  onClose: () => void;
+}) {
   const [from, setFrom] = useState(initial.from);
   const [to, setTo] = useState(initial.to);
   const [problem, setProblem] = useState<string | null>(null);
@@ -116,13 +143,27 @@ function CustomDialog({ open, initial, today, onApply, onClose }: { open: boolea
           <label className="field__label" htmlFor="custom-from">
             From
           </label>
-          <input id="custom-from" type="date" className="field__input" value={from} max={to || undefined} onChange={(e) => (setFrom(e.target.value), setProblem(null))} />
+          <input
+            id="custom-from"
+            type="date"
+            className="field__input"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => (setFrom(e.target.value), setProblem(null))}
+          />
         </div>
         <div className="field">
           <label className="field__label" htmlFor="custom-to">
             To
           </label>
-          <input id="custom-to" type="date" className="field__input" value={to} min={from || undefined} onChange={(e) => (setTo(e.target.value), setProblem(null))} />
+          <input
+            id="custom-to"
+            type="date"
+            className="field__input"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => (setTo(e.target.value), setProblem(null))}
+          />
         </div>
       </div>
       {problem ? (
@@ -274,7 +315,7 @@ function TodayByBarber({ data }: { data: Analytics }) {
       <ChartFrame
         title="today by barber"
         table={
-          <div className="biz-table-wrap">
+          <div className="biz-table-wrap" tabIndex={0} role="region" aria-label="Table">
             <table className="biz-table">
               <caption className="visually-hidden">Today's sales by barber</caption>
               <thead>
@@ -328,7 +369,7 @@ function TopServices({ data }: { data: Analytics }) {
         <ChartFrame
           title="top services"
           table={
-            <div className="biz-table-wrap">
+            <div className="biz-table-wrap" tabIndex={0} role="region" aria-label="Table">
               <table className="biz-table">
                 <caption className="visually-hidden">Sales by service</caption>
                 <thead>
@@ -543,7 +584,13 @@ export function AnalyticsPage() {
   const askedPeriod = params.get('period');
   const customFrom = params.get('from');
   const customTo = params.get('to');
-  const custom = askedPeriod === 'custom' && customFrom && customTo && DATE_RE.test(customFrom) && DATE_RE.test(customTo) && rangeProblem({ from: customFrom, to: customTo }, today) === null;
+  const custom =
+    askedPeriod === 'custom' &&
+    customFrom &&
+    customTo &&
+    DATE_RE.test(customFrom) &&
+    DATE_RE.test(customTo) &&
+    rangeProblem({ from: customFrom, to: customTo }, today) === null;
   const kind: PeriodKind = custom ? 'custom' : PERIODS.some((p) => p.id === askedPeriod) ? (askedPeriod as PeriodKind) : 'today';
   const range: Range = kind === 'custom' ? { from: customFrom!, to: customTo! } : periodRange(kind, today);
 

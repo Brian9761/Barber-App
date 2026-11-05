@@ -14,7 +14,7 @@ const BASE_URL = `http://127.0.0.1:${PORT}`;
 
 export default defineConfig({
   testDir: 'e2e',
-  testIgnore: ['demo.spec.ts'],
+  testIgnore: ['demo.spec.ts', 'business-demo.spec.ts'],
   outputDir: process.env.E2E_OUTPUT_DIR || 'test-results',
   fullyParallel: false,
   workers: 1,

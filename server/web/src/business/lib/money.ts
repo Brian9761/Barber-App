@@ -10,7 +10,10 @@ export const MAX_CENTS = 1_000_000;
  * dollar sign, thousands commas and at most two decimals.
  */
 export function parseMoney(text: string): number | null {
-  const cleaned = text.trim().replace(/^\$\s*/, '').replace(/,/g, '');
+  const cleaned = text
+    .trim()
+    .replace(/^\$\s*/, '')
+    .replace(/,/g, '');
   if (!/^\d{1,7}(\.\d{0,2})?$/.test(cleaned) && !/^\.\d{1,2}$/.test(cleaned)) return null;
   const [dollars = '0', cents = ''] = cleaned.split('.');
   return Number(dollars || '0') * 100 + Number((cents + '00').slice(0, 2));

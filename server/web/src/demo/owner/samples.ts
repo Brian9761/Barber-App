@@ -80,8 +80,36 @@ export const SAMPLE_PRODUCTS: readonly Product[] = [
 ];
 
 const FIRST_NAMES = [
-  'Marcus', 'Andre', 'Diego', 'Jay', 'Luis', 'Sam', 'Chris', 'Tony', 'Kim', 'Lee', 'Malik', 'Omar', 'Ray', 'Eli', 'Noah',
-  'Gabe', 'Isaac', 'Jon', 'Kevin', 'Mateo', 'Nate', 'Oscar', 'Pete', 'Ruben', 'Theo', 'Victor', 'Will', 'Adrian', 'Brandon', 'Carlos',
+  'Marcus',
+  'Andre',
+  'Diego',
+  'Jay',
+  'Luis',
+  'Sam',
+  'Chris',
+  'Tony',
+  'Kim',
+  'Lee',
+  'Malik',
+  'Omar',
+  'Ray',
+  'Eli',
+  'Noah',
+  'Gabe',
+  'Isaac',
+  'Jon',
+  'Kevin',
+  'Mateo',
+  'Nate',
+  'Oscar',
+  'Pete',
+  'Ruben',
+  'Theo',
+  'Victor',
+  'Will',
+  'Adrian',
+  'Brandon',
+  'Carlos',
 ];
 
 const NOTES = ['Low fade, please.', 'First visit.', "Beard trim too, if there's time.", 'Same as last time.', 'Might be a few minutes late.'];
@@ -114,7 +142,10 @@ export function seeded(text: string): () => number {
 
 function hex(random: () => number, length: number): string {
   let out = '';
-  while (out.length < length) out += Math.floor(random() * 0x10000).toString(16).padStart(4, '0');
+  while (out.length < length)
+    out += Math.floor(random() * 0x10000)
+      .toString(16)
+      .padStart(4, '0');
   return out.slice(0, length);
 }
 

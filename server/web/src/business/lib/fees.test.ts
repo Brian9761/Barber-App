@@ -55,7 +55,10 @@ describe('which fee can be charged', () => {
 
   it('charges a no-show only once the appointment has started, and never without a card', () => {
     const noShow = booked({ status: 'noShow' });
-    expect(feeCase(noShow, new Date('2026-11-03T17:59:00Z'))).toEqual({ kind: 'refused', message: "The appointment hasn't started yet, so it can't be a no-show." });
+    expect(feeCase(noShow, new Date('2026-11-03T17:59:00Z'))).toEqual({
+      kind: 'refused',
+      message: "The appointment hasn't started yet, so it can't be a no-show.",
+    });
     expect(chargeableFee(noShow, new Date('2026-11-03T18:00:00Z'))).toBe('noShow');
     expect(chargeableFee({ ...noShow, card: null }, new Date('2026-11-03T19:00:00Z'))).toBeNull();
     // Charged already: nothing more to charge.

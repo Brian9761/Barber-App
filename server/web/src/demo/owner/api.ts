@@ -388,19 +388,20 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
         token: newToken(),
       };
       // A sample of another computer signed in, so the list in Settings shows how it looks.
-      const others = store.sessions.length === 0
-        ? [
-            {
-              id: dayId('session|sample-ipad', addDays(today(), -3)),
-              name: 'Safari on iPad (sample)',
-              createdAt: iso(now.getTime() - 3 * 86_400_000),
-              lastUsedAt: iso(now.getTime() - 26 * 3_600_000),
-              expiresAt: iso(now.getTime() + 27 * 86_400_000),
-              current: false,
-              token: null,
-            },
-          ]
-        : [];
+      const others =
+        store.sessions.length === 0
+          ? [
+              {
+                id: dayId('session|sample-ipad', addDays(today(), -3)),
+                name: 'Safari on iPad (sample)',
+                createdAt: iso(now.getTime() - 3 * 86_400_000),
+                lastUsedAt: iso(now.getTime() - 26 * 3_600_000),
+                expiresAt: iso(now.getTime() + 27 * 86_400_000),
+                current: false,
+                token: null,
+              },
+            ]
+          : [];
       store.sessions = [...store.sessions.filter((s) => Date.parse(s.expiresAt) > now.getTime()), ...others, created];
       save(store);
       return { token: created.token!, session: sessionJSON(created, created) };
@@ -541,10 +542,18 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
         const found = findAppointment(store, body.appointmentId);
         if (!found) throw appointmentNotFound();
         if (found.appointment.status === 'cancelled') {
-          throw fail('not_checkoutable', "This appointment was cancelled, so it can't be checked out. Reopen it first, or check out without the appointment.", 409);
+          throw fail(
+            'not_checkoutable',
+            "This appointment was cancelled, so it can't be checked out. Reopen it first, or check out without the appointment.",
+            409,
+          );
         }
         if (found.appointment.status === 'noShow') {
-          throw fail('not_checkoutable', "This appointment was marked a no-show, so it can't be checked out. Reopen it first, or check out without the appointment.", 409);
+          throw fail(
+            'not_checkoutable',
+            "This appointment was marked a no-show, so it can't be checked out. Reopen it first, or check out without the appointment.",
+            409,
+          );
         }
         if (found.appointment.sale !== null) throw fail('already_checked_out', 'This appointment was already checked out.', 409);
         appointment = found.appointment;
@@ -775,7 +784,8 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
         next.percent = patch.percent;
       }
       if (patch.flatCents !== undefined) {
-        if (!Number.isInteger(patch.flatCents) || patch.flatCents < 50 || patch.flatCents > 50_000) throw invalid(`Pick a flat fee from ${money(50)} to ${money(50_000)}.`);
+        if (!Number.isInteger(patch.flatCents) || patch.flatCents < 50 || patch.flatCents > 50_000)
+          throw invalid(`Pick a flat fee from ${money(50)} to ${money(50_000)}.`);
         next.flatCents = patch.flatCents;
       }
       if (patch.lateCancelEnabled !== undefined) next.lateCancelEnabled = Boolean(patch.lateCancelEnabled);

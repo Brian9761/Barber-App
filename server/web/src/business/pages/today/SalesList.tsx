@@ -71,8 +71,8 @@ export function useVoidSale(onVoided: (result: VoidedSale) => void) {
       {sale ? (
         <>
           <p>
-            {sale.customerName ?? 'Walk-in'}: {itemsSummary(sale)}, sold by {sale.barberName} at {timeLabel(new Date(sale.soldAt), zone)}. Once it's voided it no
-            longer counts in your sales.{sale.appointmentId ? ' The appointment stays done, and can be checked out again.' : ''}
+            {sale.customerName ?? 'Walk-in'}: {itemsSummary(sale)}, sold by {sale.barberName} at {timeLabel(new Date(sale.soldAt), zone)}. Once it's voided it
+            no longer counts in your sales.{sale.appointmentId ? ' The appointment stays done, and can be checked out again.' : ''}
           </p>
           {sale.method === 'card' ? (
             <p className="biz-void-card">
@@ -83,7 +83,14 @@ export function useVoidSale(onVoided: (result: VoidedSale) => void) {
             <label className="field__label" htmlFor="void-reason">
               Reason <span className="field__optional">(optional)</span>
             </label>
-            <input id="void-reason" className="field__input" value={reason} maxLength={200} placeholder="Rang up twice" onChange={(e) => setReason(e.target.value)} />
+            <input
+              id="void-reason"
+              className="field__input"
+              value={reason}
+              maxLength={200}
+              placeholder="Rang up twice"
+              onChange={(e) => setReason(e.target.value)}
+            />
           </div>
           {error ? (
             <p className="field__error" role="alert">
@@ -157,7 +164,12 @@ export function SalesList({
                       Voided{sale.voidReason ? `: ${sale.voidReason}` : ''}
                     </span>
                   ) : (
-                    <button type="button" className="text-button text-button--danger" onClick={() => onVoid(sale)} aria-label={`Void the ${money(sale.totalCents)} sale to ${sale.customerName ?? 'a walk-in'}`}>
+                    <button
+                      type="button"
+                      className="text-button text-button--danger"
+                      onClick={() => onVoid(sale)}
+                      aria-label={`Void the ${money(sale.totalCents)} sale to ${sale.customerName ?? 'a walk-in'}`}
+                    >
                       Void
                     </button>
                   )}

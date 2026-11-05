@@ -54,11 +54,11 @@ describe('signing in', () => {
     renderApp('/business');
     expect(await screen.findByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeTruthy();
     const steps = screen.getByRole('list');
-    expect(within(steps).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
-      '1Open Izzy Clipz Business on your iPhone.',
-      '2Tap Settings → Use on a computer.',
-      '3Type the 6-digit code.',
-    ]);
+    expect(
+      within(steps)
+        .getAllByRole('listitem')
+        .map((li) => li.textContent),
+    ).toEqual(['1Open Izzy Clipz Business on your iPhone.', '2Tap Settings → Use on a computer.', '3Type the 6-digit code.']);
     await userEvent.type(screen.getByLabelText('6-digit code'), '483 920');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(await screen.findByText(times("Your shop's day: appointments, checkout and today's sales."))).toBeTruthy();
@@ -66,7 +66,11 @@ describe('signing in', () => {
     expect(session.current().session?.token).toBe(codeSession.token);
     // Signed in: the local nav, with Sign out.
     const nav = screen.getByRole('navigation', { name: 'Izzy Clipz Business' });
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Today', 'Analytics', 'Products', 'Settings']);
+    expect(
+      within(nav)
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual(['Today', 'Analytics', 'Products', 'Settings']);
     expect(within(nav).getByRole('button', { name: 'Sign out' })).toBeTruthy();
   });
 
@@ -80,7 +84,9 @@ describe('signing in', () => {
     expect(api.calls).toHaveLength(0);
     await userEvent.type(field, '20');
     await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
-    expect((await screen.findByRole('alert')).textContent).toBe("That code isn't right or has run out. Get a new one in the app: Settings → Use on a computer.");
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      "That code isn't right or has run out. Get a new one in the app: Settings → Use on a computer.",
+    );
     expect(field.getAttribute('aria-invalid')).toBe('true');
   });
 
@@ -206,15 +212,18 @@ describe('Analytics', () => {
     expect(live).toMatch(/^Live · Updated \d{1,2}(:\d{2})?\u00a0(AM|PM)$/);
 
     const leaderboard = screen.getByTestId('leaderboard');
-    const names = () => within(leaderboard).getAllByTestId('leaderboard-row').map((row) => row.querySelector('.biz-rank__name')?.textContent);
+    const names = () =>
+      within(leaderboard)
+        .getAllByTestId('leaderboard-row')
+        .map((row) => row.querySelector('.biz-rank__name')?.textContent);
     expect(names()).toEqual(['Izzy', 'Carlos', 'Flowxbori', 'Julian', 'Cristian']);
     await userEvent.click(within(leaderboard).getByRole('radio', { name: 'Products' }));
     expect(names()).toEqual(['Carlos', 'Flowxbori', 'Izzy', 'Cristian', 'Julian']);
-    expect(within(leaderboard).getAllByRole('img', { name: /place/ }).map((img) => img.getAttribute('aria-label'))).toEqual([
-      'First place',
-      'Second place',
-      'Second place',
-    ]);
+    expect(
+      within(leaderboard)
+        .getAllByRole('img', { name: /place/ })
+        .map((img) => img.getAttribute('aria-label')),
+    ).toEqual(['First place', 'Second place', 'Second place']);
 
     // Each tile explains itself.
     const chair = screen.getByTestId('tile-chair');
@@ -232,7 +241,9 @@ describe('Analytics', () => {
 
   it('asks for one barber’s numbers, and says the top barber is the whole shop’s', async () => {
     signedIn();
-    const api = mockApi([['GET /api/owner/analytics', ({ search }: ApiCall) => ({ body: { ...analyticsFixture, barberId: search.includes('barberId') ? 'flowxbori' : null } })]]);
+    const api = mockApi([
+      ['GET /api/owner/analytics', ({ search }: ApiCall) => ({ body: { ...analyticsFixture, barberId: search.includes('barberId') ? 'flowxbori' : null } })],
+    ]);
     renderApp('/business/analytics');
     await screen.findByTestId('total-sales-value');
     await userEvent.click(screen.getByRole('radio', { name: 'Flowxbori' }));
@@ -257,7 +268,14 @@ describe('Analytics', () => {
 describe('Products', () => {
   it('lists the products, and adds one after checking its fields', async () => {
     signedIn();
-    const created = { id: '00000000-0000-4000-8000-000000000009', name: 'Hair clay', description: 'Strong hold.', priceCents: 2000, imageUrl: null, visible: true };
+    const created = {
+      id: '00000000-0000-4000-8000-000000000009',
+      name: 'Hair clay',
+      description: 'Strong hold.',
+      priceCents: 2000,
+      imageUrl: null,
+      visible: true,
+    };
     const api = mockApi([
       ['GET /api/owner/products', { body: ownerProducts }],
       ['POST /api/owner/products', { status: 201, body: { product: created } }],

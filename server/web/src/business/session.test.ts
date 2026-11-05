@@ -41,7 +41,10 @@ describe('this computer’s session', () => {
   });
 
   it('forgets a session whose 30 days have run out', () => {
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ token: 'x'.repeat(43), id: 'a', name: 'Old', createdAt: '2020-01-01T00:00:00Z', expiresAt: '2020-01-31T00:00:00Z' }));
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ token: 'x'.repeat(43), id: 'a', name: 'Old', createdAt: '2020-01-01T00:00:00Z', expiresAt: '2020-01-31T00:00:00Z' }),
+    );
     expect(session.current().session).toBeNull();
     expect(localStorage.getItem(SESSION_KEY)).toBeNull();
   });

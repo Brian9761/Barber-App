@@ -76,7 +76,10 @@ describe('the sample shop', () => {
   });
 
   it('keeps no one signed in who wasn’t: a token it doesn’t know is turned away, and the session ends', async () => {
-    session.signIn({ token: newToken(), session: { id: 'x', name: 'Elsewhere', createdAt: now.toISOString(), lastUsedAt: now.toISOString(), expiresAt: '2027-01-01T00:00:00Z', current: true } });
+    session.signIn({
+      token: newToken(),
+      session: { id: 'x', name: 'Elsewhere', createdAt: now.toISOString(), lastUsedAt: now.toISOString(), expiresAt: '2027-01-01T00:00:00Z', current: true },
+    });
     expect(await rejects(api.appointments('2026-11-04'))).toMatchObject({ code: 'unauthorized', status: 401 });
     expect(session.current()).toMatchObject({ session: null, reason: 'expired' });
   });
@@ -102,16 +105,26 @@ describe('checking out, like the server', () => {
       ['Sample pomade', 2, 1800, 3600],
     ]);
     const after = byName(await api.appointments('2026-11-04'), 'Nate Sample');
-    expect(after).toMatchObject({ status: 'completed', sale: { id: sale.id, totalCents: 9100, method: 'cash' }, payment: { status: 'paid', amountCents: 9100 } });
+    expect(after).toMatchObject({
+      status: 'completed',
+      sale: { id: sale.id, totalCents: 9100, method: 'cash' },
+      payment: { status: 'paid', amountCents: 9100 },
+    });
 
     // The same key again (an answer that was lost): the same sale, nothing recorded twice.
     expect(await api.createSale(body, key)).toEqual(sale);
     expect((await api.sales('2026-11-04')).totals).toEqual({ totalCents: 9100, count: 1 });
     // The same key for something else is turned down.
-    expect(await rejects(api.createSale({ ...body, method: 'other' }, key))).toMatchObject({ code: 'invalid_request', message: 'That sale key was already used for another sale.' });
+    expect(await rejects(api.createSale({ ...body, method: 'other' }, key))).toMatchObject({
+      code: 'invalid_request',
+      message: 'That sale key was already used for another sale.',
+    });
     // A checked-out appointment can't be checked out again, nor changed until its sale is voided.
     expect(await rejects(api.createSale(body, newToken()))).toMatchObject({ code: 'already_checked_out', status: 409 });
-    expect(await rejects(api.setStatus(nate.id, 'booked'))).toMatchObject({ code: 'already_checked_out', message: 'This appointment was checked out. Void its sale first, then change it.' });
+    expect(await rejects(api.setStatus(nate.id, 'booked'))).toMatchObject({
+      code: 'already_checked_out',
+      message: 'This appointment was checked out. Void its sale first, then change it.',
+    });
   });
 
   it('turns down a cancelled appointment, an unknown barber, a product with no price, and a sale over $10,000', async () => {
@@ -119,34 +132,61 @@ describe('checking out, like the server', () => {
     const brandon = byName(today, 'Brandon Sample');
     await api.setStatus(brandon.id, 'cancelled');
     const service = { kind: 'service' as const, serviceId: brandon.serviceId };
-    expect(await rejects(api.createSale({ barberId: brandon.barberId, appointmentId: brandon.id, method: 'cash', items: [service] }, newToken()))).toMatchObject({
+    expect(
+      await rejects(api.createSale({ barberId: brandon.barberId, appointmentId: brandon.id, method: 'cash', items: [service] }, newToken())),
+    ).toMatchObject({
       code: 'not_checkoutable',
       status: 409,
     });
-    expect(await rejects(api.createSale({ barberId: 'nobody', method: 'cash', items: [{ kind: 'custom', name: 'Tip', unitCents: 500 }] }, newToken()))).toMatchObject({
+    expect(
+      await rejects(api.createSale({ barberId: 'nobody', method: 'cash', items: [{ kind: 'custom', name: 'Tip', unitCents: 500 }] }, newToken())),
+    ).toMatchObject({
       message: "That barber isn't on the team. Pick who did the service.",
     });
     const tonic = SAMPLE_PRODUCTS.find((p) => p.priceCents === null)!;
-    expect(await rejects(api.createSale({ barberId: 'julian-ramos', method: 'cash', items: [{ kind: 'product', productId: tonic.id }] }, newToken()))).toMatchObject({
+    expect(
+      await rejects(api.createSale({ barberId: 'julian-ramos', method: 'cash', items: [{ kind: 'product', productId: tonic.id }] }, newToken())),
+    ).toMatchObject({
       message: 'Sample hair tonic has no price. Enter the price.',
     });
     // Flowxbori has two prices for a haircut: the price must be given.
-    expect(await rejects(api.createSale({ barberId: 'flowxbori', method: 'cash', items: [{ kind: 'service', serviceId: 'haircut' }] }, newToken()))).toMatchObject({
+    expect(
+      await rejects(api.createSale({ barberId: 'flowxbori', method: 'cash', items: [{ kind: 'service', serviceId: 'haircut' }] }, newToken())),
+    ).toMatchObject({
       message: 'Flowxbori has more than one price for Haircut. Enter the price.',
     });
     expect(
-      await rejects(api.createSale({ barberId: 'julian-ramos', method: 'cash', items: [{ kind: 'custom', name: 'A lot', unitCents: 1_000_000 }, { kind: 'custom', name: 'More', unitCents: 1 }] }, newToken())),
+      await rejects(
+        api.createSale(
+          {
+            barberId: 'julian-ramos',
+            method: 'cash',
+            items: [
+              { kind: 'custom', name: 'A lot', unitCents: 1_000_000 },
+              { kind: 'custom', name: 'More', unitCents: 1 },
+            ],
+          },
+          newToken(),
+        ),
+      ),
     ).toMatchObject({ message: 'A sale can be at most $10,000. Split it into two sales.' });
   });
 
   it('voids a sale: it stops counting, its appointment is unpaid again and stays done, and voiding again answers the same', async () => {
     const nate = byName(await api.appointments('2026-11-04'), 'Nate Sample');
-    const sale = await api.createSale({ barberId: nate.barberId, appointmentId: nate.id, method: 'cash', items: [{ kind: 'service', serviceId: nate.serviceId }] }, newToken());
+    const sale = await api.createSale(
+      { barberId: nate.barberId, appointmentId: nate.id, method: 'cash', items: [{ kind: 'service', serviceId: nate.serviceId }] },
+      newToken(),
+    );
     const voided = await api.voidSale(sale.id, 'Rang up twice');
     expect(voided).toMatchObject({ sale: { voidReason: 'Rang up twice' }, message: 'The sale was voided, so it no longer counts in your sales.' });
     expect(voided.sale.voidedAt).not.toBeNull();
     expect(await api.voidSale(sale.id, null)).toEqual(voided);
-    expect(byName(await api.appointments('2026-11-04'), 'Nate Sample')).toMatchObject({ status: 'completed', sale: null, payment: { status: 'unpaid', amountCents: null } });
+    expect(byName(await api.appointments('2026-11-04'), 'Nate Sample')).toMatchObject({
+      status: 'completed',
+      sale: null,
+      payment: { status: 'unpaid', amountCents: null },
+    });
     expect((await api.sales('2026-11-04')).totals).toEqual({ totalCents: 0, count: 0 });
   });
 
@@ -154,7 +194,9 @@ describe('checking out, like the server', () => {
     const day = await api.sales('2026-11-03');
     const card = day.sales.find((s) => s.method === 'card' && s.appointmentId !== null)!;
     const result = await api.voidSale(card.id, null);
-    expect(result.message).toBe("The sale was voided, so it no longer counts in your sales. Voiding doesn't refund the card: refunds are made in the Stripe Dashboard.");
+    expect(result.message).toBe(
+      "The sale was voided, so it no longer counts in your sales. Voiding doesn't refund the card: refunds are made in the Stripe Dashboard.",
+    );
     const appointment = (await api.appointments('2026-11-03')).find((a) => a.id === card.appointmentId)!;
     // The card paid it: it stays paid.
     expect(appointment).toMatchObject({ sale: null, payment: { status: 'paid', amountCents: card.totalCents } });
@@ -165,10 +207,17 @@ describe('statuses and fees, like the server', () => {
   it('marks a no-show with a card on file only once it has started, and charges the fee once Stripe is connected', async () => {
     const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
     expect(kim.card).not.toBeNull();
-    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toMatchObject({ code: 'not_started', message: 'You can mark a no-show once the appointment has started.' });
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toMatchObject({
+      code: 'not_started',
+      message: 'You can mark a no-show once the appointment has started.',
+    });
     now = new Date('2026-11-04T20:30:00Z'); // 12:30 PM, Kim's 12 PM appointment has started
     expect((await api.setStatus(kim.id, 'noShow')).noShowFee).toMatchObject({ status: 'none', reason: 'noShow' });
-    expect(await rejects(api.chargeFee(kim.id))).toMatchObject({ code: 'stripe_not_configured', status: 503, message: 'Connect Stripe in Settings to take card payments.' });
+    expect(await rejects(api.chargeFee(kim.id))).toMatchObject({
+      code: 'stripe_not_configured',
+      status: 503,
+      message: 'Connect Stripe in Settings to take card payments.',
+    });
     expect(await api.connectStripe()).toMatchObject({ url: '/business/settings?stripe=active' });
     expect(await api.stripe()).toMatchObject({ status: 'active', businessName: 'Izzy Clipz Barbershop' });
     const charged = await api.chargeFee(kim.id);
@@ -180,13 +229,19 @@ describe('statuses and fees, like the server', () => {
   it('turns down a fee there is nothing to charge for, and declines the card that ends in 0002', async () => {
     await api.connectStripe();
     const today = await api.appointments('2026-11-04');
-    expect(await rejects(api.chargeFee(byName(today, 'Nate Sample').id))).toMatchObject({ code: 'not_chargeable', message: "This booking has no card on file, so there's no fee to charge." });
+    expect(await rejects(api.chargeFee(byName(today, 'Nate Sample').id))).toMatchObject({
+      code: 'not_chargeable',
+      message: "This booking has no card on file, so there's no fee to charge.",
+    });
     const gabe = byName(today, 'Gabe Sample');
     expect(gabe.card?.last4).toBe('0002');
     expect(await rejects(api.chargeFee(gabe.id))).toMatchObject({ code: 'not_chargeable', message: 'Mark the appointment as a no-show first.' });
     now = new Date('2026-11-04T19:00:00Z');
     await api.setStatus(gabe.id, 'noShow');
-    expect((await api.chargeFee(gabe.id)).noShowFee).toMatchObject({ status: 'declined', message: 'The card was declined. Ask the client to pay at the shop.' });
+    expect((await api.chargeFee(gabe.id)).noShowFee).toMatchObject({
+      status: 'declined',
+      message: 'The card was declined. Ask the client to pay at the shop.',
+    });
   });
 
   it('cancels as the shop and reopens, unless another booking took the time', async () => {
@@ -256,12 +311,27 @@ describe('analytics, with the definitions of docs/analytics.md, worked out by ha
     // A checkout: Nate's haircut & beard ($55) and two pomades ($36), in cash, for Izzy.
     const nate = byName(today, 'Nate Sample');
     await api.createSale(
-      { barberId: nate.barberId, appointmentId: nate.id, method: 'cash', items: [{ kind: 'service', serviceId: nate.serviceId }, { kind: 'product', productId: POMADE.id, quantity: 2 }] },
+      {
+        barberId: nate.barberId,
+        appointmentId: nate.id,
+        method: 'cash',
+        items: [
+          { kind: 'service', serviceId: nate.serviceId },
+          { kind: 'product', productId: POMADE.id, quantity: 2 },
+        ],
+      },
       newToken(),
     );
     // A walk-in for Carlos: a $25 gift card and a beard oil ($15), paid another way.
     await api.createSale(
-      { barberId: 'carlos-rafael', method: 'other', items: [{ kind: 'custom', name: 'Gift card', unitCents: 2500 }, { kind: 'product', productId: BEARD_OIL.id }] },
+      {
+        barberId: 'carlos-rafael',
+        method: 'other',
+        items: [
+          { kind: 'custom', name: 'Gift card', unitCents: 2500 },
+          { kind: 'product', productId: BEARD_OIL.id },
+        ],
+      },
       newToken(),
     );
     // A sale rung up by mistake, then voided: it doesn't count.
@@ -341,7 +411,16 @@ describe('analytics, with the definitions of docs/analytics.md, worked out by ha
     expect(week.granularity).toBe('day');
     expect(week.series.map((s) => s.date)).toEqual(['2026-11-02', '2026-11-03', '2026-11-04']);
     expect(week.series[1]).toMatchObject({ salesCents: 75800 });
-    expect(week.series[2]).toEqual({ date: '2026-11-04', salesCents: 20600, servicesCents: 9500, productsCents: 5100, otherCents: 2500, feesCents: 3500, servicesCount: 2, productsCount: 3 });
+    expect(week.series[2]).toEqual({
+      date: '2026-11-04',
+      salesCents: 20600,
+      servicesCents: 9500,
+      productsCents: 5100,
+      otherCents: 2500,
+      feesCents: 3500,
+      servicesCount: 2,
+      productsCount: 3,
+    });
     expect(week.previous).toMatchObject({ from: '2026-10-30', to: '2026-11-01' });
     // The year so far, by month.
     const year = await api.analytics({ from: '2026-01-01', to: '2026-11-04', barberId: null });
@@ -355,14 +434,20 @@ describe('analytics, with the definitions of docs/analytics.md, worked out by ha
     const a = await api.analytics({ from: '2026-11-04', to: '2026-11-04', barberId: null });
     expect(a.products).toEqual([{ productId: null, name: 'Sample pomade', quantity: 1, salesCents: 1800 }]);
     expect(await rejects(api.analytics({ from: '2026-11-05', to: '2026-11-04', barberId: null }))).toMatchObject({ message: 'to must be on or after from.' });
-    expect(await rejects(api.analytics({ from: '2025-11-03', to: '2026-11-04', barberId: null }))).toMatchObject({ message: 'Ask for at most 366 days at a time.' });
-    expect(await rejects(api.analytics({ from: '2026-11-04', to: '2026-11-04', barberId: 'nobody' }))).toMatchObject({ message: "That barber isn't on the team." });
+    expect(await rejects(api.analytics({ from: '2025-11-03', to: '2026-11-04', barberId: null }))).toMatchObject({
+      message: 'Ask for at most 366 days at a time.',
+    });
+    expect(await rejects(api.analytics({ from: '2026-11-04', to: '2026-11-04', barberId: 'nobody' }))).toMatchObject({
+      message: "That barber isn't on the team.",
+    });
   });
 });
 
 describe('products, settings and computers', () => {
   it('adds, edits and deletes products with the server’s checks', async () => {
-    expect(await rejects(api.createProduct({ name: '  ', description: null, priceCents: 1000, visible: true }))).toMatchObject({ message: 'Give the product a name.' });
+    expect(await rejects(api.createProduct({ name: '  ', description: null, priceCents: 1000, visible: true }))).toMatchObject({
+      message: 'Give the product a name.',
+    });
     const created = await api.createProduct({ name: 'Hair clay', description: ' Strong hold ', priceCents: 2000, visible: false });
     expect(created).toMatchObject({ name: 'Hair clay', description: 'Strong hold', priceCents: 2000, visible: false, imageUrl: null });
     const edited = await api.updateProduct(created.id, { priceCents: null, visible: true });
@@ -375,10 +460,23 @@ describe('products, settings and computers', () => {
   });
 
   it('saves the no-show settings with the server’s limits', async () => {
-    expect(await api.noShowSettings()).toEqual({ enabled: false, feeMode: 'percent', percent: 100, flatCents: 2000, lateCancelEnabled: true, lateCancelWindowMinutes: 60 });
-    expect(await api.updateNoShowSettings({ enabled: true, feeMode: 'flat', flatCents: 2500 })).toMatchObject({ enabled: true, feeMode: 'flat', flatCents: 2500 });
+    expect(await api.noShowSettings()).toEqual({
+      enabled: false,
+      feeMode: 'percent',
+      percent: 100,
+      flatCents: 2000,
+      lateCancelEnabled: true,
+      lateCancelWindowMinutes: 60,
+    });
+    expect(await api.updateNoShowSettings({ enabled: true, feeMode: 'flat', flatCents: 2500 })).toMatchObject({
+      enabled: true,
+      feeMode: 'flat',
+      flatCents: 2500,
+    });
     expect(await rejects(api.updateNoShowSettings({ flatCents: 60_000 }))).toMatchObject({ message: 'Pick a flat fee from $0.50 to $500.' });
-    expect(await rejects(api.updateNoShowSettings({ lateCancelWindowMinutes: 10 }))).toMatchObject({ message: 'Pick a late-cancellation window from 30 minutes to 48 hours.' });
+    expect(await rejects(api.updateNoShowSettings({ lateCancelWindowMinutes: 10 }))).toMatchObject({
+      message: 'Pick a late-cancellation window from 30 minutes to 48 hours.',
+    });
   });
 
   it('lists the computers signed in, signs one out, and all of them, this one too', async () => {

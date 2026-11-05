@@ -140,7 +140,14 @@ export function DailyChart({ series }: { series: SeriesEntry[] }) {
             ? `Best: ${seriesLabel(best.date)}, ${moneyWithCommas(best.salesCents)}. Pick a column to see its numbers.`
             : 'Pick a column to see its numbers.'}
       </p>
-      <svg className="biz-daily__svg" width="100%" height={HEIGHT} viewBox={`0 0 ${PAD.left + plotW + PAD.right} ${HEIGHT}`} role="group" aria-labelledby={titleId}>
+      <svg
+        className="biz-daily__svg"
+        width="100%"
+        height={HEIGHT}
+        viewBox={`0 0 ${PAD.left + plotW + PAD.right} ${HEIGHT}`}
+        role="group"
+        aria-labelledby={titleId}
+      >
         <title id={titleId}>{`Sales by ${series[0]?.date.length === 7 ? 'month' : 'day'}: ${moneyWithCommas(total)} in all`}</title>
         {ticks.map((tick) => (
           <g key={tick} aria-hidden="true">
@@ -209,7 +216,7 @@ export function DailyChart({ series }: { series: SeriesEntry[] }) {
 
 export function DailyTable({ series }: { series: SeriesEntry[] }) {
   return (
-    <div className="biz-table-wrap">
+    <div className="biz-table-wrap" tabIndex={0} role="region" aria-label="Table">
       <table className="biz-table">
         <caption className="visually-hidden">Sales by {series[0]?.date.length === 7 ? 'month' : 'day'}</caption>
         <thead>
@@ -247,7 +254,17 @@ export function SplitBar({ parts, label }: { parts: { label: string; value: numb
     <svg className="biz-split" viewBox="0 0 100 10" preserveAspectRatio="none" role="img" aria-label={label}>
       {shown.map((part, index) => {
         const width = (part.value / total) * 100;
-        const rect = <rect key={part.label} x={x + (index > 0 ? 0.4 : 0)} y={0} width={Math.max(0, width - (index > 0 ? 0.4 : 0))} height={10} rx={1.2} fill={part.color} />;
+        const rect = (
+          <rect
+            key={part.label}
+            x={x + (index > 0 ? 0.4 : 0)}
+            y={0}
+            width={Math.max(0, width - (index > 0 ? 0.4 : 0))}
+            height={10}
+            rx={1.2}
+            fill={part.color}
+          />
+        );
         x += width;
         return rect;
       })}

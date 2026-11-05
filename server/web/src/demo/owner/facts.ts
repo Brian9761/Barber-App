@@ -15,15 +15,7 @@ import type { Catalog } from '../../api/types';
 import { cancelledLate } from '../../lib/lateCancel';
 import { addDays, clockMinutes, localDate, weekdayOf, zonedInstant } from '../../lib/shopTime';
 import type { Analytics, AnalyticsQuery, Product } from '../../business/types';
-import {
-  computeAnalytics,
-  previousPeriod,
-  seriesPeriods,
-  type AnalyticsInput,
-  type AppointmentFact,
-  type MoneyFact,
-  type SaleCountFact,
-} from './analytics';
+import { computeAnalytics, previousPeriod, seriesPeriods, type AnalyticsInput, type AppointmentFact, type MoneyFact, type SaleCountFact } from './analytics';
 import type { DayData } from './samples';
 
 /** How many days before the range a fee's appointment may have been (fees are charged after the visit). */
@@ -125,7 +117,16 @@ export function demoAnalytics(source: FactsSource, query: AnalyticsQuery): Analy
         const chargedOn = localDate(new Date(fee.chargedAt ?? appointment.start), zone);
         const feePeriod = periodOf(chargedOn);
         if (feePeriod !== null) {
-          money.push({ period: feePeriod, barberId: appointment.barberId, kind: 'fee', visit: false, itemId: null, name: '', count: 1, cents: fee.amountCents });
+          money.push({
+            period: feePeriod,
+            barberId: appointment.barberId,
+            kind: 'fee',
+            visit: false,
+            itemId: null,
+            name: '',
+            count: 1,
+            cents: fee.amountCents,
+          });
         }
       }
       if (period === null) continue;
