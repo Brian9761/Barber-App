@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BookingTarget, Catalog, NoShowPolicy, Slot } from '../api/types';
 import { useNow } from '../components/hooks';
-import { CallLink, Loading, Notice } from '../components/ui';
+import { CallLink, Loading, NewTabLink, Notice } from '../components/ui';
 import { plural } from '../lib/format';
 import { lateCancelNotice } from '../lib/lateCancel';
 import { dateTimeLabel, dayPart, localDate, longDateLabel, monthsBetween, timeLabel, wallClock, WEEKDAY_NAMES, weekdayOf, zoneOffsetMinutes } from '../lib/shopTime';
@@ -209,6 +209,12 @@ export function FeeWarning({ policy, start, now }: { policy: NoShowPolicy; start
       {/* The shop's words are written for the app too; the website's own cancelling is the same thing. */}
       <p>Cancelling on this website, under My appointments, works the same as cancelling in the app.</p>
       {inside ? <p className="notice__strong">{inside}</p> : null}
+      {/* The whole policy, in a new tab: the booking stays where it is. */}
+      <p>
+        <NewTabLink href="/cancellation-policy" testId="fee-policy-link">
+          Read the Cancellation & No-Show Policy
+        </NewTabLink>
+      </p>
     </Notice>
   );
 }

@@ -4,7 +4,7 @@ import { api, ErrorCode, isApiError, errorMessage } from '../api/client';
 import type { BookingTarget, Catalog, NoShowPolicy } from '../api/types';
 import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
-import { CallLink, Loading, Notice } from '../components/ui';
+import { CallLink, Loading, NewTabLink, Notice } from '../components/ui';
 import { DemoNotice } from '../demo/DemoNotice';
 import { cardLabel, list, windowLabel } from '../lib/format';
 import { cancelledLate, feeLabel } from '../lib/lateCancel';
@@ -261,6 +261,11 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
       {failure ? <FailureNotice failure={failure} retrying={booking} onRetry={() => void book()} onEditDetails={() => change('details')} /> : null}
 
       <div className="step-actions">
+        {/* What booking agrees to, right above the button, with or without a card: the policies open in a new tab, so the booking stays here. */}
+        <p className="step-actions__consent" data-testid="book-consent">
+          By booking, you agree to our <NewTabLink href="/terms">Terms of Service</NewTabLink> and{' '}
+          <NewTabLink href="/cancellation-policy">Cancellation & No-Show Policy</NewTabLink>.
+        </p>
         <button type="button" className="button button--primary button--large step-actions__continue" disabled={!canBook} onClick={() => void book()} data-testid="book-button">
           {booking ? 'Booking…' : 'Book appointment'}
         </button>

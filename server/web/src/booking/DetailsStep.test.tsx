@@ -6,6 +6,7 @@ import { CARD_KEY, loadCard, loadRememberedDetails, rememberDetails, storeCard }
 import { newToken } from '../lib/tokens';
 import { FLOW45, mockApi, policy35, renderApp } from '../test/api';
 import { USER_AGENTS } from '../test/pwa';
+import { visibleText } from '../test/text';
 import { EMPTY_DRAFT, loadDraft, saveDraft } from './flow';
 
 // "Remember me on this computer": a computer can be shared, so it starts off for anyone
@@ -40,7 +41,11 @@ describe('Remember me on this computer', () => {
     expect(screen.queryByTestId('remembered-note')).toBeNull();
     // The real site sends the details to the shop, and says so (the demo says they stay here).
     expect(screen.getByText("So the shop knows who's coming and can reach you if anything changes.")).toBeTruthy();
-    expect(screen.getByTestId('details-privacy').textContent).toBe('Your name and number are sent only to Izzy Clipz, to book and manage this appointment.');
+    // Who gets them, as the Privacy Policy says, which opens in a new tab so the booking stays.
+    const privacy = screen.getByTestId('details-privacy');
+    expect(visibleText(privacy)).toBe('Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains.');
+    const link = within(privacy).getByRole('link', { name: /^Privacy Policy\s*\(opens in a new tab\)$/ });
+    expect([link.getAttribute('href'), link.getAttribute('target')]).toEqual(['/privacy', '_blank']);
   });
 
   it('names the device it’s on: on a phone, this phone', async () => {

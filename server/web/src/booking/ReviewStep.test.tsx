@@ -1,7 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { times } from '../test/text';
+import { times, visibleText } from '../test/text';
 import created from '../../../test/fixtures/contract/appointment-created.json';
 import cardCheckout from '../../../test/fixtures/contract/card-checkout.json';
 import cardSaved from '../../../test/fixtures/contract/card-saved.json';
@@ -443,6 +443,43 @@ describe('the line under Book appointment', () => {
     expect(within(header).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
     // The shop's words are written for the app too: the website says its own cancelling is the same.
     expect(screen.getByTestId('fee-warning').textContent).toContain('Cancelling on this website, under My appointments, works the same as cancelling in the app.');
+    // The whole policy, from the notice, in a new tab.
+    expect(within(screen.getByTestId('fee-warning')).getByRole('link', { name: /^Read the Cancellation & No-Show Policy/ }).getAttribute('href')).toBe('/cancellation-policy');
+  });
+});
+
+describe('what booking agrees to', () => {
+  const card = { token: newToken(), card: cardSaved.card, phone: PHONE };
+
+  /** The line right above "Book appointment", and the button after it. */
+  function consent() {
+    const line = screen.getByTestId('book-consent');
+    expect(line.nextElementSibling).toBe(screen.getByTestId('book-button'));
+    return line;
+  }
+
+  it('is right above Book appointment with a card on file, the policies in a new tab', async () => {
+    storeCard(card, false);
+    mockApi([['GET /api/no-show-policy', { body: policy35 }]]);
+    keptBooking();
+    renderApp('/book/review');
+    await waitFor(() => expect(screen.getByTestId('book-button')).toHaveProperty('disabled', false));
+    const line = consent();
+    expect(visibleText(line)).toBe('By booking, you agree to our Terms of Service and Cancellation & No-Show Policy.');
+    const links = within(line).getAllByRole('link');
+    expect(links.map((a) => [a.textContent, a.getAttribute('href'), a.getAttribute('target'), a.getAttribute('rel')])).toEqual([
+      ['Terms of Service (opens in a new tab)', '/terms', '_blank', 'noopener'],
+      ['Cancellation & No-Show Policy (opens in a new tab)', '/cancellation-policy', '_blank', 'noopener'],
+    ]);
+  });
+
+  it('is there without a card too', async () => {
+    mockApi([['GET /api/no-show-policy', { body: policyNotRequired }]]);
+    keptBooking();
+    renderApp('/book/review');
+    await waitFor(() => expect(screen.getByTestId('book-button')).toHaveProperty('disabled', false));
+    expect(screen.queryByTestId('card-section')).toBeNull();
+    expect(visibleText(consent())).toBe('By booking, you agree to our Terms of Service and Cancellation & No-Show Policy.');
   });
 });
 

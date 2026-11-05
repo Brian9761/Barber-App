@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import type { Catalog } from '../api/types';
 import { Icon } from '../components/Icon';
+import { NewTabLink } from '../components/ui';
 import { isDemo } from '../demo/mode';
 import { displayPhone, emailProblem, MAX_NOTE_LENGTH, charLength, nameProblem, noteProblem, parseUSPhone, phoneProblem, toE164 } from '../lib/phone';
 import { forgetClient, forgetDetails, keepCardFor, loadRememberedDetails, rememberDetails } from '../lib/storage';
@@ -205,9 +206,15 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
           </span>
         </div>
         <p className="secondary" data-testid="details-privacy">
-          {demo
-            ? `Demo version: your name and number stay on this ${device}. Nothing is sent to ${catalog.shop.name} or anywhere else.`
-            : `Your name and number are sent only to ${catalog.shop.name}, to book and manage this appointment.`}
+          {demo ? (
+            `Demo version: your name and number stay on this ${device}. Nothing is sent to ${catalog.shop.name} or anywhere else.`
+          ) : (
+            // Who gets them, as the Privacy Policy says (in a new tab: the booking stays here).
+            <>
+              Your details go to {catalog.shop.fullName} and the services that run its booking, as our{' '}
+              <NewTabLink href="/privacy">Privacy Policy</NewTabLink> explains.
+            </>
+          )}
         </p>
         <div className="step-actions">
           <button type="submit" className="button button--primary button--large step-actions__continue">

@@ -851,6 +851,11 @@
   color: var(--color-text-secondary);
 }
 
+/* "By booking, you agree to…": a line of its own, right above Book appointment. */
+.step-actions__consent {
+  flex: 1 0 100%;
+}
+
 .notice__strong {
   font-weight: 700;
 }
