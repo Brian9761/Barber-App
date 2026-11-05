@@ -246,6 +246,7 @@ export const ErrorBody = z.strictObject({
       'policy_changed',
       'not_chargeable',
       'not_started',
+      'already_completed',
       'late_cancel_fee',
       'not_checkoutable',
       'already_checked_out',

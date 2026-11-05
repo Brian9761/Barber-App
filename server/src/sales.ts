@@ -317,7 +317,7 @@ async function insertSale(
   if (appointmentId !== null) {
     await tx.query(
       `UPDATE appointments a
-          SET status = 'completed',
+          SET status = 'completed', completed_at = COALESCE(a.completed_at, $6),
               sale_id = $2, sale_total_cents = $3, sale_method = $4,
               payment_status = CASE WHEN card.paid THEN a.payment_status ELSE 'paid' END,
               paid_cents = CASE WHEN card.paid THEN a.paid_cents ELSE $3 END,

@@ -4,7 +4,7 @@ import { resolveTarget, targetOfferings, type Target } from './booking.js';
 import type { Offering } from './catalog.js';
 import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
-import { MAX_LATE_CANCEL_WINDOW_MINUTES, MIN_LATE_CANCEL_WINDOW_MINUTES, money, windowLabel } from './feecase.js';
+import { LATE_CANCEL_GRACE_MINUTES, MAX_LATE_CANCEL_WINDOW_MINUTES, MIN_LATE_CANCEL_WINDOW_MINUTES, money, windowLabel } from './feecase.js';
 import { json, readJsonObject } from './http.js';
 import type { Context } from './router.js';
 import { shopAccount } from './stripeaccount.js';
@@ -69,12 +69,16 @@ export { money };
 /**
  * The no-show fee for one menu item, in cents, or null when no fee applies: items
  * included with a cut, free items, and fees under 50¢. Percent mode rounds half
- * up to the cent; flat mode is the flat amount. (Whether protection is on, and
- * whether Stripe is set up, is decided by the caller.)
+ * up to the cent; flat mode is the flat amount. Either way the fee is never more
+ * than the booked service's price (a $20 flat fee on a $5 service is $5): the
+ * agreed estimate of the shop's loss can't be more than what the time would have
+ * earned. (Whether protection is on, and whether Stripe is set up, is decided by
+ * the caller.)
  */
 export function noShowFeeCents(item: Pick<Offering, 'priceCents' | 'priceKind'>, settings: NoShowSettings): number | null {
   if (item.priceKind === 'includedWithCut' || item.priceCents <= 0) return null;
-  const fee = settings.feeMode === 'flat' ? settings.flatCents : Math.floor((item.priceCents * settings.percent + 50) / 100);
+  const fee =
+    settings.feeMode === 'flat' ? Math.min(settings.flatCents, item.priceCents) : Math.floor((item.priceCents * settings.percent + 50) / 100);
   return fee >= MIN_NO_SHOW_FEE_CENTS ? fee : null;
 }
 
@@ -109,9 +113,10 @@ export interface FeeWarning {
 
 /**
  * "Full Service Cancellation & No-Show Fee": "Cancelling less than 1 hour before your
- * appointment, or not showing up, is charged the full service price ($40). Cancelling in the
+ * appointment, or not showing up, may be charged the full service price ($40). Cancelling in the
  * app more than 1 hour before is free." The title says "Full Service" only when the fee is
- * 100% of the service; with late cancellations off, it's only about no-shows.
+ * 100% of the service; with late cancellations off, it's only about no-shows. "May be charged",
+ * like the agreed policy's "may charge": the shop decides each time.
  */
 export function feeWarning(minCents: number, maxCents: number, settings: NoShowSettings): FeeWarning {
   const fee = feeRangeLabel(minCents, maxCents);
@@ -125,13 +130,28 @@ export function feeWarning(minCents: number, maxCents: number, settings: NoShowS
     const window = windowLabel(settings.lateCancelWindowMinutes);
     return {
       title: fullPrice ? 'Full Service Cancellation & No-Show Fee' : 'Late Cancellation & No-Show Fee',
-      message: `Cancelling less than ${window} before your appointment, or not showing up, is charged ${amount}. Cancelling in the app more than ${window} before is free.`,
+      message: `Cancelling less than ${window} before your appointment, or not showing up, may be charged ${amount}. Cancelling in the app more than ${window} before is free.`,
     };
   }
   return {
     title: 'No-Show Fee',
-    message: `Not showing up is charged ${amount}. Cancelling in the app before your appointment is free.`,
+    message: `Not showing up may be charged ${amount}. Cancelling in the app before your appointment is free.`,
   };
+}
+
+/**
+ * The line the apps and the website add under the warning for a time that's already inside the
+ * late-cancellation window when it's picked (bookings open 30 minutes ahead, and the window can be
+ * longer): "This time is less than 1 hour away, so cancelling it more than 15 minutes after
+ * booking may be charged $35." Cancelling within 15 minutes of booking is free (the grace period,
+ * feecase.ts). The server doesn't show it itself: it's written to test/fixtures/no-show-rule.json,
+ * so the Kit and the website word it exactly the same.
+ */
+export function lateCancelNotice(windowMinutes: number, feeLabel: string): string {
+  return (
+    `This time is less than ${windowLabel(windowMinutes)} away, so cancelling it more than ` +
+    `${LATE_CANCEL_GRACE_MINUTES} minutes after booking may be charged ${feeLabel}.`
+  );
 }
 
 export interface NoShowPolicy {

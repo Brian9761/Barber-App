@@ -3,7 +3,7 @@ import type Stripe from 'stripe';
 import { requireOwner } from './auth.js';
 import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
-import { FEE_KIND, feeCase, isFeeKind, nothingCharged, reasonOfKind, type FeeKind, type FeeReason } from './feecase.js';
+import { FEE_KIND, feeCaseAt, isFeeKind, nothingCharged, reasonOfKind, type FeeKind, type FeeReason } from './feecase.js';
 import { ApiError, json } from './http.js';
 import type { Context } from './router.js';
 import {
@@ -310,13 +310,15 @@ async function settleUnsent(deps: Deps, id: string, attempt: number, refusal: Ap
   return json({ appointment: appointmentJSON(row) });
 }
 
-/** What this booking (it has a card on file) can be charged for now, or why it can't be. */
+/**
+ * What this booking (it has a card on file) can be charged for now, or why it can't be
+ * (`feeCaseAt`): a no-show only once the appointment has ended, and nothing more than 7 days
+ * after its start. A try already pending is still looked up after that (see `chargeNoShowFee`):
+ * only a new request to Stripe is refused.
+ */
 function chargeCase(row: AppointmentRow, now: Date): { reason: FeeReason; refusal: null } | { reason: null; refusal: ApiError } {
-  const found = feeCase(row);
+  const found = feeCaseAt(row, now);
   if (found.reason === null) return { reason: null, refusal: notChargeable(found.refusal) };
-  if (found.reason === 'no_show' && row.start_at > now) {
-    return { reason: null, refusal: notChargeable("The appointment hasn't started yet, so it can't be a no-show.") };
-  }
   return { reason: found.reason, refusal: null };
 }
 

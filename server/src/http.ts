@@ -13,8 +13,13 @@ export const ERROR_STATUS = {
   card_required: 400,
   policy_changed: 409,
   not_chargeable: 409,
-  /** A no-show can only be marked once a booking with a card on file has started. */
+  /**
+   * A no-show can only be marked once a booking with a card on file has ended (the code keeps the
+   * name it had when the rule was the start).
+   */
   not_started: 409,
+  /** A booking with a card on file that was marked completed (or checked out) can't become a no-show. */
+  already_completed: 409,
   /**
    * Cancelling now, inside the agreed late-cancellation window, may be charged: the message is the
    * warning to show the client, and they cancel again with `acceptLateCancelFee: true`.

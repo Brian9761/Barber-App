@@ -527,14 +527,23 @@ async function loadSaleCounts(db: Queryable, range: Range): Promise<SaleCountFac
 
 type LateCancelRow = Pick<
   AppointmentRow,
-  'barber_id' | 'status' | 'cancelled_by' | 'start_at' | 'saved_card_id' | 'no_show_fee_cents' | 'late_cancel_window_minutes' | 'customer_cancelled_at'
+  | 'barber_id'
+  | 'status'
+  | 'cancelled_by'
+  | 'start_at'
+  | 'created_at'
+  | 'saved_card_id'
+  | 'no_show_fee_cents'
+  | 'late_cancel_window_minutes'
+  | 'customer_cancelled_at'
 >;
 
 /**
  * Appointments by the day they start: `booked` (still booked), `completed`, `noShows`,
  * `cancelled` (by anyone), `lateCancellations` (cancelled by the client in the app less than
- * that booking's agreed late-cancellation window before the start: the same rule as the fee,
- * feecase.ts `cancelledLate`; a booking whose policy had no window is never late) and
+ * that booking's agreed late-cancellation window before the start, and more than 15 minutes after
+ * booking: the same rule as the fee, feecase.ts `cancelledLate`; a booking whose policy had no
+ * window is never late) and
  * `upcoming` (booked, starting after now). `bookedMinutes`: the length of booked and completed
  * appointments that start on days up to today.
  */
@@ -562,7 +571,7 @@ async function loadAppointments(db: Queryable, range: Range): Promise<Appointmen
     [range.start, range.end, range.now, range.todayEnd],
   );
   const { rows: cancelled } = await db.query<LateCancelRow>(
-    `SELECT a.barber_id, a.status, a.cancelled_by, a.start_at, a.saved_card_id, a.no_show_fee_cents,
+    `SELECT a.barber_id, a.status, a.cancelled_by, a.start_at, a.created_at, a.saved_card_id, a.no_show_fee_cents,
             a.late_cancel_window_minutes, a.customer_cancelled_at
        FROM appointments a
       WHERE a.start_at >= $1 AND a.start_at < $2

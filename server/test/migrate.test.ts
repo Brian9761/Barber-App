@@ -27,6 +27,7 @@ describe('npm run migrate', () => {
       '005_stripe_connect_and_computers.sql',
       '006_sales.sql',
       '007_payment_succeeded_at.sql',
+      '008_retention.sql',
     ]);
   });
 
@@ -435,6 +436,53 @@ describe('npm run migrate', () => {
     } finally {
       await client.query('SET search_path TO public').catch(() => undefined);
       await client.query('DROP SCHEMA IF EXISTS before_007 CASCADE').catch(() => undefined);
+      client.release();
+    }
+  });
+
+  it('008 keeps when a booking was first completed, from the rows before it too, and keeps every row before it valid', async () => {
+    // 001–007 into a schema of its own, rows the way the server wrote them, then 008 on top.
+    const dir = mkdtempSync(join(tmpdir(), 'izzy-migrations-before-008-'));
+    const all = migrationFiles();
+    for (const f of all.filter((f) => f.name < '008')) writeFileSync(join(dir, f.name), f.sql);
+    const client = await db.pool.connect();
+    try {
+      await client.query('CREATE SCHEMA before_008');
+      await client.query('SET search_path TO before_008, public');
+      await migrate(client, pathToFileURL(`${dir}/`));
+      await client.query(`INSERT INTO barbers (id, name) VALUES ('flowxbori', 'Flowxbori')`);
+      const appointment = (id: number, status: string, updated: string) =>
+        client.query(
+          `INSERT INTO appointments (id, offering_id, service_id, barber_id, service_name, barber_name, price_label, price_cents,
+             price_kind, start_at, end_at, status, cancelled_by, booked_by, customer_name, created_at, updated_at)
+           VALUES ($1, 'x', 'haircut', 'flowxbori', 'Haircut', 'Flowxbori', '$35', 3500, 'fixed', $2, $3, $4, $5, 'shop', 'Walk-in', $2, $6)`,
+          [
+            `33000000-0000-4000-8000-00000000000${id}`,
+            `2026-11-0${id}T18:00:00Z`,
+            `2026-11-0${id}T18:45:00Z`,
+            status,
+            status === 'cancelled' ? 'shop' : null,
+            updated,
+          ],
+        );
+      await appointment(1, 'completed', '2026-11-01T18:50:00Z');
+      await appointment(2, 'booked', '2026-11-01T17:00:00Z');
+      await appointment(3, 'cancelled', '2026-11-01T17:00:00Z');
+      const file = all.find((f) => f.name === '008_retention.sql');
+      if (!file) throw new Error('008_retention.sql is missing');
+      writeFileSync(join(dir, file.name), file.sql);
+      expect((await migrate(client, pathToFileURL(`${dir}/`))).applied).toEqual(['008_retention.sql']);
+      const { rows } = await client.query('SELECT status, completed_at FROM appointments ORDER BY id');
+      expect(rows).toEqual([
+        { status: 'completed', completed_at: new Date('2026-11-01T18:50:00Z') },
+        { status: 'booked', completed_at: null },
+        { status: 'cancelled', completed_at: null },
+      ]);
+      // The code already live still completes appointments without it.
+      await client.query(`UPDATE appointments SET status = 'completed' WHERE id = '33000000-0000-4000-8000-000000000002'`);
+    } finally {
+      await client.query('SET search_path TO public').catch(() => undefined);
+      await client.query('DROP SCHEMA IF EXISTS before_008 CASCADE').catch(() => undefined);
       client.release();
     }
   });

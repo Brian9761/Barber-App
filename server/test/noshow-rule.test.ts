@@ -2,11 +2,12 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { resolveTarget } from '../src/booking.js';
 import { loadCatalog } from '../src/catalog.js';
-import { windowLabel } from '../src/feecase.js';
+import { cancelledLate, LATE_CANCEL_GRACE_MINUTES, windowLabel } from '../src/feecase.js';
 import {
   DEFAULT_NO_SHOW_SETTINGS,
   feeRangeLabel,
   feeWarning,
+  lateCancelNotice,
   money,
   noShowFeeCents,
   policyText,
@@ -38,10 +39,22 @@ describe('the fee rule', () => {
     expect(noShowFeeCents(fixed(15000), percent(1))).toBe(150);
   });
 
-  it('flat mode: the flat amount, whatever the price', () => {
+  it('flat mode: the flat amount, never more than the service’s price', () => {
     expect(noShowFeeCents(fixed(4000), flat(2000))).toBe(2000);
-    expect(noShowFeeCents(fixed(1600), flat(2500))).toBe(2500);
     expect(noShowFeeCents(fixed(100), flat(50))).toBe(50);
+    // Capped at the price: a $20 flat fee on a $5 service is $5, a $25 one on a $16 service is $16.
+    expect(noShowFeeCents(fixed(500), flat(2000))).toBe(500);
+    expect(noShowFeeCents(fixed(1600), flat(2500))).toBe(1600);
+    expect(noShowFeeCents(fixed(2000), flat(2000))).toBe(2000);
+    expect(noShowFeeCents(fixed(15000), flat(50_000))).toBe(15000);
+    expect(noShowFeeCents({ priceCents: 8000, priceKind: 'startingAt' }, flat(50_000))).toBe(8000);
+    // Still no fee under 50¢, and none for free items.
+    expect(noShowFeeCents(fixed(49), flat(2000))).toBeNull();
+    expect(noShowFeeCents(fixed(0), flat(2000))).toBeNull();
+  });
+
+  it('percent mode never goes over the price either (100% at most)', () => {
+    expect(noShowFeeCents(fixed(500), percent(100))).toBe(500);
   });
 
   it('"starting at" prices use the starting price', () => {
@@ -116,32 +129,39 @@ describe('the policy clients see', () => {
     expect(feeWarning(4000, 4000, percent(100))).toEqual({
       title: 'Full Service Cancellation & No-Show Fee',
       message:
-        'Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($40). Cancelling in the app more than 1 hour before is free.',
+        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($40). Cancelling in the app more than 1 hour before is free.',
     });
     // Any barber: the range of their prices.
     expect(feeWarning(5500, 6000, percent(100)).message).toBe(
-      'Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free.',
+      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free.',
     );
     // Less than the full price: the title doesn't say "Full Service".
     expect(feeWarning(2000, 2000, window(180, percent(50)))).toEqual({
       title: 'Late Cancellation & No-Show Fee',
       message:
-        'Cancelling less than 3 hours before your appointment, or not showing up, is charged $20 (50% of the service). Cancelling in the app more than 3 hours before is free.',
+        'Cancelling less than 3 hours before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling in the app more than 3 hours before is free.',
     });
     expect(feeWarning(2500, 2500, flat(2500))).toEqual({
       title: 'Late Cancellation & No-Show Fee',
       message:
-        'Cancelling less than 1 hour before your appointment, or not showing up, is charged $25. Cancelling in the app more than 1 hour before is free.',
+        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $25. Cancelling in the app more than 1 hour before is free.',
     });
     // Late cancellations off: only the no-show part.
     expect(feeWarning(4000, 4000, noLate(percent(100)))).toEqual({
       title: 'No-Show Fee',
-      message: 'Not showing up is charged the full service price ($40). Cancelling in the app before your appointment is free.',
+      message: 'Not showing up may be charged the full service price ($40). Cancelling in the app before your appointment is free.',
     });
     expect(feeWarning(2000, 2000, noLate(flat(2000)))).toEqual({
       title: 'No-Show Fee',
-      message: 'Not showing up is charged $20. Cancelling in the app before your appointment is free.',
+      message: 'Not showing up may be charged $20. Cancelling in the app before your appointment is free.',
     });
+  });
+
+  it('the in-window notice: cancelling more than 15 minutes after booking may be charged', () => {
+    expect(lateCancelNotice(60, '$35')).toBe('This time is less than 1 hour away, so cancelling it more than 15 minutes after booking may be charged $35.');
+    expect(lateCancelNotice(90, '$55–$60')).toBe(
+      'This time is less than 90 minutes away, so cancelling it more than 15 minutes after booking may be charged $55–$60.',
+    );
   });
 
   it('any barber: the range of the barbers’ fees; one barber: their fee', () => {
@@ -228,7 +248,59 @@ describe('test/fixtures/no-show-rule.json (read by the Kit)', () => {
       })),
     );
     const windows = [30, 45, 59, 60, 61, 90, 120, 150, 180, 360, 720, 1440, 2880].map((minutes) => ({ minutes, label: windowLabel(minutes) }));
-    const document = { fees, policies, windows };
+    // Late cancellations with the booking time (the 15-minute grace period): a 10 AM appointment,
+    // booked `bookedBefore` minutes before it and cancelled `cancelledAfter` minutes after booking.
+    const start = new Date('2026-11-03T18:00:00Z');
+    const lateCancels = (
+      [
+        [60, 30, 14],
+        [60, 30, 15],
+        [60, 30, 16],
+        [60, 45, 1],
+        [60, 45, 44],
+        [60, 120, 30],
+        [60, 120, 61],
+        [60, 120, 90],
+        [60, 61, 2],
+        [60, 61, 14],
+        [60, 61, 16],
+        [30, 30, 14],
+        [30, 30, 16],
+        [2880, 1440, 14],
+        [2880, 1440, 16],
+        [2880, 4320, 2880],
+      ] as const
+    ).map(([windowMinutes, bookedBefore, cancelledAfter]) => {
+      const createdAt = new Date(start.getTime() - bookedBefore * 60_000);
+      const cancelledAt = new Date(createdAt.getTime() + cancelledAfter * 60_000);
+      const late = cancelledLate({
+        status: 'cancelled',
+        cancelled_by: 'customer',
+        start_at: start,
+        created_at: createdAt,
+        saved_card_id: '00000000-0000-4000-8000-0000000000c1',
+        no_show_fee_cents: 3500,
+        late_cancel_window_minutes: windowMinutes,
+        customer_cancelled_at: cancelledAt,
+      });
+      return {
+        start: start.toISOString().replace('.000Z', 'Z'),
+        createdAt: createdAt.toISOString().replace('.000Z', 'Z'),
+        cancelledAt: cancelledAt.toISOString().replace('.000Z', 'Z'),
+        lateCancelWindowMinutes: windowMinutes,
+        late,
+      };
+    });
+    // The line under the warning for a time already inside the window when it's picked.
+    const notices = (
+      [
+        [60, '$35'],
+        [30, '$17.50'],
+        [90, '$55–$60'],
+        [2880, '$5'],
+      ] as const
+    ).map(([windowMinutes, feeLabel]) => ({ lateCancelWindowMinutes: windowMinutes, feeLabel, notice: lateCancelNotice(windowMinutes, feeLabel) }));
+    const document = { fees, policies, windows, graceMinutes: LATE_CANCEL_GRACE_MINUTES, lateCancels, notices };
     const file = new URL('./fixtures/no-show-rule.json', import.meta.url);
     const text = `${JSON.stringify(document, null, 2)}\n`;
     if (process.env.UPDATE_CONTRACT_FIXTURES === '1' || !existsSync(file)) writeFileSync(file, text);
@@ -268,7 +340,7 @@ describe('GET /api/no-show-policy', () => {
       warning: {
         title: 'Full Service Cancellation & No-Show Fee',
         message:
-          'Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($35). Cancelling in the app more than 1 hour before is free.',
+          'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($35). Cancelling in the app more than 1 hour before is free.',
       },
     });
     const any = await h.call('GET', '/api/no-show-policy?serviceId=haircut-and-beard&barberId=any');
@@ -292,7 +364,7 @@ describe('GET /api/no-show-policy', () => {
       lateCancelWindowMinutes: null,
       warning: {
         title: 'No-Show Fee',
-        message: 'Not showing up is charged the full service price ($35). Cancelling in the app before your appointment is free.',
+        message: 'Not showing up may be charged the full service price ($35). Cancelling in the app before your appointment is free.',
       },
     });
 
@@ -303,6 +375,22 @@ describe('GET /api/no-show-policy', () => {
     });
     await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { enabled: false } });
     expect((await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.required).toBe(false);
+  });
+
+  it('a flat fee is capped at the service’s price, in the policy and the warning', async () => {
+    await protectionOn(h);
+    await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { feeMode: 'flat', flatCents: 2000 } });
+    const SHAVE = 'carlos-rafael/a2f11804-e406-41f3-b763-6ebb3bddd1b0'; // a $5 hot lather shave
+    const shave = (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(SHAVE)}`)).body;
+    expect(shave).toMatchObject({ required: true, minFeeCents: 500, maxFeeCents: 500 });
+    expect(shave.policyText).toBe(
+      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card. Cancelling in the app more than 1 hour before is free.",
+    );
+    expect(shave.warning.message).toBe(
+      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling in the app more than 1 hour before is free.',
+    );
+    // A $35 service keeps the $20 flat fee.
+    expect((await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.minFeeCents).toBe(2000);
   });
 
   it('turns down a target that isn’t on the menu, like availability', async () => {

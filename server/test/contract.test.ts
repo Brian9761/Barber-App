@@ -179,12 +179,9 @@ describe('contract fixtures (API v1)', () => {
     // Availability last, so it shows a mix of free barbers.
     check('availability', await h.call('GET', '/api/availability?serviceId=haircut&barberId=any&from=2026-11-03&days=2'));
 
-    // The shop changes the fee; then a client who booked with a card doesn't come (Tuesday 10:20 AM).
+    // The shop changes the fee; a client books Julian's 11 AM with the card.
     check('no-show-settings-updated', await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { feeMode: 'flat', flatCents: 2500 } }));
-    h.setNow('2026-11-03T18:20:00Z');
-    await h.call('PATCH', `/api/owner/appointments/${created.appointment.id}`, { ...owner, body: { status: 'noShow' } });
-    check('no-show-fee-charged', await h.call('POST', `/api/owner/appointments/${created.appointment.id}/no-show-fee`, owner));
-    // Another one, whose card is declined.
+    h.setNow('2026-11-03T17:30:00Z');
     const later = await h.call('POST', '/api/appointments', {
       headers: cardHeaders,
       body: {
@@ -194,7 +191,13 @@ describe('contract fixtures (API v1)', () => {
         noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(JULIAN45)}`)).body.policyText,
       },
     });
-    h.setNow('2026-11-03T19:25:00Z');
+    expect(later.status, later.text).toBe(201);
+    // The client of the 10 AM didn't come (marked at 10:50 AM, after the end).
+    h.setNow('2026-11-03T18:50:00Z');
+    await h.call('PATCH', `/api/owner/appointments/${created.appointment.id}`, { ...owner, body: { status: 'noShow' } });
+    check('no-show-fee-charged', await h.call('POST', `/api/owner/appointments/${created.appointment.id}/no-show-fee`, owner));
+    // Nor the 11 AM's, whose card is declined.
+    h.setNow('2026-11-03T19:55:00Z');
     await h.call('PATCH', `/api/owner/appointments/${later.body.appointment.id}`, { ...owner, body: { status: 'noShow' } });
     h.stripe.nextCharge = 'insufficient_funds';
     check('no-show-fee-declined', await h.call('POST', `/api/owner/appointments/${later.body.appointment.id}/no-show-fee`, owner));
@@ -321,6 +324,12 @@ describe('contract fixtures (API v1)', () => {
     examples.late_cancel_fee = await h.call('POST', `/api/appointments/${protectedBooking.body.appointment.id}/cancel`, {
       headers: { 'x-manage-token': protectedBooking.body.manageToken },
     });
+    // The client came after all: once completed, it can't become a no-show.
+    await h.call('PATCH', `/api/owner/appointments/${protectedBooking.body.appointment.id}`, { owner: true, body: { status: 'completed' } });
+    examples.already_completed = await h.call('PATCH', `/api/owner/appointments/${protectedBooking.body.appointment.id}`, {
+      owner: true,
+      body: { status: 'noShow' },
+    });
     // The shop's own Stripe account and computer sign-in.
     examples.stripe_connect_off = await h.call('POST', '/api/owner/stripe/connect', { owner: true, body: { returnTo: 'app' } });
     await h.call('POST', '/api/owner/computer-codes', { owner: true });
@@ -361,6 +370,7 @@ describe('contract fixtures (API v1)', () => {
       policy_changed: 409,
       not_chargeable: 409,
       not_started: 409,
+      already_completed: 409,
       late_cancel_fee: 409,
       stripe_not_configured: 503,
       owner_not_configured: 503,

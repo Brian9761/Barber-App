@@ -55,11 +55,11 @@ async function book(cardToken: string, start = TUE10, phone = '4425550150') {
   });
 }
 
-/** A booking with a card on file whose client didn't come, marked as a no-show after the start. */
+/** A booking with a card on file whose client didn't come, marked as a no-show after its (45-minute) end. */
 async function noShow(cardToken: string, start = TUE10, phone?: string): Promise<string> {
   const booked = await book(cardToken, start, phone);
   expect(booked.status, booked.text).toBe(201);
-  h.setNow(new Date(Date.parse(start) + 20 * 60_000).toISOString());
+  h.setNow(new Date(Date.parse(start) + 50 * 60_000).toISOString());
   expect((await h.call('PATCH', `/api/owner/appointments/${booked.body.appointment.id}`, { ...owner, body: { status: 'noShow' } })).status).toBe(200);
   return booked.body.appointment.id;
 }
@@ -334,7 +334,7 @@ describe('saved cards and fees with a connected account', () => {
     expect(again.status).toBe(400);
     expect(again.body.error).toEqual({ code: 'card_required', message: 'Add your card again: the shop changed its payment account.' });
     // The booking made with it is kept, but its fee can't be charged with the new account.
-    h.setNow('2026-11-05T18:20:00Z');
+    h.setNow('2026-11-05T18:50:00Z');
     await h.call('PATCH', `/api/owner/appointments/${booked.body.appointment.id}`, { ...owner, body: { status: 'noShow' } });
     h.stripe.calls.length = 0;
     const refused = await charge(booked.body.appointment.id);
