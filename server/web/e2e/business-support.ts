@@ -2,6 +2,7 @@
 // started with (e2e/serve.ts), the owner API with that key (as the iPhone app calls it),
 // signing in on the website with a code from it, and the Business pages' own checks.
 
+import { readFileSync } from 'node:fs';
 import type { APIRequestContext, Page, TestInfo } from '@playwright/test';
 import { expect, isPhone, screenshot } from './support.js';
 
@@ -56,11 +57,8 @@ export async function shot(page: Page, testInfo: TestInfo, name: string, options
   await screenshot(page, testInfo, name, { fullPage: !options.panel });
 }
 
-/** A tiny PNG (an 8×8 photo, red and blue), for the product photo: the page makes a JPEG of it. */
-export const PHOTO_PNG = Buffer.from(
-  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAIklEQVR4nGO8LiLDAAMe1nvgbCYGHIB0CUZ5/xtUMgqnBAA2TAObCafr/gAAAABJRU5ErkJggg==',
-  'base64',
-);
+/** A photo for a product: the site's own 192 px icon, a PNG (the page makes a JPEG of it). */
+export const PHOTO_PNG = readFileSync(new URL('../public/icon-192.png', import.meta.url));
 
 /** Chrome's own reading of the Business manifest: it parses cleanly, and nothing stands in the way of installing it. */
 export async function expectBusinessInstallable(page: Page, request: APIRequestContext): Promise<void> {

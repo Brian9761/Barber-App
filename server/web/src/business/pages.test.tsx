@@ -225,6 +225,18 @@ describe('Today', () => {
     expect((await screen.findByTestId('day-empty')).textContent).toContain('Walk-ins can still be checked out with New sale.');
     expect(screen.getByTestId('sales-totals').textContent).toBe('No sales yet. They show here as you check clients out.');
   });
+
+  it('says voided sales don’t count when the only sales were voided', async () => {
+    signedIn();
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [saleVoided.sale], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    expect(await screen.findByText("No sales yet. Voided sales don't count.")).toBeTruthy();
+    expect(screen.getByTestId('sale-row').textContent).toContain('Voided: Rang up twice');
+  });
 });
 
 describe('Analytics', () => {

@@ -132,7 +132,9 @@ export function SalesList({
             {day === null
               ? 'Loading…'
               : day.totals.count === 0
-                ? 'No sales yet. They show here as you check clients out.'
+                ? day.sales.length > 0
+                  ? "No sales yet. Voided sales don't count."
+                  : 'No sales yet. They show here as you check clients out.'
                 : `${day.totals.count} ${day.totals.count === 1 ? 'sale' : 'sales'} · ${moneyWithCommas(day.totals.totalCents)}`}
           </p>
         </div>
