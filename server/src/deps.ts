@@ -44,6 +44,12 @@ export interface StripeClient {
   /** No-show protection: a Customer to save the card to, and Checkout in setup mode to collect it. */
   customers: {
     create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer>;
+    /** Deleting a saved card's Customer (retention.ts): Stripe can't charge anything saved under it any more. */
+    del(id: string, params?: Stripe.CustomerDeleteParams, options?: Stripe.RequestOptions): Promise<Stripe.DeletedCustomer>;
+  };
+  /** Deleting a saved card (retention.ts): detached from its Customer, it can never be used again. */
+  paymentMethods: {
+    detach(id: string, params?: Stripe.PaymentMethodDetachParams, options?: Stripe.RequestOptions): Promise<Stripe.PaymentMethod>;
   };
   checkout: {
     sessions: {

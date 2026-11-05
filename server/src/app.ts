@@ -1,5 +1,5 @@
 import { cancelAppointment, getAppointment, getAvailability, getOwnerAvailability, listOwnerAppointments, patchOwnerAppointment, postAppointment, postOwnerAppointment } from './appointments.js';
-import { cardCheckoutCancel, cardCheckoutReturn, createCardCheckout, saveCard } from './cards.js';
+import { cardCheckoutCancel, cardCheckoutReturn, createCardCheckout, deleteCard, saveCard } from './cards.js';
 import {
   createComputerCode,
   createComputerSession,
@@ -41,6 +41,7 @@ export function createRouter(): Router {
       .on('GET', '/api/cards/return', cardCheckoutReturn)
       .on('GET', '/api/cards/cancel', cardCheckoutCancel)
       .on('POST', '/api/cards', saveCard)
+      .on('DELETE', '/api/cards', deleteCard)
       // Signing in on a computer with a code from the Business app
       .on('POST', '/api/computer-sessions', createComputerSession)
       // Stripe's way back after connecting the shop's own account (a browser lands here)

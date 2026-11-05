@@ -47,6 +47,8 @@ import { UUID_RE } from './validation.js';
 const notFound = () => new ApiError('not_found', "We couldn't find that appointment.");
 const notChargeable = (message: string) => new ApiError('not_chargeable', message);
 export const OLD_ACCOUNT_MESSAGE = "This card was saved with the shop's old Stripe account.";
+/** The card was deleted (the client removed it, or it went unused): nothing can be charged to it. */
+export const CARD_DELETED_MESSAGE = "The client's saved card was deleted, so it can't be charged.";
 /** A fee whose answer was lost, on a card Stripe can't be asked about from here (see `chargeNoShowFee`). */
 export const UNCHECKABLE_FEE_MESSAGE =
   "This card was saved with the shop's old Stripe account, so the app can't check whether its fee went through. Look for it in that Stripe account's Dashboard.";
@@ -347,10 +349,13 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (row.no_show_fee_status === 'pending' && row.no_show_fee_payment_intent_id) {
       return { kind: 'retrieve', row, paymentIntentId: row.no_show_fee_payment_intent_id };
     }
-    if (!row.saved_card_id || row.no_show_fee_cents === null || !row.stripe_customer_id || !row.stripe_payment_method_id) {
+    if (!row.saved_card_id || row.no_show_fee_cents === null) {
       throw notChargeable("This booking has no card on file, so there's no fee to charge.");
     }
     const chargeable = chargeCase(row, now);
+    // The card was deleted at Stripe (retention.ts) once no booking needed it: why there's no fee, if
+    // there's another reason, or else that the card is gone.
+    if (!row.stripe_customer_id || !row.stripe_payment_method_id) throw chargeable.refusal ?? notChargeable(CARD_DELETED_MESSAGE);
     // The card can only be charged on the account it was saved on, in the mode it was saved in,
     // and those must be the shop's now.
     const savedLive = row.card_livemode === true;

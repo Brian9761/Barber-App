@@ -317,7 +317,10 @@ export type StripeCall =
   | 'create account'
   | 'retrieve account'
   | 'create account link'
-  | 'create terminal location';
+  | 'create terminal location'
+  | 'detach card'
+  | 'delete customer'
+  | 'send receipt';
 
 /** The parts of a stripe-node error worth logging. */
 export interface StripeErrorLike {

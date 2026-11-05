@@ -110,6 +110,8 @@ describe('every Stripe call for the shop goes to its connected account', () => {
     await site('a fee whose answer was lost', () => charge(lost));
     await site('…looked up at Stripe before charging again', () => charge(lost));
     await site('another onboarding link', () => h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'web' } }));
+    const spare = await saveCard('192.0.2.53');
+    await site('a client removes a saved card', () => h.call('DELETE', '/api/cards', { headers: { 'x-card-token': spare } }));
 
     expect(sites.map((s) => [s.site, methods(s.calls)])).toEqual([
       ['connect (the account and its onboarding link)', ['accounts.create', 'accountLinks.create']],
@@ -124,6 +126,7 @@ describe('every Stripe call for the shop goes to its connected account', () => {
       ['a fee whose answer was lost', ['paymentIntents.create']],
       ['…looked up at Stripe before charging again', ['paymentIntents.list']],
       ['another onboarding link', ['accountLinks.create']],
+      ['a client removes a saved card', ['paymentMethods.detach', 'customers.del']],
     ]);
     const platformCalls = new Set(['accounts.create', 'accounts.retrieve', 'accountLinks.create']);
     for (const call of h.stripe.calls) {

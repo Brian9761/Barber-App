@@ -72,6 +72,8 @@ export class FakeStripe implements StripeClient {
   loseNextAccountAnswer = false;
   /** accounts.create's idempotency keys, with what Stripe answered. */
   private readonly accountKeys = new Map<string, { params: string; id: string }>();
+  /** Customers deleted at Stripe (customers.del), by id. */
+  readonly deletedCustomers = new Set<string>();
   /** Idempotency keys Stripe has seen, with what it answered (like Stripe, a repeat gets the same answer). */
   private readonly idempotent = new Map<string, { params: string; intent?: Stripe.PaymentIntent; error?: unknown }>();
   /** When each charge was made (Unix seconds), by id: a PaymentIntent's `latest_charge`, once its card went through. */
@@ -375,6 +377,47 @@ export class FakeStripe implements StripeClient {
       this.customerIds.push(id);
       this.accountOf.set(id, this.on(options));
       return { id, object: 'customer', description: params.description ?? null, metadata: params.metadata ?? {} } as unknown as Stripe.Customer;
+    },
+    // Like Stripe: deleting a Customer detaches its cards, and a deleted one can't be deleted (or found) again.
+    del: async (id: string, params?: Stripe.CustomerDeleteParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'customers.del', params: { id, ...params }, options });
+      this.maybeFail();
+      if (!this.customerIds.includes(id) || this.deletedCustomers.has(id) || !this.visible(id, options)) {
+        throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'id', statusCode: 404 }, `No such customer: '${id}'`);
+      }
+      this.deletedCustomers.add(id);
+      for (const { method } of this.savedMethods()) if (method.customer === id) method.customer = null;
+      return { id, object: 'customer', deleted: true } as Stripe.DeletedCustomer;
+    },
+  };
+
+  /** The cards saved through Checkout, as Stripe keeps them, with the account each was saved on. */
+  private savedMethods(): { method: { id: string; customer: string | null }; account: string | null }[] {
+    return [...this.sessions.values()].flatMap((session) => {
+      const setup = session.setup_intent as Stripe.SetupIntent | null;
+      const method = setup?.payment_method as unknown as { id: string; customer: string | null } | null | undefined;
+      return method && typeof method === 'object' ? [{ method, account: this.accountOf.get(session.id) ?? null }] : [];
+    });
+  }
+
+  // Like Stripe: a card detached from its Customer can never be used again; detaching it again is a 400.
+  readonly paymentMethods = {
+    detach: async (id: string, params?: Stripe.PaymentMethodDetachParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'paymentMethods.detach', params: { id, ...params }, options });
+      this.maybeFail();
+      const method = this.savedMethods().find((m) => m.method.id === id && m.account === this.on(options))?.method;
+      if (!method) {
+        throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'payment_method', statusCode: 404 }, `No such PaymentMethod: '${id}'`);
+      }
+      if (method.customer === null) {
+        throw stripeError(
+          'StripeInvalidRequestError',
+          { statusCode: 400 },
+          'The payment method you provided is not attached to a customer so detachment is impossible.',
+        );
+      }
+      method.customer = null;
+      return { id, object: 'payment_method', type: 'card', customer: null } as unknown as Stripe.PaymentMethod;
     },
   };
 

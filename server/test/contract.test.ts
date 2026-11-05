@@ -224,6 +224,14 @@ describe('contract fixtures (API v1)', () => {
     h.advance(2);
     check('late-cancel-fee-charged', await h.call('POST', `/api/owner/appointments/${lateBooking.body.appointment.id}/no-show-fee`, owner));
     check('payments-with-fees', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
+    // The client removes the card: the 11 AM's declined fee may still be tried again this week, so it waits.
+    check('card-deletion-scheduled', await h.call('DELETE', '/api/cards', { headers: cardHeaders }));
+    // A card no booking uses is deleted at once.
+    const spareToken = Buffer.alloc(32, 2).toString('base64url');
+    const spare = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': spareToken }, body: { offeringId: FLOW45 } });
+    h.stripe.completeSession(spare.body.sessionId);
+    expect((await h.call('POST', '/api/cards', { headers: { 'x-card-token': spareToken }, body: { sessionId: spare.body.sessionId } })).status).toBe(201);
+    check('card-deletion', await h.call('DELETE', '/api/cards', { headers: { 'x-card-token': spareToken } }));
   });
 
   it('the shop’s own Stripe account (connect mode) and signing in on a computer', async () => {

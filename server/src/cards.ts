@@ -11,6 +11,7 @@ import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
 import { accountMatch, requestOptions, shopAccount, shopStripe, stripeFailure } from './stripeaccount.js';
 import { localDate } from './time.js';
+import { removeCard } from './retention.js';
 import { parse, shortId } from './validation.js';
 
 // Saving a card for no-show protection, with Stripe Checkout in setup mode: the
@@ -69,9 +70,10 @@ function requiredCardToken(request: Request): string {
 export interface SavedCardRow {
   id: string;
   token_hash: string;
-  checkout_session_id: string;
-  stripe_customer_id: string;
-  stripe_payment_method_id: string;
+  /** Stripe's ids: null once the card is removed (migrations/008). */
+  checkout_session_id: string | null;
+  stripe_customer_id: string | null;
+  stripe_payment_method_id: string | null;
   brand: string;
   last4: string;
   exp_month: number;
@@ -80,6 +82,15 @@ export interface SavedCardRow {
   created_at: Date;
   /** The connected account the card is saved on (migrations/005); null when saved with the server's own key. */
   stripe_account_id: string | null;
+  /** When it was deleted at Stripe (retention.ts); it can't book or be charged since. */
+  removed_at: Date | null;
+  /** When the client asked to delete it (DELETE /api/cards) while a booking still needed it. It can't book again. */
+  delete_requested_at: Date | null;
+}
+
+/** Whether a saved card can still be used for a new booking: not removed, and the client hasn't asked to delete it. */
+export function cardKept(card: Pick<SavedCardRow, 'removed_at' | 'delete_requested_at'>): boolean {
+  return card.removed_at === null && card.delete_requested_at === null;
 }
 
 export function savedCardJSON(row: Pick<SavedCardRow, 'brand' | 'last4' | 'exp_month' | 'exp_year'>) {
@@ -226,8 +237,12 @@ function sameDigest(hexA: string, hexB: string): boolean {
   return timingSafeEqual(Buffer.from(hexA, 'hex'), Buffer.from(hexB, 'hex'));
 }
 
-/** Saving it again with the same token and session (a lost answer): the same card; anything else with that token: a 400. */
+/**
+ * Saving it again with the same token and session (a lost answer): the same card; anything else with
+ * that token: a 400. A card the client removed (or asked to) isn't saved again: a 404, add it again.
+ */
 function repeat(existing: SavedCardRow, sessionId: string): Response {
+  if (!cardKept(existing)) throw unknownSession();
   if (existing.checkout_session_id !== sessionId) throw tokenUsed();
   return json({ card: savedCardJSON(existing) });
 }
@@ -239,7 +254,7 @@ export async function saveCard(ctx: Context): Promise<Response> {
   const { sessionId } = parse(saveBody, await readJsonObject(request));
   const tokenHash = hashManageToken(token);
 
-  // Answered before the rate limit: it saves nothing new.
+  // Answered before the rate limit: it saves nothing new. A card the client removed stays removed.
   const existing = await findCardByToken(deps.db, token);
   if (existing) return repeat(existing, sessionId);
 
@@ -303,6 +318,27 @@ function normalizedBrand(brand: string | null | undefined): string {
   return /^[a-z0-9_]{1,40}$/.test(b) ? b : 'unknown';
 }
 
+// DELETE /api/cards (X-Card-Token): the client removes their saved card ("Remove card", "Forget my
+// details", "Forget me", or right after a booking made without Remember me).
+
+export const CARD_DELETED_MESSAGE = "Your saved card is deleted. It can't be charged any more.";
+export const CARD_SCHEDULED_MESSAGE = 'Your card will be deleted as soon as your appointments no longer need it.';
+
+/**
+ * Deletes the card at Stripe now (`deleted`), or, while a booking still needs it (upcoming, still
+ * chargeable before the 7-day deadline, or a fee pending), marks it so the daily job deletes it once
+ * none does (`scheduled`). Either way it can't book again. Doing it again answers the same; a token
+ * with no card is a 404.
+ */
+export async function deleteCard(ctx: Context): Promise<Response> {
+  const { request, deps } = ctx;
+  const token = requiredCardToken(request);
+  const card = await findCardByToken(deps.db, token);
+  if (!card) throw new ApiError('not_found', "We couldn't find that card.");
+  const status = await removeCard(deps, card, deps.now());
+  return json({ cardDeletion: { status, message: status === 'deleted' ? CARD_DELETED_MESSAGE : CARD_SCHEDULED_MESSAGE } });
+}
+
 // Booking with a card on file (POST /api/appointments with X-Card-Token).
 
 /** What a protected booking stores: the card, the policy the client agreed to, and each possible offering's fee. */
@@ -335,7 +371,9 @@ export async function noShowTermsForBooking(
   const { policy, fees } = protectionFor(target, await loadNoShowSettings(deps.db), true);
   if (!policy.required || !policy.policyText) return null;
   if (!cardToken) throw new ApiError('card_required', "Add a card to book this time. You won't be charged now.");
-  const card = await findCardByToken(deps.db, cardToken);
+  // A card the client removed (or asked to, or saved without Remember me) doesn't book again.
+  const found = await findCardByToken(deps.db, cardToken);
+  const card = found && cardKept(found) ? found : null;
   const match = card ? accountMatch(card, shop) : null;
   // A card saved with the shop's earlier Stripe account can't be charged with this one.
   if (match === 'otherAccount') throw new ApiError('card_required', 'Add your card again: the shop changed its payment account.');
