@@ -48,7 +48,7 @@ This page explains every number in plain words. The names in parentheses
 | **Done** (`completed`) | Appointments marked Done (or checked out). |
 | **No-shows** | Appointments marked as no-shows. |
 | **Cancelled** | Appointments cancelled by the client or by the shop. |
-| **Late cancellations** | Clients who cancelled in the app later than the booking's agreed policy allowed for free (for example, less than 1 hour before). A booking whose policy had no late-cancellation rule is never late. |
+| **Late cancellations** | Clients who cancelled in the app later than the booking's agreed policy allowed for free (for example, less than 1 hour before), and more than 15 minutes after booking (cancelling within 15 minutes of booking is always free). A booking whose policy had no late-cancellation rule is never late. |
 | **Upcoming** | Booked appointments that haven't started yet. |
 | **Completion rate** | Done divided by (Done + no-shows). |
 | **No-show rate** | No-shows divided by (Done + no-shows). |
@@ -108,10 +108,17 @@ The leaderboard and the top barber stay the whole shop's.
   hours stop counting.
 - **Checked-out appointments** can't be reopened, cancelled or marked a
   no-show until their sale is voided, so the numbers always match what
-  happened.
+  happened. One booked with a card on file never becomes a no-show once
+  it's been completed, even after that (the Cancellation & No-Show Policy).
 - Payments taken by card **without** a checkout (from an older version of
   the app) don't show up here, except as the appointment's booked price
   when it's marked Done.
+- **Clients' details are removed after 12 months** (the shop's Privacy
+  Policy): the client's name, number, email and note on an appointment, and
+  the name on a sale, are deleted 12 months later (a client can also ask
+  sooner). The appointments and sales themselves stay, with what was booked,
+  the prices, what happened and the fees, so every number here stays the same:
+  the analytics never use names, numbers, emails or notes.
 
 For developers: the definitions are in `server/src/analytics.ts`, and
 `server/test/analytics.test.ts` checks every one against a week of shop data

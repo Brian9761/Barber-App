@@ -590,8 +590,8 @@ describe('fees in the analytics', () => {
     });
     expect(booked.status, booked.text).toBe(201);
     const id = booked.body.appointment.id as string;
-    // Tuesday 10:20 AM: a no-show. Charging the fee, her bank wants her to approve it first.
-    h.setNow('2026-11-03T18:20:00Z');
+    // Tuesday 10:50 AM, after her 10–10:45: a no-show. Charging the fee, her bank wants her to approve it first.
+    h.setNow('2026-11-03T18:50:00Z');
     expect((await h.call('PATCH', `/api/owner/appointments/${id}`, { ...owner, body: { status: 'noShow' } })).status).toBe(200);
     h.stripe.nextCharge = 'requires_action';
     const tried = await h.call('POST', `/api/owner/appointments/${id}/no-show-fee`, owner);

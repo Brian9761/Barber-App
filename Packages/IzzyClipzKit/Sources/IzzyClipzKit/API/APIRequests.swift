@@ -153,6 +153,11 @@ extension IzzyAPI {
         var sessionId: String
     }
 
+    /// `POST /api/owner/payments/:id/receipt` body `{ email }`.
+    struct ReceiptBody: Encodable, Hashable, Sendable {
+        var email: String
+    }
+
     /// `PATCH /api/owner/appointments/:id` body `{ status }`.
     public struct StatusChange: Encodable, Hashable, Sendable {
         public var status: AppointmentStatus
@@ -300,7 +305,10 @@ extension IzzyAPI {
         public var description: String?
         /// With a `sale`, the same as its own (or leave this out).
         public var appointmentId: String?
-        /// Stripe emails the receipt here.
+        /// Leave it `nil`: the server turns an email down here (a 400). California's Song-Beverly
+        /// Credit Card Act bars asking for one before a card payment, so the receipt is offered after
+        /// the payment went through, with `OwnerAPI.sendReceipt(paymentId:email:)`. Kept so older
+        /// code still builds.
         public var receiptEmail: String?
         /// The checkout's ticket, recorded as a card sale once the payment goes through (sent without
         /// its `method`). The server checks it like a cash sale first (400, 409 `not_checkoutable` or

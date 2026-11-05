@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "already_completed",
+    "message": "This appointment was marked completed, so it can't become a no-show."
+  }
+}

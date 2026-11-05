@@ -52,6 +52,7 @@ final class ContractFixtureTests: XCTestCase {
         kind(IzzyAPI.NoShowPolicy.self, "GET /api/no-show-policy", has("required")),
         kind(IzzyAPI.CardCheckout.self, "POST /api/cards/checkout", has("sessionId")),
         kind(IzzyAPI.SavedCardResponse.self, "POST /api/cards", has("card")),
+        kind(IzzyAPI.CardDeletionResponse.self, "DELETE /api/cards", has("cardDeletion")),
         kind(IzzyAPI.NoShowSettingsResponse.self, "{ noShowSettings }", has("noShowSettings")),
         // The shop's own Stripe account and signing in on a computer
         kind(IzzyAPI.StripeConnection.self, "GET /api/owner/stripe", has("dashboardUrl")),

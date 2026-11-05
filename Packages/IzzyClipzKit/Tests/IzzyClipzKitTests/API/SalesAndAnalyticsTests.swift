@@ -617,6 +617,7 @@ final class OwnerAPIDefaultsTests: XCTestCase {
             ("sales", { _ = try await api.sales(on: day) }),
             ("void", { _ = try await api.voidSale(id: "s1") }),
             ("analytics", { _ = try await api.analytics(IzzyAPI.AnalyticsQuery(day: day)) }),
+            ("receipt", { _ = try await api.sendReceipt(paymentId: "pi_1", email: "client@example.com") }),
         ]
         for (name, call) in calls {
             do {

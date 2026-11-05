@@ -16,7 +16,7 @@
       "description": "No-show fee: Haircut with Julian, Tue, Nov 3 at 11:00 AM",
       "appointmentId": "00000000-0000-4000-8000-000000000011",
       "status": "requires_payment_method",
-      "createdAt": "2026-11-03T19:25:00Z",
+      "createdAt": "2026-11-03T19:55:00Z",
       "kind": "noShowFee",
       "saleId": null
     },
@@ -26,7 +26,7 @@
       "description": "No-show fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM",
       "appointmentId": "00000000-0000-4000-8000-000000000005",
       "status": "succeeded",
-      "createdAt": "2026-11-03T18:20:00Z",
+      "createdAt": "2026-11-03T18:50:00Z",
       "kind": "noShowFee",
       "saleId": null
     }

@@ -63,9 +63,22 @@ public protocol ShopAPI: Sendable {
     /// `POST /api/cards`: saves the card from a completed Checkout Session under `token` (the
     /// one the checkout was started with). Safe to call again after a lost answer.
     func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard
+
+    /// `DELETE /api/cards`: the client removes the card saved under `token` ("Remove card", "Forget
+    /// my details", and right after a booking made without Remember me). The server deletes it at
+    /// Stripe now (`.deleted`), or as soon as no booking needs it any more (`.scheduled`); either way
+    /// it can't book again. Safe to call again. Forget the token on the phone whatever it answers
+    /// (a 404 means there was no card to delete).
+    func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion
 }
 
 extension ShopAPI {
+    /// What a server from before DELETE /api/cards answers: 404 `not_found`, so a conformer (an
+    /// app's fake) that hasn't been taught it yet still builds.
+    public func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion {
+        throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "This isn't available here yet.", status: 404)
+    }
+
     /// `cancelAppointment(id:manageToken:acceptLateCancelFee:)` before any warning: a cancellation
     /// inside the late-cancellation window comes back as `APIError.lateCancelFee`.
     public func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
@@ -166,6 +179,13 @@ public protocol OwnerAPI: Sendable {
     /// a ticket, records the sale: see `Payment.saleId`).
     func completePayment(id: String) async throws -> IzzyAPI.Payment
 
+    /// `POST /api/owner/payments/:id/receipt`: once a card payment went through, Stripe emails its
+    /// receipt to `email` (sending it again with another address sends a new one). Offer it only
+    /// after the payment, as optional and only for the receipt: the server never keeps the address.
+    /// The owner key only. 400 before the payment went through, for a fee, or for an address Stripe
+    /// turns down.
+    func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment
+
     /// `GET /api/owner/payments?date=`.
     func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment]
 
@@ -262,6 +282,8 @@ extension OwnerAPI {
     public func voidSale(id: String, reason: String?) async throws -> IzzyAPI.VoidedSale { throw unavailable() }
 
     public func analytics(_ query: IzzyAPI.AnalyticsQuery) async throws -> IzzyAPI.Analytics { throw unavailable() }
+
+    public func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment { throw unavailable() }
 
     /// `voidSale(id:reason:)` without a reason.
     public func voidSale(id: String) async throws -> IzzyAPI.VoidedSale {

@@ -317,7 +317,10 @@ export type StripeCall =
   | 'create account'
   | 'retrieve account'
   | 'create account link'
-  | 'create terminal location';
+  | 'create terminal location'
+  | 'detach card'
+  | 'delete customer'
+  | 'send receipt';
 
 /** The parts of a stripe-node error worth logging. */
 export interface StripeErrorLike {
@@ -361,7 +364,7 @@ export function stripeFailure(deps: Pick<Deps, 'log'>, error: unknown, what: Str
     message: redactSecrets(e.message),
   });
   const missing = e.code === 'resource_missing' || e.statusCode === 404;
-  if ((what === 'retrieve payment' || what === 'retrieve no-show fee') && missing) {
+  if ((what === 'retrieve payment' || what === 'retrieve no-show fee' || what === 'send receipt') && missing) {
     return new ApiError('not_found', "Stripe doesn't know that payment.");
   }
   if (what === 'retrieve card checkout' && missing) {
