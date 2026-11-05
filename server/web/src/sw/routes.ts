@@ -38,8 +38,22 @@ export const CATALOG_PATH = '/api/catalog';
 /** The message a page sends to the new version's waiting worker when someone taps Reload. */
 export const SKIP_WAITING = 'SKIP_WAITING';
 
-/** The site's pages (src/App.tsx). Anything else is a page this version doesn't know. */
-const PAGES = new Set(['/', '/services', '/barbers', '/reviews', '/visit', '/app', '/appointments', '/book', SHELL]);
+/** The site's pages (src/App.tsx), the four legal ones included. Anything else is a page this version doesn't know. */
+const PAGES = new Set([
+  '/',
+  '/services',
+  '/barbers',
+  '/reviews',
+  '/visit',
+  '/app',
+  '/appointments',
+  '/book',
+  '/privacy',
+  '/terms',
+  '/cancellation-policy',
+  '/accessibility',
+  SHELL,
+]);
 const SECTIONS = ['/book/'];
 
 /** Headers that say who's asking: a request with any of them is never answered from a cache. */

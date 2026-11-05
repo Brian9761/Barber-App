@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCatalog, useShopContact } from '../data/catalog';
+import { LEGAL_DOCUMENTS } from '../legal/documents';
 import { InstallHint } from '../pwa/InstallHint';
 import { OfflineNotice } from '../pwa/OfflineNotice';
 import { useStandalone } from '../pwa/platform';
@@ -264,11 +265,21 @@ export function Footer() {
             </ul>
           </div>
         </nav>
+        {/* As on apple.com: the copyright, then the shop's policies (Privacy first), then where it is. */}
         <div className="globalfooter__legal">
           <p>
             Copyright © {year} {contact.fullName}. All rights reserved.
           </p>
-          <p>{contact.addressLines.join(', ')}</p>
+          <nav className="globalfooter__policies" aria-label="Legal">
+            <ul>
+              {LEGAL_DOCUMENTS.map((document) => (
+                <li key={document.id}>
+                  <Link to={document.path}>{document.title}</Link>
+                </li>
+              ))}
+            </ul>
+          </nav>
+          <p className="globalfooter__where">{contact.addressLines.join(', ')}</p>
         </div>
       </div>
     </footer>

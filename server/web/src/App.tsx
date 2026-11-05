@@ -3,6 +3,8 @@ import { Route, Routes } from 'react-router-dom';
 import { BookingRoutes } from './booking/BookingRoutes';
 import { BusinessLoading } from './business/BusinessLoading';
 import { Layout } from './components/Layout';
+import { Loading } from './components/ui';
+import { LEGAL_DOCUMENTS, type LegalDocumentId } from './legal/documents';
 import { AppointmentsPage } from './pages/AppointmentsPage';
 import { BarbersPage } from './pages/BarbersPage';
 import { GetTheAppPage } from './pages/GetTheAppPage';
@@ -18,6 +20,23 @@ import { VisitPage } from './pages/VisitPage';
  */
 const BusinessApp = lazy(() => import('./business/BusinessApp'));
 
+/** The legal pages, with the documents' words: loaded only when one is opened. */
+const LegalPage = lazy(() => import('./legal/LegalPage'));
+
+function Legal({ id }: { id: LegalDocumentId }) {
+  return (
+    <Suspense
+      fallback={
+        <div className="container legal-loading">
+          <Loading text="Loading…" />
+        </div>
+      }
+    >
+      <LegalPage id={id} />
+    </Suspense>
+  );
+}
+
 /**
  * React Router's future flags, set so it doesn't warn. Navigation stays outside
  * React transitions: when booking ends a step (booked, or the time was taken), the
@@ -26,7 +45,7 @@ const BusinessApp = lazy(() => import('./business/BusinessApp'));
  */
 export const ROUTER_FUTURE = { v7_startTransition: false, v7_relativeSplatPath: true } as const;
 
-/** The site's pages, all under the global nav and footer; and Izzy Clipz Business, under its own. */
+/** The site's pages (the legal ones too), all under the global nav and footer; and Izzy Clipz Business, under its own. */
 export function App() {
   return (
     <Routes>
@@ -47,6 +66,9 @@ export function App() {
         <Route path="book/*" element={<BookingRoutes />} />
         <Route path="appointments" element={<AppointmentsPage />} />
         <Route path="app" element={<GetTheAppPage />} />
+        {LEGAL_DOCUMENTS.map((document) => (
+          <Route key={document.id} path={document.id} element={<Legal id={document.id} />} />
+        ))}
         <Route path="*" element={<NotFoundPage />} />
       </Route>
     </Routes>

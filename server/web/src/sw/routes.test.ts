@@ -31,6 +31,15 @@ describe('pages', () => {
     expect(isAppPage('/booking')).toBe(false);
   });
 
+  it('opens the four legal pages offline too, a section of one included', () => {
+    for (const path of ['/privacy', '/terms', '/cancellation-policy', '/accessibility', '/privacy#saved-cards', '/terms/']) {
+      expect(page(path), path).toEqual({ kind: 'shell', page: '/index.html' });
+    }
+    // Their Markdown files aren't pages of the site.
+    expect(isAppPage('/privacy.md')).toBe(false);
+    expect(isAppPage('/privacy/policy')).toBe(false);
+  });
+
   it('opens Izzy Clipz Business from its own page, with its own manifest, also offline', () => {
     for (const path of ['/business', '/business/', '/business/today', '/business/today?source=app', '/business/analytics', '/business/settings?stripe=active', '/business/no-such-page']) {
       expect(page(path), path).toEqual({ kind: 'shell', page: '/business/index.html' });

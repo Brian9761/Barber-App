@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { build as viteBuild, type Plugin, type Rollup } from 'vite';
 import { defineConfig } from 'vitest/config';
+import { legalDocuments, legalStrict } from './tools/legal.js';
 import { precacheEntries, precacheVersion } from './tools/precache.js';
 
 // The website builds into ../public, which Vercel serves next to the API (one
@@ -135,6 +136,13 @@ function serviceWorker({ api, hosting }: { api: boolean; hosting: string }): Plu
 }
 
 /**
+ * The shop's legal documents, which the legal pages render (src/legal/texts.ts). A strict build
+ * (tools/legal.ts) publishes them as they are, so it stops, saying which file and line, while
+ * any "[TO FILL IN: …]" is left in them. Every other build is a draft.
+ */
+const LEGAL_DIR = here('../../docs/legal');
+
+/**
  * The demo's robots.txt. Search engines may read its pages, which all answer with
  * X-Robots-Tag: noindex, so none is listed: a page they weren't allowed to read could still be
  * listed from links elsewhere, since they'd never see its noindex.
@@ -165,11 +173,15 @@ export default defineConfig(({ mode }) => {
   // `--mode demo` and VITE_DEMO_MODE=1 both make the demo; the site reads it as import.meta.env.VITE_DEMO_MODE.
   if (mode === 'demo') process.env.VITE_DEMO_MODE = '1';
   const demo = process.env.VITE_DEMO_MODE === '1';
+  // The legal pages are drafts unless the build is strict; the site reads it as import.meta.env.VITE_LEGAL_STRICT.
+  const strict = legalStrict(process.env, demo);
+  process.env.VITE_LEGAL_STRICT = strict ? '1' : '';
   // The demo has no API to reach: it answers in the browser.
   const proxy: Record<string, string> = demo ? {} : { '/api': API_DEV_SERVER };
   return {
     plugins: [
       react(),
+      legalDocuments({ strict, dir: LEGAL_DIR }),
       absoluteSocialLinks(),
       businessPages(),
       ...(demo ? [demoBackend(), demoHosting()] : []),
@@ -187,8 +199,9 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       proxy,
-      // The demo reads the shop's catalog from the server's own data/catalog.json.
-      fs: { allow: ['.', '../data'] },
+      // The demo reads the shop's catalog from the server's own data/catalog.json, and the legal
+      // pages the shop's documents from docs/legal.
+      fs: { allow: ['.', '../data', '../../docs/legal'] },
     },
     preview: { proxy },
     test: {

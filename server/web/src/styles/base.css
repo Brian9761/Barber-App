@@ -256,3 +256,22 @@ li a.inline-link,
 .nowrap {
   white-space: nowrap;
 }
+
+/* Printed (a policy, say), a page is just its content: no nav, ribbons, footer or Reload bar. */
+@media print {
+  body,
+  main {
+    background: #fff;
+  }
+
+  .skip-link,
+  .globalnav,
+  .app-ribbons,
+  .globalfooter,
+  .update-bar,
+  .biz-globalbar,
+  .biz-localnav,
+  .biz-footer {
+    display: none !important;
+  }
+}

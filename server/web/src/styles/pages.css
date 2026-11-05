@@ -1107,3 +1107,11 @@
 .visit__status {
   text-wrap: balance;
 }
+
+/* ------------------------------------------------------------- Legal pages */
+
+/* While a legal page's words load (src/legal/, its own styles come with it). */
+.legal-loading {
+  padding-top: var(--space-16);
+  padding-bottom: var(--space-16);
+}

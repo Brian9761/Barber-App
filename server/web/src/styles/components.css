@@ -302,9 +302,33 @@
 .globalfooter__legal {
   display: flex;
   flex-wrap: wrap;
-  justify-content: space-between;
+  align-items: baseline;
   gap: var(--space-3) var(--space-6);
   padding-top: var(--space-5);
+}
+
+/* The shop's policies, after the copyright: every one in reach, none louder than the rest. */
+.globalfooter__policies ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  list-style: none;
+}
+
+.globalfooter__policies a {
+  display: inline-block;
+  padding: 2px 0;
+}
+
+/* Where the shop is, at the right, like apple.com's country (under the rest on a phone). */
+.globalfooter__where {
+  margin-left: auto;
+}
+
+@media (max-width: 733px) {
+  .globalfooter__where {
+    margin-left: 0;
+  }
 }
 
 /* ------------------------------------------------------------------- Buttons */
