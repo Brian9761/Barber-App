@@ -11,8 +11,11 @@
 // the port.
 //
 // Test plumbing under /__e2e/ (never part of the real server): turn the live
-// reviews and no-show protection on and off, a stand-in for Stripe's card page,
-// and a new version of the service worker (for the "A new version is ready" bar). Like Stripe, its Save and Back go to the success_url and cancel_url the
+// reviews and no-show protection on and off, a stand-in for Stripe's card page
+// (and for deleting a saved card), what became of a saved card, a booking moved
+// back in time (for the fee's rules after the end and within 7 days), and a new
+// version of the service worker (for the "A new version is ready" bar). Like
+// Stripe, the card page's Save and Back go to the success_url and cancel_url the
 // server gave the Checkout Session, so the server's own way back to the website
 // (/api/cards/return and /api/cards/cancel with to=web) is part of the test.
 // There's no Stripe key: nothing leaves this machine.
@@ -34,6 +37,7 @@ import { PGLiteSocketServer } from '@electric-sql/pglite-socket';
 import type Stripe from 'stripe';
 import { createApp } from '../../src/app.js';
 import { newManageToken } from '../../src/auth.js';
+import { findCardByToken } from '../../src/cards.js';
 import { loadCatalog } from '../../src/catalog.js';
 import { configFromEnv } from '../../src/config.js';
 import { createPool, poolDb } from '../../src/db.js';
@@ -77,23 +81,39 @@ const notHere = async (): Promise<never> => {
 };
 
 /**
- * Just the card-saving calls (Customers and Checkout in setup mode), answered like Stripe.
- * The rest of the server's Stripe client (Tap to Pay, payments, and Connect on a server that
- * has it) isn't part of these tests: those calls fail if anything makes them.
+ * Just the card-saving calls (Customers and Checkout in setup mode), answered like Stripe, and
+ * deleting a saved card (detaching it, and deleting its Customer), which DELETE /api/cards asks
+ * for once no booking needs the card. The rest of the server's Stripe client (Tap to Pay,
+ * payments, and Connect on a server that has it) isn't part of these tests: those calls fail if
+ * anything makes them.
  */
-class StandInStripe implements Pick<StripeClient, 'customers' | 'checkout'> {
+class StandInStripe implements Pick<StripeClient, 'customers' | 'checkout' | 'paymentMethods'> {
   readonly sessions = new Map<string, Stripe.Checkout.Session>();
   /** Where each session sends the browser back to, as the server asked: Save, and Back. */
   readonly returns = new Map<string, { success: string; cancel: string }>();
+  /** The Customers and cards deleted, as Stripe would no longer have them. */
+  readonly deletedCustomers = new Set<string>();
+  readonly detachedCards = new Set<string>();
   private counter = 0;
 
   readonly terminal = { connectionTokens: { create: notHere }, locations: { create: notHere } };
-  readonly paymentIntents = { create: notHere, retrieve: notHere, list: notHere };
+  readonly paymentIntents = { create: notHere, retrieve: notHere, list: notHere, update: notHere };
   readonly accounts = { create: notHere, retrieve: notHere };
   readonly accountLinks = { create: notHere };
 
   readonly customers = {
     create: async () => ({ id: `cus_e2e${String(++this.counter).padStart(6, '0')}`, object: 'customer' }) as unknown as Stripe.Customer,
+    del: async (id: string) => {
+      this.deletedCustomers.add(id);
+      return { id, object: 'customer', deleted: true } as unknown as Stripe.DeletedCustomer;
+    },
+  };
+
+  readonly paymentMethods = {
+    detach: async (id: string) => {
+      this.detachedCards.add(id);
+      return { id, object: 'payment_method', customer: null } as unknown as Stripe.PaymentMethod;
+    },
   };
 
   readonly checkout = {
@@ -295,6 +315,39 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Pr
       [JSON.stringify({ enabled: Boolean(on) })],
     );
     return send(res, 200, JSON.stringify({ on: Boolean(on) }));
+  }
+  if (parts[1] === 'card' && req.method === 'GET') {
+    // What became of the card saved under this token: at the server, and at the stand-in for Stripe.
+    const card = await findCardByToken(deps.db, url.searchParams.get('token') ?? '');
+    return send(
+      res,
+      200,
+      JSON.stringify({
+        found: card !== null,
+        deleteRequested: card?.delete_requested_at != null,
+        removed: card?.removed_at != null,
+        deletedAtStripe: card !== null && card.removed_at != null && card.stripe_customer_id === null,
+        detachedCards: stripe.detachedCards.size,
+        deletedCustomers: stripe.deletedCustomers.size,
+      }),
+    );
+  }
+  if (parts[1] === 'appointments' && parts[2] === 'move' && req.method === 'POST') {
+    // A booking made now, moved back in time with everything that dates it (when it was booked and
+    // agreed to), as if it had been booked and had happened then: the clients' site can only book
+    // ahead, and the fee's rules depend on the end and on the 7 days after the start.
+    const { id, minutes } = await readBody(req);
+    const { rowCount } = await pool.query(
+      `UPDATE appointments
+          SET start_at = start_at + make_interval(mins => $2::int),
+              end_at = end_at + make_interval(mins => $2::int),
+              created_at = created_at + make_interval(mins => $2::int),
+              updated_at = updated_at + make_interval(mins => $2::int),
+              no_show_consent_at = no_show_consent_at + make_interval(mins => $2::int)
+        WHERE id = $1`,
+      [String(id), Number(minutes)],
+    );
+    return send(res, rowCount === 1 ? 200 : 404, JSON.stringify({ moved: rowCount === 1 }));
   }
   if (parts[1] === 'stripe' && parts[2]) {
     const id = parts[2];
