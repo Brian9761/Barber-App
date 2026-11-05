@@ -13,6 +13,7 @@ import {
   forgetDemoLeftovers,
   loadAppointments,
   pruneAppointments,
+  pruneBusinessSession,
   removeAppointment,
   saveAppointment,
 } from './storage';
@@ -185,5 +186,25 @@ describe('when the site opens', () => {
     expect(localStorage.getItem(APPOINTMENTS_KEY)).toBe(before);
     pruneAppointments(NOW);
     expect(localStorage.getItem(APPOINTMENTS_KEY)).toBe(before);
+  });
+});
+
+describe('this computer’s sign-in to Izzy Clipz Business', () => {
+  const session = (expiresAt: string) => JSON.stringify({ token: 'x'.repeat(43), id: 'a', name: 'Chrome on Mac', createdAt: '2026-10-03T18:00:00Z', expiresAt });
+
+  it('goes once its 30 days are up, when the site opens, the demo’s too', () => {
+    localStorage.setItem('izzy.business.session.v1', session('2026-11-02T18:00:00Z'));
+    localStorage.setItem('izzy.demo.business.session.v1', session('2026-11-02T18:00:00Z'));
+    pruneBusinessSession(new Date('2026-11-02T17:59:59Z'));
+    expect(localStorage.getItem('izzy.business.session.v1')).not.toBeNull();
+    pruneBusinessSession(new Date('2026-11-02T18:00:00Z'));
+    expect(localStorage.getItem('izzy.business.session.v1')).toBeNull();
+    expect(localStorage.getItem('izzy.demo.business.session.v1')).toBeNull();
+  });
+
+  it('leaves alone what isn’t a sign-in', () => {
+    localStorage.setItem('izzy.business.session.v1', JSON.stringify({ token: 'x' }));
+    pruneBusinessSession(NOW);
+    expect(localStorage.getItem('izzy.business.session.v1')).not.toBeNull();
   });
 });

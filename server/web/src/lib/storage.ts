@@ -69,6 +69,8 @@ export const DEMO_BUSINESS_KEY = 'izzy.demo.business.v1';
 export const DEMO_BUSINESS_SESSION_KEY = 'izzy.demo.business.session.v1';
 /** Izzy Clipz Business's barber picked last at checkout (src/business/lib/ticket.ts), on this computer. */
 export const BUSINESS_LAST_BARBER_KEY = 'izzy.business.lastBarber.v1';
+/** This computer's sign-in to Izzy Clipz Business (src/business/session.ts): never the owner key. */
+export const BUSINESS_SESSION_KEY = 'izzy.business.session.v1';
 /** How long a finished appointment stays listed, like the app. */
 export const KEEP_DAYS = 30;
 
@@ -194,6 +196,21 @@ export function keepsAnything(): boolean {
     }
   }
   return false;
+}
+
+/**
+ * When the site opens, a sign-in to Izzy Clipz Business whose 30 days have run out goes from this
+ * computer, even if only the clients' pages are used here now (the Privacy Policy: "The sign-in:
+ * when staff sign out, or after 30 days"). Business's own pages leave it to src/business/session.ts,
+ * which also says "This computer was signed out" then.
+ */
+export function pruneBusinessSession(now: Date = new Date()): void {
+  for (const key of [BUSINESS_SESSION_KEY, DEMO_BUSINESS_SESSION_KEY]) {
+    const stored = readJSON('local', key);
+    if (!isObject(stored) || typeof stored.expiresAt !== 'string') continue;
+    const ends = Date.parse(stored.expiresAt);
+    if (Number.isFinite(ends) && ends <= now.getTime()) removeKey('local', key);
+  }
 }
 
 /**

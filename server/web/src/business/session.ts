@@ -9,10 +9,10 @@
 
 import { useSyncExternalStore } from 'react';
 import { isDemo } from '../demo/mode';
-import { DEMO_BUSINESS_SESSION_KEY, readJSON, removeKey, writeJSON } from '../lib/storage';
+import { BUSINESS_SESSION_KEY, DEMO_BUSINESS_SESSION_KEY, readJSON, removeKey, writeJSON } from '../lib/storage';
 import type { SignedIn } from './types';
 
-export const SESSION_KEY = 'izzy.business.session.v1';
+export const SESSION_KEY = BUSINESS_SESSION_KEY;
 export const DEMO_SESSION_KEY = DEMO_BUSINESS_SESSION_KEY;
 
 export interface StoredSession {
