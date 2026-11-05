@@ -1,7 +1,9 @@
 // Sign in on a computer: the 6-digit code from the iPhone app (Settings → Use on a
 // computer), or the owner key instead. The key itself is never kept here: it makes a code,
 // and the code buys this computer its own session, which the app lists and can sign out.
-// In the demo, one button opens it, with sample data.
+// Nor is it offered to the browser to keep: its field isn't a password field, so the
+// browser's password manager doesn't ask to save it (the Privacy Policy: "It's never stored
+// on a computer"). In the demo, one button opens it, with sample data.
 
 import { useRef, useState, type FormEvent } from 'react';
 import { isApiError } from '../../api/errors';
@@ -176,12 +178,22 @@ function KeyForm({ onUseCode }: { onUseCode: () => void }) {
         <label className="field__label" htmlFor="owner-key">
           Owner key
         </label>
+        {/* Not type="password": browsers and password managers offer to save what's typed in one
+            (and sync it). A text field, dotted out by its style, with every way of saying "don't
+            keep this" that browsers and the common password managers read, is never offered. */}
         <input
           ref={input}
           id="owner-key"
-          className="field__input"
-          type="password"
-          autoComplete="current-password"
+          className="field__input biz-key-input"
+          type="text"
+          autoComplete="off"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          data-1p-ignore="true"
+          data-lpignore="true"
+          data-bwignore="true"
+          data-form-type="other"
           value={key}
           onChange={(event) => {
             setKey(event.target.value);
@@ -189,7 +201,6 @@ function KeyForm({ onUseCode }: { onUseCode: () => void }) {
           }}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? 'owner-key-error' : 'owner-key-hint'}
-          spellCheck={false}
         />
         {error ? (
           <p className="field__error" id="owner-key-error" role="alert">
@@ -198,7 +209,8 @@ function KeyForm({ onUseCode }: { onUseCode: () => void }) {
           </p>
         ) : (
           <p className="field__hint" id="owner-key-hint">
-            The key the shop's server was set up with. It isn't kept on this computer.
+            The key the shop's server was set up with. This computer uses it once to sign in, and doesn't keep it. Don't save it in this computer's
+            password manager.
           </p>
         )}
       </div>

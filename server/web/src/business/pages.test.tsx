@@ -108,6 +108,24 @@ describe('signing in', () => {
     expect(JSON.stringify(localStorage)).not.toContain('the-owner-key-for-this-test');
   });
 
+  it('never offers the owner key to the browser’s password manager to keep', async () => {
+    mockApi([]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByRole('button', { name: 'Use the owner key instead' }));
+    const key = screen.getByLabelText('Owner key');
+    // A text field (dotted out by its style), not a password field: browsers offer to save, and
+    // sync, what's typed in a password field. Every "don't keep this" they and password managers read.
+    expect(key.getAttribute('type')).toBe('text');
+    expect(key.getAttribute('autocomplete')).toBe('off');
+    expect(key.className).toContain('biz-key-input');
+    for (const name of ['data-1p-ignore', 'data-lpignore', 'data-bwignore']) expect(key.getAttribute(name)).toBe('true');
+    expect(key.getAttribute('data-form-type')).toBe('other');
+    expect(screen.getByText(/doesn't keep it\. Don't save it in this computer's password manager\./)).toBeTruthy();
+    // Nowhere on the sign-in page is there a field a browser would treat as a password.
+    const fields = Array.from(document.querySelectorAll('input'));
+    expect(fields.filter((field) => field.type === 'password' || /password/.test(field.autocomplete))).toEqual([]);
+  });
+
   it('says this computer was signed out when its 30 days ran out while the page was closed', async () => {
     localStorage.setItem(
       'izzy.business.session.v1',

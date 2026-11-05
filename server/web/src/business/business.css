@@ -2629,6 +2629,11 @@
   color: #c7c7cc;
 }
 
+/* The owner key's field is a text field (so no browser offers to save it), dotted out like a password. */
+.biz-key-input {
+  -webkit-text-security: disc;
+}
+
 .biz-signin__switch {
   justify-self: center;
   margin: 0;
