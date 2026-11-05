@@ -231,24 +231,28 @@ function BlockView({ block, dates = false }: { block: Block; dates?: boolean }) 
   }
 }
 
-function Inlines({ nodes, inLink = false }: { nodes: Inline[]; inLink?: boolean }) {
+/** Inline words, each knowing the words before it in its paragraph, list item or cell (`before`). */
+function Inlines({ nodes, inLink = false, before = '' }: { nodes: Inline[]; inLink?: boolean; before?: string }) {
+  let preceding = before;
   return (
     <>
-      {nodes.map((node, index) => (
-        <InlineView key={index} node={node} inLink={inLink} />
-      ))}
+      {nodes.map((node, index) => {
+        const view = <InlineView key={index} node={node} inLink={inLink} before={preceding} />;
+        preceding += plainText([node]);
+        return view;
+      })}
     </>
   );
 }
 
-function InlineView({ node, inLink }: { node: Inline; inLink: boolean }) {
+function InlineView({ node, inLink, before }: { node: Inline; inLink: boolean; before: string }) {
   switch (node.kind) {
     case 'text':
-      return <>{inLink ? node.text : linkified(node.text)}</>;
+      return <>{inLink ? node.text : linkified(node.text, before)}</>;
     case 'strong':
       return (
         <strong>
-          <Inlines nodes={node.children} inLink={inLink} />
+          <Inlines nodes={node.children} inLink={inLink} before={before} />
         </strong>
       );
     case 'code':
@@ -265,10 +269,18 @@ function InlineView({ node, inLink }: { node: Inline; inLink: boolean }) {
   }
 }
 
-/** "(442) 341-3053" and an email address: the number calls, the address writes. */
+/** "(442) 341-3053" and an email address: the number calls (or texts), the address writes. */
 const CALLABLE = /\((\d{3})\) (\d{3})-(\d{4})|[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
 
-function linkified(text: string): ReactNode {
+/** A number offered for texts ("Text us at (442) 341-3053", "Text: (442) 341-3053") opens a new text message, not a call. */
+const TEXT_US = /\btext(?: us(?: at)?|:)\s*$/i;
+
+/** Where a number in the documents goes: a call, or a text where the words just before it offer texts. */
+export function numberHref(digits: string, before: string): string {
+  return `${TEXT_US.test(before) ? 'sms' : 'tel'}:+1${digits}`;
+}
+
+function linkified(text: string, before = ''): ReactNode {
   const parts: ReactNode[] = [];
   let last = 0;
   for (const match of text.matchAll(CALLABLE)) {
@@ -276,7 +288,7 @@ function linkified(text: string): ReactNode {
     if (at > last) parts.push(text.slice(last, at));
     const [whole, area, exchange, line] = match;
     parts.push(
-      <a key={at} className="nowrap" href={area ? `tel:+1${area}${exchange}${line}` : `mailto:${whole}`}>
+      <a key={at} className="nowrap" href={area ? numberHref(`${area}${exchange}${line}`, before + text.slice(0, at)) : `mailto:${whole}`}>
         {whole}
       </a>,
     );

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ROUTER_FUTURE } from '../App';
 import { renderApp } from '../test/api';
 import type { LegalDocumentId } from './documents';
-import { LegalArticle } from './LegalPage';
+import { LegalArticle, numberHref } from './LegalPage';
 import { LEGAL_TEXTS } from './texts';
 
 // The four legal pages, drawn from docs/legal: as drafts (every build but a strict one), with the
@@ -119,6 +119,21 @@ describe('the legal pages, as drafts', () => {
     expect(screen.getByTestId('legal-page').textContent).toContain('izzyclipzbarbershop.net');
     const hrefs = Array.from(document.querySelectorAll('a')).map((a) => a.getAttribute('href') ?? '');
     expect(hrefs.filter((href) => /izzyclipzbarbershop|squire/i.test(href))).toEqual([]);
+  });
+
+  it('opens a new text message from the numbers offered for texts, and a call from the others', async () => {
+    renderApp('/accessibility');
+    await screen.findByRole('heading', { level: 1, name: 'Accessibility Statement' });
+    const numbers = main().getAllByRole('link', { name: '(442) 341-3053' });
+    const hrefOf = (words: RegExp) => numbers.filter((link) => words.test(link.closest('li, p')?.textContent ?? '')).map((link) => link.getAttribute('href'));
+    // "Text us at (442) 341-3053." and "Text: (442) 341-3053" text; "Call us at…", "Call: … or dial 711" call.
+    expect(hrefOf(/^Text us at/)).toEqual(['sms:+14423413053']);
+    expect(hrefOf(/^Text:/)).toEqual(['sms:+14423413053']);
+    expect(hrefOf(/^Call/).every((href) => href === 'tel:+14423413053')).toBe(true);
+    expect(hrefOf(/^Call/).length).toBeGreaterThan(1);
+    expect(numberHref('4423413053', 'Questions? Call us at ')).toBe('tel:+14423413053');
+    expect(numberHref('4423413053', 'If anything gets in your way, text us at ')).toBe('sms:+14423413053');
+    expect(numberHref('4423413053', 'Some context, then ')).toBe('tel:+14423413053');
   });
 
   it('draws tables with their headers, the first column naming each row, and quotes and code', async () => {
