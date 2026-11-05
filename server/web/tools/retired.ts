@@ -38,6 +38,7 @@ const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ({ '&': '&a
 function movedPage(origin: string, phone: ShopPhone): string {
   const host = escapeHtml(new URL(origin).host);
   const app = escapeHtml(`${origin}/app`);
+  const privacy = escapeHtml(`${origin}/privacy`);
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -113,6 +114,13 @@ function movedPage(origin: string, phone: ShopPhone): string {
         font-weight: 600;
         white-space: nowrap;
       }
+      .legal {
+        margin-top: 40px;
+        font-size: 14px;
+      }
+      .legal a {
+        color: #6e6e73;
+      }
     </style>
   </head>
   <body>
@@ -123,6 +131,7 @@ function movedPage(origin: string, phone: ShopPhone): string {
       <a class="button" href="${app}">Get the new app</a>
       <p class="note">Added the demo to your Home Screen? You can delete its icon now.</p>
       <p class="call">Prefer to call? <a href="tel:${escapeHtml(phone.e164)}">${escapeHtml(phone.display)}</a></p>
+      <p class="legal"><a href="${privacy}">Privacy Policy</a></p>
     </main>
     <script src="/moved.js"></script>
   </body>

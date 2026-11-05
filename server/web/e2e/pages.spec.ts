@@ -71,10 +71,17 @@ test.describe('every page', () => {
     });
   }
 
-  test('the offline page has no serious accessibility problems, and links the Privacy Policy', async ({ page }) => {
+  test('the offline page has no serious accessibility problems, and links the four policies', async ({ page }) => {
     await page.goto('/offline.html');
     await expect(page.getByRole('heading', { level: 1, name: "You're offline." })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy');
+    const legal = page.getByRole('navigation', { name: 'Legal' });
+    await expect(legal.getByRole('link')).toHaveText(['Privacy Policy', 'Terms of Service', 'Cancellation & No-Show Policy', 'Accessibility']);
+    expect(await legal.getByRole('link').evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual([
+      '/privacy',
+      '/terms',
+      '/cancellation-policy',
+      '/accessibility',
+    ]);
     await expectAccessible(page, '/offline.html');
     await expectFits(page, '/offline.html');
   });

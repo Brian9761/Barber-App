@@ -26,6 +26,8 @@ describe('the retired demo', () => {
     expect(page).toContain('<strong>izzyclipz.example</strong>');
     expect(page).toContain('<a class="button" href="https://izzyclipz.example/app">Get the new app</a>');
     expect(page).toContain('<a href="tel:+14423413053">(442) 341-3053</a>');
+    // The real site's Privacy Policy, from every address the old demo had.
+    expect(page).toContain('<p class="legal"><a href="https://izzyclipz.example/privacy">Privacy Policy</a></p>');
     expect(page).toContain('<meta name="robots" content="noindex" />');
     // No script but its own file, which the page's policy allows.
     expect(page.match(/<script/g)).toHaveLength(1);
