@@ -26,15 +26,18 @@ import {
 // - A time already less than the cutoff away says so while it's picked, on Review and under
 //   Book appointment, in the server's words, and cancelling it within 15 minutes of booking is
 //   free (My appointments asks nothing about a fee, and neither does the server).
+// - A flat fee over a service's price is capped at that price in the notice clients see and in
+//   what they agree to.
 // - Izzy Clipz Business offers "Mark no-show" for a booking with a card on file only once it
-//   has ended, offers no charge more than 7 days after the appointment (saying why in a plain
-//   line), shows the server's answer when a visit that was completed is marked a no-show, and
-//   previews a flat fee capped at each service's price, which clients "may be charged".
+//   has ended, offers a charge until 7 days after the appointment and none after (saying why in
+//   a plain line), shows the server's answer when a visit that was completed is marked a
+//   no-show, and previews a flat fee capped at each service's price, which clients "may be
+//   charged". The demo's in-browser API follows the same rules, with no request.
 //
 // On the real site, bookings with a card are made through the API (a card saved on the e2e
 // server's stand-in for Stripe's page) and moved back in time with /__e2e/appointments/move.
-// The demo's clock is fixed at Wednesday, November 4, 2026, 12:30 PM in Oceanside, so its
-// sample shop is the same every run. Screenshots go to E2E_LEGAL_SHOTS_DIR (or with the
+// The demo's clock is fixed at Wednesday, November 4, 2026, 12:30 PM in Oceanside (then 12:50 PM,
+// once Kim Sample's 12 PM haircut is over), so its sample shop is the same every run. Screenshots go to E2E_LEGAL_SHOTS_DIR (or with the
 // others), named "<run>-fees-…".
 
 const LEGAL_SHOTS = resolve(process.env.E2E_LEGAL_SHOTS_DIR || SHOTS_DIR);
@@ -281,6 +284,42 @@ test.describe('on the real site', () => {
     }
   });
 
+  test('clients see a flat fee capped at the price of what they book, in the notice and in what they agree to', async ({ page, request, phone }, testInfo) => {
+    const before = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
+    await setProtection(request, true);
+    // A $25 flat fee, with the usual 1-hour cutoff.
+    await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', { feeMode: 'flat', flatCents: 2500, lateCancelEnabled: true, lateCancelWindowMinutes: 60 });
+    try {
+      // Carlos's $5 hot lather shave: $5, never the $25.
+      await page.goto('/book?barber=carlos-rafael&service=hot-lather-shave');
+      await expectStep(page, 3, 'Pick a day and time');
+      const notice = page.getByTestId('fee-warning');
+      await expect(notice.locator('.notice__title')).toHaveText('Late Cancellation & No-Show Fee');
+      await expect(notice).toContainText(
+        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling in the app more than 1 hour before is free.',
+      );
+      await (await firstTime(page)).click();
+      await expect(notice).not.toContainText('$25');
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expectStep(page, 4, 'Your details');
+      await fillDetails(page, { name: 'Shea Shave', phone });
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expectStep(page, 5, 'Review and book');
+      await expect(page.getByTestId('fee-warning')).toContainText('may be charged $5.');
+      await expect(page.getByTestId('fee-warning')).not.toContainText('$25');
+      // What they agree to by booking: the same $5.
+      await expect(page.getByTestId('card-section')).toContainText(
+        "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card. Cancelling in the app more than 1 hour before is free.",
+      );
+      await expectAccessible(page, 'Review, with a flat fee capped at the price');
+      await page.getByTestId('fee-warning').scrollIntoViewIfNeeded();
+      await view(page, testInfo, '09-review-flat-fee-capped');
+    } finally {
+      await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', before);
+      await setProtection(request, false);
+    }
+  });
+
   test('Izzy Clipz Business previews a flat fee capped at each service’s price, which clients may be charged', async ({ page, request }, testInfo) => {
     const before = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
     try {
@@ -308,6 +347,8 @@ test.describe('on the real site', () => {
 // ------------------------------------------------------------------ The demo
 
 const NOON_THIRTY = new Date('2026-11-04T20:30:00Z');
+/** Once Kim Sample's 12 PM haircut (12 to 12:45) is over. */
+const TWELVE_FIFTY = new Date('2026-11-04T20:50:00Z');
 
 /** Every request for /api this browser makes, from the pages and the service worker. */
 function watchApi(page: Page): string[] {
@@ -327,7 +368,10 @@ test.describe('in the demo', () => {
     test.skip(!isDemo(testInfo), 'The demo’s own rules: its in-browser API');
   });
 
-  test('Izzy Clipz Business follows the same rules: a no-show after the end, nothing after 7 days, a flat fee capped', async ({ page, request }, testInfo) => {
+  test('Izzy Clipz Business follows the same rules: a no-show after the end, a completed visit never one, nothing after 7 days, a flat fee capped', async ({
+    page,
+    request,
+  }, testInfo) => {
     const fromBrowser = watchApi(page);
     const reachedServer = (await serverApiRequests(request)).length;
     await page.clock.setFixedTime(NOON_THIRTY);
@@ -344,6 +388,34 @@ test.describe('in the demo', () => {
     );
     await expectAccessible(page, 'the demo: a no-show only after the end');
     await view(page, testInfo, '04-business-before-the-end');
+    await panel.getByRole('button', { name: 'Close' }).click();
+
+    // At 12:50 she hasn't come: a no-show, whose fee can be charged until 7 days after the appointment.
+    await page.clock.setFixedTime(TWELVE_FIFTY);
+    await page.reload();
+    await page.getByTestId('appointment').filter({ hasText: 'Kim Sample' }).click();
+    await panel.getByRole('button', { name: 'Mark no-show' }).click();
+    await expect(panel.getByTestId('status-changed')).toHaveText('Marked a no-show.');
+    await expect(panel.getByRole('button', { name: 'Charge no-show fee ($35)' })).toBeVisible();
+    await expect(panel.getByTestId('fee-panel')).toContainText('It can be charged until Wed, Nov 11 at 12 PM, 7 days after the appointment.');
+    await expectAccessible(page, 'the demo: a no-show fee that can be charged');
+    await panel.getByTestId('fee-panel').scrollIntoViewIfNeeded();
+    await view(page, testInfo, '05-business-charge-within-7-days');
+
+    // Reopened and marked done after all: even reopened again, the visit never becomes a no-show.
+    await panel.getByRole('button', { name: 'Reopen' }).click();
+    await expect(panel.getByTestId('status-changed')).toHaveText('Reopened: it’s booked again.');
+    await panel.getByRole('button', { name: 'Mark done' }).click();
+    await expect(panel.getByTestId('status-changed')).toHaveText('Marked done.');
+    await panel.getByRole('button', { name: 'Reopen' }).click();
+    const reopen = page.getByTestId('confirm-reopen');
+    await expect(reopen).toContainText("It was marked done, so even once it's reopened, it can't be marked a no-show or charged a no-show fee: the client came.");
+    await view(page, testInfo, '07-business-reopen-completed');
+    await reopen.getByRole('button', { name: 'Reopen' }).click();
+    await expect(panel.getByTestId('status-changed')).toHaveText('Reopened: it’s booked again.');
+    await panel.getByRole('button', { name: 'Mark no-show' }).click();
+    await expect(panel.getByRole('alert')).toHaveText("This appointment was marked completed, so it can't become a no-show.");
+    await expect(panel.getByTestId('detail-badges')).toContainText('Booked');
     await panel.getByRole('button', { name: 'Close' }).click();
 
     // A late cancellation two weeks ago whose fee was never charged: too late now.
