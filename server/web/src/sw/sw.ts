@@ -21,6 +21,8 @@ const PRECACHE = `${PRECACHE_PREFIX}${__VERSION__}`;
 const FILES: ReadonlyMap<string, string> = new Map(__PRECACHE__.map((entry) => [entry.url, cacheKey(entry)]));
 /** How long the catalog may take before the last copy is used instead, on a poor signal. */
 const CATALOG_PATIENCE_MS = 4000;
+/** How long a legal page may take on the network before this version's copy opens instead. */
+const PAGE_PATIENCE_MS = 3000;
 
 /** What shows if even the offline page isn't in the cache. */
 const OFFLINE_TEXT = "You're offline. To book, call the shop: (442) 341-3053";
@@ -45,6 +47,9 @@ self.addEventListener('fetch', (event) => {
       return;
     case 'shell':
       event.respondWith(shell(event.request, route.page));
+      return;
+    case 'fresh':
+      event.respondWith(fresh(event.request, route.page));
       return;
     case 'file':
       event.respondWith(file(route.key, event.request));
@@ -119,6 +124,21 @@ async function shell(request: Request, shellPath: string): Promise<Response> {
   const key = FILES.get(shellPath);
   const cached = key ? await fromCache(key) : undefined;
   return cached ?? page(request);
+}
+
+/**
+ * A legal page: the network's page, whose script has the documents as the shop last published
+ * them, so a returning visitor never reads an earlier version while online (its new files come
+ * from the network too, since this version doesn't have them). Without a network, or when it
+ * answers with a problem or takes too long, this version's page opens instead.
+ */
+async function fresh(request: Request, shellPath: string): Promise<Response> {
+  const key = FILES.get(shellPath);
+  const cached = key ? await fromCache(key) : undefined;
+  if (!cached) return page(request);
+  const network = fetch(request).then((response) => (response.ok || response.type === 'opaqueredirect' ? response : cached));
+  const patience = new Promise<Response>((resolve) => setTimeout(() => resolve(cached), PAGE_PATIENCE_MS));
+  return Promise.race([network.catch(() => cached), patience]);
 }
 
 async function file(key: string, request: Request): Promise<Response> {

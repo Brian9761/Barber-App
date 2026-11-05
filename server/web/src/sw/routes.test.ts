@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cacheKey, isAppPage, isBusinessPage, routeFor, type RequestLike } from './routes';
+import { cacheKey, isAppPage, isBusinessPage, isLegalPage, routeFor, type RequestLike } from './routes';
 
 // What the service worker answers from its cache, and what it never does: nothing with a token
 // or personal data, no reviews (Google's terms), and nothing from other sites.
@@ -31,13 +31,18 @@ describe('pages', () => {
     expect(isAppPage('/booking')).toBe(false);
   });
 
-  it('opens the four legal pages offline too, a section of one included', () => {
-    for (const path of ['/privacy', '/terms', '/cancellation-policy', '/accessibility', '/privacy#saved-cards', '/terms/']) {
-      expect(page(path), path).toEqual({ kind: 'shell', page: '/index.html' });
+  it('asks the network for the four legal pages first, so a published change shows at once, and opens them offline too', () => {
+    for (const path of ['/privacy', '/terms', '/cancellation-policy', '/accessibility', '/privacy#saved-cards', '/terms/', '/accessibility?from=app']) {
+      // "fresh": the network's page, else this version's (the same page every route opens).
+      expect(page(path), path).toEqual({ kind: 'fresh', page: '/index.html' });
+      expect(isAppPage(path.split(/[?#]/)[0]!), path).toBe(true);
     }
-    // Their Markdown files aren't pages of the site.
+    // Their Markdown files aren't pages of the site; the other pages still open from this version's page.
+    expect(isLegalPage('/privacy.md')).toBe(false);
     expect(isAppPage('/privacy.md')).toBe(false);
     expect(isAppPage('/privacy/policy')).toBe(false);
+    expect(isLegalPage('/services')).toBe(false);
+    expect(page('/business/privacy')).toEqual({ kind: 'shell', page: '/business/index.html' });
   });
 
   it('opens Izzy Clipz Business from its own page, with its own manifest, also offline', () => {

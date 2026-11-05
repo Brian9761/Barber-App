@@ -168,6 +168,24 @@ test('the legal pages open offline once the app is kept on this device', async (
   }
 });
 
+test('online, a legal page comes from the network first, so a version the shop publishes shows at once', async ({ page, context }) => {
+  await page.goto('/');
+  await controlledByWorker(page);
+  // Stands in for a newer deploy: the server's /terms is a new page. The worker asks the network
+  // for it (its own fetch, which the browser context sees) instead of opening the copy it keeps.
+  const published = '<!doctype html><html lang="en"><head><title>Terms of Service</title></head><body><main><h1>The Terms as the shop just published them</h1></main></body></html>';
+  await context.route(/\/terms$/, (route) => (route.request().resourceType() === 'document' ? route.fulfill({ status: 200, contentType: 'text/html', body: published }) : route.fallback()));
+  try {
+    await page.goto('/terms');
+    await expect(page.getByRole('heading', { level: 1, name: 'The Terms as the shop just published them' })).toBeVisible();
+  } finally {
+    await context.unroute(/\/terms$/);
+  }
+  // The other pages still open from the copy the app keeps.
+  await page.goto('/visit');
+  await expect(page.getByRole('heading', { level: 1, name: 'Visit the shop' })).toBeVisible();
+});
+
 test.describe('without the app kept on this device', () => {
   // No service worker: the legal pages' own script is downloaded when one is opened.
   test.use({ serviceWorkers: 'block' });

@@ -5,6 +5,9 @@
 //   shell"), also offline; Izzy Clipz Business's (/business/…) from its own page,
 //   which links its own manifest and icons. A page this version doesn't know (a newer version's,
 //   say) is asked for on the network, and the offline page answers when that fails.
+// - The four legal pages are asked for on the network first, so a change the shop publishes
+//   shows at once (the documents promise "we'll post the new version here"), and open from this
+//   version's page offline, or when the network is slow.
 // - This version's files (scripts, styles, fonts, photos, icons) come from its cache.
 // - The API is never answered from a cache, except the shop's public catalog
 //   (menu, team and hours), which is asked for on the network first, and the last
@@ -55,13 +58,24 @@ const PAGES = new Set([
   SHELL,
 ]);
 const SECTIONS = ['/book/'];
+/** The legal pages (src/legal/documents.ts): the network's first, then this version's. */
+const LEGAL_PAGES = new Set(['/privacy', '/terms', '/cancellation-policy', '/accessibility']);
 
 /** Headers that say who's asking: a request with any of them is never answered from a cache. */
 const PERSONAL_HEADERS = ['authorization', 'x-manage-token', 'x-card-token'];
 
+function withoutSlash(pathname: string): string {
+  return pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+}
+
 export function isAppPage(pathname: string): boolean {
-  const path = pathname.length > 1 && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  const path = withoutSlash(pathname);
   return PAGES.has(path) || SECTIONS.some((section) => path.startsWith(section));
+}
+
+/** One of the four legal pages, whose words change only when the shop publishes a new version. */
+export function isLegalPage(pathname: string): boolean {
+  return LEGAL_PAGES.has(withoutSlash(pathname));
 }
 
 /** Izzy Clipz Business's pages: /business and everything under it (its own files aside). */
@@ -79,6 +93,11 @@ export type Route =
   | { kind: 'browser' }
   /** One of the site's pages: this version's page (the site's, or Business's), from its cache. */
   | { kind: 'shell'; page: typeof SHELL | typeof BUSINESS_SHELL }
+  /**
+   * A legal page: the network's page first (it loads the documents as the shop last published
+   * them), this version's when there's no network or it's slow.
+   */
+  | { kind: 'fresh'; page: typeof SHELL }
   /** One of this version's files, from its cache. */
   | { kind: 'file'; key: string }
   /** A page this version doesn't know: the network, else the offline page. */
@@ -114,6 +133,7 @@ export function routeFor(request: RequestLike, origin: string, files: ReadonlyMa
   if (request.mode === 'navigate') {
     const key = files.get(path);
     if (isBusinessPage(path) && !key) return { kind: 'shell', page: BUSINESS_SHELL };
+    if (isLegalPage(path)) return { kind: 'fresh', page: SHELL };
     if (isAppPage(path)) return { kind: 'shell', page: SHELL };
     return key ? { kind: 'file', key } : { kind: 'page' };
   }
