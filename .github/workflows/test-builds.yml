@@ -8,8 +8,7 @@ name: Test builds
 #   IzzyClipz-Demo.ipa, IzzyClipzBusiness-Demo.ipa
 #       The iPhone apps, unsigned: Sideloadly or AltStore signs them with the tester's Apple ID.
 #   IzzyClipz-Demo-Simulator.zip, IzzyClipzBusiness-Demo-Simulator.zip
-#       The apps for the iOS Simulator in Xcode on a Mac. The customer app runs on Apple silicon
-#       and Intel Macs; the owner app on Apple silicon only (see "Package").
+#       The apps for the iOS Simulator in Xcode on a Mac, for Apple silicon and Intel Macs.
 #   SHA256SUMS.txt
 # Screenshots of each Simulator build just after it launched are in demo-screenshots.
 #
@@ -38,8 +37,11 @@ permissions:
 jobs:
   build:
     name: Demo builds
-    runs-on: macos-26
-    timeout-minutes: 60
+    # GitHub's Intel Macs: its Apple silicon Macs are often short on capacity, and a job none of
+    # them picks up within 15 minutes is cancelled. Intel builds the same files (arm64 for
+    # iPhones; arm64 and x86_64 for the Simulator), just more slowly.
+    runs-on: macos-26-intel
+    timeout-minutes: 120
     # A newer push stops an older build, but never a publish halfway through (the release job has
     # its own group), which would leave no release until the next build finished.
     concurrency:
@@ -107,10 +109,10 @@ jobs:
             grep -E "error:|warning:|\*\* BUILD" "build/logs/$1-simulator.log" | sort -u | head -100
             if [ $status -ne 0 ]; then tail -80 "build/logs/$1-simulator.log"; exit $status; fi
           }
+          # Both for Apple silicon and Intel Macs (the owner app's Simulator download is bigger for it:
+          # Stripe's SDK for both kinds of Mac is 82 MB before zipping).
           build IzzyClipz "arm64 x86_64"
-          # Apple silicon only: Stripe's SDK for both kinds of Mac is 82 MB on its own, which would
-          # make this download about 24 MB.
-          build IzzyClipzBusiness arm64
+          build IzzyClipzBusiness "arm64 x86_64"
 
       - name: Archive for iPhones
         run: |
@@ -143,13 +145,6 @@ jobs:
           mkdir -p "$OUT"
           OUT_PATH="$PWD/$OUT"
 
-          # The owner app's Simulator build is arm64 only, so Stripe's SDK can be too. Each slice
-          # of a universal binary carries its own signature, so the arm64 one stays valid.
-          STRIPE="$SIM/IzzyClipzBusiness.app/Frameworks/StripeTerminal.framework/StripeTerminal"
-          if [ -f "$STRIPE" ] && lipo "$STRIPE" -verify_arch x86_64 2>/dev/null; then
-            lipo "$STRIPE" -remove x86_64 -output "$STRIPE.arm64"
-            mv "$STRIPE.arm64" "$STRIPE"
-          fi
 
           for app in IzzyClipz IzzyClipzBusiness; do
             ditto -c -k --norsrc --noqtn --keepParent --zlibCompressionLevel 9 \
@@ -196,7 +191,6 @@ jobs:
             mb=$(awk -v bytes="$bytes" 'BEGIN { printf "%.2f", bytes / 1000000 }')
             echo "$file: $bytes bytes ($mb MB)"
             echo "| $file | $bytes | $mb |" >> "$GITHUB_STEP_SUMMARY"
-            if [ "$bytes" -gt 15000000 ]; then echo "::warning::$file is over 15 MB ($mb MB)"; fi
           done
           cat "$OUT/SHA256SUMS.txt"
           (cd "$OUT" && shasum -a 256 -c SHA256SUMS.txt)
