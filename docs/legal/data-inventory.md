@@ -706,7 +706,7 @@ See section 10:
 ### G18. The Visit page's accessibility lines
 
 - **Now:** "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`, `IzzyClipzData.swift`). "ADA-compliant" is a legal claim nobody has inspected.
-- **The change:** use only lines the owner has checked, for example "Step-free entrance". The Accessibility Statement points to the Visit page.
+- **The change:** remove the unchecked lines now (an empty list, with the Visit page asking clients to call with questions about getting in), and add back only lines the owner has checked, for example "Step-free entrance". The Accessibility Statement doesn't depend on them: it asks clients to contact the shop for help getting in.
 
 ### G19. Smaller points
 
