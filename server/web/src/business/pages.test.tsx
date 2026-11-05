@@ -324,6 +324,26 @@ describe('Today', () => {
     expect(sent[1]!.headers['idempotency-key']).toBe(sent[0]!.headers['idempotency-key']);
   });
 
+  it('records a sale again as a new one when its earlier, lost answer was voided since', async () => {
+    signedIn();
+    const api = mockApi([...TODAY_ROUTES, ['GET /api/owner/products', { body: ownerProducts }], ['POST /api/owner/sales', { status: 201, body: saleCreated }]]);
+    renderApp('/business/today');
+    // The key's earlier sale comes back voided (rung up after a lost answer, then voided).
+    api.once('POST /api/owner/sales', { status: 200, body: { sale: { ...saleCreated.sale, voidedAt: '2026-11-02T19:00:00Z', voidReason: 'Twice' } } });
+    await userEvent.click(await screen.findByRole('button', { name: 'New sale' }));
+    const panel = screen.getByTestId('side-panel');
+    await userEvent.click(within(panel).getByRole('radio', { name: 'Julian' }));
+    await userEvent.click(within(panel).getByRole('button', { name: '+ Amount' }));
+    await userEvent.type(within(panel).getByLabelText('Amount'), '20');
+    await userEvent.click(within(panel).getByRole('button', { name: 'Add the amount' }));
+    await userEvent.click(within(panel).getByRole('button', { name: 'Cash' }));
+    await userEvent.click(within(screen.getByTestId('confirm-sale')).getByRole('button', { name: 'Record sale' }));
+    expect((await within(panel).findByTestId('receipt')).textContent).toContain('Sold $96 · Cash');
+    const sent = api.calls.filter((c) => c.method === 'POST' && c.path === '/api/owner/sales');
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.headers['idempotency-key']).not.toBe(sent[0]!.headers['idempotency-key']);
+  });
+
   it('says the sales couldn’t load when the day didn’t, instead of loading forever', async () => {
     signedIn();
     mockApi([

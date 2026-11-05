@@ -338,7 +338,13 @@ export function Checkout({
     setBusy(true);
     setFailed(null);
     try {
-      const recorded = await ownerApi.createSale(sale, saleKeys.keyFor(sale));
+      let recorded = await ownerApi.createSale(sale, saleKeys.keyFor(sale));
+      if (recorded.voidedAt !== null) {
+        // The server answered with the sale this key recorded before (after a lost answer), and
+        // it has been voided since: ringing it up again is a new sale, with a new key.
+        saleKeys.done(sale);
+        recorded = await ownerApi.createSale(sale, saleKeys.keyFor(sale));
+      }
       saleKeys.done(sale);
       rememberBarber(recorded.barberId);
       setAsking(null);
