@@ -214,7 +214,11 @@ test.describe('with no-show protection on', () => {
     // Bea, at the same computer: Alex's details are offered with "Not you?", and Alex's card isn't hers.
     await page.goto('/book?barber=carlos-rafael&service=haircut');
     await expectStep(page, 3, 'Pick a day and time');
+    const month = page.getByTestId('calendar-month');
+    const thisMonth = await month.innerText();
     await page.getByRole('button', { name: 'Next month' }).click();
+    await expect(month).not.toHaveText(thisMonth);
+    await expect(page.locator('.times__day')).toContainText((await month.innerText()).split(' ')[0]!);
     await (await firstTime(page)).click();
     await page.getByRole('button', { name: 'Continue' }).click();
     await expectStep(page, 4, 'Your details');

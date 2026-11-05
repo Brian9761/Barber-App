@@ -240,12 +240,15 @@ test('booking says what it agrees to right above Book appointment, the fee notic
       const read = notice.getByRole('link', { name: /^Read the Cancellation & No-Show Policy/ });
       await expect(read).toHaveAttribute('href', '/cancellation-policy');
       await expect(read).toHaveAttribute('target', '_blank');
-      // Next month: outside the late-cancellation window, as most bookings are.
+      // Next month: outside the late-cancellation window, as most bookings are. The times shown
+      // must be next month's before one is picked (today's can still be there for a moment).
       const month = page.getByTestId('calendar-month');
       const thisMonth = await month.innerText();
       await page.getByRole('button', { name: 'Next month' }).click();
       await expect(month).not.toHaveText(thisMonth);
+      await expect(page.locator('.times__day')).toContainText((await month.innerText()).split(' ')[0]!);
       await (await firstTime(page)).click();
+      await expect(notice).not.toContainText('away, so cancelling it');
       await scrollToTop(notice);
       await view(page, testInfo, 'legal-06a-time-fee-notice');
     }
