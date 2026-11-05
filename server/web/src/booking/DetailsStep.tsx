@@ -221,8 +221,8 @@ export function DetailsStep({ catalog }: { catalog: Catalog }) {
             </label>
             <span id={`${ids.remember}-hint`} className="secondary">
               {demo
-                ? `Your name and number fill in next time you book here. Leave it off on a shared ${device}.`
-                : `Your name and number fill in next time you book here, and a card you add stays saved. Leave it off on a shared ${device}.`}
+                ? `Your name, number and email fill in next time you book here. Leave it off on a shared ${device}.`
+                : `Your name, number and email fill in next time you book here, and a card you add stays saved. Leave it off on a shared ${device}.`}
             </span>
           </span>
         </div>

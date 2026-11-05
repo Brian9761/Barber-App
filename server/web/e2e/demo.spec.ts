@@ -91,7 +91,7 @@ test('books and cancels with no request to /api, saying it’s a demo', async ({
   await expect(page.getByTestId('details-privacy')).toHaveText(
     /^Demo version: your name and number stay on this (phone|computer)\. Nothing is sent to Izzy Clipz or anywhere else\.$/,
   );
-  await expect(page.getByText('Your name and number fill in next time you book here. Leave it off on a shared', { exact: false })).toBeVisible();
+  await expect(page.getByText('Your name, number and email fill in next time you book here. Leave it off on a shared', { exact: false })).toBeVisible();
   await expect(page.getByRole('main')).not.toContainText('a card you add');
   await fillDetails(page, { name: 'Demo Client', phone });
   await screenshot(page, testInfo, '05-book-4-details');

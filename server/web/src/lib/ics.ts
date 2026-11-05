@@ -97,7 +97,10 @@ export function appointmentEvent(appointment: Omit<Appointment, 'customer' | 'no
         : []),
       `${appointment.serviceName} with ${barber}`,
       `${appointment.priceLabel} · ${durationLabel(appointment.durationMinutes)} · Pay at the shop`,
-      ...(demo ? [] : [`To change or cancel, go to ${siteOrigin}/appointments or call ${shop.phone.display}.`]),
+      // The key to cancel online is only on the phone or computer it was booked on (a calendar syncs elsewhere).
+      ...(demo
+        ? []
+        : [`To change or cancel, open My appointments on the phone or computer you booked on (${siteOrigin}/appointments), or call ${shop.phone.display}.`]),
     ].join('\n'),
     url: `${siteOrigin}/appointments`,
     geo: shop.coordinate,

@@ -18,7 +18,7 @@ describe('Add to calendar', () => {
     expect(lines).toContain('SUMMARY:Haircut at Izzy Clipz');
     expect(lines).toContain(`LOCATION:Izzy Clipz Barbershop\\, ${catalog.shop.address.lines.map(escapeText).join('\\, ')}`);
     expect(lines).toContain(
-      `DESCRIPTION:Haircut with Flowxbori\\n$35 · 45 min · Pay at the shop\\nTo change or cancel\\, go to ${ORIGIN}/appointments or call ${catalog.shop.phone.display}.`,
+      `DESCRIPTION:Haircut with Flowxbori\\n$35 · 45 min · Pay at the shop\\nTo change or cancel\\, open My appointments on the phone or computer you booked on (${ORIGIN}/appointments)\\, or call ${catalog.shop.phone.display}.`,
     );
     expect(lines).toContain(`GEO:${catalog.shop.coordinate.latitude};${catalog.shop.coordinate.longitude}`);
     expect(lines).toContain(`URL:${ORIGIN}/appointments`);

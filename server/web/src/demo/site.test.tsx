@@ -154,7 +154,7 @@ describe('Your details in the demo', () => {
     );
     const remember = screen.getByRole('checkbox', { name: 'Remember me on this computer' });
     const hint = document.getElementById(remember.getAttribute('aria-describedby')!)!;
-    expect(hint.textContent).toBe('Your name and number fill in next time you book here. Leave it off on a shared computer.');
+    expect(hint.textContent).toBe('Your name, number and email fill in next time you book here. Leave it off on a shared computer.');
     expect(document.body.textContent).not.toMatch(/card you add|sent only to/);
     // The number's hint doesn't say the shop will reach them: nothing reaches the shop.
     expect(screen.getByText('A US number, like (442) 555-0123.')).toBeTruthy();
