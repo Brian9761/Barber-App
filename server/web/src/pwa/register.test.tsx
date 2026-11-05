@@ -129,6 +129,9 @@ describe('a new version', () => {
     const container = new FakeContainer(false);
     container.register.mockImplementation(() => Promise.reject(new Error('blocked')));
     expect(await registerServiceWorker(container as unknown as ServiceWorkerContainer)).toBeNull();
+    // Where service workers are blocked, registering can come back with nothing: no error either.
+    container.register.mockImplementation(() => Promise.resolve(undefined as unknown as FakeRegistration));
+    expect(await registerServiceWorker(container as unknown as ServiceWorkerContainer)).toBeNull();
   });
 });
 

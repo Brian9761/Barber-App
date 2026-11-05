@@ -31,12 +31,14 @@ export async function registerServiceWorker(
       setTimeout(reload, TAKE_OVER_WAIT_MS);
     });
 
-  let registration: ServiceWorkerRegistration;
+  let registration: ServiceWorkerRegistration | undefined;
   try {
     registration = await container.register('/sw.js', { scope: '/' });
   } catch {
     return null;
   }
+  // Where service workers are blocked, registering can come back with nothing at all.
+  if (!registration) return null;
   // The first version installs for next time, and isn't "new": only one installed while a version is in use is.
   if (registration.waiting && container.controller) offer(registration.waiting);
   registration.addEventListener('updatefound', () => {
