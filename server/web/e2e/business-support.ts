@@ -3,7 +3,7 @@
 // signing in on the website with a code from it, and the Business pages' own checks.
 
 import { readFileSync } from 'node:fs';
-import type { APIRequestContext, Page, TestInfo } from '@playwright/test';
+import type { APIRequestContext, Locator, Page, TestInfo } from '@playwright/test';
 import { expect, isPhone, screenshot } from './support.js';
 
 /** The owner key e2e/serve.ts opens the owner routes with. */
@@ -94,4 +94,19 @@ export async function expectBusinessInstallable(page: Page, request: APIRequestC
   // Let go of it: while a second DevTools session is attached, Chromium keeps navigator.onLine
   // true even after the test takes the browser offline.
   await cdp.detach();
+}
+
+/**
+ * What `locator` shows is in sight and on top, where the owner can see and click it: nothing
+ * (checkout's total, say) covers its middle. Asked before anything else touches it, since a
+ * click would scroll it into view first.
+ */
+export async function expectInSight(locator: Locator, what: string): Promise<void> {
+  const where = await locator.evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+    const inView = box.top >= 0 && box.bottom <= window.innerHeight;
+    return { inView, onTop: hit !== null && (hit === element || element.contains(hit)), hit: hit ? `${hit.tagName.toLowerCase()}.${hit.className}` : null };
+  });
+  expect(where, `${what} in sight`).toMatchObject({ inView: true, onTop: true });
 }

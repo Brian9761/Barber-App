@@ -1,5 +1,5 @@
 import type { APIRequestContext, Page } from '@playwright/test';
-import { expectBusinessInstallable, navLink, PHOTO_PNG, shot, signOutButton } from './business-support.js';
+import { expectBusinessInstallable, expectInSight, navLink, PHOTO_PNG, shot, signOutButton } from './business-support.js';
 import { expect, expectAccessible, isPhone, test } from './support.js';
 
 // Izzy Clipz Business in the demo version (playwright.demo.config.ts): one button opens it,
@@ -89,8 +89,13 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   await expectAccessible(page, 'an appointment in the demo');
   await shot(page, testInfo, 'b03-appointment', { panel: true });
   await panel.getByRole('button', { name: 'Check out' }).click();
+  // The panel's new view starts at its heading, with the focus.
+  await expect(panel.getByRole('heading', { name: 'Check out' })).toBeFocused();
   await panel.getByRole('button', { name: '+ Product' }).click();
+  // What + Product opens is in sight, above the total and how they're paying, never under them.
+  await expectInSight(panel.getByRole('button', { name: /Sample pomade/ }), 'the first product');
   await panel.getByRole('button', { name: /Sample pomade/ }).click();
+  await expect(panel.getByRole('button', { name: '+ Product' })).toBeFocused();
   await expect(panel.getByTestId('ticket-total')).toHaveText('$63');
   await shot(page, testInfo, 'b04-checkout', { panel: true });
   await panel.getByRole('button', { name: /^Other/ }).click();
@@ -111,9 +116,24 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   // A week, with its daily chart and its table.
   await page.getByRole('radio', { name: 'Week' }).check();
   await expect(page.getByTestId('period-line')).toHaveText('This week: Nov 2 – Nov 4 · Whole shop');
+  // Compared with the same number of days just before, named.
+  await expect(page.getByTestId('total-sales-change')).toContainText('Oct 30 – Nov 1');
+  // The chart's columns are one stop for the keyboard; the arrow keys move between them.
+  const columns = page.getByTestId('daily-sales').locator('[role="button"][aria-pressed]');
+  await expect(columns).toHaveCount(3);
+  await expect(page.getByTestId('daily-sales').locator('[role="button"][tabindex="0"]')).toHaveCount(1);
+  await columns.first().focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Enter');
+  await expect(columns.nth(1)).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('daily-picked')).toContainText('Tue, Nov 3: $');
   await page.getByRole('button', { name: 'Show daily sales as a table' }).click();
   await expect(page.getByTestId('daily-sales').getByRole('row')).toHaveCount(4);
   await shot(page, testInfo, 'b07-analytics-week');
+  // The year, by month: no serious axe-core finding on its chart either.
+  await page.getByRole('radio', { name: 'Year' }).check();
+  await expect(page.getByRole('heading', { name: 'Sales by month' })).toBeVisible();
+  await expectAccessible(page, 'the demo’s Analytics by month');
 
   // Void it: it stops counting as a sale; Ruben's appointment stays done, so it counts at its booked $45.
   await navLink(page, 'Today').click();
@@ -152,14 +172,19 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   await appointment(page, 'Kim Sample').click();
   await panel.getByRole('button', { name: 'Mark no-show' }).click();
   await expect(panel.getByTestId('detail-badges')).toContainText('No-show');
+  await expect(panel.getByTestId('status-changed')).toHaveText('Marked a no-show.');
+  await expect(panel.getByTestId('status-changed')).toBeFocused();
   await panel.getByRole('button', { name: 'Charge no-show fee ($35)' }).click();
   const fee = page.getByTestId('confirm-fee');
   await expect(fee.getByRole('heading')).toHaveText(/^Charge \$35 to Kim Sample's (Visa|Mastercard) •••• 3875\?$/);
   await fee.getByRole('button', { name: 'Charge $35' }).click();
-  await expect(panel.getByRole('alert')).toHaveText('Connect Stripe in Settings to take card payments.');
-  await panel.getByRole('button', { name: 'Close' }).click();
+  // Said next to the fee's button, in sight, with the focus, and the way to Settings.
+  const refused = panel.getByTestId('fee-error');
+  await expect(refused).toContainText('Connect Stripe in Settings to take card payments.');
+  await expect(refused).toBeFocused();
+  await expectInSight(refused, 'why the fee wasn’t charged');
+  await refused.getByRole('link', { name: 'Go to Settings' }).click();
 
-  await navLink(page, 'Settings').click();
   await expect(page.getByTestId('stripe-status')).toContainText('Not connected');
   await page.getByRole('button', { name: 'Connect Stripe' }).click();
   await expect(page.getByRole('button', { name: 'Connecting to Stripe (demo)…' })).toBeVisible();

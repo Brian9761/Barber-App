@@ -1,5 +1,5 @@
 import type { APIRequestContext, Page } from '@playwright/test';
-import { expectBusinessInstallable, navLink, newCode, ownerCall, PHOTO_PNG, shot, signInWithCode, signOutButton } from './business-support.js';
+import { expectBusinessInstallable, expectInSight, navLink, newCode, ownerCall, PHOTO_PNG, shot, signInWithCode, signOutButton } from './business-support.js';
 import { expect, expectAccessible, isPhone, tabTo, test } from './support.js';
 
 // Izzy Clipz Business on a computer, against the real API (e2e/serve.ts, with an owner key):
@@ -127,7 +127,10 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   await expect(panel.getByRole('radio', { name: barber.name })).toBeChecked();
   await expect(panel.getByText('Card payments happen on the iPhone, with Tap to Pay in Izzy Clipz Business.', { exact: false })).toBeVisible();
   await panel.getByRole('button', { name: '+ Product' }).click();
-  await panel.getByRole('button', { name: new RegExp(product.product.name.replace(/[()]/g, '\\$&')) }).click();
+  // What + Product opens is in sight, never under the total and how they're paying.
+  const pomade = panel.getByRole('button', { name: new RegExp(product.product.name.replace(/[()]/g, '\\$&')) });
+  await expectInSight(pomade, 'the product to add');
+  await pomade.click();
   await expect(panel.getByTestId('ticket-total')).toHaveText('$53');
   await expectAccessible(page, 'checkout');
   await shot(page, testInfo, 'b04-checkout', { panel: true });
@@ -157,6 +160,10 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   // The leaderboard by products: the barber who sold the pomade is up there.
   await page.getByTestId('leaderboard').getByRole('radio', { name: 'Products' }).check();
   await expect(row).toContainText(/\d+ products?/);
+  // The year, by month: no serious axe-core finding on its chart.
+  await page.getByRole('radio', { name: 'Year' }).check();
+  await expect(page.getByRole('heading', { name: 'Sales by month' })).toBeVisible();
+  await expectAccessible(page, 'Analytics by month');
 
   // Void it: the sale stops counting, and the appointment is unpaid again.
   await navLink(page, 'Today').click();
@@ -169,6 +176,44 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   await expect(card).not.toContainText('Paid');
   const after = await ownerCall<Analytics>(request, 'GET', `/api/owner/analytics?from=${today}&to=${today}`);
   expect(after.totals.salesCents).toBe(numbers.totals.salesCents - 5300 + 3500);
+});
+
+test('a walk-in whose answer was lost is recorded once, also when the ticket is closed and the sale rung up again', async ({
+  page,
+  request,
+  browserConsole,
+}, testInfo) => {
+  // The browser logs the request the test cuts off.
+  browserConsole.allow(/ERR_FAILED|Failed to load resource/);
+  await signInWithCode(page, request);
+  const name = `Lost answer (${testInfo.project.name})`;
+  let cut = false;
+  await page.route('**/api/owner/sales', async (route) => {
+    if (route.request().method() !== 'POST' || cut) return route.fallback();
+    cut = true;
+    // The server records the sale, and its answer never reaches the page.
+    await route.fetch();
+    await route.abort('failed');
+  });
+  const panel = page.getByTestId('side-panel');
+  const ringUp = async () => {
+    await page.getByRole('button', { name: 'New sale' }).click();
+    await panel.getByRole('radio', { name: 'Carlos' }).check();
+    await panel.getByRole('button', { name: '+ Amount' }).click();
+    await panel.getByLabel(/^Name/).fill(name);
+    await panel.getByLabel('Amount', { exact: true }).fill('12');
+    await panel.getByRole('button', { name: 'Add the amount' }).click();
+    await panel.getByRole('button', { name: 'Cash', exact: true }).click();
+    await page.getByTestId('confirm-sale').getByRole('button', { name: 'Record sale' }).click();
+  };
+  await ringUp();
+  await expect(panel.getByTestId('ticket-failed')).toContainText("Trying again is safe: the same sale can't be recorded twice.");
+  // Closed, and rung up again on a new ticket: the server answers with the sale it has.
+  await panel.getByRole('button', { name: 'Close' }).click();
+  await ringUp();
+  await expect(panel.getByTestId('receipt')).toContainText('Sold $12 · Cash · Carlos');
+  const { sales } = await ownerCall<{ sales: { items: { name: string }[] }[] }>(request, 'GET', `/api/owner/sales?date=${shopClock(new Date()).date}`);
+  expect(sales.filter((sale) => sale.items.some((item) => item.name === name))).toHaveLength(1);
 });
 
 test('a product is added, given a photo, edited and deleted', async ({ page, request }, testInfo) => {
