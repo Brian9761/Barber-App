@@ -470,9 +470,10 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertFalse(element("chargeFee").exists, "Still never twice")
         // Cancelling it doesn't refund the fee either, and the question says so (not "no fee").
         tap("cancelAppointment")
-        XCTAssertTrue(text(containing: "The $35 no-show fee stays charged: cancelling doesn't refund it.").waitForExistence(timeout: 10))
+        let question = text(containing: "The $35 no-show fee stays charged: cancelling doesn't refund it.")
+        XCTAssertTrue(question.waitForExistence(timeout: 10))
         XCTAssertFalse(text(containing: "There's no fee when the shop cancels.").exists)
-        tapDialogButton("Keep it", identifier: "keepAppointment")
+        tapDialogCancelButton("Keep it", identifier: "keepAppointment", closing: question)
         XCTAssertTrue(statusShows("Booked"))
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
@@ -982,6 +983,31 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let matches = app.buttons.matching(NSPredicate(format: "label == %@", label))
         XCTAssertTrue(matches.firstMatch.waitForExistence(timeout: 10), "No \(label) button in the dialog", file: file, line: line)
         matches.element(boundBy: max(matches.count - 1, 0)).tap()
+    }
+
+    /// Answers a confirmation dialog with its cancel button ("Keep it") and waits for `question`
+    /// to go. iOS 26 shows a dialog that comes from a button on the screen as a popover without
+    /// its cancel button: there, a tap outside the popover gives the same answer.
+    private func tapDialogCancelButton(
+        _ label: String,
+        identifier: String,
+        closing question: XCUIElement,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let byIdentifier = element(identifier)
+        let byLabel = app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+        let outside = app.otherElements["PopoverDismissRegion"]
+        if byIdentifier.waitForExistence(timeout: 3) {
+            byIdentifier.tap()
+        } else if byLabel.exists {
+            byLabel.tap()
+        } else {
+            XCTAssertTrue(outside.exists, "No \(label) button, and no popover to tap outside of", file: file, line: line)
+            // The popover is narrower than the screen: its left edge is clear of it.
+            outside.coordinate(withNormalizedOffset: CGVector(dx: 0.04, dy: 0.5)).tap()
+        }
+        XCTAssertTrue(waitForDisappearance(of: question), "The dialog didn't close", file: file, line: line)
     }
 
     private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 10) -> Bool {
