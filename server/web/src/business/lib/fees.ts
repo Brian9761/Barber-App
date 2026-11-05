@@ -6,10 +6,11 @@
 // (server/test/fixtures/fee-cases.json).
 
 import type { NoShowFee } from '../../api/types';
-import { cardLabel, money, windowLabel } from '../../lib/format';
+import { cardLabel, windowLabel } from '../../lib/format';
 import { cancelledLate } from '../../lib/lateCancel';
 import { dateTimeLabel, localDate, timeLabel } from '../../lib/shopTime';
 import type { OwnerAppointment } from '../types';
+import { moneyWithCommas } from './money';
 
 export type FeeReason = 'noShow' | 'lateCancel';
 
@@ -113,7 +114,7 @@ export function isCancelledLate(appointment: Booking): boolean {
 
 /** "$40", or "$40 (the full service price)". */
 export function feeAmountLabel(fee: NoShowFee): string {
-  return fee.fullPrice ? `${money(fee.amountCents)} (the full service price)` : money(fee.amountCents);
+  return fee.fullPrice ? `${moneyWithCommas(fee.amountCents)} (the full service price)` : moneyWithCommas(fee.amountCents);
 }
 
 // ------------------------------------------------------------------ The panel
@@ -215,7 +216,7 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
   switch (fee.status) {
     case 'charged': {
       const when = fee.chargedAt ? `, ${dateTimeLabel(new Date(fee.chargedAt), zone)}` : '';
-      status = { kind: 'charged', title: `${feeTitle(fee)} charged`, detail: `${money(fee.amountCents)} to ${card}${when}.` };
+      status = { kind: 'charged', title: `${feeTitle(fee)} charged`, detail: `${moneyWithCommas(fee.amountCents)} to ${card}${when}.` };
       footer = "Refunds are made in the Stripe Dashboard. Reopening the appointment doesn't refund the fee.";
       break;
     }
@@ -240,7 +241,7 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
   if (isFeePending(appointment)) {
     action = { title: 'Check again', confirmation: null };
   } else if (chargeable) {
-    const amount = money(fee.amountCents);
+    const amount = moneyWithCommas(fee.amountCents);
     const title =
       fee.status === 'declined' || fee.status === 'needsAction' ? `Charge again (${amount})` : `Charge ${reasonTitle(chargeable).toLowerCase()} (${amount})`;
     action = {
@@ -274,7 +275,7 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
 export function reopenWarning(appointment: OwnerAppointment, now: Date): string | null {
   const fee = appointment.noShowFee;
   if (!fee) return null;
-  const what = `${money(fee.amountCents)} ${feeTitle(fee).toLowerCase()}`;
+  const what = `${moneyWithCommas(fee.amountCents)} ${feeTitle(fee).toLowerCase()}`;
   switch (fee.status) {
     case 'charged':
       return `The ${what} stays charged: reopening doesn't refund it. Refunds are made in the Stripe Dashboard.`;
@@ -282,7 +283,7 @@ export function reopenWarning(appointment: OwnerAppointment, now: Date): string 
       return `Stripe hasn't confirmed the ${what} yet. If it went through, reopening doesn't refund it. Refunds are made in the Stripe Dashboard.`;
     default:
       if (chargeableFee(appointment, now) === 'lateCancel') {
-        return `Once it's reopened, the ${money(fee.amountCents)} late cancellation fee can't be charged any more. The client cancelled in the app, so a no-show fee can't be charged either.`;
+        return `Once it's reopened, the ${moneyWithCommas(fee.amountCents)} late cancellation fee can't be charged any more. The client cancelled in the app, so a no-show fee can't be charged either.`;
       }
       if (appointment.status === 'cancelled' && appointment.card && fee.customerCancelledAt) {
         return "The client cancelled this booking in the app, so once it's reopened, it can't be charged a no-show fee. To keep a no-show fee, ask them to book again in the app instead.";
@@ -307,7 +308,7 @@ export function shopCancelNote(appointment: OwnerAppointment): string | null {
   const fee = appointment.noShowFee;
   const none = "There's no fee when the shop cancels.";
   if (!fee) return none;
-  const what = `${money(fee.amountCents)} ${feeTitle(fee).toLowerCase()}`;
+  const what = `${moneyWithCommas(fee.amountCents)} ${feeTitle(fee).toLowerCase()}`;
   switch (fee.status) {
     case 'charged':
       return `The ${what} stays charged: cancelling doesn't refund it. Refunds are made in the Stripe Dashboard.`;
@@ -343,8 +344,8 @@ export function methodTitle(method: keyof typeof METHOD_TITLE): string {
 
 /** "Paid $60 · Cash", "Paid $40": what an appointment's checkout (or payment) says. */
 export function paidLabel(appointment: Pick<OwnerAppointment, 'sale' | 'payment'>): string | null {
-  if (appointment.sale) return `Paid ${money(appointment.sale.totalCents)} · ${methodTitle(appointment.sale.method)}`;
-  if (appointment.payment.status === 'paid') return appointment.payment.amountCents !== null ? `Paid ${money(appointment.payment.amountCents)}` : 'Paid';
+  if (appointment.sale) return `Paid ${moneyWithCommas(appointment.sale.totalCents)} · ${methodTitle(appointment.sale.method)}`;
+  if (appointment.payment.status === 'paid') return appointment.payment.amountCents !== null ? `Paid ${moneyWithCommas(appointment.payment.amountCents)}` : 'Paid';
   return null;
 }
 
@@ -362,7 +363,7 @@ export function appointmentBadges(appointment: OwnerAppointment): Badge[] {
   if (fee) {
     switch (fee.status) {
       case 'charged':
-        badges.push({ text: `${feeTitle(fee)} ${money(fee.amountCents)} charged`, tone: 'feeCharged' });
+        badges.push({ text: `${feeTitle(fee)} ${moneyWithCommas(fee.amountCents)} charged`, tone: 'feeCharged' });
         break;
       case 'declined':
         badges.push({ text: 'Fee declined', tone: 'feeDeclined' });
@@ -397,14 +398,14 @@ export function paymentSummary(appointment: OwnerAppointment): { title: string; 
   let value: string;
   if (appointment.sale) {
     title = 'Paid';
-    value = `${money(appointment.sale.totalCents)} · ${methodTitle(appointment.sale.method)}`;
+    value = `${moneyWithCommas(appointment.sale.totalCents)} · ${methodTitle(appointment.sale.method)}`;
   } else if (appointment.payment.status === 'paid') {
     title = 'Paid';
-    value = appointment.payment.amountCents !== null ? money(appointment.payment.amountCents) : 'Yes';
+    value = appointment.payment.amountCents !== null ? moneyWithCommas(appointment.payment.amountCents) : 'Yes';
   } else {
     title = feeCharged ? 'Service not paid' : 'Not paid yet';
     value = appointment.priceLabel;
   }
-  const feeNote = fee && feeCharged ? `The ${money(fee.amountCents)} ${feeTitle(fee).toLowerCase()} was charged to the card on file.` : null;
+  const feeNote = fee && feeCharged ? `The ${moneyWithCommas(fee.amountCents)} ${feeTitle(fee).toLowerCase()} was charged to the card on file.` : null;
   return { title, value, feeNote };
 }

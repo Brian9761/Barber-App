@@ -159,6 +159,8 @@ describe('badges and the payment', () => {
 
   it('says "Paid $60 · Cash" for a checkout, and keeps a charged fee apart from the service', () => {
     expect(paidLabel(checkedOut)).toBe('Paid $96 · Cash');
+    // With thousands commas, like every total.
+    expect(paidLabel({ ...checkedOut, sale: { ...checkedOut.sale!, totalCents: 125000 } })).toBe('Paid $1,250 · Cash');
     expect(paymentSummary(checkedOut)).toEqual({ title: 'Paid', value: '$96 · Cash', feeNote: null });
     expect(paymentSummary(charged)).toEqual({ title: 'Service not paid', value: '$35', feeNote: 'The $35 no-show fee was charged to the card on file.' });
   });
