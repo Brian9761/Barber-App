@@ -102,7 +102,10 @@ describe('GET /api/catalog', () => {
     expect(shop.googleReviewUrl).toBe('https://search.google.com/local/writereview?placeid=ChIJGz5HChRv3IARYJJy_6jyRm8');
     expect(shop.highlights).toContain('Walk-ins welcome');
     expect(shop.about.length).toBeGreaterThan(0);
-    expect(shop.accessibility.length).toBeGreaterThan(0);
+    // Empty until the owner has checked what's there (docs/legal/OWNER-CHECKLIST.md): the website's
+    // Visit page then asks clients to call about getting in. Any line put back is plain text.
+    expect(Array.isArray(shop.accessibility)).toBe(true);
+    for (const line of shop.accessibility as unknown[]) expect(line).toMatch(/\S/);
   });
 
   it('describes every service, in menu order by category, with the favorites marked', async () => {

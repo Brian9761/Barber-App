@@ -542,10 +542,6 @@
       "Credit card",
       "Gift card"
     ],
-    "accessibility": [
-      "Wheelchair accessible",
-      "ADA-compliant entrance",
-      "Accessible parking near the entrance"
-    ]
+    "accessibility": []
   }
 }

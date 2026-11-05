@@ -47,7 +47,7 @@ extension ShopInfo {
         websiteURL: URL(string: "https://www.izzyclipzbarbershop.net")!,
         paymentMethods: ["Credit card", "Gift card"],
         highlights: ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"],
-        accessibility: ["Wheelchair accessible", "ADA-compliant entrance", "Accessible parking near the entrance"],
+        accessibility: [],
         googlePlaceID: IzzyClipzListing.googlePlaceID
     )
 }
