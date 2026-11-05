@@ -3,7 +3,7 @@ import type { BookingTarget, Catalog, NoShowPolicy, Slot } from '../api/types';
 import { useNow } from '../components/hooks';
 import { CallLink, Loading, NewTabLink, Notice } from '../components/ui';
 import { plural, windowLabel } from '../lib/format';
-import { lateCancelNotice } from '../lib/lateCancel';
+import { cutoffOf, lateCancelNotice } from '../lib/lateCancel';
 import { dateTimeLabel, dayPart, localDate, longDateLabel, monthsBetween, timeLabel, wallClock, WEEKDAY_NAMES, weekdayOf, zoneOffsetMinutes } from '../lib/shopTime';
 import { useBooking, useStepNavigation } from './BookingContext';
 import { Calendar } from './Calendar';
@@ -29,9 +29,10 @@ function TimePicker({ catalog, target }: { catalog: Catalog; target: BookingTarg
   const { draft, dispatch } = useBooking();
   const { goTo } = useStepNavigation('time');
   const zone = catalog.timeZone;
-  const now = useNow();
-  const availability = useAvailability(catalog, target, now);
   const policy = useNoShowPolicy(target);
+  // The fee notice changes the moment the picked time is inside its free-cancellation cutoff.
+  const now = useNow(60_000, policy.state.status === 'ready' && draft.start ? cutoffOf(policy.state.policy, draft.start) : null);
+  const availability = useAvailability(catalog, target, now);
   const summary = summarize(catalog, draft);
 
   const pages = useMemo(() => monthsBetween(availability.today, availability.lastDay), [availability.today, availability.lastDay]);

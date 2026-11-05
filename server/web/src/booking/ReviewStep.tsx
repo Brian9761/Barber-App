@@ -8,7 +8,7 @@ import { CallLink, Loading, NewTabLink, Notice } from '../components/ui';
 import { DemoNotice } from '../demo/DemoNotice';
 import { deleteSavedCardQuietly } from '../lib/cardRemoval';
 import { cardLabel, list, windowLabel } from '../lib/format';
-import { cancelledLate, feeLabel, lateCancelNoticeText } from '../lib/lateCancel';
+import { cancelledLate, cutoffOf, feeLabel, lateCancelNoticeText } from '../lib/lateCancel';
 import { leaveTo } from '../lib/leave';
 import { parseUSPhone, toE164 } from '../lib/phone';
 import { dateTimeLabel, localDate, timeLabel } from '../lib/shopTime';
@@ -76,9 +76,10 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
   const details = draft.details!;
   const phone = phoneOf(details.phone);
   const zone = catalog.timeZone;
-  const now = useNow();
   const summary = summarize(catalog, draft);
   const { state: policyState, reload: reloadPolicy } = useNoShowPolicy(target);
+  // The notices below change the moment this time is inside its free-cancellation cutoff.
+  const now = useNow(60_000, policyState.status === 'ready' ? cutoffOf(policyState.policy, start) : null);
   const [card, setCard] = useState<StoredCard | null>(() => (phone ? loadCardFor(phone) : null));
   const [booking, setBooking] = useState(false);
   const [failure, setFailure] = useState<BookingFailure | null>(null);

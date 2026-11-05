@@ -89,6 +89,16 @@ export function lateCancelNoticeText(windowMinutes: number, fee: string): string
 }
 
 /**
+ * When cancelling a time starting at `start` stops being free under `policy` (ms): the window
+ * before it. Null when it never does (no card needed, or late cancellations off).
+ */
+export function cutoffOf(policy: NoShowPolicy, start: string): number | null {
+  if (!policy.required || policy.lateCancelWindowMinutes === null) return null;
+  const at = new Date(start).getTime() - policy.lateCancelWindowMinutes * 60_000;
+  return Number.isFinite(at) ? at : null;
+}
+
+/**
  * For a picked time that starts less than the window from now (bookings open 30 minutes ahead,
  * the window is often an hour): the policy's "Cancelling in the app more than 1 hour before is
  * free" can't apply to it, and once it's booked, cancelling it is free only for 15 minutes.
