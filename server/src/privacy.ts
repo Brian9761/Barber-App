@@ -241,7 +241,7 @@ export const PRIVACY_USAGE = `Answer a client's privacy request, after checking 
   npm run privacy:forget -- --phone "(442) 555-0170" [--dry-run]
 
 find prints everything kept about that person as JSON (save it with --out and send it to them).
-correct fixes an appointment's name, number or email ("" removes the number or email), and the name on its checkout.
+correct fixes an appointment's name, number or email ("" removes the number or email), and the same name where its checkout copied it.
 forget removes their name, number, email and notes now, except from appointments still needed (it says which, and when to run it again), and deletes their saved cards at Stripe.`;
 
 /** Runs one command; what to print, and the exit code. */
