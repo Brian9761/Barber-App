@@ -105,7 +105,20 @@ function VisitDetails({ catalog }: { catalog: Catalog }) {
           </div>
           <div className="know-list__row">
             <dt>Accessibility</dt>
-            <dd>{shop.accessibility.join(' · ')}</dd>
+            {/* Only what the owner has checked (catalog.json); until then, a call away. */}
+            <dd data-testid="visit-accessibility">
+              {shop.accessibility.length > 0 ? (
+                shop.accessibility.join(' · ')
+              ) : (
+                <>
+                  Questions about getting in or around the shop? Call{' '}
+                  <a className="inline-link nowrap" href={`tel:${shop.phone.e164}`}>
+                    {shop.phone.display}
+                  </a>{' '}
+                  and we'll help.
+                </>
+              )}
+            </dd>
           </div>
         </dl>
       </section>

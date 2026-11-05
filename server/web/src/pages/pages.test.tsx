@@ -1,6 +1,9 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { App, ROUTER_FUTURE } from '../App';
+import { CatalogProvider } from '../data/catalog';
 import { forgetReviews } from '../data/reviews';
 import { catalog, mockApi, renderApp, reviews, reviewsUnavailable } from '../test/api';
 import { times } from '../test/text';
@@ -161,6 +164,25 @@ describe('Visit', () => {
     // Paid at the shop; a card the shop may hold isn't "never online", so it doesn't say so.
     expect(main().getByText('Credit card · Gift card. You pay at the shop.')).toBeTruthy();
     expect(document.body.textContent).not.toContain('never online');
+  });
+
+  it('lists the shop’s accessibility features when the catalog has them', () => {
+    renderApp('/visit');
+    expect(screen.getByTestId('visit-accessibility').textContent).toBe(catalog.shop.accessibility.join(' · '));
+  });
+
+  it('until the owner has checked them, asks people to call about getting in, with the number to call', () => {
+    render(
+      <MemoryRouter initialEntries={['/visit']} future={ROUTER_FUTURE}>
+        <CatalogProvider initial={{ ...catalog, shop: { ...catalog.shop, accessibility: [] } }}>
+          <App />
+        </CatalogProvider>
+      </MemoryRouter>,
+    );
+    const line = screen.getByTestId('visit-accessibility');
+    expect(line.textContent).toBe("Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.");
+    expect(within(line).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
+    expect(document.body.textContent).not.toMatch(/ADA|Wheelchair accessible/);
   });
 });
 

@@ -498,11 +498,7 @@
       "At Izzy Clipz, a haircut is more than just a service. It's an experience. Izzy and his team are dedicated to helping you look and feel your best, whether you're after a fresh cut, a bold new color or a precision shave.",
       "Walk-ins are welcome, and appointments are available for your convenience."
     ],
-    "accessibility" : [
-      "Wheelchair accessible",
-      "ADA-compliant entrance",
-      "Accessible parking near the entrance"
-    ],
+    "accessibility" : [],
     "address" : {
       "city" : "Oceanside",
       "lines" : [

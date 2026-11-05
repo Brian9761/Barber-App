@@ -50,7 +50,11 @@ afterEach(() => {
 
 describe('the catalog', () => {
   it('is the shop’s real catalog, exactly what the server’s GET /api/catalog answers', async () => {
-    expect(await demo().catalog()).toEqual(catalogFixture);
+    // data/catalog.json lists none of the shop's accessibility features until the owner has
+    // checked them (docs/legal/research.md §18, item 17); the server's contract fixture still
+    // lists the old ones until it's written again (UPDATE_CONTRACT_FIXTURES=1 in server/).
+    expect(DEMO_CATALOG.shop.accessibility).toEqual([]);
+    expect(await demo().catalog()).toEqual({ ...catalogFixture, shop: { ...catalogFixture.shop, accessibility: [] } });
     expect(DEMO_CATALOG.timeZone).toBe(LA);
   });
 });
