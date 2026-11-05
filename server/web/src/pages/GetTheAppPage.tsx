@@ -39,9 +39,11 @@ export function GetTheAppPage() {
         </div>
       ) : null}
       {standalone ? <UsingTheApp computer={computer} /> : <HowToGetIt platform={platform} />}
-      <p className="container secondary get-app-privacy" data-testid="get-app-privacy">
-        It's this website, installed: our <Link to="/privacy">Privacy Policy</Link> explains what it keeps on your {thisDevice()}.
-      </p>
+      <div className="container get-app-privacy">
+        <p className="secondary" data-testid="get-app-privacy">
+          It's this website, installed: our <Link to="/privacy">Privacy Policy</Link> explains what it keeps on your {thisDevice()}.
+        </p>
+      </div>
     </>
   );
 }

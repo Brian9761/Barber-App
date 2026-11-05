@@ -485,7 +485,6 @@ html.is-standalone body {
 
 /* Get the app: the app is this website, and its Privacy Policy says what it keeps. */
 .get-app-privacy {
-  max-width: calc(var(--content-width) + 2 * var(--gutter));
   padding-top: var(--space-8);
   padding-bottom: var(--space-16);
 }

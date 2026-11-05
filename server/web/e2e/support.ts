@@ -173,6 +173,37 @@ export async function expectFits(page: Page, what: string): Promise<void> {
   expect(overflow.tight, `${what}: text keeps clear of the screen's edges`).toEqual([]);
 }
 
+/**
+ * Every request this page makes to another site (the Privacy Policy: the website loads its pages,
+ * fonts and pictures from its own host, and only Google's reviewers' photos and Stripe's card page
+ * from anywhere else). Checked at the end of a test.
+ */
+export function watchOtherSites(page: Page, testInfo: TestInfo): string[] {
+  const own = new URL(String(testInfo.project.use.baseURL)).origin;
+  const others: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if ((url.protocol === 'http:' || url.protocol === 'https:') && url.origin !== own) others.push(request.url());
+  });
+  return others;
+}
+
+/** What the Privacy Policy says the website keeps in the browser (its table "Our website also keeps…", and the demo's). */
+export const POLICY_STORAGE = {
+  local: [
+    'izzy.appointments.v1',
+    'izzy.details.v1',
+    'izzy.card.v1',
+    'izzy.visits.v1',
+    'izzy.installHint.v1',
+    'izzy.business.session.v1',
+    'izzy.business.lastBarber.v1',
+  ],
+  session: ['izzy.booking.v1', 'izzy.cardCheckout.v1', 'izzy.card.v1', 'izzy.lastBooked.v1', 'izzy.visitCounted.v1'],
+  /** Only in the demo, which "Forget me" and "Reset the demo" clear. */
+  demo: ['izzy.demo.v1', 'izzy.demo.appointments.v1', 'izzy.demo.business.v1', 'izzy.demo.business.session.v1'],
+} as const;
+
 /** A full-page screenshot, named for the screen size: "desktop-03-barbers.png". Checks the page fits, too. */
 export async function screenshot(page: Page, testInfo: TestInfo, name: string, options: { fullPage?: boolean } = {}): Promise<void> {
   mkdirSync(SHOTS_DIR, { recursive: true });
@@ -270,10 +301,12 @@ export async function setProtection(request: APIRequestContext, on: boolean): Pr
 
 // --------------------------------------------------------------- Booking steps
 
-/** "Step 2 of 5" and the step's question. */
+/** "Step 2 of 5" and the step's question: its one main heading, and the page's title. */
 export async function expectStep(page: Page, number: number, title: string): Promise<void> {
   await expect(page.getByTestId('step-count')).toHaveText(`Step ${number} of 5`);
   await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible();
+  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page).toHaveTitle(`Step ${number} of 5: ${title} · Izzy Clipz Barbershop`);
   await expect(page.getByRole('main').getByRole('button', { name: 'Back', exact: true })).toBeVisible();
 }
 

@@ -1,8 +1,11 @@
-import { expectAccessible, expect, expectFits, expectLogosStandOut, isPhone, screenshot, setLiveReviews, test } from './support.js';
+import type { Locator, Page } from '@playwright/test';
+import { expectAccessible, expect, expectFits, expectLogosStandOut, firstTime, isPhone, screenshot, setLiveReviews, tabTo, test, watchOtherSites } from './support.js';
 
-// Every page opens with its own heading and title, works from the nav on a
-// desktop and a phone, logs nothing as an error and has no serious
-// accessibility problems. Screenshots of each.
+// Every page (the four legal ones too) opens with its one main heading and its title, works
+// from the nav on a desktop and a phone, logs nothing as an error, has no serious
+// accessibility problems, loads nothing from another site and never links the shop's older
+// website. With "reduce motion" nothing moves; in forced colors the controls keep their
+// edges, focus rings and states. Screenshots of each.
 
 const PAGES = [
   { path: '/', shot: '01-home', heading: 'Fresh cuts. Booked in seconds.', title: 'Izzy Clipz Barbershop in Oceanside' },
@@ -14,6 +17,10 @@ const PAGES = [
   { path: '/appointments', shot: '07-appointments-empty', heading: 'My appointments', title: 'My appointments · Izzy Clipz Barbershop' },
   { path: '/app', shot: '20-get-the-app', heading: 'Get the app.', title: 'Get the app · Izzy Clipz Barbershop' },
   { path: '/no-such-page', shot: '09-not-found', heading: "This page isn't here.", title: 'Page not found · Izzy Clipz Barbershop' },
+  { path: '/privacy', shot: '30-privacy', heading: 'Privacy Policy', title: 'Privacy Policy · Izzy Clipz Barbershop' },
+  { path: '/terms', shot: '31-terms', heading: 'Terms of Service', title: 'Terms of Service · Izzy Clipz Barbershop' },
+  { path: '/cancellation-policy', shot: '32-cancellation-policy', heading: 'Cancellation & No-Show Policy', title: 'Cancellation & No-Show Policy · Izzy Clipz Barbershop' },
+  { path: '/accessibility', shot: '33-accessibility', heading: 'Accessibility Statement', title: 'Accessibility · Izzy Clipz Barbershop' },
 ] as const;
 
 test.describe('every page', () => {
@@ -23,8 +30,11 @@ test.describe('every page', () => {
 
   for (const page of PAGES) {
     test(`${page.path} opens with its heading, title and description`, async ({ page: tab }, testInfo) => {
+      const otherSites = watchOtherSites(tab, testInfo);
       await tab.goto(page.path);
       await expect(tab.getByRole('heading', { level: 1, name: page.heading })).toBeVisible();
+      // One main heading.
+      await expect(tab.locator('h1')).toHaveCount(1);
       await expect(tab).toHaveTitle(page.title);
       await expect(tab.locator('meta[name="description"]')).toHaveAttribute('content', /.{40,}/);
       await expect(tab.locator('meta[property="og:title"]')).toHaveAttribute('content', page.title);
@@ -49,11 +59,25 @@ test.describe('every page', () => {
           'https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside',
         );
       }
+      // The shop's policies from the footer, Privacy first.
+      await expect(tab.getByRole('contentinfo').getByRole('navigation', { name: 'Legal' }).getByRole('link').first()).toHaveText('Privacy Policy');
+      // Never the shop's older website or its Squire page as if they were this one.
+      await expect(tab.locator('a[href*="izzyclipzbarbershop"], a[href*="squire" i]')).toHaveCount(0);
       await expectAccessible(tab, page.path);
       await expectLogosStandOut(tab, page.path);
       await screenshot(tab, testInfo, page.shot);
+      // Everything came from this site (the server's reviews have no photos here).
+      expect(otherSites, `${page.path} loads nothing from another site`).toEqual([]);
     });
   }
+
+  test('the offline page has no serious accessibility problems, and links the Privacy Policy', async ({ page }) => {
+    await page.goto('/offline.html');
+    await expect(page.getByRole('heading', { level: 1, name: "You're offline." })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute('href', '/privacy');
+    await expectAccessible(page, '/offline.html');
+    await expectFits(page, '/offline.html');
+  });
 });
 
 test('every page fits a small phone, 375 pixels wide', async ({ page }, testInfo) => {
@@ -178,6 +202,94 @@ test('in Windows High Contrast, light or dark, every logo takes the system’s c
       await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
       await expectLogosStandOut(page, `${path} in High Contrast, ${colorScheme}`);
     }
+  }
+});
+
+/** How a control is drawn now: its border, underline, background and outline. */
+function drawn(control: Locator) {
+  return control.evaluate((element) => {
+    const style = getComputedStyle(element);
+    return {
+      border: style.borderTopStyle === 'none' ? 0 : parseFloat(style.borderTopWidth),
+      underline: style.textDecorationLine.includes('underline'),
+      background: style.backgroundColor,
+    };
+  });
+}
+
+/** The system's highlight color in forced colors, as the browser paints it. */
+function highlightColor(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const probe = document.createElement('div');
+    probe.style.setProperty('forced-color-adjust', 'none');
+    probe.style.setProperty('background-color', 'Highlight');
+    document.body.append(probe);
+    const color = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return color;
+  });
+}
+
+test('in forced colors (Windows High Contrast), the controls keep their edges, focus rings and states', async ({ page, phone }, testInfo) => {
+  test.skip(isPhone(testInfo), 'High Contrast is a Windows computer setting');
+  await page.emulateMedia({ forcedColors: 'active' });
+
+  // The choices are cards with an edge.
+  await page.goto('/book?service=haircut');
+  const any = page.getByTestId('any-barber');
+  expect((await drawn(any)).border, 'a choice’s edge').toBeGreaterThanOrEqual(1);
+  await any.click();
+
+  // Each time has an edge; the picked time and the picked day take the system's highlight.
+  const highlight = await highlightColor(page);
+  const chip = await firstTime(page);
+  expect((await drawn(chip)).border, 'a time’s edge').toBeGreaterThanOrEqual(1);
+  await chip.click();
+  expect((await drawn(chip)).background, 'the picked time').toBe(highlight);
+  expect((await drawn(page.locator('.calendar__day[aria-pressed="true"]'))).background, 'the picked day').toBe(highlight);
+  // Buttons keep an edge, and the focus ring shows (tabTo checks it on the way).
+  const next = page.getByRole('button', { name: 'Continue' });
+  expect((await drawn(next)).border, 'a button’s edge').toBeGreaterThanOrEqual(1);
+  await tabTo(page, next);
+  await page.keyboard.press('Enter');
+
+  // Fields have edges; Remember me is the browser's own checkbox.
+  for (const label of ['Name', 'Mobile number']) {
+    expect((await drawn(page.getByRole('textbox', { name: label, exact: true }))).border, label).toBeGreaterThanOrEqual(1);
+  }
+  await page.getByRole('textbox', { name: 'Name', exact: true }).fill('Hana Contrast');
+  await page.getByRole('textbox', { name: 'Mobile number' }).fill(phone);
+  await next.click();
+  // Buttons that look like links are underlined, so they don't read as plain words.
+  expect((await drawn(page.getByRole('button', { name: 'Change service' }))).underline, '“Change”').toBe(true);
+
+  // The device picker on Get the app has a frame; its picked choice an outline in the system's highlight.
+  await page.goto('/app');
+  expect((await drawn(page.locator('.segmented').first())).border, 'the device picker’s frame').toBeGreaterThanOrEqual(1);
+  // "On this page" on a legal page has a frame too.
+  await page.goto('/privacy');
+  expect((await drawn(page.locator('.legal-toc'))).border, '“On this page”').toBeGreaterThanOrEqual(1);
+});
+
+test('with “reduce motion”, nothing on the site moves', async ({ page }, testInfo) => {
+  test.skip(isPhone(testInfo), 'Once is enough: the same styles at every size');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  for (const path of ['/', '/book', '/visit', '/privacy', '/app', '/business']) {
+    await page.goto(path);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    const moving = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('*'))
+        .flatMap((element) =>
+          [null, '::before', '::after'].flatMap((pseudo) => {
+            const style = getComputedStyle(element, pseudo);
+            const longest = Math.max(...`${style.transitionDuration},${style.animationDuration}`.split(',').map((d) => parseFloat(d) || 0));
+            return style.animationName !== 'none' || longest > 0 ? [`${element.tagName.toLowerCase()}.${element.getAttribute('class') ?? ''}${pseudo ?? ''}`] : [];
+          }),
+        )
+        .slice(0, 5),
+    );
+    expect(moving, `${path}: nothing moves`).toEqual([]);
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).scrollBehavior)).toBe('auto');
   }
 });
 
