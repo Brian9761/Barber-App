@@ -36,7 +36,7 @@ Our website is also available as a public demo, and our iPhone apps have demo ve
 - no card is ever asked for, and nothing is charged;
 - the reviews are samples, so no photos load from Google or Yelp.
 
-Our hosting provider still processes your IP address and browser details to deliver the demo website's pages (see "Technical information"). "Forget me" and "Reset the demo" clear what the demo website stored on your device.
+Our hosting provider still processes your IP address and browser details to deliver the demo website's pages (see "Technical information"). "Forget me" clears everything the demo website stored on your device, and "Reset the demo" puts the sample shop in Izzy Clipz Business back as it started.
 
 The rest of this policy describes the real versions.
 
@@ -144,7 +144,7 @@ We share with each provider only what it needs. Vercel and Neon process your inf
 
 ### On our website
 
-We use **one cookie**, called `izzy_appointments`. It's a first-party, functional cookie. It carries the appointments you booked in this browser (each one's ID and its key to manage it) into the app you add to your Home Screen, which keeps its own storage. Your browser sends it to our server with each request, but our server doesn't read it. It ends 60 days after it was last updated, each appointment in it is dropped 30 days after the appointment, and the demo never sets it.
+We use **one cookie**, called `izzy_appointments`. It's a first-party, functional cookie. It carries the appointments you booked in this browser (each one's ID and its key to manage it) into the app you add to your Home Screen, which keeps its own storage. Your browser sends it to our server with each request, but our server doesn't read it. It ends at most 60 days after it was last updated (some browsers end it sooner), and never later than 30 days after the last appointment in it. Each appointment in it is dropped 30 days after the appointment, the next time you open our website. The demo never sets it.
 
 We don't use advertising or analytics cookies. Stripe may use cookies on its own card page.
 
@@ -152,13 +152,15 @@ Our website also keeps a few things in your browser's storage, for your convenie
 
 | What | When it's removed |
 |---|---|
-| The appointments you booked in this browser, with their keys (never your name, number, email or note) | 30 days after each appointment, or when you choose "Forget me" |
+| The appointments you booked in this browser, with their keys and, for a booking with a card on file, the card's type and last 4 digits (never your name, number, email or note) | 30 days after each appointment (the next time you open our website), or when you choose "Forget me" |
 | Your name, number and email, only if you turn on "Remember me" (it's off unless this browser already remembers you) | When you choose "Forget me" or "Not you?" |
 | The key to your saved card, with its type, last 4 digits and expiry, and the number of the person who added it | With "Remember me", when you choose "Forget me"; without it, after you book or when you close the tab |
 | The booking you're in the middle of, including your details (and, while you add a card, what's needed to come back from Stripe's page) | When you book, close the tab or choose "Forget me" |
 | The last appointment you booked in this tab, so its confirmation can be shown again | When you close the tab or choose "Forget me" |
 | Whether the "Add to Home Screen" bar was closed, and a count of visits for that bar | When you clear your browser's data for our website |
-| For shop staff only: the computer's sign-in to Izzy Clipz Business (never the owner key), and the barber last picked at checkout | The sign-in: when staff sign out, or after 30 days |
+| For shop staff only: the computer's sign-in to Izzy Clipz Business (never the owner key), and the barber last picked at checkout | The sign-in: when staff sign out, or after 30 days (the next time our website is opened on that computer) |
+
+A browser that reopens a closed tab can bring back what that tab kept, so on a shared computer, use "Forget me" before you leave.
 
 To work offline, our website also saves copies of its own pages, pictures and the shop's public menu on your device. It never saves your personal information there.
 
@@ -253,7 +255,7 @@ Our server, database and the shop's product photos are hosted in the United Stat
 
 Izzy Clipz Business is for the shop's staff. Here's what it handles about them:
 
-- **The owner key** is kept on the shop's server and in the Keychain of the shop's iPhone, on that iPhone only. It's never stored on a computer: computers sign in with a one-time code instead.
+- **The owner key** is kept on the shop's server and in the Keychain of the shop's iPhone, on that iPhone only. It's never stored on a computer: a computer signs in with a one-time code, made in the iPhone app or by typing the key once, and our website doesn't keep the key or offer it to the browser to save.
 - **Signed-in computers.** For each computer signed in to Izzy Clipz Business, our server keeps a name made from its browser (for example, "Chrome on Mac") and when it was last used. Each sign-in lasts at most 30 days, and ended sign-ins are deleted when the next computer signs in.
 - **Product photos.** The app uses the camera and photo library only for photos of the shop's products. Before a photo is uploaded, it's redrawn on the device, which removes its location and other camera details. Product photos are public, because the client app shows them.
 - **Tap to Pay on iPhone.** Stripe needs to know where card payments are taken, to reduce fraud and disputes, so its software checks the iPhone's location while a payment is taken; without it, Tap to Pay is turned off. Stripe's software also sends Stripe the iPhone's approximate location and information about how its payment features are used. The app declares Bluetooth only because Stripe's software supports Bluetooth card readers; it doesn't connect to Bluetooth devices.
