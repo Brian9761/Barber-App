@@ -100,6 +100,8 @@ struct NoShowSettingsView: View {
                 Section {
                     Label("Saved. New bookings use these settings.", systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                        // One message, as InlineMessage is: not the checkmark and the words apart.
+                        .accessibilityElement(children: .combine)
                         .accessibilityIdentifier("noShowSaved")
                 }
             }
