@@ -29,7 +29,7 @@ enum NoShowTestData {
     static let carlosPolicyText = "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $45 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free."
     static let carlosWarning = IzzyAPI.NoShowWarning(
         title: "Full Service Cancellation & No-Show Fee",
-        message: "Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($45). Cancelling in the app more than 1 hour before is free."
+        message: "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($45). Cancelling in the app more than 1 hour before is free."
     )
     static let carlosPolicy = IzzyAPI.NoShowPolicy(
         required: true, minFeeCents: 4_500, maxFeeCents: 4_500, policyText: carlosPolicyText,
@@ -45,9 +45,11 @@ enum NoShowTestData {
         StoredCard(token: .generate(), card: card)
     }
 
-    /// Carlos's haircut with a card on file, booked under the starting policy.
+    /// Carlos's haircut with a card on file, booked the day before under the starting policy (so the
+    /// 15 minutes after booking, when cancelling is always free, are long over).
     static func appointment(start: Date, fee: IzzyAPI.NoShowFee? = nil) -> IzzyAPI.Appointment {
         var appointment = TestData.appointment(start: start)
+        appointment.createdAt = TestData.now.addingTimeInterval(-24 * 60 * 60)
         appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
         appointment.noShowFee = fee ?? IzzyAPI.NoShowFee(amountCents: 4_500, fullPrice: true, lateCancelWindowMinutes: 60)
         return appointment
@@ -383,12 +385,13 @@ final class NoShowWarningContentTests: XCTestCase {
         XCTAssertEqual(content.spoken, "Full Service Cancellation & No-Show Fee. \(NoShowTestData.carlosWarning.message)")
     }
 
-    /// A time less than the window away can't be cancelled for free once it's booked: it says so.
-    /// An hour or more away is free to cancel until an hour before.
+    /// A time less than the window away can be cancelled for free only for 15 minutes once it's
+    /// booked: it says so. An hour or more away is free to cancel until an hour before.
     func testAPickedTimeInsideTheWindowSaysCancellingMayBeCharged() throws {
         let soon = try XCTUnwrap(NoShowWarningContent(policy: NoShowTestData.carlosPolicy, start: TestData.now.addingTimeInterval(45 * 60), now: TestData.now))
-        XCTAssertEqual(soon.notice, "This time is less than 1 hour away, so cancelling it may be charged $45.")
-        XCTAssertTrue(soon.spoken.hasSuffix("This time is less than 1 hour away, so cancelling it may be charged $45."))
+        let notice = "This time is less than 1 hour away, so cancelling it more than 15 minutes after booking may be charged $45."
+        XCTAssertEqual(soon.notice, notice)
+        XCTAssertTrue(soon.spoken.hasSuffix(notice))
         let inAnHour = try XCTUnwrap(NoShowWarningContent(policy: NoShowTestData.carlosPolicy, start: TestData.now.addingTimeInterval(60 * 60), now: TestData.now))
         XCTAssertNil(inAnHour.notice, "Exactly an hour away: still free until an hour before")
 
@@ -407,7 +410,7 @@ final class LateCancelNoticeTimerTests: XCTestCase {
     private let start = TestData.now.addingTimeInterval(90 * 60)
     /// 12:30 PM: exactly an hour before, the last moment cancelling 1:30 PM is free.
     private var lastFreeMoment: Date { start.addingTimeInterval(-60 * 60) }
-    private let notice = "This time is less than 1 hour away, so cancelling it may be charged $45."
+    private let notice = "This time is less than 1 hour away, so cancelling it more than 15 minutes after booking may be charged $45."
 
     /// The minute a once-a-minute timeline got wrong: its moment for 12:30:00–12:30:59 is 12:30:00
     /// sharp, which is still free, so a client booking 1:30 PM at 12:30:40 never saw the note.
@@ -441,7 +444,7 @@ final class LateCancelNoticeTimerTests: XCTestCase {
         XCTAssertNil(LateCancelNoticeTimer(policy: twoHours, start: start).wait(now: TestData.now))
         XCTAssertEqual(
             NoShowWarningContent(policy: twoHours, start: start, now: TestData.now)?.notice,
-            "This time is less than 2 hours away, so cancelling it may be charged $45."
+            "This time is less than 2 hours away, so cancelling it more than 15 minutes after booking may be charged $45."
         )
     }
 
@@ -1040,6 +1043,38 @@ final class AppointmentCancellingTests: XCTestCase {
         XCTAssertEqual(api.cancellations.map(\.acceptLateCancelFee), [true])
     }
 
+    /// Booked a few minutes ago for a time already inside the window: cancelling within 15 minutes of
+    /// booking is always free, so it says so (exactly 15 minutes after too); a minute later it warns.
+    func testWithin15MinutesOfBookingCancellingIsFree() async throws {
+        let start = TestData.now.addingTimeInterval(40 * 60)
+        var appointment = NoShowTestData.appointment(start: start)
+        appointment.createdAt = TestData.now.addingTimeInterval(-10 * 60)
+        let store = makeStore(holding: appointment)
+        api.cancelHandler = { [unowned self] id, _ in cancelled(id) }
+        let flow = makeFlow(store)
+        flow.ask()
+        XCTAssertEqual(
+            flow.question,
+            CancelQuestion(message: "Haircut with Carlos, \(calendar.dateTimeLabel(for: start)). The shop sees it right away. Cancelling now is free.", warnsOfFee: false)
+        )
+        now = TestData.now.addingTimeInterval(5 * 60)
+        flow.ask()
+        XCTAssertEqual(flow.question?.warnsOfFee, false, "exactly 15 minutes after booking")
+        now = TestData.now.addingTimeInterval(6 * 60)
+        flow.ask()
+        let question = try XCTUnwrap(flow.question)
+        XCTAssertTrue(question.warnsOfFee, "16 minutes after booking")
+        XCTAssertEqual(question.message, "\(NoShowTestData.lateCancelWarning) Haircut with Carlos, \(calendar.dateTimeLabel(for: start)).")
+        flow.dismissQuestion()
+
+        // Asked within the 15 minutes, it cancels without agreeing to any fee.
+        now = TestData.now
+        flow.ask()
+        let outcome = await flow.confirm(try XCTUnwrap(flow.question))
+        XCTAssertEqual(outcome, .cancelled)
+        XCTAssertEqual(api.cancellations.map(\.acceptLateCancelFee), [false])
+    }
+
     /// The question is worked out when it's asked: the same booking an hour and a half ahead is free,
     /// then half an hour ahead it warns.
     func testTheQuestionIsWorkedOutWhenAsked() throws {
@@ -1271,7 +1306,7 @@ final class FakeShopAPINoShowTests: XCTestCase {
 
     /// The server's own answer for "any barber" Haircut & Beard (server/test/fixtures/contract/no-show-policy.json).
     func testAnyBarberGivesTheRangeOfTheirFees() async throws {
-        let fixture = #"{"required":true,"minFeeCents":5500,"maxFeeCents":6000,"policyText":"No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $55–$60 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.","lateCancelWindowMinutes":60,"warning":{"title":"Full Service Cancellation & No-Show Fee","message":"Cancelling less than 1 hour before your appointment, or not showing up, is charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free."}}"#
+        let fixture = #"{"required":true,"minFeeCents":5500,"maxFeeCents":6000,"policyText":"No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $55–$60 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.","lateCancelWindowMinutes":60,"warning":{"title":"Full Service Cancellation & No-Show Fee","message":"Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free."}}"#
         let server = try IzzyAPI.makeDecoder().decode(IzzyAPI.NoShowPolicy.self, from: Data(fixture.utf8))
         let policy = try await NoShowTestData.fake().noShowPolicy(for: .anyBarber(serviceId: "haircut-and-beard"))
         XCTAssertEqual(policy, server)
@@ -1296,7 +1331,7 @@ final class FakeShopAPINoShowTests: XCTestCase {
         let policy = try await NoShowTestData.fake { $0.noShowSettings.lateCancelEnabled = false }.noShowPolicy(for: carlos)
         XCTAssertNil(policy.lateCancelWindowMinutes)
         XCTAssertEqual(policy.policyText, "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $45 (100% of the service) to this card. Cancelling in the app before your appointment is free.")
-        XCTAssertEqual(policy.warning, IzzyAPI.NoShowWarning(title: "No-Show Fee", message: "Not showing up is charged the full service price ($45). Cancelling in the app before your appointment is free."))
+        XCTAssertEqual(policy.warning, IzzyAPI.NoShowWarning(title: "No-Show Fee", message: "Not showing up may be charged the full service price ($45). Cancelling in the app before your appointment is free."))
     }
 
     /// Booking needs a usable card and today's policy, checked in the server's order, with its words.

@@ -579,9 +579,14 @@ final class FakeShopAPITests: XCTestCase {
     /// cancel time counts, and a request the shop's status turned down still counts.
     func testABookingWithACardOnFileIsCancelledLikeOnTheServer() async throws {
         let fake = makeFake()
-        func held(_ n: Int, startsIn minutes: Double, status: IzzyAPI.AppointmentStatus = .booked, cancelledAt: Date? = nil) -> (id: String, token: String) {
+        /// Booked a day before unless `bookedMinutesAgo` says otherwise.
+        func held(
+            _ n: Int, startsIn minutes: Double, status: IzzyAPI.AppointmentStatus = .booked, cancelledAt: Date? = nil,
+            bookedMinutesAgo: Double = 24 * 60
+        ) -> (id: String, token: String) {
             let id = "00000000-0000-4000-8000-00000000000\(n)"
             var appointment = TestData.appointment(id: id, start: TestData.now.addingTimeInterval(minutes * 60), status: status)
+            appointment.createdAt = TestData.now.addingTimeInterval(-bookedMinutesAgo * 60)
             appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
             appointment.noShowFee = IzzyAPI.NoShowFee(amountCents: 4_500, fullPrice: true, customerCancelledAt: cancelledAt, lateCancelWindowMinutes: 60)
             fake.hold(appointment, token: "token-\(n)")
@@ -611,6 +616,23 @@ final class FakeShopAPITests: XCTestCase {
         let free = try await fake.cancelAppointment(id: early.id, manageToken: early.token)
         XCTAssertEqual(free.noShowFee?.customerCancelledAt, TestData.now)
         XCTAssertNil(free.noShowFee?.reason)
+
+        // 30 minutes ahead, but booked 15 minutes ago: within 15 minutes of booking it's always free,
+        // and nothing is asked. Booked 16 minutes ago, the server asks first.
+        let justBooked = held(5, startsIn: 30, bookedMinutesAgo: 15)
+        let graceFree = try await fake.cancelAppointment(id: justBooked.id, manageToken: justBooked.token)
+        XCTAssertEqual(graceFree.status, .cancelled)
+        XCTAssertEqual(graceFree.noShowFee?.customerCancelledAt, TestData.now)
+        XCTAssertNil(graceFree.noShowFee?.reason)
+        let bookedEarlier = held(6, startsIn: 30, bookedMinutesAgo: 16)
+        do {
+            _ = try await fake.cancelAppointment(id: bookedEarlier.id, manageToken: bookedEarlier.token)
+            XCTFail("16 minutes after booking, inside the window, the server asks first")
+        } catch {
+            XCTAssertEqual(error as? APIError, .lateCancelFee(
+                message: "Cancelling now, less than 1 hour before your appointment, may be charged $45, the full service price."
+            ))
+        }
 
         // Cancelled the day before, then reopened by the shop: the first time counts, so it's still free.
         let dayBefore = TestData.now.addingTimeInterval(-86_400)

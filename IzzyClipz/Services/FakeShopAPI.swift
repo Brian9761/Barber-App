@@ -300,7 +300,8 @@ final class FakeShopAPI: ShopAPI {
             if fee.status == .none {
                 let found = IzzyAPI.NoShowRule.feeCase(
                     status: .cancelled, cancelledBy: .customer, start: entry.appointment.start,
-                    customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes
+                    customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes,
+                    createdAt: entry.appointment.createdAt
                 )
                 if case .chargeable(let reason) = found { fee.reason = reason } else { fee.reason = nil }
             }
@@ -547,7 +548,8 @@ final class FakeShopAPI: ShopAPI {
     }
 
     /// A booking with a card on file that already exists when the app starts: a haircut with Carlos
-    /// in 45 minutes, booked under the server's starting policy, so cancelling it now may be charged
+    /// in 45 minutes, booked yesterday under the server's starting policy (so the 15 minutes after
+    /// booking when cancelling is always free are long over), so cancelling it now may be charged
     /// the full service price ($45). The app saves it as if it had been booked on this phone.
     func seedBookingStartingSoonWithCard(customerName: String = "Sample client") -> IzzyAPI.BookingConfirmation? {
         guard let offering = catalog.offerings(forService: "haircut").first(where: { $0.barberID == "carlos-rafael" }) else {
@@ -560,6 +562,7 @@ final class FakeShopAPI: ShopAPI {
         let soon = now.addingTimeInterval(45 * 60)
         let start = Date(timeIntervalSince1970: (soon.timeIntervalSince1970 / 60).rounded(.down) * 60)
         var appointment = makeAppointment(offering: offering, start: start, name: customerName, phone: "+14425550123", note: nil)
+        appointment.createdAt = now.addingTimeInterval(-24 * 60 * 60)
         appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
         appointment.noShowFee = IzzyAPI.NoShowFee(
             amountCents: fee,

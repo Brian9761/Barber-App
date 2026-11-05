@@ -1147,7 +1147,10 @@ final class IzzyClipzUITests: XCTestCase {
         let note = element("lateCancelNotice")
         if expected {
             XCTAssertTrue(note.waitForExistence(timeout: 10), "No note for a time \(Int(minutesAway)) minutes away", file: file, line: line)
-            XCTAssertTrue(note.label.contains("less than 1 hour away, so cancelling it may be charged $45"), note.label, file: file, line: line)
+            XCTAssertTrue(
+                note.label.contains("less than 1 hour away, so cancelling it more than 15 minutes after booking may be charged $45"),
+                note.label, file: file, line: line
+            )
             XCTAssertTrue(note.isHittable, "The note isn't on screen", file: file, line: line)
             XCTAssertLessThanOrEqual(
                 note.frame.maxY, element("continueToDetails").frame.minY + 1,
