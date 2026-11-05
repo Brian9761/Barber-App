@@ -179,6 +179,24 @@ describe('Get the app', () => {
   });
 });
 
+describe('its Privacy Policy', () => {
+  it('says the app is this website, and that the Privacy Policy explains what it keeps, as the app too', () => {
+    on(USER_AGENTS.iphoneSafari);
+    renderApp('/app');
+    const line = screen.getByTestId('get-app-privacy');
+    expect(line.textContent).toBe("It's this website, installed: our Privacy Policy explains what it keeps on your phone.");
+    expect(within(line).getByRole('link', { name: 'Privacy Policy' }).getAttribute('href')).toBe('/privacy');
+  });
+
+  it('says so in the app too, on a computer with its word', () => {
+    on(USER_AGENTS.macChrome);
+    displayMode(true);
+    renderApp('/app');
+    expect(screen.getByTestId('using-the-app')).toBeTruthy();
+    expect(screen.getByTestId('get-app-privacy').textContent).toBe("It's this website, installed: our Privacy Policy explains what it keeps on your computer.");
+  });
+});
+
 describe('in the nav and footer', () => {
   it('is "Get the app" in both, and leaves them once it’s the app', () => {
     mockApi([['GET /api/reviews', { body: reviewsUnavailable }]]);

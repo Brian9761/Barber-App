@@ -10,7 +10,9 @@ import { isApiError } from '../../api/errors';
 import { Dialog } from '../../components/Dialog';
 import { Icon } from '../../components/Icon';
 import { Logo } from '../../components/Logo';
+import { NewTabLink } from '../../components/ui';
 import { useShopContact } from '../../data/catalog';
+import { LEGAL_DOCUMENTS } from '../../legal/documents';
 import { useOnline } from '../../pwa/connection';
 import { UpdateBar } from '../../pwa/UpdateBar';
 import { ownerApi } from '../api/client';
@@ -189,6 +191,16 @@ export function Frame({ signedIn, children }: { signedIn: boolean; children: Rea
           <p>
             The shop's phone: <a href={`tel:${phone.e164}`}>{phone.display}</a>
           </p>
+          {/* The clients' site's policies, out of the way: they open in a new tab, so the page here stays. */}
+          <nav className="biz-footer__legal" aria-label="Legal">
+            <ul>
+              {LEGAL_DOCUMENTS.map((document) => (
+                <li key={document.id}>
+                  <NewTabLink href={document.path}>{document.title}</NewTabLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
         </div>
       </footer>
       <UpdateBar />

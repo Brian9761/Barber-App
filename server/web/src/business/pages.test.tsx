@@ -55,7 +55,7 @@ describe('signing in', () => {
     const api = mockApi([['POST /api/computer-sessions', { status: 201, body: codeSession }], ...TODAY_ROUTES]);
     renderApp('/business');
     expect(await screen.findByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeTruthy();
-    const steps = screen.getByRole('list');
+    const steps = main().getByRole('list');
     expect(
       within(steps)
         .getAllByRole('listitem')
@@ -612,5 +612,29 @@ describe('Settings', () => {
     expect(await screen.findByText('Every computer was signed out, this one too. Each needs a new code from the app to sign in again.')).toBeTruthy();
     expect(api.calls.some((c) => c.method === 'DELETE' && c.path === '/api/owner/computer-sessions')).toBe(true);
     expect(main().getByRole('heading', { level: 1 }).textContent).toBe('Izzy Clipz Business on your computer');
+  });
+});
+
+describe('the shop’s policies', () => {
+  it('are linked from every Business page, sign-in included, small and in a new tab', async () => {
+    mockApi(TODAY_ROUTES);
+    renderApp('/business');
+    await screen.findByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' });
+    const policies = () => within(screen.getByRole('contentinfo')).getByRole('navigation', { name: 'Legal' });
+    const expected = [
+      ['Privacy Policy (opens in a new tab)', '/privacy'],
+      ['Terms of Service (opens in a new tab)', '/terms'],
+      ['Cancellation & No-Show Policy (opens in a new tab)', '/cancellation-policy'],
+      ['Accessibility (opens in a new tab)', '/accessibility'],
+    ];
+    const links = () => within(policies()).getAllByRole('link');
+    expect(links().map((a) => [a.textContent, a.getAttribute('href')])).toEqual(expected);
+    expect(links().every((a) => a.getAttribute('target') === '_blank' && a.getAttribute('rel') === 'noopener')).toBe(true);
+
+    signedIn();
+    renderApp('/business/today');
+    await screen.findAllByRole('navigation', { name: 'Legal' });
+    const all = screen.getAllByRole('navigation', { name: 'Legal' });
+    expect(within(all[all.length - 1]!).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(expected.map(([, href]) => href));
   });
 });

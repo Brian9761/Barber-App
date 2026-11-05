@@ -28,6 +28,19 @@ export function MoreLink({ to, href, children, large = false }: { to?: string; h
   );
 }
 
+/**
+ * A link that opens in a new tab (one of the shop's policies, from the middle of a booking), so
+ * what's on screen stays where it is. Screen readers hear that it opens in a new tab.
+ */
+export function NewTabLink({ href, className, children, testId }: { href: string; className?: string; children: ReactNode; testId?: string }) {
+  return (
+    <a className={className} href={href} target="_blank" rel="noopener" data-testid={testId}>
+      {children}
+      <span className="visually-hidden"> (opens in a new tab)</span>
+    </a>
+  );
+}
+
 /** "(442) 341-3053", tapping calls the shop. */
 export function CallLink({ className, children }: { className?: string; children?: ReactNode }) {
   const { phone } = useShopContact();

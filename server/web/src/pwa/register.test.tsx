@@ -162,6 +162,8 @@ describe('offline', () => {
     // A way on: try again, or the home page, which opens offline.
     expect(page.querySelector('a[href=""]')?.textContent).toBe('Try again');
     expect(page.querySelector('a[href="/"]')).not.toBeNull();
+    // The shop's Privacy Policy, which opens offline too (src/sw/routes.ts).
+    expect(page.querySelector('a[href="/privacy"]')?.textContent).toBe('Privacy Policy');
     // Nothing from the network: everything it needs is in the page, or kept with it.
     expect(offlineHtml).not.toMatch(/https?:\/\//);
     expect([...page.querySelectorAll('[src]')].map((e) => e.getAttribute('src'))).toEqual(['/icon-192.png']);

@@ -7,7 +7,7 @@ import { DemoNotice } from '../demo/DemoNotice';
 import { isDemo } from '../demo/mode';
 import { promptInstall, useInstallPrompt } from '../pwa/installPrompt';
 import { AndroidSteps, ComputerSteps, DevicePicker, InstallNow, IPhoneSteps } from '../pwa/InstallSteps';
-import { currentPlatform, useStandalone, type Device, type Platform } from '../pwa/platform';
+import { currentPlatform, thisDevice, useStandalone, type Device, type Platform } from '../pwa/platform';
 import { QrCode } from '../pwa/QrCode';
 
 // "Get the app": how to put Izzy Clipz on the Home Screen, in a few plain steps for the
@@ -39,6 +39,9 @@ export function GetTheAppPage() {
         </div>
       ) : null}
       {standalone ? <UsingTheApp computer={computer} /> : <HowToGetIt platform={platform} />}
+      <p className="container secondary get-app-privacy" data-testid="get-app-privacy">
+        It's this website, installed: our <Link to="/privacy">Privacy Policy</Link> explains what it keeps on your {thisDevice()}.
+      </p>
     </>
   );
 }
