@@ -176,7 +176,7 @@ describe('this computer’s name in the app’s list', () => {
 });
 
 describe('amounts of $1,000 and more', () => {
-  it('have their commas in what a chart's column says, like the total next to them', async () => {
+  it('have their commas in what a chart’s column says, like the total next to them', async () => {
     const { columnDescription } = await import('../components/charts');
     const october = { date: '2026-10', salesCents: 2054600, servicesCents: 1633000, productsCents: 371600, otherCents: 25000, feesCents: 25000, servicesCount: 400, productsCount: 200 };
     expect(columnDescription(october)).toBe('October 2026: $20,546. Services $16,330, products $3,716, other and fees $500.');
