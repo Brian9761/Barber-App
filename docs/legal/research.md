@@ -1,6 +1,6 @@
 # Legal research for the Izzy Clipz legal documents
 
-**Researched:** November 5, 2026\
+**Researched:** November 5, 2026, and revised the same day after two independent reviews (see "Changes after review" at the end)\
 **For:** drafting `privacy.md`, `terms.md`, `cancellation-policy.md` and `accessibility.md` (and `OWNER-CHECKLIST.md`)\
 **Status:** research notes. This is not legal advice.
 
@@ -30,6 +30,7 @@ Labels used throughout:
 - The California Legislature's own site (leginfo) blocked automated reading. Statute text therefore comes from FindLaw's copies, marked "current as of January 1, 2026". Bill status comes from CalMatters Digital Democracy, cross-checked against law-firm alerts.
 - Google's Maps Platform Terms were read on November 5, 2026 (last modified August 26, 2026); the clause the Terms of Service must carry is quoted in §12.
 - While the documents were drafted, these points were checked again against their sources: Apple's App Review Guidelines (last updated October 16, 2026), Yelp's display requirements, the small claims limits, the gift card cash-out threshold, the FTC's review-rule warning letters, DOJ's Title II extension, WCAG 2.2 as an ISO standard, and SB 690.
+- After the reviews, these were read on November 5, 2026: Yelp's API Terms of Use (last updated September 22, 2026); Stripe's Privacy Policy (last updated April 28, 2026); Vercel's Privacy Notice (June 1, 2026) and Data Processing Addendum (last updated March 17, 2026); Stripe's Terminal iOS setup page and its API reference for Checkout Sessions and for updating a Charge; Code of Civil Procedure §395 and Civil Code §§1723 and 1747.08 (FindLaw); Apple's Standard EULA; 28 C.F.R. §36.303 (Cornell LII); §3.2.3(e) of the Google Maps Platform Terms; and the shop's older website.
 
 ---
 
@@ -37,31 +38,33 @@ Labels used throughout:
 
 | # | Rule | Applies? | What the documents / product must do | Recent / coming |
 |---|---|---|---|---|
-| 1 | **CalOPPA** (privacy policy law) | **Applies** (site + apps collect name, phone, email) | Privacy Policy with the required elements; a conspicuous "Privacy" link on the homepage and inside each app; Do Not Track statement; effective date; how changes are announced | — |
+| 1 | **CalOPPA** (privacy policy law) | **Applies** (site + apps collect name, phone, email) | Privacy Policy with the required elements, including every category of third party that receives PII (service providers and the developer who runs the systems) and whether other parties can collect data across sites (Stripe's card page does); a conspicuous "Privacy" link on the homepage and inside each app; Do Not Track statement; effective date; how changes are announced | — |
 | 2 | **CCPA / CPRA** | **Probably doesn't apply** (revenue threshold $26,625,000; shop doesn't sell or share data) | Don't rely on it; offer access/correction/deletion anyway; say "we don't sell or share"; list retention periods | Recent: new regulations in force Jan 1, 2026. Coming: CPI threshold adjustment Jan 2027 |
 | 3 | **Do Not Track / Global Privacy Control** | DNT statement **applies** (CalOPPA); honoring GPC is **good practice** | Say how DNT is handled (no cross-site tracking at all); say GPC is honored; optional `/.well-known/gpc.json` | Recent: Firefox dropped its DNT setting (2025). Coming: browsers must offer an opt-out signal from Jan 1, 2027 (AB 566) |
 | 4 | **COPPA** (amended rule) | **Probably doesn't apply** (general-audience barbershop; no knowing collection from under-13s) | "Not for children under 13; a parent or guardian books for a child"; delete a child's data if found | Recent: compliance date Apr 22, 2026 |
-| 5 | **California Digital Age Assurance Act** (AB 1043, as amended by AB 1856) | **Applies to both iPhone apps** from Jan 1, 2027 | Ask iOS for the user's age range when the app is downloaded and launched (Apple's Declared Age Range API); decide what happens for under-13s; disclose it | **Coming: Jan 1, 2027** (apps downloaded earlier: by Jul 1, 2027) |
+| 5 | **California Digital Age Assurance Act** (AB 1043, as amended by AB 1856) | **Applies to both iPhone apps** from Jan 1, 2027 | **Must do:** ask iOS for the user's age range when the app is downloaded and launched (Apple's Declared Age Range API); decide what happens for under-13s; disclose it | **Coming: Jan 1, 2027** (apps downloaded earlier: by Jul 1, 2027) |
 | 6 | **State app-store age laws** (Texas, Utah, Louisiana) | **May apply** to users in those states | Follow Apple's age-assurance guidance for those states | Recent: Texas enforced for new Texas accounts since Jun 4, 2026 (per Apple) |
 | 7 | **Data breach law** (Civ. Code §1798.82) + reasonable security (§1798.81.5) + disposal (§1798.81) | **Applies** | Security section; breach-notice commitment "as California law requires"; real deletion | Recent: **30-day notice deadline** since Jan 1, 2026 (SB 446) |
 | 8 | **CAN-SPAM** | **Probably doesn't apply today** (no marketing email; the server sends no email) | Say "no marketing emails or texts"; if that changes, get consent and honor opt-outs | — |
 | 9 | **TCPA** | **Probably doesn't apply today** (no automated texts or calls in the code) | Phone number used only about the appointment; consent before any automated reminders | Recent: FCC "revoke-all" rule pushed to Jan 31, 2027; *McLaughlin* (Jun 2025) |
 | 10 | **Honest Pricing Law** (SB 478, Civ. Code §1770(a)(29)) | **Applies** to prices shown | Prices include every mandatory charge; "From" prices must be real; no-show fee disclosed clearly (it's contingent, so it isn't part of the price) | In force since Jul 1, 2024 |
 | 11 | **Gender pricing law for barbers** (Civ. Code §51.6) | **Applies** (in the shop) | Posted price list and sign in the shop; no price differences by gender (names already neutral) | — |
-| 12 | **Liquidated damages** (Civ. Code §1671(d)) | **Applies** to the no-show / late-cancel fee | Fee must be a reasonable estimate of the shop's loss; **cap at the service price** (flat mode can exceed it today); document how the amount was chosen | — |
+| 12 | **Liquidated damages** (Civ. Code §1671(d)) | **Applies** to the no-show / late-cancel fee | Fee must be a reasonable estimate of the shop's loss; **cap at the service price** (flat mode can exceed it today); a grace period for bookings made after the cutoff has passed; a no-show fee only after the appointment's end time; document how the amount was chosen | — |
 | 13 | **Online agreement** (*Berman*, *Chabolla* line of cases) | **Applies** to how the fee agreement is shown | Keep the full policy text right above "Book appointment"; add links to the full policy and Terms; consider a checkbox | Recent: *Chabolla v. ClassPass* (9th Cir., Feb 2025) |
 | 14 | **Stripe** rules for saved cards and public policies | **Applies** | Terms covering when the card may be charged, the amount rule and the event that triggers it; public refund/cancellation/contact info; clear statement descriptor; yearly PCI self-attestation | — |
 | 15 | **Card-network stored-credential rules** (via Stripe) | **Applies** | Agreement shows last 4 digits, how it's used, the amount rule and its duration; notify changes; keep the consent record | — |
-| 16 | **ADA Title III + Unruh Act** (accessibility) | **Applies** (physical shop; site and apps serve it) | Aim for WCAG 2.2 AA; accessibility statement; other ways to book; no overclaiming | Recent: DOJ extended its Title II (government) deadlines Apr 2026; WCAG 2.2 became ISO/IEC 40500:2025 |
+| 16 | **ADA Title III + Unruh Act** (accessibility) | **Applies** (physical shop; site and apps serve it) | Aim for WCAG 2.2 AA; accessibility statement; other ways to book, including ways to reach the shop without a voice call (relay calls, text, email); no overclaiming, on the site or on the Visit page | Recent: DOJ extended its Title II (government) deadlines Apr 2026; WCAG 2.2 became ISO/IEC 40500:2025 |
 | 17 | **Apple App Store rules** | **Applies** | Privacy policy link in each app and in App Store Connect; accurate App Privacy answers; privacy manifests (present); account deletion not required; age rating answers; Tap to Pay rules | Recent: new age-rating questions (Jan 31, 2026); age-assurance APIs (2026) |
 | 18 | **Google Maps Platform / Places** terms | **Applies** when live Google reviews show | "Google Maps" attribution, author credit, link to each review, ordering notice (all already done); Terms and Privacy mention Google's terms and privacy policy | Recent: "Google Maps" attribution wording |
-| 19 | **Yelp display requirements** | **Applies** when Yelp reviews show | Yelp logo + **Yelp-branded stars** (gap today), rating with review count, link back, no blending, max 24-hour storage (done) | — |
+| 19 | **Yelp API Terms of Use + display requirements** | **Applies** if Yelp reviews are shown | The API is described as for **non-commercial uses** (no promotional value to the user) and bars Yelp ratings next to other reviews, so **keep Yelp reviews off** (link only) unless Yelp gives written consent; the documents assume they're off | Recent: API terms updated Sep 22, 2026 |
 | 20 | **FTC Consumer Review Rule; Consumer Review Fairness Act; Civ. Code §1670.8** | **Applies** | No clauses limiting reviews; no suppressing negative reviews; no incentives for positive ones | Recent: FTC warning letters Dec 2025 |
 | 21 | **Gift cards** (Civ. Code §1749.5) | **Applies if sold** (checkout supports "gift card" items) | No expiry, no fees, cash back on request under **$15** | Recent: $15 threshold since Apr 1, 2026 (SB 22) |
 | 22 | **CIPA** (wiretap/tracker lawsuits) | **Low risk** (no trackers) | Keep it that way; get advice before adding analytics or pixels | Recent: SB 690 signed Sep 30, 2026 (narrows one claim) |
 | 23 | **Shine the Light** (Civ. Code §1798.83) | **Probably doesn't apply** (exempt under 20 employees; no marketing sharing) | Optional line: "we don't share your information with others for their marketing" | — |
 | 24 | **Consumer contract limits** (Civ. Code §1668, CLRA, *City of Santa Barbara*, *McGill*) | **Applies** to the Terms | Keep "as is" disclaimers to the software; no waiver of liability for injuries from services; no arbitration; small claims allowed | Small-claims limits unchanged ($12,500 / $6,250) |
-| 25 | **Right of publicity** (Civ. Code §3344) | **Applies** to photos of people (gallery) and barbers' names and bios | Written consent from people shown (a parent for a minor) | — |
+| 25 | **Right of publicity** (Civ. Code §3344) | **Applies** to photos of people (gallery) and barbers' names and bios | Written consent from people shown (a parent for a minor); **the gallery photos are already live on the public demo**, so take them down now | — |
+| 26 | **Song-Beverly Credit Card Act** (Civ. Code §1747.08) | **Applies** to card payments in the shop | Don't ask for an email, ZIP code or phone number as part of a card payment; offer an email receipt only after the payment is approved, and don't keep the address | — |
+| 27 | **Consumer venue** (Code Civ. Proc. §395(b)–(c)) | **Applies** to the Terms' courts clause | Keep the client's own county available; a clause waiving it is void | — |
 
 ---
 
@@ -81,7 +84,7 @@ These were checked in the code on November 5, 2026. The data inventory (`data-in
     - Fetched live and never stored.
     - The only fields requested are `rating`, `userRatingCount`, `reviews` and `googleMapsUri`.
     - Up to 5 reviews are shown, in Google's order.
-  - Yelp:
+  - Yelp (only when the server has a Yelp key; see §12.2):
     - Cached for at most 24 hours: purged daily and dropped on read after 24 hours.
     - Up to 7 reviews are shown, in Yelp's default order.
   - **No filtering by star rating.**
@@ -101,6 +104,8 @@ These were checked in the code on November 5, 2026. The data inventory (`data-in
   - The exact policy text is shown on Stripe's page (`custom_text.submit`) and stored with the booking, together with the consent time (`no_show_policy`, `no_show_consent_at`).
   - The server keeps only the card brand, last 4 digits, expiry and Stripe IDs.
   - Fees are charged later, off-session, only when the owner acts, at most once per appointment, and with no time limit after the visit today.
+  - A booking with a card on file can be marked a no-show, and charged, as soon as its start time has passed (`patchOwnerAppointment` in `server/src/appointments.ts`, `chargeCase` in `server/src/noshowfee.ts`), although the documents say a client who arrives before the end isn't a no-show. A completed appointment without a sale can also be changed to a no-show.
+  - A client's cancellation counts as late whenever it's inside the window, even one made a minute after booking a time that was already inside it (`cancelledLate` in `server/src/feecase.ts` doesn't look at `created_at`). Bookings can start 30 minutes ahead (`leadTimeMinutes` in `server/data/catalog.json`), and the window can be up to 48 hours. The booking screens warn about it ("This time is less than 1 hour away, so cancelling it may be charged $40").
 - **Agreement screen:**
   - App: "By booking, you agree to this:" plus the full policy text (`IzzyClipz/Features/Booking/NoShowViews.swift`).
   - Website: "What you agree to by booking" (`server/web/src/booking/ReviewStep.tsx`).
@@ -109,6 +114,7 @@ These were checked in the code on November 5, 2026. The data inventory (`data-in
   - The app's "Remember me on this iPhone" option **starts ticked** (`IzzyClipz/App/AppRouter.swift`). It keeps the card for later bookings.
   - The website's equivalent starts unticked.
   - Nothing in the server ever removes a saved card or deletes Stripe's customer record.
+  - Without "Remember me", the website and the app forget the card's key right after booking (`server/web/src/booking/ReviewStep.tsx`, `keepOrForgetCard` in `IzzyClipz/Features/Booking/BookingModels.swift`), so the client has nothing left to remove that card with.
 - **Abuse protection:**
   - Rate-limit keys use a SHA-256 of the client's IP address, cut to 32 characters, with no secret added (`server/src/ratelimit.ts`).
   - That is a scrambled form of the IP, not an anonymous one: the IPv4 space is small enough to reverse it by trying every address.
@@ -123,15 +129,21 @@ These were checked in the code on November 5, 2026. The data inventory (`data-in
   - MapKit; UserDefaults and Keychain.
   - No location, camera or photo permissions.
   - The privacy manifest declares Name, Phone Number, Payment Info and Other User Content, with no tracking, and UserDefaults reason `CA92.1`.
+  - Notification permission is asked right after the first booking, because the appointment's reminders start on (`appointments.add(confirmation, remind: true)` in `BookingModels.swift`; `performSync` in `IzzyClipz/Stores/AppointmentStore.swift`).
+  - "Forget my details" clears only the remembered name and number and the card. Stored appointments keep the client's name, number and note until 30 days after each one, and "Remove from this list" works only for past or cancelled ones. Keychain items (appointment keys, the card key, unconfirmed bookings with their number) can stay after the app is deleted.
+  - The Visit tab's "Website" row, its Share link and every Add to Calendar event use the shop's older website, https://www.izzyclipzbarbershop.net. It runs on Squarespace (it sets Squarespace's `crumb` cookie and loads Squarespace's scripts), and its booking button goes to the shop's old booking page on Squire (checked November 5, 2026).
 - **Business iPhone app:**
   - Stripe Terminal SDK 6.0.0 and the Tap to Pay entitlement.
   - Permission strings for Bluetooth (required by Stripe's SDK), camera, photo library and location while in use. The location string says Stripe checks location during each card payment.
   - Its privacy manifest declares **no collected data types**. That may be incomplete (see §11).
+  - The receipt email is typed on the take-payment screen before the card is tapped (`IzzyClipzBusiness/Features/Payments/TakePaymentView.swift`), sent to Stripe with the payment and kept in `payments.receipt_email` (`server/src/payments.ts`). See §9.3.
+  - Without a note, the payment's description sent to Stripe is "<service> with <barber> for <client's name>" (`IzzyClipzBusiness/Payments/CheckoutModel.swift`).
 - **Products and gift cards:**
   - Products are a showcase only: "Available at the shop", with no online sales.
   - The shop's checkout can ring up "custom items like a gift card" in person, and the catalog lists "Credit card" and "Gift card" as payment methods.
-- **Gallery:** the client app and the website show six photos of the shop's work. They show clients' faces, and at least one appears to be a minor.
+- **Gallery:** the client app and the website show six photos of the shop's work. They show clients' faces, and at least one appears to be a minor. They came from the shop's older website (`README.md`, "Where the data came from"), and they're already live on the public demo: its script bundle loads all six (checked November 5, 2026).
 - **Hosting:** Vercel Functions in region `pdx1`, with a Neon Postgres database.
+- **Who else can reach the data:** the developer who deploys the server sets its secrets, including the owner key, the database address and the Stripe key (`server/README.md`). With `STRIPE_CONNECT=on`, the Stripe key is the developer's own Connect platform key, and every Stripe call for the shop is made on the shop's connected account with it. The owner checklist has the developer run the privacy tools against the live database. So the developer is a recipient of clients' information that the Privacy Policy must name (§1).
 
 ---
 
@@ -174,7 +186,9 @@ The public demo keeps bookings in the browser only, so arguably nothing is "main
 
 **What to do.**
 
-- **Privacy Policy:** include all six statutory elements and follow the AG recommendations above. Name the third parties (Stripe, Vercel, Neon, Google, Yelp, Apple) and link to their privacy policies.
+- **Privacy Policy:** include all six statutory elements and follow the AG recommendations above. Name the third parties (Stripe, Vercel, Neon, Google and Apple, plus Yelp if its reviews are ever shown) and link to their privacy policies.
+  - **The developer counts too.** The developer who runs the systems can reach clients' information (see "What the code shows"), so the policy names the developer as a category of recipient and limits the use to running the systems, fixing problems and carrying out requests. The owner checklist backs that with a written agreement.
+  - **Element 6 (other parties):** Stripe's card page collects "the devices and browsers you use across our Sites and third-party websites" and activity indicators "to help us detect fraud" ([Stripe Privacy Policy](https://stripe.com/privacy), last updated April 28, 2026, §2(a)), and uses End Customers' data "for Stripe's own purposes such as enhancing security" (§1.2(b)). Stripe has announced an update to that policy for November 20, 2026, so check it again before go-live. Google receives visitors' IP addresses when reviewers' photos load. The policy says so, instead of saying that no other company can collect such information.
 - **Website:** add a footer "Privacy" link on every page, with the Terms, Accessibility and Cancellation Policy links. Keep it visible on the homepage and the booking steps.
 - **Apps:** add a "Privacy Policy" link inside both iPhone apps, plus the policy URL on the App Store pages. Apple requires the in-app link anyway (§11).
 - **Changes:** announce material changes with a notice in the apps and on the site, not just by updating the page. Apply them only going forward.
@@ -206,7 +220,7 @@ What the law requires around GPC:
 **What to do.**
 
 - **Privacy Policy section "How we respond to Do Not Track and Global Privacy Control signals".** Say:
-  - We don't track you across other websites or apps, and we don't let other companies do so on our site or apps.
+  - We don't track you across other websites or apps. Two other companies can receive information from visitors' devices: Stripe's card page (device and browser details, including across other sites that use Stripe, to prevent fraud) and Google (IP address and browser details when reviewers' photos load). Saying that no other company can track visitors would be wrong (see §1, element 6).
   - Visitors are treated the same with or without DNT.
   - We treat GPC as a request not to sell or share your personal information. We don't sell or share it in any case.
 - **Optional product changes:** publish `/.well-known/gpc.json`, and show a short "Your browser's privacy signal is on; we honor it" note where it's detected.
@@ -295,7 +309,7 @@ Commentators read the developer duty differently:
 
 **What to do.**
 
-- **Product (both apps):** plan to adopt Apple's **Declared Age Range API** before January 1, 2027. Apple's tool returns an age range and how it was confirmed ([Apple, Age assurance](https://developer.apple.com/support/age-assurance)). Decide what an under-13 user sees (see §4.1).
+- **Product (both apps), must do:** adopt Apple's **Declared Age Range API** in any version of the apps available on or after January 1, 2027 (a must-do in the owner checklist, not a recommendation). Apple's tool returns an age range and how it was confirmed ([Apple, Age assurance](https://developer.apple.com/support/age-assurance)). Decide what an under-13 user sees (see §4.1).
 - **Privacy Policy, once this is built:** say the app asks the iPhone for an age range because California law requires it, uses it only to apply age rules, and doesn't store it. Say only what is true of the implementation. The current documents say nothing about it, because nothing is built yet.
 
 ### 4.3 Other states' app-store age laws (Texas, Utah, Louisiana)
@@ -426,8 +440,8 @@ The FTC's federal fee rule (16 CFR Part 464, in force May 12, 2025) covers **onl
   - "Prices shown include everything you'll be charged for the service."
   - "We don't add booking, service or other required fees."
   - "Tips are always optional." Voluntary tips are outside SB 478.
-  - Only say "no card fees" if that's true. If the shop ever adds a card surcharge, get legal advice first. (The documents don't mention card fees; the owner checklist asks the owner to confirm there are none.)
-- **"From" prices:** a price varies by barber, so "From $X" must be **a real, bookable lowest price** for that service. The exact price for the chosen barber must show before booking, as the Review step does now. One offering is a true starting price ("From $80" for a lightener with Izzy, `priceKind: startingAt`), so the Terms say the barber gives the final price before starting work.
+  - Only say "no card fees" if that's true. If the shop ever adds a card surcharge, get legal advice first. (The Terms promise no booking fees or other required charges on top of the price, and don't mention card fees by name. The owner checklist, section 1, asks the owner to confirm the shop never adds a card fee or other extra charge at the counter: a surcharge rung up as a custom checkout item would break the Terms' promise, and would breach SB 478 unless clients could avoid it by paying another way and it was disclosed.)
+- **"From" prices:** a price varies by barber, so "From $X" must be **a real, bookable lowest price** for that service. The exact price for the chosen barber must show before booking, as the Review step does now. One offering is a true starting price ("From $80" for a lightener with Izzy, `priceKind: startingAt`), so the Terms say the barber gives the final price before starting work, and that the client can say no without any fee. The Terms' promise that "the price you see is what you pay" names both exceptions (that starting price, and the range shown for "any barber" when barbers' prices differ, as for Haircut & Beard at $55 or $60), because an absolute promise next to an exception would be read against the shop (Civ. Code §1654).
 - **The no-show / late-cancel fee** is contingent on the client's later conduct, so it **isn't part of the advertised price**. It must still be shown **clearly before booking**, as it is now (on "Pick a day and time", on Review, and on Stripe's page), so it doesn't deceive.
 
 ### 7.2 Gender pricing: barbers and hair salons (Civ. Code §51.6)
@@ -536,8 +550,11 @@ A term that "merely provides an option of alternative performance" escapes §167
    - Card networks require telling cardholders about changes, and Stripe recommends clear, recognizable charges (§9).
    - Have the barber text or call, or send a receipt when an email is on file. Set a recognizable **statement descriptor**, for example "IZZY CLIPZ".
 8. **Adults only:** require the card saver to be 18+ or have the cardholder's permission (§4.4).
-9. **"Remember me":** in the iPhone app it **starts ticked**. Stripe's guidance is to "explicitly collect consent ... for this specific use", for example a "Save my payment method for future use" checkbox. Make it **unticked by default** in the app, as on the website, or label it unmistakably. Owner decision.
+9. **"Remember me":** in the iPhone app it **starts ticked**, and with a card it keeps the card for later bookings. Stripe's guidance is to "explicitly collect consent ... for this specific use", for example a "Save my payment method for future use" checkbox; a box that starts ticked isn't explicit consent. **Required:** start it unticked in the app, as on the website (on only when the device already remembers the client). Without "Remember me", the card should be deleted once its booking can no longer be charged, instead of staying at Stripe for up to 12 months with no way for the client to remove it.
 10. **A charging deadline.** Nothing limits how long after a visit a fee can be charged. Card-network rules say not to charge "beyond the duration expressly agreed by the cardholder" (§9.2). The documents promise fees are charged within **7 days** after the appointment time, or not at all, and the code should enforce it.
+11. **A grace period for bookings made after the cutoff has passed.** With a 30-minute lead time and a window of up to 48 hours, a client can book a time that's already inside the window, and today a cancellation one minute later is a late cancellation at 100%, although the shop lost nothing (the time was free a minute earlier). A fee where the actual loss is plainly zero looks like a penalty under §1671(d) (*Ridgley*; *Cellphone Termination Fee Cases*). The documents give a **15-minute grace period** after booking (owner decision, attorney to confirm), and the code must enforce it and say so on the booking screens.
+12. **When a no-show can be charged.** The documents say a client who arrives before the end of the appointment isn't a no-show. The server must match: a booking with a card on file can be marked a no-show, and charged, only after its end time, and once it's marked completed it can't become a no-show. Otherwise a client charged at 10:01 who arrives at 10:10 has a dispute the policy can't settle, and the shop has CLRA (§1770(a)(14)) and chargeback exposure.
+13. **Say what the fee is.** A short recital in the policy ("the fee is our agreed estimate of that loss, not a penalty", with why the loss is hard to know in advance) supports part 1 of the §1671(d) test. It doesn't replace a reasonable amount.
 
 ### 8.4 Forming the agreement online
 
@@ -573,7 +590,8 @@ It must match the server exactly:
 - **What triggers a fee:**
   - **Late cancellation:** cancelling less than the window before the start. Exactly the window before is still free. The app and website ask the client to confirm first.
   - **No-show:** not coming and not cancelling.
-  - The Policy must also say whether lateness counts. Owner decision; the code has no automatic late-arrival rule. The documents say a client who arrives after the appointment time has ended is a no-show, and otherwise the barber fits them in if possible.
+  - The Policy must also say whether lateness counts. Owner decision. The documents say a client who arrives after the appointment time has ended is a no-show, and otherwise the barber fits them in if possible; a no-show fee can be charged only after the end time, which the code must enforce (§8.3 item 12).
+  - **Booking after the cutoff has passed:** the booking screens warn about it, and cancelling within 15 minutes of booking is free (§8.3 item 11).
 - **How much:**
   - Exactly the amount shown at booking: a percentage of the service price, default 100%, or a flat amount.
   - **Never more than the service price**, once the cap above is built.
@@ -584,7 +602,7 @@ It must match the server exactly:
   - The client will be told (see §8.3 item 7).
 - **The card:**
   - Saved with Stripe. The shop never sees the full number.
-  - Kept for later bookings only if "Remember me" is chosen.
+  - Kept for later bookings only if "Remember me" is chosen; otherwise deleted once its booking can no longer be charged.
   - How to remove it.
   - The agreement for a booking ends when the client comes, cancels on time, the shop cancels, or 7 days after the appointment.
 - **Disagreeing with a charge:** contact the shop first (phone or in person). This doesn't limit the client's rights with their card issuer.
@@ -607,7 +625,7 @@ It must match the server exactly:
   - the anticipated timing and frequency;
   - how you determine the amount;
   - the cancellation policy, for subscriptions.
-- **Status:** the stored policy text covers the triggering events, the amount and the free-cancellation rule. The Cancellation Policy and Terms cover timing ("after the appointment", within 7 days), duration and how to remove the card.
+- **Status:** the stored policy text covers the triggering events, the amount and the free-cancellation rule. The Cancellation Policy and Terms cover timing ("after the appointment", within 7 days), duration and how to remove the card. Opting in must be explicit, so "Remember me" has to start unticked in the app too (§8.3 item 9).
 
 **Checkout options** ([Stripe, Checkout custom text and policies](https://docs.stripe.com/payments/checkout/custom-components?ui=full-page); [setup mode](https://docs.stripe.com/payments/checkout/save-and-reuse?payment-ui=stripe-hosted)):
 
@@ -630,6 +648,7 @@ It must match the server exactly:
   - promotion terms
 
   ([Stripe support FAQ](https://support.stripe.com/questions/business-website-for-account-activation-faq)).
+- **Status:** the Cancellation & No-Show Policy covers cancellations and fee disputes. The Terms have a "Refunds" line the owner must fill in (what happens if a client is unhappy with a service or a product); the documents don't invent one. If products aren't fully refundable or exchangeable for 7 days, Civil Code §1723 also requires the policy to be posted at the counter.
 
 **Disputes** ([Stripe, Preventing disputes](https://docs.stripe.com/disputes/prevention/best-practices); [How disputes work](https://docs.stripe.com/disputes/how-disputes-work)):
 
@@ -646,7 +665,7 @@ It must match the server exactly:
 - requires Apple's Tap to Pay entitlement (`com.apple.developer.proximity-reader.payment.acceptance`, present in `IzzyClipzBusiness/IzzyClipzBusiness.entitlements`), granted to the developer account under Apple's own Tap to Pay terms;
 - requires location permission while taking payments: Stripe "must know where payments occur" and turns payments off without it ([Stripe Terminal iOS setup](https://docs.stripe.com/terminal/payments/setup-integration?terminal-sdk-platform=ios)); the app asks for it while in use;
 - Stripe Terminal 6.0.0's own privacy manifest declares **coarse location** and **product interaction** data (not linked to the user, not used for tracking). The Business app's App Privacy answers should include them (§11);
-- the card is read by Apple's Tap to Pay technology, so card numbers never reach the shop's app or server. The Privacy Policy says so, and says the payment description sent to Stripe can include the client's name (`IzzyClipzBusiness/Payments/CheckoutModel.swift`).
+- the card is read by Apple's Tap to Pay technology, so card numbers never reach the shop's app or server. The Privacy Policy says so. Today the payment description sent to Stripe includes the client's name when staff type no note (`IzzyClipzBusiness/Payments/CheckoutModel.swift`); the documents assume it no longer does (§18), and that a receipt email is asked for only after the payment (§9.3).
 
 ### 9.2 Card-network rules for stored cards
 
@@ -670,6 +689,23 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 - The Cancellation & No-Show Policy states how the card is used (only the fee for a booking made with it), the amount rule, the triggering events, when the agreement ends (7 days after the appointment at the latest), the refund and dispute path, the shop's address, and how changes work (they never apply to existing bookings).
 - Keep the stored text and consent time; give a copy on request.
 
+### 9.3 Asking for an email at the counter (Song-Beverly Credit Card Act)
+
+**The rule** ([Civ. Code §1747.08, FindLaw](https://codes.findlaw.com/ca/civil-code/civ-sect-1747-08/)):
+
+- A business that accepts credit cards may not request, or require as a condition of accepting the card, that the cardholder provide "personal identification information" which the business then writes down or records (subdivision (a)).
+- That means information about the cardholder that isn't on the card, such as an address or phone number (subdivision (b)). The California Supreme Court held a ZIP code counts (*Pineda v. Williams-Sonoma Stores, Inc.* (2011) 51 Cal.4th 524), and a federal court treated an email address the same way in a case about e-receipts (*Capp v. Nordstrom, Inc.*, E.D. Cal., Oct. 21, 2013, an unpublished ruling on a motion to dismiss).
+- There are exceptions, for example for information needed "for a special purpose incidental but related to the individual credit card transaction" such as shipping or delivery (subdivision (c)(4)). Whether an e-receipt fits is unsettled.
+- Civil penalties: up to $250 for a first violation and $1,000 for each later one (subdivision (e)), and class actions are common.
+
+**Does it apply? Applies** to card payments taken in the shop. The Business app asks for an optional "Receipt email" on the same screen as the payment, before the card is tapped, and the server records it in `payments.receipt_email` (see "What the code shows").
+
+**What to do.**
+
+- **Product (required):** offer the email receipt only after the payment has been approved; say it's optional and only for the receipt; send it to Stripe without keeping it (Stripe's API sends a new receipt when `receipt_email` is set on a charge afterwards: "If this field is updated, then a new email receipt will be sent to the updated address", [Update a charge](https://docs.stripe.com/api/charges/update)); never require a ZIP code, phone number or email to take a card.
+- **Privacy Policy:** describe the email receipt as offered after the payment, optional, passed to Stripe and not kept.
+- **Attorney:** confirm the approach.
+
 ---
 
 ## 10. Accessibility: ADA Title III, the Unruh Act and WCAG 2.2
@@ -687,17 +723,18 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 **What the code shows** (website code on `v5/webapp-business`, apps on `v5/int`):
 
-- **Website:** axe-core checks (`server/web/e2e/support.ts`, `expectAccessible`) run on every page, each booking step and the Business pages, at desktop (1440 px) and phone (390 px) sizes in Chromium, and fail on any **serious or critical** violation; a test books a whole appointment with the keyboard alone (`server/web/e2e/booking.spec.ts`); every page is checked to fit 375 px without sideways scrolling; a skip link, focus moved to the main content on navigation, labelled form fields with announced errors; `prefers-reduced-motion` and Windows High Contrast (`forced-colors`) styles, with a test for the logo in High Contrast.
+- **Website:** axe-core checks (`server/web/e2e/support.ts`, `expectAccessible`) run on every page, each booking step and the Business pages, at desktop (1440 px) and phone (390 px) sizes in Chromium, and fail on any **serious or critical** violation; a test books a whole appointment with the keyboard alone (`server/web/e2e/booking.spec.ts`); the nine main pages in `PAGES` (`server/web/e2e/pages.spec.ts`) are checked to fit 375 px without sideways scrolling, and the booking steps, the confirmation and the Business pages are checked at the phone size (390 px) through `screenshot()`; a skip link, focus moved to the main content on navigation, labelled form fields with announced errors; `prefers-reduced-motion` and Windows High Contrast (`forced-colors`) styles, with one test that checks the logos on three pages in High Contrast. The legal pages aren't in any test list, or in the service worker's page list (`server/web/src/sw/routes.ts`), until they're added with them.
 - **Apps:** Dynamic Type text styles throughout (`IzzyClipz/Theme/Typography.swift`), VoiceOver labels on controls in both apps, and Reduce Motion in the client app. A few fixed-size icons and large numbers don't scale.
 - **Not done:** no manual testing by assistive-technology users, no outside audit, no accessibility audits in the iOS UI tests, no tests at 320 px or at large text sizes.
-- **Shop listing:** the Visit page shows "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`). "ADA-compliant" is a legal conclusion; unless a CASp inspection supports it, say what's there ("step-free entrance") instead.
+- **Shop listing:** the Visit page shows "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`, `IzzyClipzData.swift`). "ADA-compliant" is a legal conclusion that no inspection supports; advertising compliance that isn't there invites ADA and Unruh claims. Say what's there ("step-free entrance") instead, before launch, since the Accessibility Statement points to the Visit page.
 
 **What a good accessibility statement contains** ([W3C, Developing an Accessibility Statement](https://www.w3.org/WAI/planning/statements/)): a commitment and the standard aimed for; what has been done; known limitations, including third-party content; other ways to get the service; how to report problems and when to expect a reply; and the date it was last reviewed. Don't claim conformance that hasn't been checked.
 
 **What to do.**
 
-- **Accessibility Statement:** WCAG 2.2 AA as the goal; only the measures above; the known limits (no audit, Stripe's page, Google and Yelp content, maps); phone booking and walk-ins as alternatives; a 5-business-day reply to reports.
-- **Owner checklist:** confirm or reword "ADA-compliant entrance"; consider a CASp inspection; welcome service animals.
+- **Accessibility Statement:** WCAG 2.2 AA as the goal; only the measures above, worded as the tests really check them; the known limits (no audit, Stripe's page, Google's content, maps); phone booking and walk-ins as alternatives; a 5-business-day reply to reports.
+- **Ways to reach the shop without a voice call.** A voice line, a visit and a letter don't work for people who are deaf, hard of hearing or speech-disabled. Title III requires "appropriate auxiliary aids and services where necessary to ensure effective communication" (28 C.F.R. §36.303(c)(1)), listing text-based ones such as written notes and text telephones (§36.303(b)(1)), and a business must "respond to telephone calls from a telecommunications relay service ... in the same manner that it responds to other telephone calls" (§36.303(d)(4)); the Unruh Act adopts this through Civ. Code §51(f). W3C's guidance also asks for several ways to make contact. So the statement offers relay calls (711), texts (once the owner confirms the number takes them) and the shop's email (a launch blocker).
+- **Owner checklist:** reword "ADA-compliant entrance" before launch; consider a CASp inspection; welcome service animals and relay calls.
 - **Product (recommended):** add accessibility audits to the iOS UI tests, test at the largest text sizes and at 320 px, and have someone who uses a screen reader try a booking.
 
 ---
@@ -721,11 +758,12 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 **What to do.**
 
 - **Both apps:** a "Privacy Policy" link inside the app (client app: the Visit tab and Your details; Business app: Settings), and the policy's web address in App Store Connect.
-- **Privacy Policy:** covers both apps, names the third parties, states that they protect data at least as well as the policy, and gives retention and deletion.
+- **Privacy Policy:** covers both apps, names the third parties, and gives retention and deletion. Guideline 5.1.1(i) asks the policy to "confirm" that third parties give "the same or equal protection", but the confirmation has to be true. Stripe uses End Customers' data for its own purposes where allowed (its Privacy Policy, §1.2(b)), Apple handles App Store, MapKit and Tap to Pay data under its own terms, and Vercel acts as a controller for some service data (its Data Processing Addendum, §4.b). So the policy says that Vercel and Neon process data for the shop under data protection terms (which the owner confirms are in place), and that Stripe and Apple also use some information as their own privacy policies explain. It doesn't claim that every provider protects data at least as well as the policy.
+- **Apple's standard license agreement:** without a custom one, the client app is licensed under Apple's Standard EULA, which has its own "as is" disclaimer, caps the developer's liability at $50, and picks Santa Clara County courts. The Terms say they apply together with it, and that they win in a conflict unless Apple requires its own terms. The attorney should confirm that, or the shop can give the app a custom license agreement that includes Apple's minimum terms.
 - **App Store Connect answers:**
   - client app: Name, Phone Number, Payment Info, Other User Content, and consider Email Address (Stripe's page, opened from the app, collects one);
   - Business app: Coarse Location and Product Interaction (Stripe), Photos or Videos (product photos), and, to be safe, Name, Phone Number, Email Address and Other User Content for the clients' details that staff enter.
-- **Support URL and contact:** guideline 1.5 asks for an easy way to contact the developer; the shop's phone works, and an email is better.
+- **Support URL and contact:** guideline 1.5 asks for an easy way to contact the developer; the shop's phone works, and the shop's email (a must-do in the owner checklist) is better.
 
 ---
 
@@ -738,6 +776,7 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 - **§3.2.2(a)(i) Terms of service and privacy policy:** "The Customer Application's terms of service will (A) notify users that the Customer Application includes Google Maps features and content; and (B) state that use of Google Maps features and content is subject to the then-current versions of the: (1) Google Maps End User Additional Terms of Service at https://maps.google.com/help/terms_maps/; and (2) Google Privacy Policy at https://policies.google.com/privacy."
 - **§3.2.2(b) Attribution:** display all attribution Google provides, and don't modify, obscure or delete it.
 - **§3.2.3(a)–(b) No scraping or caching:** don't store Google Maps Content (including "user reviews") beyond what the service-specific terms allow.
+- **§3.2.3(e) No use with non-Google maps:** "Customer will not use the Google Maps Core Services with or near a non-Google Map in a Customer Application", for example "display or use Places content on a non-Google Map". The client app's Visit tab has an Apple map; Google's reviews are on a separate Reviews screen, and the Visit tab only links to it. Keep it that way: no Google reviews or rating on a screen with the Apple map.
 - Google's Places policies also ask for author attribution, a link to each review and, recommended, a note on how reviews are sorted.
 
 **Does it apply? Applies** when live Google reviews show.
@@ -748,19 +787,30 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 ### 12.2 Yelp
 
-**The rule** ([Yelp Display Requirements](https://terms.yelp.com/developers/display_requirements/), read November 5, 2026):
+**The rules.**
 
-- "The following Yelp-branded stars sprite must be used when representing a Yelp rating. Generic or unbranded stars are not permitted."
-- Make Yelp's logo prominently visible on all content from Yelp, and make it link to Yelp.
-- Link directly to the Yelp pages whenever showing star ratings, review excerpts and review counts; include "read more" links.
-- Show aggregate star ratings side by side with the number of reviews.
-- Don't blend Yelp ratings with other sources, don't store data longer than 24 hours, and don't suggest that critical reviews can be removed.
+- **Yelp's API Terms of Use** ([terms.yelp.com/developers/api_terms](https://terms.yelp.com/developers/api_terms/), last updated September 22, 2026):
+  - Section 1: the API is made available "to enable you to access and present Yelp Content to on your consumer-facing content distribution platform (i.e. non-commercial uses, as defined below), including but not limited to your website and mobile apps".
+  - Section 5: "'Non-commercial use' means any use of the Yelp Content which does not generate promotional or monetary value for the creator or the user, or such use does not gain economic value from the use of our content for the creator or user, i.e. you." Anyone "interested in commercial use of the Yelp Content" is sent to insights-api.yelp.com.
+  - §5(c): don't "display or use Yelp user review ratings ... alongside or in conjunction with other user-generated content".
+  - §5(d): don't "use Yelp Content for any commercial purpose without the express written consent of Yelp".
+  - §5(a): don't store Yelp content for more than 24 hours.
+  - Yelp's paid plans change call limits; the terms send anyone interested in commercial use to Yelp's commercial offering instead.
+- **Yelp's Display Requirements** ([terms.yelp.com/developers/display_requirements](https://terms.yelp.com/developers/display_requirements/), read November 5, 2026), which are conditions of the API license:
+  - "The following Yelp-branded stars sprite must be used when representing a Yelp rating. Generic or unbranded stars are not permitted."
+  - Make Yelp's logo prominently visible on all content from Yelp, and make it link to Yelp.
+  - Link directly to the Yelp pages whenever showing star ratings, review excerpts and review counts; include "read more" links.
+  - Show aggregate star ratings side by side with the number of reviews.
+  - Don't blend Yelp ratings with other sources, don't store data longer than 24 hours, and don't suggest that critical reviews can be removed.
 
-**Does it apply? Applies** when Yelp reviews show.
+**Does it apply? Applies** if Yelp reviews are shown. The terms can be read two ways: section 1 seems to treat showing Yelp content on a consumer-facing site as the permitted use, but the definition excludes any use that brings "promotional or monetary value" to the user of the API, and a shop's own website and app exist to promote the shop. Under that definition, showing the shop's Yelp reviews there is commercial use, which needs Yelp's written consent (§5(d)). The other rule is clearer: the website's Reviews page shows Yelp's rating on the same page as Google's reviews, and its home page shows both ratings in one tile, which §5(c) forbids. Attorney to confirm the reading; until Yelp consents in writing, the safe course is to keep Yelp reviews off.
 
-**What the code does:** links, review counts, no blending and the 24-hour limit are done. **Gap:** the rating uses generic stars and there's no Yelp logo.
+**What the code does:** Yelp reviews show only when the server has a Yelp key (`YELP_API_KEY`, which needs a paid Yelp plan). Without one, the website and the app show a "Read our reviews on Yelp" link instead. With one, the 24-hour limit, links and review counts are done, but the rating uses generic stars, there's no Yelp logo, and Yelp's rating sits next to Google's.
 
-**What to do (product):** use Yelp's branded stars and logo before showing live Yelp reviews, or hide the Yelp section until then. The documents don't depend on it.
+**What to do.**
+
+- **Must do before launch:** keep Yelp reviews off, with no Yelp key on the live server, and link to the shop's Yelp page instead. The documents are written that way: the Privacy Policy, the Terms and the Accessibility Statement say the website and apps show Google's reviews and link to Yelp.
+- **If the owner wants Yelp reviews later:** first get Yelp's written consent for this use; then use Yelp's branded stars and logo, keep the Yelp rating off any screen or tile with Google's, and update the documents before turning them on. Add back to the Privacy Policy that reviewers' photos also load from Yelp's servers (in "Reviews", in the Do Not Track section and in "What our website loads"), that Yelp receives the visitor's IP address and browser details (with Yelp's privacy policy link), and that Yelp reviews are kept no more than 24 hours; to the Terms (sections 9 and 10) that the website and app show Yelp's reviews as Yelp provides them; and to the Accessibility Statement ("Content from other companies") that Yelp's reviews are shown as Yelp provides them.
 
 ---
 
@@ -800,6 +850,7 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 - **Public injunctive relief** can't be waived in every forum: *McGill v. Citibank, N.A.* (2017) 2 Cal.5th 945.
 - **Arbitration:** enforceable in principle, but for a small shop it adds cost and complexity, invites challenges over formation and fairness, and gains little. Small claims court is fast and cheap for both sides.
 - **Small claims limits** ([California Courts](https://selfhelp.courts.ca.gov/small-claims-california), checked November 5, 2026): up to **$12,500** for individuals and **$6,250** for businesses. Lawyers can't represent parties in court.
+- **Consumer venue** ([Code Civ. Proc. §395, FindLaw](https://codes.findlaw.com/ca/code-of-civil-procedure/ccp-sect-395/)): in an action "arising from an offer or provision of goods, services, loans or extensions of credit intended primarily for personal, family or household use", the court in the county where the buyer signed the contract, lived when it was made, or lives when the action begins is a proper court (§395(b)); "Any provision of an obligation described in subdivision (b) waiving that subdivision is void and unenforceable" (§395(c)). A clause sending every dispute to San Diego County would be partly void against clients who live elsewhere, for example if the shop ever sued to collect a fee.
 
 **Does it apply? Applies** to the Terms.
 
@@ -807,7 +858,7 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 - keep "as is" disclaimers to the website and apps, and say plainly that they don't limit responsibility for services at the shop;
 - limit liability for the website and apps to the greater of $100 or what the client paid for the appointment in question, with carve-outs for personal injury, fraud, willful harm, gross negligence, violations of law and non-waivable consumer rights (attorney to review the cap);
-- set out an informal step first (call, 30 days to fix it), allow small claims, name the courts of San Diego County, choose California law, and use **no arbitration and no class waiver**;
+- set out an informal step first (call, 30 days to fix it), allow small claims, name the courts of San Diego County unless the law gives the client a court in another county (such as their own), choose California law, and use **no arbitration and no class waiver**;
 - keep card-dispute rights intact.
 
 ---
@@ -816,12 +867,13 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 **The rule.** Civ. Code §3344 ([FindLaw](https://codes.findlaw.com/ca/civil-code/civ-sect-3344/)): using someone's name, photograph or likeness to advertise or sell, without their consent, makes the user liable for at least $750 or actual damages, plus profits and attorney's fees. For a minor, a parent or legal guardian must consent.
 
-**Does it apply? Applies.** The gallery on the website and in the app shows six clients' faces, and at least one looks under 18. The barbers' names, titles, bios and Instagram handles also appear (with initials, not photos).
+**Does it apply? Applies.** The gallery on the website and in the app shows six clients' faces, and at least one looks under 18. **They're already published:** the public demo (izzy-clipz.vercel.app) loads all six, and they're in the app builds. They came from the shop's older website, so whether the shop owns them, or has a license to use them, isn't confirmed. The barbers' names, titles, bios and Instagram handles also appear (with initials, not photos).
 
 **What to do.**
 
-- **Owner checklist:** get written permission from each person in the gallery (from a parent or guardian for anyone under 18), or replace the photos; get each barber's OK to show their name, photo and bio, and remove them when they leave.
-- **Privacy Policy:** anyone in a gallery photo can ask for it to be taken down.
+- **Now:** take the photos of identifiable people off the public demo and out of the app builds, the apparent minor first, until signed releases exist, or replace them with photos that show no faces (the owner checklist's "Do this now" item). Removal only after someone asks isn't enough under §3344.
+- **Before launch:** written permission from each person shown (from a parent or guardian for anyone under 18); confirm that the shop owns, or has a license to, every photo, since the Terms say the shop's photos belong to it or to its licensors; get each barber's OK to show their name, photo and bio, and remove them when they leave.
+- **Privacy Policy:** says that everyone who can be recognized in the photos agreed, and that anyone in one can ask for it to be taken down.
 
 ---
 
@@ -832,10 +884,10 @@ The AG's CalOPPA guide asks for a retention period for each category (§1), Appl
 **The plan the documents use** (details and code changes in `data-inventory.md`, G1 and G2):
 
 - **Contact details on appointments** (name, number, email, note): removed **12 months after the appointment**, except while a fee for it is still pending. The appointment stays as an anonymous record, so the analytics don't change.
-- **Names on sales, receipt emails and payment descriptions that can include a name:** removed after **12 months**.
+- **Names on sales, and the descriptions of card payments taken at the shop:** removed after **12 months**. Receipt emails aren't kept at all (§9.3), and payment descriptions stop including the client's name (§18). The copies in the shop's Stripe account stay as long as Stripe keeps payment records, and the policy says so.
 - **Fee evidence:** the agreed text, consent time, fee, status and card type and last 4 stay with the anonymous record, so the shop can still answer a card dispute. With fees charged within 7 days of the appointment and disputes usually allowed for 120 days (§9.1), 12 months covers the dispute window comfortably; a separate 18-month hold for fee records isn't needed.
-- **Saved cards:** deleted at Stripe (with the email Stripe collected) when the card expires, after 12 months without a booking, or when the client removes it or asks, once no booking still needs it.
-- **Already true today:** scrambled IP addresses about 2 days; the Yelp cache at most 24 hours; Google content not stored; host logs up to 30 days depending on the plan; database restore history up to 30 days depending on the plan.
+- **Saved cards:** deleted at Stripe when the card expires, after 12 months without a booking, when the client removes it or asks, or, for a card saved without "Remember me", once its booking can no longer be charged; in each case once no booking still needs it. Detaching the card and deleting the Stripe Customer stops the card being charged, but doesn't remove the email from the shop's Stripe account: the completed Checkout Session keeps what the client typed on Stripe's page, and Stripe's API can't delete a Checkout Session (it can only create, update, retrieve, list and expire one). The policy says so instead of promising the email is deleted.
+- **Already true today:** scrambled IP addresses about 2 days; Google content not stored (and the Yelp cache at most 24 hours, if Yelp reviews are ever turned on); the host logs the shop can see up to 30 days depending on the plan, while Vercel may keep some traffic information longer under its own Privacy Notice (it acts as a controller for some of it), which the policy says; database restore history up to 30 days depending on the plan.
 - **Tax records:** sales totals and items stay (without names), which is what tax records need.
 
 The periods are proposals for the owner to confirm (`OWNER-CHECKLIST.md`).
@@ -844,25 +896,49 @@ The periods are proposals for the owner to confirm (`OWNER-CHECKLIST.md`).
 
 ## 18. What the documents promise that the code must do first
 
-The documents are written for the live version. These promises aren't kept by the code yet; each is small enough to build before the live version goes public:
+The documents are written for the live version, and they're not in effect until it ships: their dates say "[TO FILL IN]". These promises aren't kept by the code yet. **All of them ship in one release together with the documents**, with tests that fail if any piece is missing; publishing the documents first would make them untrue on the day they go up.
 
-1. **Publish the four policies and link them** on every page, in both apps and in the booking steps (CalOPPA §1, Apple §11, the fee notice §8.3).
+1. **Publish the four policies and link them** on every page (live site and demo), in both apps and in the booking steps (CalOPPA §1, Apple §11, the fee notice §8.3). Add the four pages to the website's accessibility, phone-size and offline lists, and check that no "TO FILL IN" is left in them.
 2. **Show the Terms and the Cancellation & No-Show Policy at booking**, directly above "Book appointment" (§8.4).
 3. **Cap every fee at the booked service's price** (§8.2–8.3).
 4. **Stop charging fees 7 days after the appointment** (§8.3 item 10, §9.2).
-5. **Remove clients' contact details after 12 months** with the daily job (§17).
-6. **Delete saved cards** when they expire, go 12 months unused, or are removed (§17).
-7. **Tools to answer privacy requests:** find, export, correct and delete one person's data (§3).
+5. **A no-show only after the end time:** a booking with a card on file can be marked a no-show, and charged, only after its end time, and a completed one can't become a no-show (§8.3 item 12).
+6. **The 15-minute grace period** for bookings made after the cutoff has passed, also on the booking screens (§8.3 item 11).
+7. **Remove clients' contact details after 12 months** with the daily job (§17).
+8. **Delete saved cards** when they expire, go 12 months unused, or are removed, and once the booking is over for a card saved without "Remember me" (§17).
+9. **Tools to answer privacy requests:** find, export, correct and delete one person's data (§3).
+10. **"Remember me" starts unticked in the iPhone app** (§8.3 item 9).
+11. **The line under the details form** says the details go to the shop "and the services that run its booking", not "only to" the shop (§1).
+12. **The app opens the new website**, not the older Squarespace one, from its Website row, Share link and calendar events (§1, and "What the code shows").
+13. **Yelp reviews stay off** (§12.2).
+14. **Receipt emails only after the card payment, and not kept** (§9.3).
+15. **No client name in Tap to Pay payment descriptions** (§17).
+16. **The Business app's location question gives Stripe's real reason** (fraud and disputes), as the Privacy Policy now does (§9.1).
+17. **The Visit page's accessibility lines say only what's been checked** (§10).
+18. **Apple's Declared Age Range API in both apps** before January 1, 2027 (§4.2). This is a legal requirement rather than a promise of the documents, and the Privacy Policy's "Children" section changes when it ships.
+
+The gallery photos are a separate, urgent step: they come off the public demo and out of the app builds now, not at launch (§16).
 
 ## 19. Recommended, but not promised by the documents
 
-- Yelp-branded stars and logo, or hide Yelp until then (§12.2).
-- Apple's Declared Age Range API before January 1, 2027 (§4.2), and Apple's age-assurance steps for Texas, Utah and Louisiana (§4.3).
+- Apple's age-assurance steps for Texas, Utah and Louisiana (§4.3).
 - Accurate App Store privacy answers for both apps (§11).
-- "Remember me" unticked by default in the iPhone app, as on the website (§8.3 item 9). Owner decision.
 - The fee notice says "is charged"; the agreed text says "may charge". Use "may be charged" in the notice too, and "online" rather than "in the app" in the stored text, for new bookings.
-- Drop the client's name from Tap to Pay payment descriptions; clear `sale_draft` and receipt emails once a sale is recorded.
+- Clear `sale_draft` once a sale is recorded.
 - Use an HMAC with a server secret for the rate-limit IP hash; add a Content-Security-Policy and Permissions-Policy to the live site, as the demo has.
 - Publish `/.well-known/gpc.json` (§2).
 - Show a charged fee on the website's My appointments page, as the iPhone app does, and offer staff a ready-made text to tell the client.
 - Accessibility audits in the iOS UI tests, and a test with a screen-reader user (§10).
+- A "Remove everything from this iPhone" action that also removes past appointments and their keys.
+
+## Changes after review (November 5, 2026)
+
+Two independent reviews checked the drafts against the law and the code. Every finding was checked again before acting on it. What changed:
+
+- **Not in effect until the code ships.** The four documents' dates are now "[TO FILL IN]", and the owner checklist and §18 tie publishing to the release that makes them true.
+- **No-show fee:** a 15-minute grace period for bookings made after the cutoff has passed, a short "estimate, not a penalty" recital, a no-show fee only after the appointment's end time (matching the late-arrival rule), and a completed appointment that can't become a no-show (§8.3 items 11–13).
+- **Privacy Policy:** the Do Not Track section now says Stripe's card page and Google can collect device details (§1, §2); providers are described one by one instead of all being "bound to this policy" (§11); Vercel's own log retention is acknowledged (§17); the developer is named as a recipient (§1); notification prompts, "Forget my details", the Keychain and "Remove from this list" are described as the app really works; saved cards without "Remember me" are deleted once their booking is over, and the Stripe email that can't be deleted is disclosed (§17); the older website and Squire are excluded by name; receipt emails are offered after payment and not kept (§9.3); the Tap to Pay location reason is Stripe's own.
+- **Yelp:** its API terms describe the API as for non-commercial uses and bar Yelp ratings next to other reviews, so the documents assume Yelp reviews are off and only linked (§12.2).
+- **Terms:** both price exceptions ("From" and "any barber"), a warning not to cancel online inside the cutoff to rebook, cancelling only on the device used to book, a refund line for the owner to fill in, the consumer's own county kept available (§15), and Apple's standard license agreement brought into "the whole agreement" (§11).
+- **Accessibility Statement:** relay calls, texts (once confirmed) and email; the phone-size and High Contrast claims worded as the tests really check them; the Visit page's "ADA-compliant" line made a launch item (§10).
+- **Owner checklist:** a "do this now" step for the gallery photos (§16); must-dos for the shop email, texts and relay, a refund policy, Yelp, the older website and Squire, a developer agreement, providers' data protection terms, no card fees, and the age signal.

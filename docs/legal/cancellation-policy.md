@@ -1,14 +1,14 @@
 # Cancellation & No-Show Policy
 
-**Effective date:** November 5, 2026\
-**Last updated:** November 5, 2026
+**Effective date:** [TO FILL IN: the day this version goes live]\
+**Last updated:** [TO FILL IN: the same day]
 
 This policy explains how to cancel an appointment with Izzy Clipz Barbershop ("Izzy Clipz", "we", "us"), and when a fee may be charged if you cancel late or don't come. It's part of our [Terms of Service](terms.md).
 
 ## The short version
 
 - **Booking online is free, and you pay at the shop.** Nothing is charged when you book.
-- **You can cancel online any time before your appointment starts**, in the Izzy Clipz app or on our website under My appointments.
+- **You can cancel online any time before your appointment starts**, on the phone or computer you booked it on: in the Izzy Clipz app, or on our website under My appointments. You can also call us.
 - **Some bookings need a card on file.** When one does, the booking screens tell you before you book, show the fee and how long before your appointment cancelling stops being free, and you agree to that by booking.
 - **With a card on file**, cancelling in time is free. If you cancel late or don't come, we may charge the fee you agreed to. It's never more than the price of the service you booked.
 - **We decide each time** whether to charge it, and we'll let you know if we do.
@@ -43,14 +43,16 @@ The terms shown when you book are the terms for that booking. We keep a copy of 
 - **It's charged at most once per appointment.**
 - It isn't part of the price of your service. You pay it only if you cancel late or don't come.
 
-Why we have it: when someone cancels at the last minute or doesn't come, their barber's time usually goes unused, because it's too late for someone else to book it. The fee helps cover that loss.
+Why we have it: when someone cancels at the last minute or doesn't come, their barber's time usually goes unused, because it's too late for someone else to book it. How much the shop loses each time is hard to know in advance, because it depends on the day and on whether someone walks in. So the fee is our agreed estimate of that loss, not a penalty.
 
 ### Cancelling in time, and cancelling late
 
 - **Cancelling before the cutoff is free.** The cutoff is shown before you book, for example "Cancelling in the app more than 1 hour before is free." The shop can set it from 30 minutes to 48 hours before the appointment. It's 1 hour unless the booking screens say otherwise.
 - **Cancelling exactly at the cutoff is still free.** With a 1-hour cutoff, cancelling exactly 1 hour before your appointment costs nothing.
 - **Cancelling after the cutoff is a late cancellation.** Before you cancel late, the app or website tells you the fee and asks you to confirm.
+- **Booking after the cutoff has passed.** If you book a time that's less than the cutoff away (for example, at 9:30 for a 10:00 appointment with a 1-hour cutoff), the booking screens tell you before you book. Cancelling it within 15 minutes of booking is still free. After that, cancelling it counts as a late cancellation.
 - **Cancelling on our website, under My appointments, counts the same as cancelling in the app**, even though the terms say "in the app".
+- **Cancel on the phone or computer you booked on.** The key that lets you cancel online is kept on the phone or computer, and in the app or browser, you booked with. Anywhere else, call us.
 - **What counts is when you first cancelled online.** Once you've cancelled online before your appointment started, it can't be charged as a no-show, even if we reopen the appointment later.
 - **If the notice is titled "No-Show Fee",** the shop isn't charging for late cancellations. Cancelling online is free any time before your appointment starts, and only a no-show can be charged.
 
@@ -59,18 +61,19 @@ Why we have it: when someone cancels at the last minute or doesn't come, their b
 A **no-show** means you didn't come to your appointment and didn't cancel it before it started.
 
 - **Running late?** Call us at (442) 341-3053. We'll fit you in if we can, but we may need to shorten your service or move you to another time.
-- **If you arrive after your appointment time has ended**, it counts as a no-show.
+- **If you arrive after your appointment time has ended**, it counts as a no-show. If you arrive before it ends, it doesn't.
 - Once your appointment's start time has passed, it can't be cancelled online anymore.
 
-### Cancelling by phone, and when we cancel
+### Cancelling or changing by phone, and when we cancel
 
 - **Before your appointment starts, you can also cancel by calling us** at (442) 341-3053.
 - **When the shop cancels an appointment, there's no fee.** That includes an appointment we cancel because you called us, and one we cancel for any other reason.
+- **To change your appointment after the cutoff**, call us rather than cancelling online and booking again, which would count as a late cancellation. We'll move it if we can, or cancel it for you, with no fee.
 - If we have to cancel or change your appointment, we'll try to let you know as soon as we can, at the number you gave us.
 
 ### When and how a fee is charged
 
-- **Only afterwards:** for a late cancellation, after you cancel; for a no-show, after your appointment's start time.
+- **Only afterwards:** for a late cancellation, after you cancel; for a no-show, after your appointment's end time.
 - **We decide each time** whether to charge it. We may waive a fee, for example after an emergency, and we try to treat everyone the same way.
 - **Within 7 days.** We charge a fee within 7 days after your appointment time, or not at all.
 - **To the card you saved for that booking**, through Stripe, our payment processor. It appears on your card statement as a charge from the shop.
@@ -82,7 +85,7 @@ A **no-show** means you didn't come to your appointment and didn't cancel it bef
 - **You add your card on Stripe's secure page.** The shop never sees your full card number. We keep only the card's type, last 4 digits and expiry date. Stripe keeps the card in the shop's Stripe account.
 - **Nothing is charged when you add it.**
 - **The card can be charged only the fee for a booking made with it**, under the terms you agreed to for that booking.
-- **"Remember me"** keeps a key to the card on your phone or computer, so you can use it for later bookings. Each later booking shows its terms again, and you agree to them by booking.
+- **"Remember me"** is off unless you turn it on, or your phone or computer already remembers you. With it on, your phone or computer keeps a key to the card, so you can use it for later bookings. Each later booking shows its terms again, and you agree to them by booking. Without it, the card is used only for the booking you added it for.
 - **The card must be yours, or you must have the cardholder's permission to use it.** You must be 18 or older to add a card. If you're younger, please ask a parent or guardian to book for you.
 - **To remove a saved card,** use "Remove card" or "Forget my details" in the Izzy Clipz app, or "Forget me" on our website, or call us. Appointments you already booked keep their card until they no longer need it. Our [Privacy Policy](privacy.md) explains how long saved cards are kept.
 
@@ -92,7 +95,7 @@ The agreement for a booking ends as soon as you come to your appointment, you ca
 
 ### If you disagree with a fee
 
-- **Call us at (442) 341-3053 or come by the shop.** We'll look into it and get back to you within 5 business days.
+- **Call us at (442) 341-3053, email us at [TO FILL IN: the shop's email address], or come by the shop.** We'll look into it and get back to you within 5 business days.
 - **If we charged a fee by mistake, we'll refund it.**
 - This doesn't affect your right to dispute a charge with your card issuer.
 
@@ -108,4 +111,4 @@ In the public demo of our website and in the demo versions of our apps, no card 
 
 ## Questions
 
-Call us at (442) 341-3053, or visit us at 1919 Mission Ave, Ste 105, Oceanside, CA 92058.
+Call us at (442) 341-3053, email us at [TO FILL IN: the shop's email address], or visit us at 1919 Mission Ave, Ste 105, Oceanside, CA 92058.

@@ -10,6 +10,7 @@ This file records what the Izzy Clipz website, web apps, iPhone apps and server 
   - Paths marked **(web)** exist only on `v5/webapp-business` today.
   - The server is the same on both branches, with four exceptions: `server/src/website.ts` (web only), the website's build and headers in `server/vercel.json` (web only), the website's extra catalog content (barbers' bios, titles and Instagram handles) in `server/data/catalog.json` (web only), and one rounding detail when cancelling (int only).
   - The database migrations are identical on both branches.
+- **Re-checked after two independent reviews,** the same day: the new facts are marked in sections 2, 6, 8 and 9, and the gaps they added are G12 to G18 in section 11.
 - **Keep it current:** check this file again whenever code that stores, sends or deletes data changes, and before changing the Privacy Policy.
 
 ## At a glance
@@ -30,8 +31,9 @@ This file records what the Izzy Clipz website, web apps, iPhone apps and server 
   - There's no retention period for clients' details. The documents promise to remove them 12 months after the appointment, using the existing daily job.
   - Saved cards are never deleted at Stripe.
   - There's no tooling to answer requests for a copy, a correction or deletion.
-  - The client's name is sent to Stripe in Tap to Pay payment descriptions (the Privacy Policy discloses it).
+  - The client's name is sent to Stripe in Tap to Pay payment descriptions, and the receipt email is asked for before the card payment and kept.
   - The Business app's App Store privacy answers need to cover more than they do.
+  - Added after the reviews: "Remember me" starts on in the app; a no-show can be charged before the appointment ends; the app links to the shop's older Squarespace site; Yelp's API terms likely don't allow its reviews on the shop's own site; and the gallery photos of clients are already on the public demo (G12 to G18).
 
 ## 1. The systems and where they run
 
@@ -173,6 +175,7 @@ This applies only once the owner has turned no-show protection on and Stripe is 
 - **On the iPhone:**
   - Stored in the Keychain, service `com.izzyclipz.app.saved-card`, item `no-show-card`. It stays on this iPhone only and is never included in a backup (`KeychainSecretStore.savedCard()`).
   - It's kept only when "Remember me" is on. Otherwise the card is held in memory for this booking only (`IzzyClipz/Stores/SavedCardStore.swift`).
+  - "Remember me" starts on in the app (`BookingDetailsInProgress.start` in `IzzyClipz/App/AppRouter.swift`), and with a card the note under it says "your card stays saved". See G12.
 - **On the website:** `izzy.card.v1`, together with the number of the client who added the card. It's in `localStorage` with "Remember me" on, and in `sessionStorage` otherwise; without "Remember me" it's also forgotten once the booking is made (see 5.1).
 - **Why:** to charge the fee the client agreed to, if the barber decides to.
 - **How long:** **forever**, both for the server's row and for the Customer and card at Stripe.
@@ -181,6 +184,8 @@ This applies only once the owner has turned no-show protection on and Stripe is 
 - **Who receives it:**
   - Stripe, as the payment processor. In connect mode, this is the shop's own connected Stripe account.
   - The shop, which can see the Customer, its email, and the card's brand, last 4 digits and expiry in its Stripe Dashboard.
+  - The developer, technically: the server's Stripe key can read and act on the shop's account. In connect mode it's the developer's own Connect platform key, which makes every call on the connected account (`server/README.md`).
+- **What deleting can't remove:** the completed Checkout Session keeps what the client typed on Stripe's page (the email, and any name or ZIP code). Stripe's API can create, update, retrieve, list and expire Checkout Sessions, but not delete them, so that email stays in the shop's Stripe account even after the Customer is deleted (G2).
 
 ### 2.8 The client's agreement to the policy
 
@@ -205,6 +210,7 @@ This applies only once the owner has turned no-show protection on and Stripe is 
 
   No name, number or receipt email is sent.
 - **Rules:** at most one fee per appointment; only after the start for a no-show; never for a booking the shop cancelled, or that the client cancelled online before the window (`feeCase` in `server/src/feecase.ts`). There's no time limit after the visit today (see G2).
+  - A booking with a card on file can be marked a no-show from its start time (`patchOwnerAppointment` in `server/src/appointments.ts`), and a completed one without a sale can be changed to a no-show. A client cancellation inside the window is late even right after booking a time that was already inside it (`cancelledLate` doesn't read `created_at`). The documents promise otherwise: see G13.
 - **Receipts:** Stripe may email the client a receipt, using the email on the Customer, if the shop turns on Stripe's receipt emails. That's a setting in the Stripe Dashboard, not in our code.
 - **How long:** forever.
 
@@ -214,7 +220,7 @@ This applies only once the owner has turned no-show protection on and Stripe is 
 - **Sent to Stripe** (`server/src/payments.ts`):
   - the amount;
   - a description: the note staff typed, or without one, "<service> with <barber> for <client's name>" (`IzzyClipzBusiness/Payments/CheckoutModel.swift`);
-  - an optional receipt email, which Stripe uses to email the receipt (`IzzyClipzBusiness/Features/Payments/TakePaymentView.swift`);
+  - an optional receipt email, which Stripe uses to email the receipt. Staff type it on the take-payment screen before the card is tapped (`IzzyClipzBusiness/Features/Payments/TakePaymentView.swift`); see G14;
   - the appointment's id, as metadata.
 - **Stored** in `payments`:
   - id, amount, description, appointment, status, receipt email, times, kind and account;
@@ -270,6 +276,7 @@ This applies only once the owner has turned no-show protection on and Stripe is 
 
 - Six photos of the shop's work ship with the website (`server/web/src/assets/images/gallery-*.webp` (web)) and the client app (`IzzyClipz/Resources/Assets.xcassets/Gallery1`–`Gallery6`).
 - They show clients' faces; at least one appears to be under 18. See the owner checklist (written permission, from a parent for a minor).
+- **They're already public:** the demo at https://izzy-clipz.vercel.app loads all six (its script bundle, checked November 5, 2026), and they're in the app builds, including the test builds. They came from the shop's older website (`README.md`). See G17.
 - They're bundled files, so taking one down means a website deploy and an app update.
 
 ## 3. The shop's and staff's data
@@ -392,7 +399,7 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 - **Permissions:**
   - The app's Info.plist asks for none: no camera, photos, location, contacts, microphone, Bluetooth or tracking (`IzzyClipz/Info.plist`, `project.yml`).
   - "Add to Calendar" uses the system's event editor without calendar access, so the app can't read the calendar (`IzzyClipz/Components/CalendarEventEditor.swift`).
-  - Notifications are requested when the client turns reminders on. They're **local only**: the app doesn't register for push notifications and has no device token (`IzzyClipz/Features/Reminders/ReminderStore.swift`, `IzzyClipz/Stores/AppointmentStore.swift`).
+  - Notifications are requested right after the first booking, because each booking is saved with its reminders on (`appointments.add(confirmation, remind: true)` in `IzzyClipz/Features/Booking/BookingModels.swift`) and the next sync asks iOS while permission is undecided and a reminder is still ahead (`performSync` in `IzzyClipz/Stores/AppointmentStore.swift`). The client can turn an appointment's reminders off on "You're booked" (`BookedView.swift`). Turning on haircut reminders asks too. They're **local only**: the app doesn't register for push notifications and has no device token (`IzzyClipz/Features/Reminders/ReminderStore.swift`).
 - **Stored in UserDefaults:**
   - `customer.name` and `customer.phone`, when "Remember me" is on. It's on by default in the app (`IzzyClipz/App/AppRouter.swift`, `IzzyClipz/Stores/CustomerDetailsStore.swift`).
   - `appointments.v2`: each appointment as the server last described it, **including the client's own name, number, note, and card brand and last 4**, until 30 days after the appointment ends.
@@ -411,8 +418,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
   - directions in Apple Maps or Google Maps (`IzzyClipz/Components/ContactButtons.swift`);
   - Instagram (`IzzyClipz/Components/InstagramCard.swift`);
   - Google and Yelp review pages, and Google's terms (`IzzyClipz/Features/Reviews/ReviewsView.swift`);
-  - the shop's existing website, https://www.izzyclipzbarbershop.net (the catalog's `websiteUrl`), shown in an in-app browser. That site isn't part of this codebase, and the documents in this folder don't cover it.
-- **What the client can clear:** "Forget my details" (name, number and card), "Remove card", and "Remove from this list" on each appointment. All of these act on this iPhone only.
+  - the shop's existing website, https://www.izzyclipzbarbershop.net (the catalog's `websiteUrl`), shown in an in-app browser from the Visit tab's "Website" row (`IzzyClipz/Features/Visit/VisitView.swift`). The Share link on the Visit tab and every Add to Calendar event use the same address (`IzzyClipz/Components/CalendarEventEditor.swift`). That site isn't part of this codebase: it runs on Squarespace (it sets Squarespace's `crumb` cookie and loads Squarespace's scripts), and its booking button goes to the shop's old booking page on Squire, web.getsquire.com/book/izzy-clipz-oceanside (checked November 5, 2026). The documents say they don't cover either. See G15.
+- **What the client can clear:** "Forget my details" (the remembered name and number, and the card), "Remove card", and "Remove from this list" on a past or cancelled appointment (an upcoming booked one must be cancelled first: `remove` in `AppointmentStore.swift`), which also deletes its key. All of these act on this iPhone only. "Forget my details" leaves the stored appointments, with the client's name, number and note, until 30 days after each one. Keychain items (appointment keys, the card key, and unconfirmed bookings with the number) can stay after the app is deleted, and nothing removes them then.
 - **Demo builds:** these use an in-memory sample server, and nothing is sent to the shop (`IzzyClipz/App/DemoMode.swift`, `IzzyClipz/Services/FakeShopAPI.swift`).
 - **What the app tells clients:**
   - "Your name and number are sent only to Izzy Clipz…" (`BookingDetailsView.swift`)
@@ -451,10 +458,12 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 | Vercel | Hosting: functions, CDN, Blob, cron and logs | Everything the server handles, while it handles it; product photos; request logs with IP address, browser and path | https://vercel.com/legal/privacy-notice |
 | Neon | Database, through the Vercel Marketplace | Everything in section 4, including restore history | https://neon.com/privacy-policy (it now leads to the privacy notice of Databricks, which owns Neon) |
 | Google | Reviews (Places API) | **From the server:** its key and the shop's place id. **From visitors:** their IP address and browser when reviewers' photos load, plus anything on Google pages they open. | https://policies.google.com/privacy (linked on the Reviews page) |
-| Yelp | Reviews (Yelp's API) | The same pattern as Google | https://www.yelp.com/tos/privacy_policy |
+| Yelp | Reviews (Yelp's API), only when the server has `YELP_API_KEY`; the documents assume it doesn't (G16) | The same pattern as Google | https://www.yelp.com/tos/privacy_policy |
 | Apple | App Store; Tap to Pay on iPhone; MapKit map tiles; the system calendar editor and local notifications (both on the device); Apple Pay on Stripe's page | What Apple's services need in order to work | https://www.apple.com/legal/privacy/ |
 | Meta (Instagram) | Links only | Nothing from the apps or the site | |
 | GitHub | Code hosting and CI | No client data. Tests use 555 numbers. The smoke test books "Smoke test" with a 555-01xx number on the live server and then cancels it (`server/scripts/smoke.ts`). | |
+| The developer | Builds and runs the website, apps and server for the shop | Technical access to everything the server and database hold; sets the server's secrets (owner key, database address, Stripe key); in connect mode, the Stripe key is the developer's own platform key, which acts on the shop's connected account; runs the privacy tools for the shop | None of its own: the owner checklist asks for a written agreement |
+| Squarespace and Squire | The shop's older website and old booking page, which the client app links to (G15) | Nothing from our code; visitors who follow the link deal with them directly | Their own |
 
 Both branches were searched. The code uses no ad networks, analytics or crash-reporting services, data brokers, or email or text-message services.
 
@@ -462,7 +471,7 @@ Both branches were searched. The code uses no ad networks, analytics or crash-re
 
 | Claim | True today? | Evidence and suggested wording |
 |---|---|---|
-| No analytics or tracking | Yes, for the website, client app and server | No analytics, crash-reporting or attribution code. Both manifests set `NSPrivacyTracking` to false. No App Tracking Transparency or ad identifier. Say that the Business app, used by staff, includes Stripe's payment software, which reports usage and approximate location to Stripe, and that the host keeps request logs. |
+| No analytics or tracking | Yes, for the website, client app and server | No analytics, crash-reporting or attribution code. Both manifests set `NSPrivacyTracking` to false. No App Tracking Transparency or ad identifier. Say that the Business app, used by staff, includes Stripe's payment software, which reports usage and approximate location to Stripe, and that the host keeps request logs. Don't say no other company can collect device data across sites: Stripe's card page does, to prevent fraud, and Google sees visitors' IP addresses when reviewers' photos load. |
 | No ads | Yes | No ad code |
 | We don't sell data or share it for advertising | Yes | Only service providers receive it. Mention that Google and Yelp see visitors' IP addresses when reviewers' photos load. |
 | No marketing texts or emails | Yes | No email or text code. Staff may call or text clients one to one about an appointment from the shop's phone. Stripe emails a receipt when staff enter a receipt email, and may email receipts if the shop turns that on in Stripe. |
@@ -470,8 +479,12 @@ Both branches were searched. The code uses no ad networks, analytics or crash-re
 | One cookie, used only to carry appointments into the Home Screen app | Yes | See 5.2. It's strictly functional. Say that it's sent to the shop's server with requests, and that the server ignores it. |
 | We don't keep IP addresses | Almost | We keep a scrambled IP address for up to about 2 days to stop abuse. The host also processes IP addresses in its logs, for 1 hour to 30 days depending on the plan. |
 | Card numbers never reach the shop | Yes | They go only to Stripe's page and Apple's Tap to Pay. Say that Stripe keeps the card, and the email typed on its page, in the shop's Stripe account. |
-| "Your name and number are sent only to Izzy Clipz" (shown in the apps and on the site) | Almost | The hosts handle the details on the shop's behalf. Stripe gets the client's name in Tap to Pay descriptions (G5). The line doesn't mention email (G9). |
+| "Your name and number are sent only to Izzy Clipz" (shown in the apps and on the site) | No | The hosts handle the details on the shop's behalf, the developer can reach them, and Stripe gets the client's name in Tap to Pay descriptions (G5). The line doesn't mention email. Change it (G9). |
 | Reminders stay on your phone | Yes | They're local notifications only. |
+| The app asks for notifications only when reminders are turned on | No | It asks right after the first booking, because appointment reminders start on (section 6). |
+| "Forget my details" clears the client's details from the iPhone | Partly | It clears the remembered name and number and the card. Stored appointments keep the name, number and note until 30 days after each one, and Keychain items can outlive the app (section 6). |
+| Every provider protects data at least as well as the policy | No | Stripe and Apple use some data for their own purposes, and Vercel acts as a controller for some service data. Say that Vercel and Neon process data under data protection terms (once confirmed), and that Stripe and Apple use some data under their own policies. |
+| The host keeps logs for up to 30 days | Only the logs the shop sees | Vercel's runtime logs are kept 1 hour to 30 days, by plan. Vercel's Privacy Notice keeps some data it controls, such as IP addresses, "for the minimum necessary period" it decides. |
 | Do Not Track and Global Privacy Control | Nothing to switch off | There's no cross-site tracking, and no code reads either signal. The policy can say so. |
 | Data stays in the US | Yes, for hosting | Functions, database and photos are in `pdx1` (Oregon). Vercel's CDN serves files from its nearest location. Stripe, Google, Yelp and Apple follow their own terms. |
 | We delete your details after a set time | **No** | Nothing deletes appointments, sales, payments or saved cards (G1, G2). The documents promise it; it must be built first. |
@@ -517,9 +530,10 @@ These are listed with the highest priority first. Each is either a change to the
 
 **Status in the documents:**
 
-- **Promised by the documents, so they must be built before the live version goes public:** G1, G2 and G3, plus publishing and linking the documents, showing the Terms at booking, and capping the fee at the service's price (see `research.md` §18).
-- **Disclosed in the Privacy Policy instead of changed:** G4, G5 and G6.
-- **Recommended, not promised:** G7 to G12.
+- **Promised by the documents, so they must be built and released together with them:** G1, G2, G3, G5, G9, G12, G13, G14, G15, G16 and G18, plus publishing and linking the documents, showing the Terms at booking, and capping the fee at the service's price (see `research.md` §18). The documents' dates stay "[TO FILL IN]" until that release.
+- **Urgent, before launch and independent of it:** G17 (the gallery photos on the public demo).
+- **Disclosed in the Privacy Policy instead of changed:** G4 and G6.
+- **Recommended, not promised:** G7, G8, G10, G11 and G19.
 
 ### G1. No retention period for clients' details
 
@@ -578,14 +592,15 @@ These are listed with the highest priority first. Each is either a change to the
 - **What the documents promise:**
   1. **A charging deadline of 7 days after the appointment's start.** After it, the server refuses a new fee attempt. It's fairer to clients, it gives the card agreement a clear end (card-network rules, `research.md` §9.2), and it tells the server when a card is no longer needed.
   2. **`DELETE /api/cards`**, called with `X-Card-Token`:
-     - When no booking still needs the card, it detaches the card (`paymentMethods.detach`) and deletes the Stripe Customer (`customers.del`). The card can then no longer be charged, and the email Stripe collected is no longer on the shop's account. (Stripe keeps its own records as the law requires.)
-     - A booking still needs the card if it's upcoming, still inside the 7-day charging deadline, or has a fee pending. In that case, mark the card and let the daily job delete it once those have passed.
+     - When no booking still needs the card, it detaches the card (`paymentMethods.detach`) and deletes the Stripe Customer (`customers.del`). The card can then no longer be charged. The completed Checkout Session still holds the email typed on Stripe's page, because Stripe's API can't delete a Checkout Session; the Privacy Policy says so. (Stripe also keeps its own records as the law requires.)
+     - A booking still needs the card if it's upcoming, if it could still be charged a fee before the 7-day deadline (it's still booked, marked a no-show, or cancelled late), or if a fee is pending. In that case, mark the card (`delete_requested_at`) and let the daily job delete it once none of those is true.
      - Call it from "Remove card" and "Forget my details" in the app, and from "Forget me" (and "Not you? Forget me") on the website.
+     - **Also call it right after a booking made without "Remember me"**: on the website in `ReviewStep.tsx` before `forgetCard()`, and in the app in `keepOrForgetCard`. Today the device drops the card's key then, so the client can never remove the card, while it would stay at Stripe for up to 12 months.
   3. **The daily job** deletes cards that have expired, or haven't been used for a booking in 12 months, or were marked for deletion, as long as no booking needs them.
   4. **Code changes:**
      - Add those Stripe calls to `StripeClient` (`server/src/deps.ts`).
      - Add `removed_at` and `delete_requested_at` to `saved_cards`, and allow its Stripe ids to be null once the card is removed.
-  5. **Wording in the Privacy Policy:** "Your saved card stays with Stripe so you can book again quickly, until the first of these happens: the card expires; 12 months pass without it being used for a booking; you remove it ... or ask us to delete it. We then ask Stripe to delete it ... as soon as none of your bookings still needs it."
+  5. **Wording in the Privacy Policy:** "A card you save on Stripe's page stays in the shop's Stripe account until the first of these happens: the card expires; 12 months pass without it being used for a booking; you remove it ... or ask us to delete it; you saved it without 'Remember me', and the booking you saved it for can no longer be charged a fee (7 days after the appointment at the latest). ... Then we ask Stripe to delete the card, and the customer record it was saved under, as soon as none of your bookings still needs it."
 
 ### G3. No way to answer requests for a copy, a correction or deletion
 
@@ -609,7 +624,7 @@ These are listed with the highest priority first. Each is either a change to the
 
 - **Now:** without a note, the description is "<service> with <barber> for <client>". It's sent to Stripe and kept in `payments.description`.
 - **In the documents:** the Privacy Policy says the description sent to Stripe can include the client's name.
-- **Optional fix:** drop " for <client>" in `IzzyClipzBusiness/Payments/CheckoutModel.swift`. The policy stays true either way.
+- **Required fix (the Privacy Policy now assumes it):** drop " for <client>" in `IzzyClipzBusiness/Payments/CheckoutModel.swift`, so the description is "<service> with <barber>" unless staff type a note. The copy of older descriptions in the shop's Stripe account stays as long as Stripe keeps payment records, which the policy's retention table says.
 - **Related clean-up:**
   - Stop keeping the receipt email after the payment, since Stripe has it.
   - Clear `sale_draft` when its sale is recorded (`server/src/sales.ts`).
@@ -633,7 +648,7 @@ These are listed with the highest priority first. Each is either a change to the
 ### G9. The website's email field has no use in the code
 
 - The Privacy Policy says it's optional and used only to contact the client about the appointment.
-- Optionally, change the line under the form to "Your details are sent only to…", since it mentions only the name and number.
+- **Required:** the line under the form ("Your name and number are sent only to Izzy Clipz Barbershop, to book and manage this appointment.", in `server/web/src/booking/DetailsStep.tsx` and `IzzyClipz/Features/Booking/BookingDetailsView.swift`) isn't accurate: the hosts, Stripe and the developer handle the details too. Change it to "Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains.", with the policy linked.
 - The app doesn't ask for an email.
 
 ### G10. More clean-up in the daily job
@@ -648,10 +663,54 @@ See section 10:
 - For the client app, consider adding Email Address.
 - For the Business app, give its real answers: Stripe's coarse location and product interaction, product photos, and the clients' details that staff enter.
 
-### G12. Smaller points
+### G12. "Remember me" starts on in the app
+
+- **Now:** the app's "Remember me on this iPhone" starts on (`BookingDetailsInProgress.start` in `IzzyClipz/App/AppRouter.swift`), and with a card it keeps the card for later bookings. The website's starts off unless the browser already remembers the client.
+- **Why it matters:** Stripe asks for explicit consent to save a card for later use, for example an unticked "Save my payment method for future use" box. A box that starts ticked isn't explicit consent, and invites "I never agreed to keep my card" disputes.
+- **What the documents promise:** it starts off in the app too, unless this iPhone already remembers the client: `remember: saved != nil` in `BookingDetailsInProgress.start` (and in `remembering(_:)`), with the UI tests updated.
+
+### G13. When a fee can be charged
+
+- **Now** (`server/src/feecase.ts`, `server/src/appointments.ts`, `server/src/noshowfee.ts`):
+  - A booking with a card on file can be marked a no-show, and charged, as soon as its start time passes, although the documents say a client who arrives before the end isn't a no-show.
+  - A completed appointment without a sale can be changed to a no-show and charged, although the documents say the agreement ends when the client comes.
+  - A client cancellation inside the window is late even a minute after booking a time that was already inside it (bookings can start 30 minutes ahead, and the window can be up to 48 hours).
+- **What the documents promise, and the change:**
+  1. **A no-show fee only after the end time.** `patchOwnerAppointment` refuses `no_show` for a booking with a card on file while `end_at > now` (instead of `start_at`), with the message "You can mark a no-show once the appointment has ended."; `chargeCase` refuses a no-show fee while `end_at > now`. Mirror it in the Kit and both owner screens (the app and the website's Business area), and test one minute before and after the end.
+  2. **A completed appointment stays completed for fees.** `patchOwnerAppointment` refuses changing a booking with a card on file from `completed` to `no_show`, so a client who came can't be charged by mistake. Test it.
+  3. **A 15-minute grace period.** `cancelledLate` also requires `customer_cancelled_at - created_at > 15 minutes`, in the server, the Kit's `NoShowRule`, and the website's `lib/lateCancel.ts` (used by the booking steps and `business/lib/fees.ts`). `test/fixtures/no-show-rule.json` gets cases with `created_at`. The notices for a time already inside the window (the website's `bookNote` in `ReviewStep.tsx`, the Kit's `lateCancelNotice` shown in `ChooseTimeView.swift`) say that cancelling it more than 15 minutes after booking may be charged. Test at 14 and 16 minutes.
+
+### G14. The receipt email is asked for before the card payment
+
+- **Now:** staff type an optional receipt email on the take-payment screen before the card is tapped (`IzzyClipzBusiness/Features/Payments/TakePaymentView.swift`); it goes to Stripe with the PaymentIntent and is kept in `payments.receipt_email` (`server/src/payments.ts`).
+- **Why it matters:** California's Song-Beverly Credit Card Act (Civ. Code §1747.08) bars requesting personal identification information that's recorded as part of a credit card transaction (`research.md` §9.3).
+- **What the documents promise, and the change:** the email receipt is offered only after the payment has gone through; the server sets `receipt_email` on that payment's charge, which makes Stripe send the receipt (Stripe's API: "If this field is updated, then a new email receipt will be sent to the updated address"), and doesn't store the address. Card payments never need an email, ZIP code or phone number.
+
+### G15. The client app links to the older website
+
+- **Now:** the Visit tab's "Website" row, its Share link and every Add to Calendar event use https://www.izzyclipzbarbershop.net (`websiteURL` in `Packages/IzzyClipzKit/Sources/IzzyClipzKit/IzzyClipzData.swift`, `websiteUrl` in `server/data/catalog.json`). That's the shop's older Squarespace site, with Squarespace's cookie and scripts, and its booking button goes to Squire.
+- **What the documents promise:** the Privacy Policy says there are no analytics or tracking tools in the client app, and the documents say they don't cover the older site or Squire.
+- **The change:** point all three at the new website's address once it's known, or remove them until then.
+
+### G16. Yelp reviews
+
+- **Now:** with `YELP_API_KEY` set, the website and app show Yelp's reviews and rating next to Google's (the website's Reviews page and home tile), with generic stars and no Yelp logo.
+- **Why it matters:** Yelp's API Terms (September 22, 2026) describe the API as for non-commercial uses, defined as bringing no promotional or monetary value, and bar Yelp ratings next to other reviews (`research.md` §12.2).
+- **What the documents promise:** only Google's reviews are shown; Yelp is linked. Leave `YELP_API_KEY` unset on the live server (the website and app then show "Read our reviews on Yelp"), unless the owner gets Yelp's written consent.
+
+### G17. The gallery photos are already public (urgent)
+
+- **Now:** the six gallery photos, with clients' faces and an apparent minor in the first one, are on the public demo and in the app builds (2.14).
+- **The change, now:** remove them from `server/web/src/assets/images/gallery-*.webp` and `IzzyClipz/Resources/Assets.xcassets/Gallery1`–`Gallery6` (or replace them with photos without faces), redeploy the demo and rebuild the test builds. A photo of a person goes back only with that person's signed permission (a parent's or guardian's for a minor). The Privacy Policy says everyone who can be recognized agreed.
+
+### G18. The Visit page's accessibility lines
+
+- **Now:** "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`, `IzzyClipzData.swift`). "ADA-compliant" is a legal claim nobody has inspected.
+- **The change:** use only lines the owner has checked, for example "Step-free entrance". The Accessibility Statement points to the Visit page.
+
+### G19. Smaller points
 
 - **The cookie is sent to the server with every request.** Optionally, set it with `Path=/appointments`, the only place it's read, after checking that the Home Screen import still works.
-- **"Remember me" starts on in the app but off on the website.** Either default is fine for the documents, which describe both. `research.md` §8.3 item 9 recommends unticked in the app too (owner decision).
 - **Owner access is all or nothing.**
   - The Privacy Policy says that everyone at the shop who uses Izzy Clipz Business can see appointment details.
   - The owner should give access to the app and computer sign-ins only to trusted staff, and sign out old computers (Settings lists them).
@@ -667,14 +726,17 @@ This is what the Privacy Policy states. In the last column, "now" means it's alr
 |---|---|---|---|
 | Name, number, email and note on appointments | Server | 12 months after the appointment (later only while a fee is pending) | G1 (today: forever) |
 | Client's name on sales; void reasons | Server | 12 months | G1 (today: forever) |
-| Receipt emails, payment descriptions, checkout tickets | Server | At most 12 months | G1 (today: forever) |
+| Payment descriptions, checkout tickets | Server | At most 12 months | G1 (today: forever) |
+| Receipt emails typed at the counter | Server | Not kept: passed to Stripe after the payment | G14 (today: forever) |
+| Payment records, descriptions and receipt emails at Stripe; the card page's record (Checkout Session) with the email typed there | Stripe (the shop's account) | As long as Stripe keeps them; a Checkout Session can't be deleted | Stripe |
 | What was booked, prices, sales totals | Server | Kept for the shop's records, without personal details | n/a |
-| Saved card | Stripe and server | Until it expires, goes 12 months unused, or is removed, once no booking needs it | G2 (today: forever) |
+| Saved card | Stripe and server | Until it expires, goes 12 months unused, or is removed; without "Remember me", until its booking can no longer be charged; in each case once no booking needs it | G2 (today: forever) |
 | Agreed policy text and its time | Server | Kept with the appointment, no longer linked to a person after 12 months | G1 |
 | Scrambled IP address for rate limits | Server | About 2 days | Now |
-| Request logs | Vercel | 1 hour (Hobby), 1 day (Pro), up to 30 days (Observability Plus) | Vercel |
+| Request logs the shop can see | Vercel | 1 hour (Hobby), 1 day (Pro), up to 30 days (Observability Plus) | Vercel |
+| Traffic data Vercel keeps for itself (for example IP addresses, for security) | Vercel | "The minimum necessary period", as Vercel decides (its Privacy Notice) | Vercel |
 | Database restore history | Neon | 6 hours to 30 days, depending on the plan | Neon |
-| Yelp reviews | Server | At most 24 hours | Now |
+| Yelp reviews (only with a Yelp key; the documents assume none, G16) | Server | At most 24 hours | Now |
 | Google reviews | Server | Not stored | Now |
 | Computer sign-ins | Server and browser | Up to 30 days (ended ones deleted at the next sign-in) | Now (G10 would make it daily) |
 | Product photos | Vercel Blob | Until replaced or deleted (copies cached for up to 30 days) | Now |
@@ -691,7 +753,7 @@ This is what the Privacy Policy states. In the last column, "now" means it's alr
 - **"Is charged" and "may charge":** the fee notice says "is charged" (`feeWarning`), while the agreed text says "may charge" (`policyText`). The documents follow the agreed text (the shop decides each time). Optionally, make the notice say "may be charged" too.
 - **Only clients' own online cancellations can count as late:**
   - A booking the shop cancels (after a phone call, for example) is never charged.
-  - A no-show can be charged only after the appointment's start, and only if the client never cancelled (`feeCase` in `server/src/feecase.ts`).
+  - A no-show can be charged only after the appointment's start, and only if the client never cancelled (`feeCase` in `server/src/feecase.ts`). The documents promise only after its end (G13).
 - **No-show protection is off** until the owner turns it on, even when Stripe is set up. When it's on:
   - the defaults are 100% of the service price and a 1-hour window;
   - the owner can choose 1% to 100% of the price or a flat $0.50 to $500, and a window from 30 minutes to 48 hours (`server/src/noshow.ts`);
@@ -722,6 +784,11 @@ This is what the Privacy Policy states. In the last column, "now" means it's alr
 - Neon restore window by plan: [Neon plans](https://neon.com/docs/introduction/plans) (2026-11-04)
 - Neon's privacy policy address now leads to Databricks' privacy notice: [neon.com/privacy-policy](https://neon.com/privacy-policy) (checked 2026-11-05)
 - Stripe Checkout and the Customer's email (the `customer` and `customer_email` parameters): [Create a Checkout Session](https://docs.stripe.com/api/checkout/sessions/create)
-- Stripe Terminal location requirement and the Bluetooth key: [Terminal iOS setup](https://docs.stripe.com/terminal/payments/setup-integration?terminal-sdk-platform=ios)
+- Stripe Terminal location requirement and the Bluetooth key: [Terminal iOS setup](https://docs.stripe.com/terminal/payments/setup-integration?terminal-sdk-platform=ios) ("To reduce fraud risks associated with payments, and to minimize disputes, Stripe must know where payments occur.")
+- Checkout Sessions can be created, updated, retrieved, listed and expired, not deleted: [Checkout Sessions API](https://docs.stripe.com/api/checkout/sessions)
+- Setting `receipt_email` on a charge afterwards sends a new receipt: [Update a charge](https://docs.stripe.com/api/charges/update)
+- Stripe collects device and browser details across sites to detect fraud, and uses End Customers' data for its own purposes where allowed: [Stripe Privacy Policy](https://stripe.com/privacy) (last updated April 28, 2026), §1.2(b) and §2(a)
+- Vercel acts as a controller for some data and keeps it "for the minimum necessary period": [Vercel Privacy Notice](https://vercel.com/legal/privacy-notice) (June 1, 2026); its Data Processing Addendum applies to Pro and Enterprise customers: [Vercel DPA](https://vercel.com/legal/dpa) (last updated March 17, 2026)
+- Yelp's API is described as for non-commercial uses, and Yelp ratings may not be shown next to other reviews: [Yelp API Terms of Use](https://terms.yelp.com/developers/api_terms/) (last updated September 22, 2026), sections 1 and 5
 - Stripe Terminal 6.0.0's privacy manifest: read from the [6.0.0 release archive](https://github.com/stripe/stripe-terminal-ios/releases/download/6.0.0/StripeTerminal.xcframework.zip), whose checksum matches the one [Stripe's Swift package](https://raw.githubusercontent.com/stripe/stripe-terminal-ios-spm/6.0.0/Package.swift) pins
 - Privacy manifests in apps and SDKs: [Apple: Privacy manifest files](https://developer.apple.com/documentation/bundleresources/privacy-manifest-files)
