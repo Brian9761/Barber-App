@@ -313,7 +313,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(eventTitle.label.contains("Haircut"), eventTitle.label)
         tapToClose(app.buttons["Add"], closing: eventTitle, "Add to Calendar didn't close")
 
-        tapPinned("bookedDoneButton")
+        tapDone()
         XCTAssertTrue(element("bookService-haircut").waitForExistence(timeout: 10), "Done didn't go back to step 1")
         let card = element("appointmentCard")
         XCTAssertTrue(card.waitForExistence(timeout: 10), "The appointment isn't on the Book tab")
@@ -492,7 +492,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("bookedTitle").waitForExistence(timeout: 15), "Trying again didn't find the booking that went through")
         screenshot("42-Booked-After-Lost-Answer")
 
-        tapPinned("bookedDoneButton")
+        tapDone()
         XCTAssertTrue(element("bookService-haircut").waitForExistence(timeout: 10), "Done didn't go back to step 1")
         XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "The appointment isn't on the Book tab")
         let list = element("yourAppointments")
@@ -535,7 +535,7 @@ final class IzzyClipzUITests: XCTestCase {
         let summary = element("bookedSummary")
         XCTAssertTrue(summary.waitForExistence(timeout: 30), "It was booked, but nothing said so")
         XCTAssertTrue(summary.label.contains("Carlos"), summary.label)
-        tapPinned("bookedDoneButton")
+        tapDone()
         let list = element("yourAppointments")
         XCTAssertTrue(list.waitForExistence(timeout: 10), "No list of appointments on the Book tab")
         XCTAssertEqual(list.descendants(matching: .any).matching(identifier: "appointmentCard").count, 1)
@@ -623,7 +623,7 @@ final class IzzyClipzUITests: XCTestCase {
         continueToDetails()
         continueToReview()
         bookAppointment()
-        tapPinned("bookedDoneButton")
+        tapDone()
         openTab("Home")
         let next = labeled("Next appointment")
         XCTAssertTrue(next.waitForExistence(timeout: 10), "Home doesn't show the new booking")
@@ -721,7 +721,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(reminders.label.contains("Reminders also say until when you can cancel for free"), reminders.label)
         screenshot("53-Booked-With-Card")
 
-        tapPinned("bookedDoneButton")
+        tapDone()
         let onCard = element("appointmentCardOnFile")
         XCTAssertTrue(onCard.waitForExistence(timeout: 10), "The appointment doesn't show its card on file")
         XCTAssertTrue(onCard.label.contains("Card on file for no-shows and late cancellations: Visa ending in 4242"), onCard.label)
@@ -748,7 +748,7 @@ final class IzzyClipzUITests: XCTestCase {
         bookAppointment()
         XCTAssertFalse(element("bookedSummary").label.contains("Card on file"), element("bookedSummary").label)
         XCTAssertFalse(element("appointmentRemindersToggle").label.contains("cancel for free"), "Nothing about fees without a card")
-        tapPinned("bookedDoneButton")
+        tapDone()
         XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10))
         XCTAssertFalse(element("appointmentCardOnFile").exists)
     }
@@ -892,7 +892,7 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("savedCard").waitForExistence(timeout: 15), "The card wasn't added")
         bookAppointment()
         XCTAssertTrue(element("bookedSummary").label.contains("Visa ending in 4242"), "The booking has the card")
-        tapPinned("bookedDoneButton")
+        tapDone()
         XCTAssertTrue(element("appointmentCard").waitForExistence(timeout: 10), "The appointment isn't on the Book tab")
         XCTAssertFalse(element("customerDetailsRow").exists, "Remember me off: the name and number aren't kept")
 
@@ -1103,7 +1103,7 @@ final class IzzyClipzUITests: XCTestCase {
         tap("addCardButton", file: file, line: line)
         XCTAssertTrue(element("savedCard").waitForExistence(timeout: 15), "The card wasn't added", file: file, line: line)
         bookAppointment(file: file, line: line)
-        tapPinned("bookedDoneButton", file: file, line: line)
+        tapDone(file: file, line: line)
         XCTAssertTrue(element("customerDetailsRow").waitForExistence(timeout: 10), "The details aren't remembered", file: file, line: line)
     }
 
@@ -1395,6 +1395,18 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(target.waitForExistence(timeout: 10), "Missing \(identifier)", file: file, line: line)
         XCTAssertTrue(waitUntil(target, toMatch: hittable()), "\(identifier) can't be tapped", file: file, line: line)
         target.tap()
+    }
+
+    /// Closes "You're booked" with Done, back to the Book tab's start. A busy simulator can drop
+    /// the tap (Done lit up but the confirmation stayed), so it's tapped once more while it's still
+    /// there: Done only ever goes back to the start, so a second tap can't do anything else.
+    private func tapDone(file: StaticString = #filePath, line: UInt = #line) {
+        let done = element("bookedDoneButton")
+        tapPinned("bookedDoneButton", file: file, line: line)
+        if !waitForDisappearance(of: done, timeout: 5), done.exists, done.isHittable {
+            done.tap()
+        }
+        XCTAssertTrue(waitForDisappearance(of: done), "Done didn't close the confirmation", file: file, line: line)
     }
 
     /// Taps `button` until `next` shows: slow simulators occasionally drop a tap, and every
