@@ -52,6 +52,18 @@ final class DemoModeTests: XCTestCase {
         await model.start()
         let workspace = try XCTUnwrap(model.workspace, "The demo starts signed in")
         XCTAssertEqual(workspace.ownerKey, FakeServer.ownerKey)
-        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+
+        // The shop's Stripe account starts not connected, so Connect Stripe can be tried: a pretend
+        // step (a moment long) connects a sample account, and Tap to Pay works with the test reader.
+        XCTAssertEqual(server.options.stripeAccount, FakeServer.StripeAccount.none)
+        XCTAssertEqual(environment.stripeWindowDelay, DemoMode.stripeWindowDelay)
+        XCTAssertEqual(workspace.checkout.mode, .unavailable(.stripeNotConnected(.notConnected)))
+        environment.stripeWindowDelay = .zero
+        let connecting = StripeConnectionStore(api: workspace.api, connector: environment.makeStripeConnector())
+        connecting.onChange = { Task { await workspace.refreshStatus() } }
+        await connecting.connect()
+        XCTAssertEqual(connecting.connection?.status, .active)
+        let on = await eventually { workspace.checkout.mode == .sampleServer(locationId: "tml_sample_location") }
+        XCTAssertTrue(on, "Got \(workspace.checkout.mode)")
     }
 }

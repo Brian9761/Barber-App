@@ -21,10 +21,10 @@ struct SettingsView: View {
                     }
                 }
                 shopSection
-                serverSection
-                stripeSection
+                StripeConnectionSection(workspace: workspace)
                 noShowSection
                 tapToPaySection
+                serverSection
                 keySection
                 legalSection
                 Section {
@@ -44,11 +44,13 @@ struct SettingsView: View {
                 await workspace.refreshStatus()
                 await workspace.refreshHealth()
                 await workspace.noShow.refresh()
+                await workspace.stripeConnection.refresh()
             }
             .task {
                 async let health: Void = workspace.refreshHealth()
                 async let noShow: Void = workspace.noShow.refresh()
-                _ = await (health, noShow)
+                async let stripe: Void = workspace.stripeConnection.refresh()
+                _ = await (health, noShow, stripe)
             }
             .sheet(isPresented: $showsReplaceKey) {
                 ReplaceKeyView(model: model)
@@ -158,43 +160,6 @@ struct SettingsView: View {
         } header: {
             Text("Server")
         }
-    }
-
-    private var stripeSection: some View {
-        Section {
-            if let stripe = workspace.ownerStatus?.stripe {
-                LabeledContent("Card payments", value: stripe.configured ? "Set up" : "Not set up")
-                    .accessibilityIdentifier("stripeConfigured")
-                if stripe.configured {
-                    LabeledContent("Mode", value: stripe.mode == .live ? "Live: real money" : stripe.mode == .test ? "Test mode: no real money" : "Unknown")
-                        .accessibilityIdentifier("stripeMode")
-                    LabeledContent("Terminal location", value: stripe.locationId ?? "Missing")
-                        .accessibilityIdentifier("stripeLocation")
-                }
-            } else if let error = workspace.statusError {
-                InlineMessage(text: error)
-            } else {
-                LabeledContent("Card payments") { ProgressView() }
-            }
-        } header: {
-            Text("Stripe")
-        } footer: {
-            Text(stripeFooter)
-        }
-    }
-
-    private var stripeFooter: String {
-        guard let stripe = workspace.ownerStatus?.stripe else { return "" }
-        if !stripe.configured {
-            return "To take cards, add the shop's Stripe secret key (STRIPE_SECRET_KEY) and Terminal location (STRIPE_TERMINAL_LOCATION_ID) to the server's settings."
-        }
-        if stripe.locationId == nil {
-            return "Create a Terminal location with the shop's address in the Stripe Dashboard and add its ID (tml_…) to the server as STRIPE_TERMINAL_LOCATION_ID."
-        }
-        if stripe.mode == .test {
-            return "Stripe test keys: only Stripe test cards work and no money moves. Switch the server to the live key to take real payments."
-        }
-        return "Payments go to the shop's Stripe account."
     }
 
     private var noShowSection: some View {

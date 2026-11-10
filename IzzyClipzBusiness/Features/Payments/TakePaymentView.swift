@@ -94,12 +94,22 @@ struct TakePaymentView: View {
             }
         case .unavailable(let issue):
             IssueCard(issue: issue) {
-                Button("Practice in test mode") { checkout.startPractice() }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("startPractice")
-                Button("Check again") { Task { await workspace.refreshStatus() } }
-                    .buttonStyle(.bordered)
-                    .accessibilityIdentifier("checkStripeAgain")
+                if issue.fixInSettings {
+                    // The shop's own Stripe account: connected (or finished) in Settings.
+                    Button("Go to Settings") { workspace.openSettings() }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("goToStripeSettings")
+                    Button("Practice in test mode") { checkout.startPractice() }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("startPractice")
+                } else {
+                    Button("Practice in test mode") { checkout.startPractice() }
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("startPractice")
+                    Button("Check again") { Task { await workspace.refreshStatus() } }
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("checkStripeAgain")
+                }
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("paymentsUnavailable")

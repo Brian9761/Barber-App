@@ -400,12 +400,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     func testSettingsShowStatusHowToTapAndSignOut() {
         launch()
         openTab("Settings")
-        XCTAssertTrue(waitForLabel(element("stripeMode"), containing: "Test mode: no real money"))
-        XCTAssertTrue(element("stripeLocation").label.contains("tml_sample_location"))
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Connected"))
+        XCTAssertTrue(waitForLabel(reveal("stripeMode"), containing: "Test mode: no real money"))
+        XCTAssertTrue(reveal("stripeLocation").label.contains("tml_sample_location"))
+        screenshot("O18-Settings")
+        reveal("serverStatus")
         let online = app.descendants(matching: .any).matching(identifier: "serverStatus")
             .matching(NSPredicate(format: "label CONTAINS %@", "Online")).firstMatch
         XCTAssertTrue(online.waitForExistence(timeout: 10), "The server's health check")
-        screenshot("O18-Settings")
 
         tap("howToTap")
         XCTAssertTrue(element("howToTapDone").waitForExistence(timeout: 10))
@@ -417,6 +419,79 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("signOut")
         tapDialogButton("Sign out", identifier: "confirmSignOut")
         XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 10), "Signing out didn't go back to sign in")
+    }
+
+    // MARK: The shop's Stripe account
+
+    /// The shop's own Stripe account isn't connected yet (`-fake-stripe-not-connected`): Take payment
+    /// says how to connect, with a button to Settings, where Connect Stripe opens Stripe's window (a
+    /// stand-in in UI tests) and comes back connected. Then Take payment takes cards.
+    func testConnectStripeFromSettings() {
+        launch("-fake-stripe-not-connected")
+        openTab("Take payment")
+        XCTAssertTrue(element("paymentsUnavailable").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "Connect Stripe to take cards").exists)
+        screenshot("O41-Payments-Connect-Stripe")
+        tap("goToStripeSettings")
+        XCTAssertTrue(waitUntil(tabButton("Settings"), toMatch: NSPredicate(format: "isSelected == true")), "Didn't go to Settings")
+        let status = reveal("stripeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "Not connected"), "Got: \(status.label)")
+        XCTAssertTrue(reveal("stripeMessage").label.contains("Connect your Stripe account to take card payments in the app."))
+        XCTAssertFalse(element("disconnectStripe").exists, "Nothing to disconnect yet")
+        screenshot("O42-Settings-Stripe-Not-Connected")
+
+        tap("connectStripe")
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "You're connected. You can take card payments now."))
+        let connected = reveal("stripeStatus")
+        XCTAssertTrue(waitForLabel(connected, containing: "Connected"), "Got: \(connected.label)")
+        XCTAssertTrue(connected.label.contains("Izzy Clipz Barbershop"), "Got: \(connected.label)")
+        XCTAssertTrue(waitForLabel(reveal("stripeMessage"), containing: "Payouts to your bank are on."))
+        XCTAssertTrue(reveal("openStripeDashboard").exists)
+        XCTAssertTrue(reveal("disconnectStripe").exists)
+        screenshot("O43-Settings-Stripe-Connected")
+
+        openTab("Take payment")
+        XCTAssertTrue(waitForDisappearance(of: element("paymentsUnavailable")), "Take payment still says to connect")
+        XCTAssertTrue(element("testModeBanner").waitForExistence(timeout: 10))
+    }
+
+    /// Stripe still needs details after its window (`-fake-stripe-needs-info`): Settings says so, and
+    /// Finish setting up opens it again.
+    func testStripeStillNeedingDetailsOffersFinishSettingUp() {
+        launch("-fake-stripe-needs-info")
+        openTab("Settings")
+        tap("connectStripe")
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "Stripe still needs a few details: tap Finish setting up."))
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Finish setting up"))
+        let finish = reveal("connectStripe")
+        XCTAssertTrue(waitForLabel(finish, containing: "Finish setting up"), "Got: \(finish.label)")
+        screenshot("O44-Settings-Stripe-Needs-Info")
+        finish.tap()
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "You're connected."))
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Connected"))
+    }
+
+    /// Closing Stripe's window (`-fake-stripe-cancel`) says nothing went wrong and shows no result:
+    /// the account the server started stays, so the button reads Finish setting up.
+    func testClosingStripesWindowShowsNoResult() {
+        launch("-fake-stripe-cancel")
+        openTab("Settings")
+        tap("connectStripe")
+        XCTAssertTrue(waitForLabel(reveal("connectStripe"), containing: "Finish setting up"))
+        XCTAssertFalse(element("stripeResult").exists, "Closing the window isn't a result")
+        XCTAssertFalse(element("stripeActionError").exists, "Closing the window isn't an error")
+    }
+
+    /// Disconnect asks first, says what stops, and leaves Connect Stripe.
+    func testDisconnectStripeAsksFirst() {
+        launch()
+        openTab("Settings")
+        tap("disconnectStripe")
+        XCTAssertTrue(text(containing: "Card payments stop until you connect Stripe again.").waitForExistence(timeout: 10))
+        tapDialogButton("Disconnect Stripe", identifier: "confirmDisconnectStripe")
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Not connected"))
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "Your Stripe account isn't closed"))
+        XCTAssertTrue(reveal("connectStripe").exists)
     }
 
     /// Settings → Legal opens the website's four policies in the in-app browser (UI tests see the

@@ -41,6 +41,8 @@ final class Workspace {
     let products: ProductsStore
     /// Settings → No-show protection.
     let noShow: NoShowSettingsStore
+    /// Settings → Card payments (Stripe): the shop's own Stripe account.
+    let stripeConnection: StripeConnectionStore
 
     private static let setUpKey = "hasSetUpTapToPay"
     fileprivate static let educationKey = "hasSeenHowToTap"
@@ -67,7 +69,8 @@ final class Workspace {
         )
         self.products = ProductsStore(api: api)
         self.noShow = NoShowSettingsStore(api: api, catalog: environment.catalog)
-        checkout.update(stripe: status?.stripe)
+        self.stripeConnection = StripeConnectionStore(api: api, connector: environment.makeStripeConnector())
+        checkout.update(stripe: status?.stripe, connection: status?.connection)
         checkout.onPaid = { [weak schedule] _ in
             Task { await schedule?.refresh() }
         }
@@ -83,6 +86,10 @@ final class Workspace {
         }
         checkout.onStatusNeeded = { [weak self] in
             Task { await self?.recheckStatusIfNeeded() }
+        }
+        // Connected, finished or disconnected in Settings: Take payment and Tap to Pay read the new status.
+        stripeConnection.onChange = { [weak self] in
+            Task { await self?.refreshStatus() }
         }
         #if canImport(StripeTerminal)
         if case .live = environment.backend {
@@ -122,7 +129,7 @@ final class Workspace {
             let status = try await api.ownerStatus()
             ownerStatus = status
             statusError = nil
-            checkout.update(stripe: status.stripe)
+            checkout.update(stripe: status.stripe, connection: status.connection)
             checkout.statusCheckFinished()
         } catch is CancellationError {
             return
@@ -229,5 +236,10 @@ final class Workspace {
         guard checkout.prefill(context) else { return false }
         selectedTab = .payment
         return true
+    }
+
+    /// "Go to Settings" on Take payment: where the shop's Stripe account is connected.
+    func openSettings() {
+        selectedTab = .settings
     }
 }

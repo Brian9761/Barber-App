@@ -35,6 +35,14 @@ enum LaunchArgument {
     /// The next fee charged to a card on file goes through (or is declined, with `noShowDeclined`), but
     /// the answer is lost on the way back: the app loads the day again and shows what happened.
     static let noShowAnswerLost = "-fake-no-show-answer-lost"
+    /// The shop's own Stripe account isn't connected yet (Stripe Connect): Settings offers Connect
+    /// Stripe, which connects the sample account straight away (a stand-in for Stripe's window).
+    static let stripeNotConnected = "-fake-stripe-not-connected"
+    /// Not connected yet, and the first Connect Stripe comes back with details still missing:
+    /// Settings then offers Finish setting up.
+    static let stripeNeedsInfo = "-fake-stripe-needs-info"
+    /// Not connected yet, and the owner closes Stripe's window the first time.
+    static let stripeCancel = "-fake-stripe-cancel"
 }
 
 /// What the app talks to and how: the real server and Tap to Pay, or the
@@ -64,6 +72,10 @@ final class AppEnvironment {
     let canShowAppleEducation: Bool
     /// The shop's website (Info.plist `IzzyWebsiteURL`), where Settings → Legal opens the legal pages.
     let websiteURL: URL
+    /// With the sample server: what the stand-in for Stripe's window does the first time (launch
+    /// arguments), and how long it takes (a moment in the demo, so it reads as a step).
+    var stripeFirstTry: FakeStripeConnector.FirstTry = .finishes
+    var stripeWindowDelay: Duration = .zero
 
     init(
         backend: Backend,
@@ -105,6 +117,21 @@ final class AppEnvironment {
             return IzzyAPIClient(baseURL: baseURL, ownerKey: ownerKey)
         case .sample(let server):
             return server.api(ownerKey: ownerKey)
+        }
+    }
+
+    /// What opens Stripe's window for Settings → Connect Stripe: Stripe's real pages in
+    /// `ASWebAuthenticationSession`, or the sample server's stand-in.
+    func makeStripeConnector() -> any StripeConnector {
+        switch backend {
+        case .sample(let server):
+            return FakeStripeConnector(server: server, firstTry: stripeFirstTry, delay: stripeWindowDelay)
+        case .live:
+            #if canImport(AuthenticationServices)
+            return WebStripeConnector()
+            #else
+            return UnavailableStripeConnector()
+            #endif
         }
     }
 
@@ -189,6 +216,12 @@ final class AppEnvironment {
         if arguments.contains(LaunchArgument.noShowNeedsAction) { options.nextFeeAnswer = .needsAction }
         options.nextFeeChargeFails = arguments.contains(LaunchArgument.noShowUnreachable)
         options.loseNextFeeAnswer = arguments.contains(LaunchArgument.noShowAnswerLost)
+        var stripeFirstTry = FakeStripeConnector.FirstTry.finishes
+        if arguments.contains(LaunchArgument.stripeNeedsInfo) { stripeFirstTry = .leavesDetailsMissing }
+        if arguments.contains(LaunchArgument.stripeCancel) { stripeFirstTry = .closesTheWindow }
+        if [LaunchArgument.stripeNotConnected, LaunchArgument.stripeNeedsInfo, LaunchArgument.stripeCancel].contains(where: arguments.contains) {
+            options.stripeAccount = .none
+        }
         let server = FakeServer(options: options, shopTime: shopTime, now: clock)
 
         let terminal = SimulatedPaymentTerminal(stepDelay: stepDelay)
@@ -197,7 +230,7 @@ final class AppEnvironment {
         let defaults = UserDefaults(suiteName: suiteName) ?? .standard
         defaults.removePersistentDomain(forName: suiteName)
         let signedIn = arguments.contains(LaunchArgument.signedIn)
-        return AppEnvironment(
+        let environment = AppEnvironment(
             backend: .sample(server),
             secrets: InMemorySecretStore(secret: signedIn ? FakeServer.ownerKey : nil),
             shopTime: shopTime,
@@ -209,5 +242,7 @@ final class AppEnvironment {
             startsSignedIn: signedIn,
             canShowAppleEducation: false
         )
+        environment.stripeFirstTry = stripeFirstTry
+        return environment
     }
 }

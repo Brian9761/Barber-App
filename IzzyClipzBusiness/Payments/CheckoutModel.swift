@@ -129,6 +129,9 @@ final class CheckoutModel {
     var validationMessage: String?
 
     private(set) var stripe: IzzyAPI.StripeStatus?
+    /// How the server takes card payments (`GET /api/owner/me`'s `connection`): with Stripe Connect,
+    /// cards wait for the shop's own Stripe account.
+    private(set) var connection: IzzyAPI.StripeConnectionSummary?
     private(set) var practiceRequested = false
 
     /// Today's successful payments, newest first.
@@ -193,7 +196,13 @@ final class CheckoutModel {
     var mode: Mode {
         if practiceRequested { return .practice(.chosen) }
         guard let stripe else { return .checking }
-        guard stripe.configured else { return .unavailable(.stripeNotConfigured) }
+        guard stripe.configured else {
+            // Stripe Connect: the shop's own account isn't taking card payments yet.
+            if let connection, connection.mode == .connect, connection.status != .active {
+                return .unavailable(.stripeNotConnected(connection.status))
+            }
+            return .unavailable(.stripeNotConfigured)
+        }
         guard let location = stripe.locationId, !location.isEmpty else { return .unavailable(.locationMissing) }
         if usesSampleServer { return .sampleServer(locationId: location) }
         guard deviceSupportsTapToPay else { return .practice(.deviceUnsupported) }
@@ -214,9 +223,10 @@ final class CheckoutModel {
         }
     }
 
-    /// Stripe's status from `GET /api/owner/me`.
-    func update(stripe: IzzyAPI.StripeStatus?) {
+    /// Stripe's status from `GET /api/owner/me`, and how the server takes card payments.
+    func update(stripe: IzzyAPI.StripeStatus?, connection: IzzyAPI.StripeConnectionSummary? = nil) {
         self.stripe = stripe
+        self.connection = connection
     }
 
     static let stillCheckingMessage = "Still checking whether card payments are set up. Try again in a moment."
