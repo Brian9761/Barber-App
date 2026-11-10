@@ -8,7 +8,7 @@ import Observation
 @Observable
 final class Workspace {
     enum Tab: Hashable {
-        case schedule, newBooking, payment, products, settings
+        case schedule, newBooking, payment, analytics, products, settings
     }
 
     let environment: AppEnvironment
@@ -39,6 +39,8 @@ final class Workspace {
     let booking: NewBookingStore
     let checkout: CheckoutModel
     let products: ProductsStore
+    /// The Analytics tab: the shop's (or one barber's) numbers, live.
+    let analytics: AnalyticsStore
     /// Settings → No-show protection.
     let noShow: NoShowSettingsStore
 
@@ -66,6 +68,7 @@ final class Workspace {
             deviceSupportsTapToPay: environment.deviceSupportsTapToPay
         )
         self.products = ProductsStore(api: api)
+        self.analytics = AnalyticsStore(api: api, shopTime: environment.shopTime, catalog: environment.catalog, clock: environment.clock)
         self.noShow = NoShowSettingsStore(api: api, catalog: environment.catalog)
         checkout.update(stripe: status?.stripe)
         checkout.onPaid = { [weak schedule] _ in

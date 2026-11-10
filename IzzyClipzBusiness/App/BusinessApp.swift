@@ -44,7 +44,7 @@ struct RootView: View {
     }
 }
 
-/// Schedule, New booking, Take payment, Products, Settings.
+/// Schedule, New booking, Take payment, Analytics, Products, Settings.
 struct MainTabView: View {
     @Bindable var workspace: Workspace
     let model: AppModel
@@ -60,6 +60,9 @@ struct MainTabView: View {
             TakePaymentView(checkout: workspace.checkout, workspace: workspace)
                 .tabItem { Label("Take payment", systemImage: "wave.3.right.circle") }
                 .tag(Workspace.Tab.payment)
+            AnalyticsTab(workspace: workspace)
+                .tabItem { Label("Analytics", systemImage: "chart.bar.xaxis") }
+                .tag(Workspace.Tab.analytics)
             ProductsView(store: workspace.products, allowsTestPhoto: workspace.environment.usesSampleServer)
                 .tabItem { Label("Products", systemImage: "bag") }
                 .tag(Workspace.Tab.products)
