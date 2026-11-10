@@ -3,6 +3,7 @@ import SwiftUI
 
 /// The shop's own products: add, edit, hide or show in the customer app,
 /// delete. The customer app shows the visible ones as "available at the shop".
+/// Settings → Products opens it, in Settings' navigation.
 struct ProductsView: View {
     let store: ProductsStore
     /// The sample server's "Use a test photo" button, for UI tests.
@@ -11,49 +12,47 @@ struct ProductsView: View {
     @State private var productToDelete: IzzyAPI.Product?
 
     var body: some View {
-        NavigationStack {
-            List {
-                content
-            }
-            .navigationTitle("Products")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        editing = EditorItem(product: nil)
-                    } label: {
-                        Label("Add product", systemImage: "plus")
-                    }
-                    .accessibilityIdentifier("addProduct")
+        List {
+            content
+        }
+        .navigationTitle("Products")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    editing = EditorItem(product: nil)
+                } label: {
+                    Label("Add product", systemImage: "plus")
                 }
+                .accessibilityIdentifier("addProduct")
             }
-            .refreshable { await store.refresh() }
-            // Every time the tab shows: what's on screen stays while it reloads.
-            .task { await store.refresh() }
-            .sheet(item: $editing) { item in
-                ProductEditorView(store: store, product: item.product, allowsTestPhoto: allowsTestPhoto)
+        }
+        .refreshable { await store.refresh() }
+        // Every time it opens: what's on screen stays while it reloads.
+        .task { await store.refresh() }
+        .sheet(item: $editing) { item in
+            ProductEditorView(store: store, product: item.product, allowsTestPhoto: allowsTestPhoto)
+        }
+        .confirmationDialog(
+            "Delete this product?",
+            isPresented: Binding(get: { productToDelete != nil }, set: { if !$0 { productToDelete = nil } }),
+            titleVisibility: .visible,
+            presenting: productToDelete
+        ) { product in
+            Button("Delete \(product.name)", role: .destructive) {
+                Task { await store.delete(product) }
             }
-            .confirmationDialog(
-                "Delete this product?",
-                isPresented: Binding(get: { productToDelete != nil }, set: { if !$0 { productToDelete = nil } }),
-                titleVisibility: .visible,
-                presenting: productToDelete
-            ) { product in
-                Button("Delete \(product.name)", role: .destructive) {
-                    Task { await store.delete(product) }
-                }
-                .accessibilityIdentifier("confirmDeleteProduct")
-                Button("Keep it", role: .cancel) {}
-            } message: { _ in
-                Text("It disappears from the customer app. To take it off the app for a while instead, hide it.")
-            }
-            .alert(
-                "That didn't work",
-                isPresented: Binding(get: { store.actionError != nil }, set: { if !$0 { store.actionError = nil } })
-            ) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(store.actionError ?? "")
-            }
+            .accessibilityIdentifier("confirmDeleteProduct")
+            Button("Keep it", role: .cancel) {}
+        } message: { _ in
+            Text("It disappears from the customer app. To take it off the app for a while instead, hide it.")
+        }
+        .alert(
+            "That didn't work",
+            isPresented: Binding(get: { store.actionError != nil }, set: { if !$0 { store.actionError = nil } })
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(store.actionError ?? "")
         }
     }
 

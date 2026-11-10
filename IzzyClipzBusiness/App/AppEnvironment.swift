@@ -62,6 +62,8 @@ final class AppEnvironment {
     let startsSignedIn: Bool
     /// Apple's own "How to Tap" screens can be shown (never in tests).
     let canShowAppleEducation: Bool
+    /// The shop's website (Info.plist `IzzyWebsiteURL`), where Settings → Legal opens the legal pages.
+    let websiteURL: URL
 
     init(
         backend: Backend,
@@ -74,7 +76,8 @@ final class AppEnvironment {
         practiceTerminal: SimulatedPaymentTerminal,
         deviceSupportsTapToPay: Bool,
         startsSignedIn: Bool = false,
-        canShowAppleEducation: Bool
+        canShowAppleEducation: Bool,
+        websiteURL: URL = Website.baseURL()
     ) {
         self.backend = backend
         self.secrets = secrets
@@ -87,6 +90,7 @@ final class AppEnvironment {
         self.deviceSupportsTapToPay = deviceSupportsTapToPay
         self.startsSignedIn = startsSignedIn
         self.canShowAppleEducation = canShowAppleEducation
+        self.websiteURL = websiteURL
     }
 
     var usesSampleServer: Bool {

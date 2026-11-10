@@ -110,9 +110,11 @@ struct TakePaymentView_Previews: PreviewProvider {
 struct ProductsView_Previews: PreviewProvider {
     static var previews: some View {
         let (_, workspace) = PreviewSupport.workspace()
-        ProductsView(store: workspace.products, allowsTestPhoto: true)
-            .preferredColorScheme(.dark)
-            .tint(BusinessTheme.red)
+        NavigationStack {
+            ProductsView(store: workspace.products, allowsTestPhoto: true)
+        }
+        .preferredColorScheme(.dark)
+        .tint(BusinessTheme.red)
         ProductEditorView(store: workspace.products, product: nil, allowsTestPhoto: true)
             .preferredColorScheme(.dark)
             .tint(BusinessTheme.red)

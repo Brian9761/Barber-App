@@ -8,7 +8,7 @@ import Observation
 @Observable
 final class Workspace {
     enum Tab: Hashable {
-        case schedule, newBooking, payment, products, settings
+        case schedule, newBooking, payment, analytics, settings
     }
 
     let environment: AppEnvironment

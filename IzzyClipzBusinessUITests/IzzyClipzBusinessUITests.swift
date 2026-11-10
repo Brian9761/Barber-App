@@ -38,7 +38,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         screenshot("O01-Sign-In")
         signIn(with: ownerKey)
         XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 15), "Signing in didn't open the schedule")
-        for tab in ["Schedule", "New booking", "Take payment", "Products", "Settings"] {
+        for tab in ["Schedule", "New booking", "Take payment", "Analytics", "Settings"] {
             XCTAssertTrue(tabButton(tab).exists, "Missing the \(tab) tab")
         }
         XCTAssertTrue(element("appointment-Andre Sample").waitForExistence(timeout: 10))
@@ -359,9 +359,10 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     // MARK: Products
 
+    /// The shop's products are in Settings now (they used to have a tab).
     func testAddEditHideAndDeleteAProduct() {
         launch()
-        openTab("Products")
+        openProducts()
         XCTAssertTrue(element("product-Sample pomade").waitForExistence(timeout: 10))
         XCTAssertTrue(element("product-Sample beard oil").label.contains("hidden"))
         screenshot("O16-Products")
@@ -416,6 +417,30 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("signOut")
         tapDialogButton("Sign out", identifier: "confirmSignOut")
         XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 10), "Signing out didn't go back to sign in")
+    }
+
+    /// Settings → Legal opens the website's four policies in the in-app browser (UI tests see the
+    /// address instead of Safari).
+    func testTheLegalPagesOpenTheWebsite() {
+        launch()
+        openTab("Settings")
+        let pages = [
+            ("legal-privacy", "Privacy Policy", "/privacy"),
+            ("legal-terms", "Terms of Service", "/terms"),
+            ("legal-cancellation-policy", "Cancellation & No-Show Policy", "/cancellation-policy"),
+            ("legal-accessibility", "Accessibility", "/accessibility"),
+        ]
+        for (identifier, title, path) in pages {
+            let row = reveal(identifier)
+            XCTAssertTrue(row.label.contains(title), "Got: \(row.label)")
+            if identifier == "legal-privacy" { screenshot("O40-Settings-Legal") }
+            row.tap()
+            let address = element("webURL")
+            XCTAssertTrue(address.waitForExistence(timeout: 10), "\(title) didn't open")
+            XCTAssertEqual(address.label, "https://izzy-clipz.vercel.app" + path)
+            tap("webDone")
+            XCTAssertTrue(waitForDisappearance(of: address))
+        }
     }
 
     // MARK: No-show protection
@@ -720,7 +745,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         launch("-fake-empty")
         XCTAssertTrue(element("scheduleEmpty").waitForExistence(timeout: 10))
         screenshot("O20-Empty-Day")
-        openTab("Products")
+        openProducts()
         XCTAssertTrue(element("productsEmpty").waitForExistence(timeout: 10))
     }
 
@@ -750,6 +775,13 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// Settings → Products.
+    private func openProducts(file: StaticString = #filePath, line: UInt = #line) {
+        openTab("Settings", file: file, line: line)
+        tap("productsLink", file: file, line: line)
+        XCTAssertTrue(app.navigationBars["Products"].waitForExistence(timeout: 10), "Products didn't open", file: file, line: line)
+    }
 
     private func signIn(with key: String) {
         let field = element("ownerKeyField")

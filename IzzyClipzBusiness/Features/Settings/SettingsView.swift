@@ -1,13 +1,15 @@
 import IzzyClipzKit
 import SwiftUI
 
-/// Server and Stripe status, no-show protection, Tap to Pay setup and "How
-/// to Tap", the owner key, sign out, and the app's version.
+/// The shop's products, server and Stripe status, no-show protection, Tap to Pay setup and "How
+/// to Tap", the owner key, the legal pages, sign out, and the app's version.
 struct SettingsView: View {
     let workspace: Workspace
     let model: AppModel
     @State private var showsReplaceKey = false
     @State private var confirmsSignOut = false
+    /// The legal page open in the in-app browser, if any.
+    @State private var legalPage: Website.LegalPage?
 
     var body: some View {
         NavigationStack {
@@ -18,11 +20,13 @@ struct SettingsView: View {
                             .accessibilityIdentifier("demoNotice")
                     }
                 }
+                shopSection
                 serverSection
                 stripeSection
                 noShowSection
                 tapToPaySection
                 keySection
+                legalSection
                 Section {
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
                         .frame(minHeight: BusinessTheme.minimumTapSize)
@@ -49,6 +53,9 @@ struct SettingsView: View {
             .sheet(isPresented: $showsReplaceKey) {
                 ReplaceKeyView(model: model)
             }
+            .sheet(item: $legalPage) { page in
+                WebPageSheet(url: page.url(on: workspace.environment.websiteURL))
+            }
             .confirmationDialog("Sign out of Izzy Clipz Business?", isPresented: $confirmsSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) {
                     Task { await model.signOut() }
@@ -62,6 +69,60 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    /// The shop's own products (they used to have a tab of their own).
+    private var shopSection: some View {
+        Section {
+            NavigationLink {
+                ProductsView(store: workspace.products, allowsTestPhoto: workspace.environment.usesSampleServer)
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Products")
+                        Text("What clients see in the Izzy Clipz app, with photos and prices.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "bag")
+                }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+                .accessibilityElement(children: .combine)
+            }
+            .accessibilityIdentifier("productsLink")
+        } header: {
+            Text("Shop")
+        }
+    }
+
+    /// The website's Privacy Policy, Terms of Service, Cancellation & No-Show Policy and
+    /// Accessibility pages, in the in-app browser.
+    private var legalSection: some View {
+        Section {
+            ForEach(Website.LegalPage.allCases) { page in
+                Button {
+                    legalPage = page
+                } label: {
+                    HStack {
+                        Text(page.title)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "arrow.up.forward.square")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: BusinessTheme.minimumTapSize)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityHint("Opens the page on the shop's website.")
+                .accessibilityIdentifier(page.identifier)
+            }
+        } header: {
+            Text("Legal")
+        } footer: {
+            Text("The shop's policies, on its website: what clients agree to when they book, and how their details are used.")
+        }
+    }
 
     private var serverSection: some View {
         Section {
