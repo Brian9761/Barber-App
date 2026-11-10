@@ -49,16 +49,14 @@ final class CheckoutModelTests: XCTestCase {
         let checkout = makeCheckout()
         XCTAssertTrue(checkout.prefill(.init(appointment: andre, catalog: .izzyClipz)))
         XCTAssertEqual(checkout.entry.cents, 5500, "Izzy's Haircut & Beard is a fixed $55")
-        checkout.receiptEmail = "client@example.com"
         checkout.charge()
         await checkout.waitUntilSettled()
 
         guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
         XCTAssertEqual(receipt.amountCents, 5500)
         XCTAssertTrue(receipt.isTestMode, "The simulated reader is always test mode")
-        XCTAssertEqual(receipt.receiptEmail, "client@example.com")
         XCTAssertEqual(api.createdPayments, 1)
-        XCTAssertEqual(harness.server.payments.last?.receiptEmail, "client@example.com", "The receipt email goes to the server with the PaymentIntent")
+        XCTAssertNil(harness.server.payments.last?.receiptEmail, "No email goes with the payment: a receipt is offered once it went through")
         XCTAssertEqual(harness.appointment(named: "Andre Sample")?.payment.status, .paid)
         XCTAssertEqual(harness.appointment(named: "Andre Sample")?.payment.amountCents, 5500)
         XCTAssertEqual(paidAppointments, [andre.id])
@@ -356,7 +354,6 @@ final class CheckoutModelTests: XCTestCase {
         var connected = 0
         checkout.onReaderConnected = { connected += 1 }
         XCTAssertEqual(checkout.mode, .live(locationId: "tml_1", stripeTestMode: true))
-        checkout.receiptEmail = "client@example.com"
         await charge(checkout, cents: 3500)
         guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
         XCTAssertFalse(receipt.isTestMode)
