@@ -494,6 +494,39 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(reveal("connectStripe").exists)
     }
 
+    // MARK: Use on a computer
+
+    /// Settings → Use on a computer: the steps, a big code counting down (frozen at 10:00 with the
+    /// UI tests' fixed clock), a new code, and the computers signed in, signed out one and then all.
+    func testGetAComputerCodeAndSignComputersOut() {
+        launch()
+        openTab("Settings")
+        let link = reveal("computerAccessLink")
+        XCTAssertTrue(waitForLabel(link, containing: "2 computers signed in"), "Got: \(link.label)")
+        link.tap()
+        let code = element("computerCode")
+        XCTAssertTrue(code.waitForExistence(timeout: 10), "No code")
+        XCTAssertEqual(code.label, "Code 4 8 3, 9 2 0")
+        XCTAssertTrue(waitForLabel(element("computerCodeExpiry"), containing: "Expires in 10:00"))
+        XCTAssertTrue(element("computerSite").label.hasSuffix("/business"), "Got: \(element("computerSite").label)")
+        XCTAssertTrue(element("computerIntro").label.contains("See your schedule, sales and analytics on a computer."))
+        screenshot("O45-Use-On-A-Computer")
+
+        tap("newComputerCode")
+        XCTAssertTrue(waitForLabel(element("computerCode"), containing: "2 7 1, 8 4 6"))
+
+        let mac = reveal("computer-Chrome on Mac")
+        XCTAssertTrue(mac.label.contains("Last used today at 10:45 AM"), "Got: \(mac.label)")
+        XCTAssertTrue(reveal("computer-Safari on iPad").exists)
+        tap("signOutComputer-Chrome on Mac")
+        XCTAssertTrue(waitForDisappearance(of: element("computer-Chrome on Mac")))
+        tap("signOutAllComputers")
+        XCTAssertTrue(text(containing: "Every computer goes back to the website's sign-in page.").waitForExistence(timeout: 10))
+        tapDialogButton("Sign out all computers", identifier: "confirmSignOutAllComputers")
+        XCTAssertTrue(reveal("computersEmpty").exists, "No computers left")
+        XCTAssertFalse(element("computer-Safari on iPad").exists)
+    }
+
     /// Settings → Legal opens the website's four policies in the in-app browser (UI tests see the
     /// address instead of Safari).
     func testTheLegalPagesOpenTheWebsite() {

@@ -22,6 +22,7 @@ struct SettingsView: View {
                 }
                 shopSection
                 StripeConnectionSection(workspace: workspace)
+                computerSection
                 noShowSection
                 tapToPaySection
                 serverSection
@@ -50,7 +51,8 @@ struct SettingsView: View {
                 async let health: Void = workspace.refreshHealth()
                 async let noShow: Void = workspace.noShow.refresh()
                 async let stripe: Void = workspace.stripeConnection.refresh()
-                _ = await (health, noShow, stripe)
+                async let computers: Void = workspace.computers.refreshSessions()
+                _ = await (health, noShow, stripe, computers)
             }
             .sheet(isPresented: $showsReplaceKey) {
                 ReplaceKeyView(model: model)
@@ -94,6 +96,33 @@ struct SettingsView: View {
             .accessibilityIdentifier("productsLink")
         } header: {
             Text("Shop")
+        }
+    }
+
+    /// The website's Business area on a computer: a code from here, and the computers signed in.
+    private var computerSection: some View {
+        Section {
+            NavigationLink {
+                ComputerAccessView(store: workspace.computers)
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Use on a computer")
+                        if let summary = workspace.computers.summary {
+                            Text(summary)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: "desktopcomputer")
+                }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+                .accessibilityElement(children: .combine)
+            }
+            .accessibilityIdentifier("computerAccessLink")
+        } footer: {
+            Text("See your schedule, sales and analytics on a computer.")
         }
     }
 

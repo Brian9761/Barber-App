@@ -135,6 +135,16 @@ final class AppEnvironment {
         }
     }
 
+    /// Where the website's Business area is, for Settings → Use on a computer: the server's own site
+    /// (the same address as the API, where the codes work), or with the sample server the demo
+    /// website, whose Business area opens without a code.
+    var businessSiteAddress: String {
+        switch backend {
+        case .live(let baseURL): return (baseURL.host() ?? baseURL.absoluteString) + "/business"
+        case .sample: return (websiteURL.host() ?? "izzy-clipz.vercel.app") + "/business"
+        }
+    }
+
     /// The server's address, for Settings.
     var serverDescription: String {
         switch backend {

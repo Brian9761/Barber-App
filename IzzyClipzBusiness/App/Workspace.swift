@@ -43,6 +43,8 @@ final class Workspace {
     let noShow: NoShowSettingsStore
     /// Settings → Card payments (Stripe): the shop's own Stripe account.
     let stripeConnection: StripeConnectionStore
+    /// Settings → Use on a computer: sign-in codes and the computers signed in.
+    let computers: ComputerAccessStore
 
     private static let setUpKey = "hasSetUpTapToPay"
     fileprivate static let educationKey = "hasSeenHowToTap"
@@ -70,6 +72,9 @@ final class Workspace {
         self.products = ProductsStore(api: api)
         self.noShow = NoShowSettingsStore(api: api, catalog: environment.catalog)
         self.stripeConnection = StripeConnectionStore(api: api, connector: environment.makeStripeConnector())
+        self.computers = ComputerAccessStore(
+            api: api, siteAddress: environment.businessSiteAddress, shopTime: environment.shopTime, clock: environment.clock
+        )
         checkout.update(stripe: status?.stripe, connection: status?.connection)
         checkout.onPaid = { [weak schedule] _ in
             Task { await schedule?.refresh() }

@@ -119,6 +119,8 @@ final class FakeServer {
     /// computers signed in, revoked ones included.
     var computerCode: IzzyAPI.ComputerCode?
     var computerSessions: [IzzyAPI.ComputerSession] = []
+    /// How many codes were made, so the sample codes come in the same order on every run.
+    var computerCodesMade = 0
     /// Numbers the ids of sales, codes and computers.
     var shopCounter = 0
 

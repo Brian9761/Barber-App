@@ -86,9 +86,10 @@ extension FakeServer {
     static let sampleCodes = ["483920", "271846", "905173", "638254"]
 
     /// `POST /api/owner/computer-codes`: a new 6-digit code for 10 minutes, replacing the one before.
+    /// The sample codes come in turn: 483920 first.
     func createComputerCode() -> IzzyAPI.ComputerCode {
-        shopCounter += 1
-        let code = Self.sampleCodes[(shopCounter - 1) % Self.sampleCodes.count]
+        let code = Self.sampleCodes[computerCodesMade % Self.sampleCodes.count]
+        computerCodesMade += 1
         let made = IzzyAPI.ComputerCode(code: code, expiresAt: now().addingTimeInterval(600), expiresInSeconds: 600)
         computerCode = made
         return made
