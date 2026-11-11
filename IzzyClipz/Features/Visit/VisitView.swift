@@ -602,10 +602,14 @@ private struct VisitAccessibilityRow: View {
             .foregroundStyle(Theme.smoke)
     }
 
-    /// The sentence with the number electric and underlined, so it reads as something to tap.
+    /// The sentence with the number electric and underlined, so it reads as something to tap, and
+    /// kept on one line (a no-break space and a no-break hyphen), never split as "(442)" and
+    /// "341-3053". VoiceOver reads the plain sentence (`text`).
     private static var styledText: AttributedString {
-        var text = AttributedString(Self.text)
-        if let range = text.range(of: AppData.shop.phone.display) {
+        let number = AppData.shop.phone.display
+        let unbroken = number.replacingOccurrences(of: " ", with: "\u{00A0}").replacingOccurrences(of: "-", with: "\u{2011}")
+        var text = AttributedString(Self.text.replacingOccurrences(of: number, with: unbroken))
+        if let range = text.range(of: unbroken) {
             text[range].swiftUI.foregroundColor = Theme.electric
             text[range].swiftUI.underlineStyle = .single
         }
