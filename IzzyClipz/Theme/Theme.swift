@@ -260,7 +260,6 @@ enum Symbol {
     static let accessibility = "figure.roll"
     static let walkIn = "figure.walk"
     static let firstAvailable = "person.2.fill"
-    static let gallery = "photo.on.rectangle"
     static let photoUnavailable = "photo"
     static let quote = "quote.opening"
     static let info = "info.circle"
@@ -285,7 +284,7 @@ enum Symbol {
             reminders, remindersOn, call, directions, instagram, message, website, share, copy, external, forward,
             close, chevron, back, more, remove, edit, writeReview, cart, buy, add, subtract,
             team, starFilled, starHalf, starEmpty, favorite, favoriteFilled, included, clock, calendar, calendarAdd,
-            calendarClock, payment, accessibility, walkIn, firstAvailable, gallery, quote, info, map, location,
+            calendarClock, payment, accessibility, walkIn, firstAvailable, quote, info, map, location,
             checkmark, success, partner, shipping, reviews, morning, afternoon, evening, sparkles, warning, remindersOff,
             photoUnavailable, person,
         ]

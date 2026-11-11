@@ -13,7 +13,6 @@ enum AppTab: Hashable {
 
 /// Screens pushed from Home that aren't a service or a barber.
 enum HomeRoute: Hashable {
-    case gallery
     case team
     case reviews
 }

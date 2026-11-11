@@ -2,8 +2,8 @@ import XCTest
 
 /// Walks through every screen the way a client would: the five tabs, booking through to "You're
 /// booked" (with any barber, with a chosen barber, Flowxbori's second haircut), what happens when a
-/// time is taken or the phone is offline, cancelling, the shop's products, the live reviews, Visit,
-/// the gallery and reminders. Saves screenshots along the way.
+/// time is taken or the phone is offline, cancelling, the shop's products, the live reviews, Visit
+/// and reminders. Saves screenshots along the way.
 ///
 /// The app runs with `-ui-testing`: it starts from empty settings, never touches the network (an
 /// in-memory server stands in for the shop's, with a "now" frozen at launch, sample bookings,
@@ -74,8 +74,12 @@ final class IzzyClipzUITests: XCTestCase {
     func testHome() {
         launch()
         XCTAssertTrue(element("shopStatus").exists)
-        XCTAssertTrue(element("homeHeroPhotos").exists)
-        XCTAssertTrue(element("seeAllPhotos").exists)
+        // The storefront, not photos of people: there's no gallery any more.
+        let hero = element("homeHero")
+        XCTAssertTrue(hero.exists)
+        XCTAssertTrue(hero.label.contains("storefront"), hero.label)
+        XCTAssertFalse(element("homeHeroPhotos").exists)
+        XCTAssertFalse(element("seeAllPhotos").exists)
         XCTAssertTrue(element("homeWalkIns").exists, "With nothing booked, Home shows the walk-in line")
         XCTAssertFalse(element("appointmentCard").exists, "Nothing is booked yet")
         XCTAssertTrue(element("callButton").exists)
@@ -995,7 +999,7 @@ final class IzzyClipzUITests: XCTestCase {
         screenshot("27-Reviews-Unavailable")
     }
 
-    // MARK: Visit, gallery, reminders
+    // MARK: Visit, reminders
 
     func testVisit() {
         launch()
@@ -1016,37 +1020,6 @@ final class IzzyClipzUITests: XCTestCase {
         screenshot("24-Visit-Links")
         reviews.tap()
         XCTAssertTrue(element("googleReviews").waitForExistence(timeout: 15), "Visit's reviews link didn't open the reviews")
-    }
-
-    func testGallery() {
-        launch()
-        tap("seeAllPhotos")
-        let first = element("photo-1")
-        XCTAssertTrue(first.waitForExistence(timeout: 10))
-        XCTAssertTrue(element("galleryInstagramButton").exists)
-        screenshot("28-Gallery")
-
-        first.tap()
-        let close = element("closePhoto")
-        XCTAssertTrue(close.waitForExistence(timeout: 10))
-        screenshot("29-Photo-Viewer")
-        let closeFrame = close.frame
-        app.swipeLeft()
-        // A tap that lands while the swiped page is still settling can be taken by the paging
-        // scroll, so it's tried a few times, by screen position (the button is pinned).
-        var closed = false
-        for _ in 0..<3 where !closed {
-            guard close.exists else {
-                closed = true
-                break
-            }
-            app.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: closeFrame.midX, dy: closeFrame.midY))
-                .tap()
-            closed = waitForDisappearance(of: close, timeout: 10)
-        }
-        XCTAssertTrue(closed, "The photo viewer didn't close")
-        XCTAssertTrue(first.waitForExistence(timeout: 10))
     }
 
     func testReminderSettings() {

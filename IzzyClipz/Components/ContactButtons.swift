@@ -60,35 +60,17 @@ struct DirectionsButton<Label: View>: View {
     }
 }
 
-/// The storefront photo with "DIRECTIONS" and the address over an ink fade, and a bone disc with
-/// the location glyph. The text sits only where the fade is at least 75% ink.
+/// "Directions" and the street on an ink tile with a bone location disc, beside the Call tile.
+/// (The storefront photo is right above it, on Home's hero.)
 struct DirectionsTile: View {
     private let address = AppData.shop.address
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-
-    /// 80% ink from 40% of the way down, where the two lines start up to xLarge text (at the
-    /// default size they start at about 47%). From xxLarge they reach higher up the tile than any
-    /// fade can follow, so the whole photo sits under 80% ink.
-    private var scrim: [Gradient.Stop] {
-        if dynamicTypeSize >= .xxLarge {
-            return [
-                .init(color: Theme.ink.opacity(0.80), location: 0),
-                .init(color: Theme.ink.opacity(0.88), location: 1),
-            ]
-        }
-        return [
-            .init(color: Theme.ink.opacity(0.15), location: 0),
-            .init(color: Theme.ink.opacity(0.80), location: 0.4),
-            .init(color: Theme.ink.opacity(0.88), location: 1),
-        ]
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Image(systemName: Symbol.directions)
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(Theme.ink)
-                .frame(width: 30, height: 30)
+                .frame(width: 32, height: 32)
                 .background(Theme.bone, in: Circle())
                 .accessibilityHidden(true)
             Spacer(minLength: Theme.Space.l)
@@ -98,20 +80,13 @@ struct DirectionsTile: View {
                     .foregroundStyle(Theme.bone)
                 Text(address.streetLine)
                     .textRole(.caption)
-                    .foregroundStyle(Theme.bone)
+                    .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(Theme.Space.l)
         .frame(maxWidth: .infinity, minHeight: 112, alignment: .leading)
-        .background {
-            ZStack {
-                FillImage(name: Asset.storefront)
-                LinearGradient(stops: scrim, startPoint: .top, endPoint: .bottom)
-            }
-            .accessibilityHidden(true)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+        .background(Theme.ink3, in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
         .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
     }
 }

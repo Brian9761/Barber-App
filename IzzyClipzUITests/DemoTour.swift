@@ -9,7 +9,7 @@ import XCTest
 ///
 /// It books the way a client would: a service, a barber, a day and time from the live calendar,
 /// their details, the review ("No payment now"), then "You're booked" and the appointment on
-/// Home. Then the crew, the shop's products, the reviews, Visit and the gallery.
+/// Home. Then the crew, the shop's products, the reviews and Visit.
 ///
 /// Steps are lenient on purpose: anything that goes wrong is logged and attached as a screenshot,
 /// and the tour goes on.
@@ -28,7 +28,7 @@ final class DemoTour: XCTestCase {
     }
 
     func testTour() {
-        // Home: the photos, Book, Directions and Call, then the menu, the crew, reviews and the shop
+        // Home: the storefront, Book, Directions and Call, then the menu, the crew, reviews and the shop
         expect("homeBookButton")
         pause(3)
         capture("Home")
@@ -143,27 +143,6 @@ final class DemoTour: XCTestCase {
             pause(1.5)
         }
         capture("Visit-Info")
-
-        // Gallery and the photo viewer
-        tab("Home")
-        pause(1)
-        app.swipeDown(velocity: .fast)
-        app.swipeDown(velocity: .fast)
-        pause(1)
-        tap("seeAllPhotos")
-        pause(2.5)
-        tap("photo-2")
-        pause(2.5)
-        app.swipeLeft()
-        pause(2)
-        capture("Photo-Viewer")
-        let close = element("closePhoto")
-        if close.waitForExistence(timeout: 5) {
-            close.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
-        } else {
-            note("Missing closePhoto")
-        }
-        pause(2)
     }
 
     // MARK: Helpers

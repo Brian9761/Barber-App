@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The Home tab: the shop's work up top, the way to book right under it, then the client's next
+/// The Home tab: the storefront up top, the way to book right under it, then the client's next
 /// appointment, the quick ways to reach the shop, the menu's favorites, the crew, what clients say,
 /// the shop's products and Instagram.
 struct HomeView: View {
@@ -16,7 +16,6 @@ struct HomeView: View {
                 .navigationDestination(for: HomeRoute.self) { route in
                     Group {
                         switch route {
-                        case .gallery: GalleryView()
                         case .team: TeamView()
                         case .reviews: ReviewsView()
                         }
@@ -54,7 +53,7 @@ private struct HomeScreen: View {
     }
 }
 
-/// Everything on Home, top to bottom: the photos, Book, the next appointment, Directions and Call,
+/// Everything on Home, top to bottom: the storefront, Book, the next appointment, Directions and Call,
 /// popular services, the crew, reviews, the shop's products and Instagram.
 private struct HomeContent: View {
     let heroHeight: CGFloat
