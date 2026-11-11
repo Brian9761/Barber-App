@@ -4,10 +4,10 @@ import SwiftUI
 /// app if it's installed (through its universal link), Safari otherwise.
 ///
 /// Honest by design: the app can't load posts or follow anyone, so the card never shows photos as
-/// if they were the account's posts. Bundled photos appear only labeled "FROM THE SHOP".
+/// if they were the account's posts, and it shows no photos of people at all.
 ///
-/// - `.home`: one big tap target (`instagramButton`) with the handle, the logo sticker on its
-///   corner and, optionally, up to three of the shop's photos.
+/// - `.home`: one big tap target (`instagramButton`) with the handle and the logo sticker on its
+///   corner.
 /// - `.visit`: the handle with two actions, "Open in Instagram ↗" (`visitInstagramLink`) and
 ///   "Message us ↗" (`visitInstagramMessage`, an Instagram DM).
 struct InstagramCard: View {
@@ -17,8 +17,6 @@ struct InstagramCard: View {
     }
 
     var variant: Variant = .home
-    /// Up to three bundled photos for the Home card, labeled "FROM THE SHOP".
-    var photos: [GalleryPhoto] = []
 
     @Environment(AppRouter.self) private var router
     private let shop = AppData.shop
@@ -42,19 +40,14 @@ struct InstagramCard: View {
             router.openOutside(shop.instagramURL)
         } label: {
             VStack(alignment: .leading, spacing: Theme.Space.m) {
-                VStack(alignment: .leading, spacing: Theme.Space.m) {
-                    header
-                    handle
-                    Text("Follow the shop on Instagram")
-                        .textRole(.body)
-                        .foregroundStyle(Theme.smoke)
-                }
-                // Clear of the logo sticker on the corner.
-                .padding(.trailing, Self.stickerRoom)
-                if !photos.isEmpty {
-                    photoStrip
-                }
+                header
+                handle
+                Text("Follow the shop on Instagram")
+                    .textRole(.body)
+                    .foregroundStyle(Theme.smoke)
             }
+            // Clear of the logo sticker on the corner.
+            .padding(.trailing, Self.stickerRoom)
             .card()
             .overlay(alignment: .topTrailing) {
                 LogoSticker(width: 76, rotation: .degrees(7))
@@ -67,20 +60,6 @@ struct InstagramCard: View {
         .accessibilityLabel("\(shop.name) on Instagram, @\(shop.instagramHandle)")
         .accessibilityHint("Opens Instagram")
         .accessibilityIdentifier("instagramButton")
-    }
-
-    private var photoStrip: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Kicker("From the shop")
-            HStack(spacing: Theme.Space.xs) {
-                ForEach(photos.prefix(3)) { photo in
-                    FillImage(name: photo.assetName, anchor: FillImage.editorial)
-                        .frame(height: 66)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.chip, style: .continuous))
-                        .accessibilityHidden(true)
-                }
-            }
-        }
     }
 
     // MARK: Visit

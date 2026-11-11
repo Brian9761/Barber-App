@@ -7,7 +7,7 @@ import UIKit
 ///
 /// Top to bottom: the storefront with the logo sticker and the open status, the address card with
 /// the screen's one red (Directions), the week's hours on a bone card, the map, good-to-know notes,
-/// a few words about the shop, Instagram, links and the footer.
+/// a few words about the shop, Instagram, links, the legal pages and the footer.
 struct VisitView: View {
     /// Popped back to Visit when the Visit tab is tapped again.
     @State private var path = NavigationPath()
@@ -94,6 +94,7 @@ private struct VisitScreen: View {
                         VisitAboutSection()
                         InstagramCard(variant: .visit)
                         VisitLinksSection()
+                        VisitLegalSection()
                         VisitFooter()
                     }
                     .padding(.horizontal, Theme.gutter)
@@ -521,10 +522,57 @@ private struct VisitInfoSection: View {
                 VisitDivider()
                 VisitInfoRow(symbol: Symbol.payment, title: "Payment", items: shop.paymentMethods)
                 VisitDivider()
-                VisitInfoRow(symbol: Symbol.accessibility, title: "Accessibility", items: shop.accessibility)
+                if shop.accessibility.isEmpty {
+                    VisitAccessibilityCallRow()
+                } else {
+                    VisitInfoRow(symbol: Symbol.accessibility, title: "Accessibility", items: shop.accessibility)
+                }
             }
             .card(padding: Theme.Space.xxs)
         }
+    }
+}
+
+/// "Accessibility" while the owner hasn't checked what to say about getting in (no lines in the
+/// shop's data): an invitation to call, the whole row calling the shop, with the number in the
+/// link color. It claims nothing about the building (docs/legal/research.md §10).
+private struct VisitAccessibilityCallRow: View {
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    static var text: String {
+        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) and we'll help."
+    }
+
+    var body: some View {
+        CallButton(spokenLabel: "Accessibility: \(Self.text)") {
+            HStack(alignment: .top, spacing: Theme.Space.l) {
+                VisitIconTile(symbol: Symbol.accessibility)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text("Accessibility")
+                        .textRole(.headline)
+                        .foregroundStyle(Theme.bone)
+                    Text(Self.styledText)
+                        .textRole(.body)
+                        .foregroundStyle(Theme.smoke)
+                }
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(Theme.Space.m)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityIdentifier("visitAccessibilityCall")
+    }
+
+    /// The sentence with the number electric and underlined, so it reads as something to tap.
+    private static var styledText: AttributedString {
+        var text = AttributedString(Self.text)
+        if let range = text.range(of: AppData.shop.phone.display) {
+            text[range].swiftUI.foregroundColor = Theme.electric
+            text[range].swiftUI.underlineStyle = .single
+        }
+        return text
     }
 }
 
@@ -605,16 +653,18 @@ private struct VisitAboutSection: View {
 
 // MARK: - Links
 
-/// The website, sharing the shop, the reviews and Google's review form.
+/// The website, sharing the shop, the reviews and Google's review form. The website is the shop's
+/// new one (`Website`), never its older Squarespace site.
 private struct VisitLinksSection: View {
     @Environment(AppRouter.self) private var router
     private let shop = AppData.shop
+    private let website = Website.baseURL
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             SectionHeader("More")
             VStack(spacing: 0) {
-                website
+                websiteRow
                 VisitDivider()
                 share
                 VisitDivider()
@@ -626,9 +676,9 @@ private struct VisitLinksSection: View {
         }
     }
 
-    private var website: some View {
+    private var websiteRow: some View {
         Button {
-            router.openWeb(shop.websiteURL)
+            router.openWeb(website)
         } label: {
             VisitLinkRow(symbol: Symbol.website, title: "Website", detail: websiteLabel)
         }
@@ -640,7 +690,7 @@ private struct VisitLinksSection: View {
 
     private var share: some View {
         ShareLink(
-            item: shop.websiteURL,
+            item: website,
             subject: Text(shop.fullName),
             message: Text("\(shop.fullName), \(shop.address.singleLine)")
         ) {
@@ -662,7 +712,7 @@ private struct VisitLinksSection: View {
             VisitLinkRow(
                 symbol: Symbol.reviews,
                 title: "Reviews",
-                detail: "On Google and Yelp",
+                detail: "From Google, with a link to Yelp",
                 trailingSymbol: Symbol.chevron
             )
         }
@@ -683,12 +733,54 @@ private struct VisitLinksSection: View {
         .accessibilityIdentifier("leaveReviewButton")
     }
 
-    /// "izzyclipzbarbershop.net".
+    /// "izzy-clipz.vercel.app".
     private var websiteLabel: String {
-        let host = shop.websiteURL.host() ?? shop.websiteURL.absoluteString
-        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        Website.displayName(of: website)
+    }
+}
+
+// MARK: - Legal
+
+/// The shop's Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility
+/// statement, on its website, in the in-app browser.
+private struct VisitLegalSection: View {
+    @Environment(AppRouter.self) private var router
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            SectionHeader("Legal")
+            Text("How the shop handles your details, bookings and cancellations, on its website.")
+                .textRole(.caption)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
+            VStack(spacing: 0) {
+                ForEach(Website.LegalPage.allCases) { page in
+                    if page != Website.LegalPage.allCases.first {
+                        VisitDivider()
+                    }
+                    Button {
+                        router.openWeb(page.url())
+                    } label: {
+                        VisitLinkRow(symbol: Self.symbol(for: page), title: page.title, detail: page.summary)
+                    }
+                    .buttonStyle(.pressable)
+                    .accessibilityLabel(page.title)
+                    .accessibilityHint("Opens the page on the shop's website")
+                    .accessibilityIdentifier(page.identifier)
+                }
+            }
+            .card(padding: Theme.Space.xxs)
+        }
     }
 
+    private static func symbol(for page: Website.LegalPage) -> String {
+        switch page {
+        case .privacy: return Symbol.privacy
+        case .terms: return Symbol.terms
+        case .cancellationPolicy: return Symbol.calendarClock
+        case .accessibility: return Symbol.accessibility
+        }
+    }
 }
 
 /// An icon tile, a title over a detail line, and a trailing arrow (↗ for web pages, › for the

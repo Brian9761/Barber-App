@@ -84,6 +84,14 @@ private struct ServicesMenu: View {
                         .padding(.top, Theme.Space.xs)
                         .id(ServicesMenuAnchor.top)
                     if !isSearching {
+                        Text("Tap a service to see what's included, who does it and their prices.")
+                            .textRole(.body)
+                            .foregroundStyle(Theme.smoke)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.horizontal, Theme.gutter)
+                            .padding(.top, Theme.Space.xs)
+                    }
+                    if !isSearching {
                         jumpChips(proxy)
                             .padding(.top, Theme.Space.s)
                     }

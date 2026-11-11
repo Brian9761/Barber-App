@@ -165,6 +165,12 @@ struct ReviewCardSection: View {
                 // One message ("Warning, The card wasn't added…"), not the icon and the words apart.
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("cardError")
+            // Another way forward, as with every error: the shop can book it by phone.
+            CallButton {
+                Label("Call the shop", systemImage: Symbol.call)
+            }
+            .buttonStyle(.textLink(color: Theme.electric))
+            .accessibilityIdentifier("cardErrorCallButton")
         }
     }
 }

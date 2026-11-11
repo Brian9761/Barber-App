@@ -169,8 +169,8 @@ private struct ChooseTimeScreen: View {
         policies.policy(for: choice.target)
     }
 
-    /// "This time is less than 1 hour away, so cancelling it may be charged $45." for a picked time
-    /// inside the late-cancellation window.
+    /// "This time is less than 1 hour away, so cancelling it more than 15 minutes after booking may be
+    /// charged $45." for a picked time inside the late-cancellation window.
     private var lateNotice: String? {
         lateNotice(for: selectedStart)
     }
@@ -408,7 +408,7 @@ private struct ChooseTimeNotice: View {
 }
 
 /// Over Continue, for a picked time inside the late-cancellation window: "This time is less than 1
-/// hour away, so cancelling it may be charged $40."
+/// hour away, so cancelling it more than 15 minutes after booking may be charged $40."
 private struct ChooseTimeLateCancelNotice: View {
     let text: String
 

@@ -325,12 +325,8 @@ struct StickyBottomBar<Content: View>: View {
 struct FillImage: View {
     let name: String
     /// Which point of the photo lines up with the same point of the frame, like CSS
-    /// `object-position`. The portrait cut photos crop best at `FillImage.editorial` (18–22% from
-    /// the top), which keeps the head, the fade line and the beard in the frame.
+    /// `object-position`.
     var anchor: UnitPoint = .center
-
-    /// The editorial crop for the portrait cut photos.
-    static let editorial = UnitPoint(x: 0.5, y: 0.2)
 
     var body: some View {
         GeometryReader { proxy in

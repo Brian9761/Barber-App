@@ -498,6 +498,25 @@ final class CardSetupTests: XCTestCase {
         IzzyAPI.CardCheckout(url: URL(string: "https://checkout.stripe.com/c/pay/\(id)")!, sessionId: id)
     }
 
+    /// A new card replaces the one before ("Change"): that one's key leaves this iPhone, so the shop
+    /// is asked to delete it. The first card replaces nothing.
+    func testANewCardReplacingAnotherHasTheShopDeleteTheOldOne() async throws {
+        api.startCardCheckoutHandler = { [unowned self] _, _ in checkout("cs_test_r1") }
+        api.saveCardHandler = { _, _ in NoShowTestData.card() }
+        let first = makeSetup()
+        let oldResult = await first.addCard(for: carlos, remember: true)
+        let old = try XCTUnwrap(oldResult)
+        XCTAssertNil(first.cardDeletion)
+
+        api.startCardCheckoutHandler = { [unowned self] _, _ in checkout("cs_test_r2") }
+        let second = makeSetup()
+        let newResult = await second.addCard(for: carlos, remember: true)
+        let new = try XCTUnwrap(newResult)
+        _ = await second.cardDeletion?.value
+        XCTAssertEqual(api.cardDeletions, [old.token])
+        XCTAssertEqual(cards.saved, new)
+    }
+
     /// Stripe's page with a new token, then the server keeps the card from that session under the
     /// same token, and this iPhone keeps both.
     func testAddsACardThroughStripesPage() async throws {
@@ -751,16 +770,21 @@ final class NoShowBookingTests: XCTestCase {
     }
 
     /// A card the server doesn't know (it was saved in test mode, say) is dropped from this iPhone,
-    /// so Review asks for another. A card added since is kept.
+    /// so Review asks for another, and the shop is asked to delete it, if it has it. A card added
+    /// since is kept.
     func testAnUnknownCardIsDropped() async throws {
         let card = NoShowTestData.stored()
         cards.save(card, remember: true)
         api.bookHandler = { _ in throw APIError.cardRequired(message: "We couldn't find your saved card. Add it again.") }
+        api.deleteCardHandler = { _ in throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "We couldn't find that card.", status: 404) }
         let submitter = makeSubmitter()
         _ = await submitter.book(try draft(), noShow: IzzyAPI.NoShowAgreement(cardToken: card.token, policyText: NoShowTestData.carlosPolicyText))
         XCTAssertEqual(submitter.failure, .cardNeeded("We couldn't find your saved card. Add it again."))
         XCTAssertNil(cards.saved)
         XCTAssertNil(keychain.secrets[SavedCardStore.account])
+        let deletion = await submitter.cardDeletion?.value
+        XCTAssertEqual(deletion, .nothingToDelete)
+        XCTAssertEqual(api.cardDeletions, [card.token])
 
         let newer = NoShowTestData.stored()
         cards.save(newer, remember: true)
@@ -794,31 +818,74 @@ final class NoShowBookingTests: XCTestCase {
         XCTAssertTrue(api.noShowPolicyRequests.isEmpty)
     }
 
-    /// "Remember me" off: the card is forgotten once it's booked, like the name and number. On, it's
-    /// kept for next time.
-    func testRememberMeOffForgetsTheCardOnceBooked() async throws {
+    /// "Remember me" off: the card is forgotten once it's booked, like the name and number, and the
+    /// shop is asked to delete it (it keeps it only while this booking can be charged). On, it's
+    /// kept for next time, and nothing is deleted.
+    func testRememberMeOffForgetsTheCardOnceBookedAndTheShopDeletesIt() async throws {
         api.bookHandler = { _ in TestData.confirmation() }
+        api.deleteCardHandler = { _ in IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage) }
         let card = NoShowTestData.stored()
         cards.save(card, remember: false)
         let agreement = IzzyAPI.NoShowAgreement(cardToken: card.token, policyText: NoShowTestData.carlosPolicyText)
-        _ = await makeSubmitter().book(try draft(remember: false), noShow: agreement)
+        let submitter = makeSubmitter()
+        let saved = await submitter.book(try draft(remember: false), noShow: agreement)
+        XCTAssertNotNil(saved)
         XCTAssertNil(cards.saved)
         XCTAssertNil(keychain.secrets[SavedCardStore.account])
+        let deletion = await submitter.cardDeletion?.value
+        XCTAssertEqual(api.cardDeletions, [card.token])
+        XCTAssertEqual(deletion, .answered(IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage)))
 
         cards.save(card, remember: true)
         api.bookHandler = { _ in TestData.confirmation(id: "6c9f3d2f-4e5b-4f70-9bac-1d2e3f4a5b6c", token: "token-2") }
-        _ = await makeSubmitter().book(try draft(start: TestData.friday.addingTimeInterval(3600)), noShow: agreement)
+        let remembering = makeSubmitter()
+        _ = await remembering.book(try draft(start: TestData.friday.addingTimeInterval(3600), remember: true), noShow: agreement)
         XCTAssertEqual(cards.saved, card)
         XCTAssertTrue(cards.isRemembered)
+        XCTAssertNil(remembering.cardDeletion, "A remembered card stays at the shop")
+        XCTAssertEqual(api.cardDeletions, [card.token])
     }
 
-    /// Not booked: the card stays for the next try, whatever "Remember me" says.
+    /// The shop can't be reached to delete it: the card is still forgotten on this iPhone, and the
+    /// booking stands.
+    func testACardIsForgottenEvenWhenTheShopCantBeReachedToDeleteIt() async throws {
+        api.bookHandler = { _ in TestData.confirmation() }
+        api.deleteCardHandler = { _ in throw APIError.offline }
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: false)
+        let submitter = makeSubmitter()
+        let saved = await submitter.book(try draft(remember: false), noShow: IzzyAPI.NoShowAgreement(cardToken: card.token, policyText: NoShowTestData.carlosPolicyText))
+        XCTAssertNotNil(saved)
+        XCTAssertNil(submitter.failure)
+        XCTAssertNil(cards.saved)
+        let deletion = await submitter.cardDeletion?.value
+        XCTAssertEqual(deletion, .failed)
+        XCTAssertEqual(api.cardDeletions, [card.token, card.token], "Asked once more after the connection dropped")
+    }
+
+    /// A booking without a card, with Remember me off, still lets go of a card kept from before:
+    /// the shop deletes that one too, since nobody could use it from this iPhone again.
+    func testRememberMeOffLetsGoOfAKeptCardEvenWithoutUsingIt() async throws {
+        api.bookHandler = { _ in TestData.confirmation() }
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: true)
+        let submitter = makeSubmitter()
+        _ = await submitter.book(try draft(remember: false))
+        _ = await submitter.cardDeletion?.value
+        XCTAssertNil(cards.saved)
+        XCTAssertEqual(api.cardDeletions, [card.token])
+    }
+
+    /// Not booked: the card stays for the next try, whatever "Remember me" says, and nothing is deleted.
     func testAFailedBookingKeepsTheCardForTheNextTry() async throws {
         api.bookHandler = { _ in throw APIError.offline }
         let card = NoShowTestData.stored()
         cards.save(card, remember: false)
-        _ = await makeSubmitter().book(try draft(remember: false), noShow: IzzyAPI.NoShowAgreement(cardToken: card.token, policyText: NoShowTestData.carlosPolicyText))
+        let submitter = makeSubmitter()
+        _ = await submitter.book(try draft(remember: false), noShow: IzzyAPI.NoShowAgreement(cardToken: card.token, policyText: NoShowTestData.carlosPolicyText))
         XCTAssertEqual(cards.saved, card)
+        XCTAssertNil(submitter.cardDeletion)
+        XCTAssertTrue(api.cardDeletions.isEmpty)
     }
 
     /// The whole thing against the in-memory server: the policy, a card from the test card page,
@@ -908,11 +975,14 @@ final class RememberedDetailsTests: XCTestCase {
         XCTAssertEqual(cardsNextTime.saved, card)
     }
 
-    /// "Forget my details": the name and number, and the card, from this iPhone.
+    /// "Forget my details": the name and number, and the card, from this iPhone. It hands back the
+    /// card's key, for the shop to delete the card too.
     func testForgettingTheDetailsForgetsTheCard() {
         details.remember(alex)
-        cards.save(NoShowTestData.stored(), remember: true)
-        RememberedDetails.forget(details, cards: cards)
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: true)
+        XCTAssertEqual(RememberedDetails.forget(details, cards: cards), card.token)
+        XCTAssertNil(RememberedDetails.forget(details, cards: cards), "Nothing left to delete")
         XCTAssertNil(details.saved)
         XCTAssertNil(cards.saved)
         XCTAssertNil(keychain.secrets[SavedCardStore.account])
@@ -960,13 +1030,25 @@ final class RememberedDetailsTests: XCTestCase {
         XCTAssertNil(cards.saved)
         XCTAssertEqual(NoShowRequirement(entry: policies.entry(for: carlos), cards: cards, start: third), .needsCard(NoShowTestData.carlosPolicy, unusable: nil))
         XCTAssertEqual(fake.bookingsMade, 2)
+
+        // Each card was given up with its booking: the shop deletes it once that booking can no
+        // longer be charged (both are still ahead), and neither can book again.
+        let deletion = await submitter.cardDeletion?.value
+        XCTAssertEqual(deletion, .answered(IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage)))
+        XCTAssertEqual(fake.cardRemoval(for: kept.token)?.requested, true)
+        XCTAssertEqual(fake.cardRemoval(for: added.token)?.requested, true)
+        XCTAssertEqual(fake.cardRemoval(for: added.token)?.deleted, false, "Its booking can still be charged")
     }
 
     func testTheWords() {
         XCTAssertEqual(NoShowCopy.forgetDetailsTitle(hasCard: false), "Forget your name and number?")
         XCTAssertEqual(NoShowCopy.forgetDetailsTitle(hasCard: true), "Forget your name, number and card?")
         XCTAssertEqual(NoShowCopy.forgetDetailsMessage(hasCard: false), "You'll type them again next time you book.")
-        XCTAssertEqual(NoShowCopy.forgetDetailsMessage(hasCard: true), "You'll type them again, and add a card, next time you book.")
+        XCTAssertEqual(
+            NoShowCopy.forgetDetailsMessage(hasCard: true),
+            "The shop deletes the card as soon as no appointment needs it. You'll type them again, and add a card, next time you book."
+        )
+        XCTAssertEqual(NoShowCopy.removeCardTitle, "Remove your card?")
         XCTAssertEqual(NoShowCopy.removeCardButton, "Remove card")
         XCTAssertEqual(NoShowCopy.remindersNote, "Reminders also say until when you can cancel for free.")
     }
@@ -1178,6 +1260,21 @@ final class NoShowCopyTests: XCTestCase {
         XCTAssertNil(NoShowCopy.feeChargedLine(appointment))
         XCTAssertEqual(
             NoShowCopy.bookedCardDetail(appointment),
+            "Nothing is charged now. If you don't come, or cancel less than 1 hour before, the shop may charge $45."
+        )
+
+        // Booked when it was already less than an hour away: the 15 minutes after booking are free.
+        var soon = NoShowTestData.appointment(start: TestData.now.addingTimeInterval(45 * 60))
+        soon.createdAt = TestData.now
+        XCTAssertEqual(
+            NoShowCopy.bookedCardDetail(soon),
+            "Nothing is charged now. If you don't come, or cancel less than 1 hour before, the shop may charge $45. "
+                + "Cancelling within 15 minutes of booking is free."
+        )
+        // Exactly an hour away when booked: cancelling is free until an hour before, as always.
+        soon.start = TestData.now.addingTimeInterval(60 * 60)
+        XCTAssertEqual(
+            NoShowCopy.bookedCardDetail(soon),
             "Nothing is charged now. If you don't come, or cancel less than 1 hour before, the shop may charge $45."
         )
 

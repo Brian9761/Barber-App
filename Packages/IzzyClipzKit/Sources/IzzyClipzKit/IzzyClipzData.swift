@@ -44,10 +44,10 @@ extension ShopInfo {
             .sunday: OpeningHours(opens: TimeOfDay(hour: 10), closes: TimeOfDay(hour: 18)),
         ]),
         instagramHandle: "izzy_clipz_barbershop_",
-        websiteURL: URL(string: "https://www.izzyclipzbarbershop.net")!,
+        websiteURL: URL(string: "https://izzy-clipz.vercel.app")!,
         paymentMethods: ["Credit card", "Gift card"],
         highlights: ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"],
-        accessibility: ["Wheelchair accessible", "ADA-compliant entrance", "Accessible parking near the entrance"],
+        accessibility: [],
         googlePlaceID: IzzyClipzListing.googlePlaceID
     )
 }

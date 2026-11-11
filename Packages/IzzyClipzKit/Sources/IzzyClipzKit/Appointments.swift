@@ -108,16 +108,27 @@ public struct LateCancelTerms: Hashable, Sendable {
     public var windowMinutes: Int
     /// The fee: "$45".
     public var feeLabel: String
+    /// When it was booked: cancelling within 15 minutes of booking is free whatever the window
+    /// (`IzzyAPI.NoShowRule.lateCancelGraceMinutes`). `nil` counts no grace period.
+    public var bookedAt: Date?
 
-    public init(windowMinutes: Int, feeLabel: String) {
+    public init(windowMinutes: Int, feeLabel: String, bookedAt: Date? = nil) {
         self.windowMinutes = windowMinutes
         self.feeLabel = feeLabel
+        self.bookedAt = bookedAt
     }
 
     /// The last moment cancelling an appointment that starts at `start` is free: exactly the
-    /// window before it (less than that is late, as the server counts it).
+    /// window before it (less than that is late, as the server counts it), or, when that's later,
+    /// the end of the 15 minutes after booking, to the minute (a time booked inside the window is
+    /// free to cancel only for those 15 minutes).
     public func freeUntil(start: Date) -> Date {
-        start.addingTimeInterval(-TimeInterval(windowMinutes) * 60)
+        let window = start.addingTimeInterval(-TimeInterval(windowMinutes) * 60)
+        guard let bookedAt else { return window }
+        let grace = bookedAt.addingTimeInterval(TimeInterval(IzzyAPI.NoShowRule.lateCancelGraceMinutes) * 60)
+        // Down to the minute, so "by 12:07 PM" is still free all through 12:07.
+        let graceMinute = Date(timeIntervalSinceReferenceDate: (grace.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
+        return max(window, graceMinute)
     }
 }
 

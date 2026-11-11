@@ -4,7 +4,8 @@ import UIKit
 /// An appointment on a card: where it stands ("Booked", "Cancelled by the shop", "Completed"), the
 /// day and time, the service with the barber, the price and length, and what can be done with it,
 /// each as its own button: Add to Calendar, Directions, Cancel appointment (after a confirmation),
-/// or Remove once it's over or cancelled.
+/// or, once it's over or cancelled, Book again (the same service and barber, straight to the day
+/// and time) and Remove.
 ///
 /// A booking with a card on file (no-show protection) says so, and says when a fee was charged.
 /// Cancelling it inside the late-cancellation window warns first that it may be charged; if the
@@ -19,6 +20,7 @@ struct AppointmentCard: View {
 
     @Environment(AppRouter.self) private var router
     @Environment(AppointmentStore.self) private var store
+    @Environment(\.openURL) private var openURL
     @State private var isConfirmingRemove = false
     /// Cancelling it: the question, and the request. Made when the card first shows.
     @State private var cancelling: AppointmentCancelling?
@@ -66,6 +68,10 @@ struct AppointmentCard: View {
                  : "It only comes off this iPhone's list.")
         }
         .alert("Couldn't cancel", isPresented: Binding(get: { cancelling?.error != nil }, set: { if !$0 { cancelling?.clearError() } })) {
+            // The shop can always cancel it over the phone.
+            Button("Call the shop") {
+                openURL(AppData.shop.phone.callURL)
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text(cancelling?.error ?? "")
@@ -175,15 +181,15 @@ struct AppointmentCard: View {
                 removeButton
             }
         } else {
-            if appointment.isCancelledByShop, appointment.isUpcoming(at: now) {
-                Button {
-                    router.startBooking(serviceID: appointment.snapshot.serviceId)
-                } label: {
-                    Text("Book another time")
-                }
-                .buttonStyle(.secondary)
-                .accessibilityIdentifier("bookAgainButton")
+            Button {
+                router.bookAgain(appointment.snapshot)
+            } label: {
+                // The shop cancelled one that hadn't happened yet: the client wanted that time.
+                Text(appointment.isCancelledByShop && appointment.isUpcoming(at: now) ? "Book another time" : "Book again")
             }
+            .buttonStyle(.secondary)
+            .accessibilityHint("\(appointment.title), on a day and time you pick")
+            .accessibilityIdentifier("bookAgainButton")
             removeButton
         }
     }

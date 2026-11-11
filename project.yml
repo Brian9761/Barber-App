@@ -57,6 +57,8 @@ targets:
         IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
         # YES only in the demo version (IZZY_DEMO_MODE below).
         IzzyDemoMode: $(IZZY_DEMO_MODE)
+        # The shop's website, for Visit's Website row and legal pages (IZZY_WEBSITE_URL below).
+        IzzyWebsiteURL: $(IZZY_WEBSITE_URL)
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIApplicationSupportsIndirectInputEvents: true
@@ -68,11 +70,18 @@ targets:
           - arm64
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+    entitlements:
+      path: IzzyClipz/IzzyClipz.entitlements
+      properties:
+        # Apple's Declared Age Range (IzzyClipz/App/AgeCheck.swift), which California law asks of
+        # every app from January 1, 2027.
+        com.apple.developer.declared-age-range: true
     settings:
       base:
         PRODUCT_NAME: IzzyClipz
         PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.app
         TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_ENTITLEMENTS: IzzyClipz/IzzyClipz.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
@@ -81,6 +90,11 @@ targets:
         # The demo version, on its in-memory sample server (IzzyClipz/App/DemoMode.swift). Only
         # the test builds set YES (.github/workflows/test-builds.yml).
         IZZY_DEMO_MODE: NO
+        # The website the app links to: Visit's Website row and Share link, calendar events, and the
+        # Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility pages.
+        # The current public site, until the shop's own domain replaces it here
+        # (IzzyClipz/App/Website.swift).
+        IZZY_WEBSITE_URL: https://izzy-clipz.vercel.app
 
   IzzyClipzTests:
     type: bundle.unit-test

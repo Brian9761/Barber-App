@@ -236,6 +236,25 @@ final class AppointmentPlannerTests: XCTestCase {
     func testFreeUntilIsExactlyTheWindowBeforeTheStart() {
         XCTAssertEqual(oneHour.freeUntil(start: pacificDate(2026, 10, 30, 14, 30)), pacificDate(2026, 10, 30, 13, 30))
         XCTAssertEqual(LateCancelTerms(windowMinutes: 2_880, feeLabel: "$45").freeUntil(start: pacificDate(2026, 10, 30, 14, 30)), pacificDate(2026, 10, 28, 14, 30))
+        // Booked days ahead, the 15 minutes after booking are long over by then.
+        let early = LateCancelTerms(windowMinutes: 60, feeLabel: "$45", bookedAt: pacificDate(2026, 10, 28, 12))
+        XCTAssertEqual(early.freeUntil(start: pacificDate(2026, 10, 30, 14, 30)), pacificDate(2026, 10, 30, 13, 30))
+    }
+
+    /// Cancelling within 15 minutes of booking is always free: booked 70 minutes ahead under a 1-hour
+    /// window, cancelling is free for 15 minutes after booking, not just 10, to the minute.
+    func testTheFifteenMinutesAfterBookingAreFreeToo() {
+        let start = pacificDate(2026, 10, 28, 13, 10)
+        let booked = pacificDate(2026, 10, 28, 12).addingTimeInterval(30)
+        let terms = LateCancelTerms(windowMinutes: 60, feeLabel: "$45", bookedAt: booked)
+        XCTAssertEqual(terms.freeUntil(start: start), pacificDate(2026, 10, 28, 12, 15))
+        // So the hour-before reminder, at 12:10, still says it's free, and until when.
+        let appointment = makeAppointment(start: start)
+        let hourBefore = reminders(for: appointment, now: pacificDate(2026, 10, 28, 12, 1), lateCancel: terms).first { $0.kind == .hourBefore }
+        XCTAssertEqual(hourBefore?.body, "With Carlos at Izzy Clipz, 1919 Mission Ave. Can't make it? Cancel in the app by 12:15 PM so it's free.")
+        // Without the booking time, only the window counts: at 12:10 cancelling may be charged.
+        let windowOnly = reminders(for: appointment, now: pacificDate(2026, 10, 28, 12, 1), lateCancel: oneHour).first { $0.kind == .hourBefore }
+        XCTAssertEqual(windowOnly?.body, "With Carlos at Izzy Clipz, 1919 Mission Ave. Cancelling now may be charged $45.")
     }
 
     /// Booked days ahead under a 1-hour window: the day-before reminder says until when cancelling

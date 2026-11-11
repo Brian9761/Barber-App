@@ -2,8 +2,8 @@ import XCTest
 
 /// Walks through every screen the way a client would: the five tabs, booking through to "You're
 /// booked" (with any barber, with a chosen barber, Flowxbori's second haircut), what happens when a
-/// time is taken or the phone is offline, cancelling, the shop's products, the live reviews, Visit,
-/// the gallery and reminders. Saves screenshots along the way.
+/// time is taken or the phone is offline, cancelling, the shop's products, the live reviews, Visit
+/// and reminders. Saves screenshots along the way.
 ///
 /// The app runs with `-ui-testing`: it starts from empty settings, never touches the network (an
 /// in-memory server stands in for the shop's, with a "now" frozen at launch, sample bookings,
@@ -74,8 +74,12 @@ final class IzzyClipzUITests: XCTestCase {
     func testHome() {
         launch()
         XCTAssertTrue(element("shopStatus").exists)
-        XCTAssertTrue(element("homeHeroPhotos").exists)
-        XCTAssertTrue(element("seeAllPhotos").exists)
+        // The storefront, not photos of people: there's no gallery any more.
+        let hero = element("homeHero")
+        XCTAssertTrue(hero.exists)
+        XCTAssertTrue(hero.label.contains("storefront"), hero.label)
+        XCTAssertFalse(element("homeHeroPhotos").exists)
+        XCTAssertFalse(element("seeAllPhotos").exists)
         XCTAssertTrue(element("homeWalkIns").exists, "With nothing booked, Home shows the walk-in line")
         XCTAssertFalse(element("appointmentCard").exists, "Nothing is booked yet")
         XCTAssertTrue(element("callButton").exists)
@@ -284,7 +288,18 @@ final class IzzyClipzUITests: XCTestCase {
         tapPinned("hideKeyboard")
         XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "Hide keyboard didn't put it away")
         XCTAssertTrue(waitForDisappearance(of: element("hideKeyboard")), "The button stays only while typing")
-        XCTAssertEqual(element("rememberDetailsToggle").value as? String, "1", "Remember me starts on")
+        // Who gets the details, as the Privacy Policy says.
+        let privacy = element("detailsPrivacy")
+        scroll(toReveal: privacy)
+        XCTAssertTrue(
+            privacy.label.contains("Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains"),
+            privacy.label
+        )
+        // Nothing is remembered yet, so Remember me starts off: keeping the details is the client's choice.
+        let remember = element("rememberDetailsToggle")
+        scroll(toReveal: remember)
+        XCTAssertEqual(remember.value as? String, "0", "Remember me starts off")
+        flipSwitch(remember)
         screenshot("14-Book-Details")
 
         continueToReview()
@@ -295,6 +310,14 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("bookingSummary").waitForExistence(timeout: 10))
         XCTAssertTrue(containing("Any barber").exists, "The review should say any barber")
         XCTAssertTrue(containing("Low fade, please").exists, "The note is on the review")
+        // What booking agrees to, right above Book appointment.
+        let consent = element("bookingConsent")
+        XCTAssertTrue(consent.exists, "No consent line on Review")
+        XCTAssertTrue(consent.label.contains("By booking, you agree to our Terms of Service and Cancellation & No-Show Policy"), consent.label)
+        XCTAssertLessThanOrEqual(
+            consent.frame.maxY, element("bookAppointmentButton").frame.minY + 1,
+            "The consent line should sit right above Book appointment"
+        )
         screenshot("15-Book-Review")
 
         bookAppointment()
@@ -348,6 +371,12 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(containing("Carlos").exists, "The review should name Carlos")
         bookAppointment()
         XCTAssertTrue(element("bookedSummary").label.contains("Carlos"), element("bookedSummary").label)
+
+        // "Book again" on the confirmation: Carlos's haircut again, at the times.
+        tap("bookedBookAgainButton")
+        waitForPickedDay()
+        XCTAssertTrue(containing("Haircut with Carlos").exists, "Book again didn't keep the service and the barber")
+        XCTAssertTrue(labeled("Step 3 of 5").exists)
     }
 
     /// Flowxbori's second haircut (an hour) is its own offering, booked as such.
@@ -601,22 +630,26 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("appointmentCard")), "The appointment is still listed")
     }
 
-    /// The shop cancelled it: the app finds out when it opens and says so, on Home too. Booking
-    /// another time, later than the cancelled one, puts the new appointment on Home under the
-    /// shop's cancellation (it used to stay hidden until the cancelled time was over).
+    /// The shop cancelled it: the app finds out when it opens and says so, on Home too. "Book
+    /// another time" starts the same service with the same barber at the times. Booking another
+    /// time, later than the cancelled one, puts the new appointment on Home under the shop's
+    /// cancellation (it used to stay hidden until the cancelled time was over).
     func testShopCancelledAppointment() {
         launch(UITestArguments.bookedAppointment, UITestArguments.shopCancels, UITestArguments.savedDetails)
         XCTAssertTrue(labeled("Cancelled by the shop").waitForExistence(timeout: 20), "Home doesn't say the shop cancelled it")
-        XCTAssertTrue(element("bookAgainButton").exists)
+        let bookAgain = element("bookAgainButton")
+        XCTAssertTrue(bookAgain.exists)
+        XCTAssertEqual(bookAgain.label, "Book another time")
         XCTAssertFalse(element("cancelAppointmentButton").exists)
-        scroll(toReveal: element("bookAgainButton"))
+        scroll(toReveal: bookAgain)
         screenshot("36-Cancelled-By-The-Shop")
         tap("bookAgainButton")
-        XCTAssertTrue(element("chooseAnyBarber").waitForExistence(timeout: 10), "Book another time didn't start booking the service")
-        assertSelectedTab("Book")
-
-        tap("chooseAnyBarber")
+        // The seeded booking is a haircut with Carlos: straight to his times.
         waitForTimes()
+        assertSelectedTab("Book")
+        XCTAssertTrue(containing("Haircut with Carlos").exists, "Book another time didn't keep the service and the barber")
+        XCTAssertTrue(labeled("Step 3 of 5").exists)
+
         // The cancelled one is 2 to 14 days out (FakeShopAPI.seedBooking), so this is after it.
         pickOpenDay(atLeast: 15)
         pickFirstTime()
@@ -632,6 +665,37 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(cancelled.exists, "Home no longer says the shop cancelled the earlier one")
         XCTAssertTrue(element("bookAgainButton").exists)
         XCTAssertLessThan(cancelled.frame.minY, next.frame.minY, "The earlier, cancelled appointment should come first")
+    }
+
+    /// A cancelled appointment offers "Book again": the same service with the same barber, straight
+    /// to the day and time (with "Pick a barber" a step back), then booked as usual.
+    func testBookAgainFromACancelledAppointment() {
+        launch(UITestArguments.bookedAppointment, UITestArguments.savedDetails)
+        openTab("Book")
+        let cancel = element("cancelAppointmentButton")
+        XCTAssertTrue(cancel.waitForExistence(timeout: 15), "Book doesn't show the booked appointment")
+        scroll(toReveal: cancel)
+        cancel.tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Cancel appointment", "cancelAppointmentButton")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "No confirmation before cancelling")
+        confirm.tap()
+        XCTAssertTrue(labeled("Cancelled").waitForExistence(timeout: 15), "The appointment doesn't say it's cancelled")
+
+        let bookAgain = element("bookAgainButton")
+        XCTAssertTrue(bookAgain.waitForExistence(timeout: 10), "A cancelled appointment has no Book again")
+        XCTAssertEqual(bookAgain.label, "Book again")
+        scroll(toReveal: bookAgain)
+        screenshot("36b-Book-Again")
+        bookAgain.tap()
+        waitForTimes()
+        XCTAssertTrue(containing("Haircut with Carlos").exists, "Book again didn't keep the service and the barber")
+        XCTAssertTrue(labeled("Step 3 of 5").exists)
+        pickFirstTime()
+        continueToDetails()
+        XCTAssertEqual(element("nameField").value as? String, "Sample Client", "The remembered name isn't filled in")
+        continueToReview()
+        bookAppointment()
+        XCTAssertTrue(element("bookedSummary").label.contains("Carlos"), element("bookedSummary").label)
     }
 
     /// Offline, Home still shows the appointment as it was, and says it couldn't check it with the
@@ -828,8 +892,9 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("cancelAppointmentButton")))
     }
 
-    /// Your details shows the card saved with the last booking; Remove card takes it off this
-    /// iPhone, so the next booking asks for a card again.
+    /// Your details shows the card saved with the last booking; Remove card asks first, takes it
+    /// off this iPhone and has the shop delete it (once the booking made with it no longer needs
+    /// it), so the next booking asks for a card again.
     func testRemovingTheCardInYourDetails() {
         launch(UITestArguments.noShowProtection, UITestArguments.savedDetails)
         bookCarlosHaircutWithANewCard()
@@ -841,8 +906,20 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("removeCardButton").exists)
         screenshot("57-Your-Details-Card")
         tapInSheet("removeCardButton")
+        // Deleting it at the shop can't be undone, so it asks first.
+        XCTAssertTrue(containing("Remove your card?").waitForExistence(timeout: 10), "No question before removing the card")
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Remove card", "removeCardButton")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "No Remove card in the question")
+        confirm.tap()
         XCTAssertTrue(waitForDisappearance(of: card), "Remove card didn't take the card away")
         XCTAssertFalse(element("removeCardButton").exists)
+        // The booking made with it is still ahead, so the shop deletes it once that's over.
+        let removal = element("cardRemovalMessage")
+        XCTAssertTrue(
+            waitUntil(removal, toMatch: NSPredicate(format: "label CONTAINS %@", "as soon as your appointments no longer need it")),
+            "Your details doesn't say what the shop did with the card"
+        )
+        screenshot("57b-Your-Details-Card-Removed")
         closeYourDetails()
         XCTAssertTrue(element("customerDetailsRow").exists, "Removing the card keeps the name and number")
 
@@ -867,6 +944,15 @@ final class IzzyClipzUITests: XCTestCase {
         let forget = app.buttons.matching(NSPredicate(format: "label == %@", "Forget")).firstMatch
         XCTAssertTrue(forget.waitForExistence(timeout: 10))
         forget.tap()
+        // The card goes at the shop too: Your details stays to say what the shop answered.
+        let removal = element("cardRemovalMessage")
+        XCTAssertTrue(
+            waitUntil(removal, toMatch: NSPredicate(format: "label CONTAINS %@", "as soon as your appointments no longer need it")),
+            "Your details doesn't say what the shop did with the card"
+        )
+        XCTAssertTrue(element("detailsForgottenNote").exists, "It doesn't say the details are forgotten")
+        screenshot("58b-Details-And-Card-Forgotten")
+        tapToClose(app.navigationBars["Your details"].buttons["Close"], closing: element("detailsSheetName"), "Your details didn't close")
         XCTAssertTrue(waitForDisappearance(of: element("customerDetailsRow")), "The details are still remembered")
 
         openDetailsOfCarlosHaircut()
@@ -970,15 +1056,22 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("googleTermsLink").exists)
     }
 
-    func testReviewsWithYelp() {
+    /// Even when the shop's server sends Yelp's reviews, the app shows only Google's and links to
+    /// Yelp: a Yelp rating never sits next to Google's.
+    func testReviewsNeverShowYelpsRating() {
         launch(UITestArguments.yelp)
         tap("homeReviews")
         XCTAssertTrue(element("googleReviews").waitForExistence(timeout: 15))
-        let yelp = element("yelpReviews")
+        XCTAssertTrue(element("googleRating").exists)
+        let yelp = element("yelpReviewsButton")
         scroll(toReveal: yelp)
-        XCTAssertTrue(yelp.exists, "The server has Yelp data: its own section")
-        XCTAssertTrue(element("yelpRating").exists)
-        screenshot("26-Reviews-Yelp")
+        XCTAssertFalse(element("yelpReviews").exists, "Yelp's reviews are only linked")
+        XCTAssertFalse(element("yelpRating").exists, "No Yelp rating next to Google's")
+        XCTAssertFalse(containing("Sample Yelp").exists, "No Yelp review shows")
+        screenshot("26-Reviews-Yelp-Link")
+        yelp.tap()
+        XCTAssertEqual(webPageURL(), "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")
+        closeWebPage()
     }
 
     func testReviewsUnavailable() {
@@ -995,7 +1088,25 @@ final class IzzyClipzUITests: XCTestCase {
         screenshot("27-Reviews-Unavailable")
     }
 
-    // MARK: Visit, gallery, reminders
+    // MARK: Age
+
+    /// iOS says the person is under 13 (`-fakeUnder13` stands for its answer): a calm screen asks a
+    /// parent or guardian to book, with the shop's number, and there's nothing to book with or fill in.
+    func testSomeoneUnder13IsAskedToHaveAParentBook() {
+        app.launchArguments = ["-ui-testing", "-fakeUnder13"]
+        app.launch()
+        let title = element("parentScreenTitle")
+        XCTAssertTrue(title.waitForExistence(timeout: 30), "No screen for a parent or guardian")
+        XCTAssertEqual(title.label, "Please ask a parent or guardian to book")
+        XCTAssertTrue(element("parentScreenMessage").label.contains("parent or guardian"))
+        XCTAssertTrue(element("parentScreenCall").exists, "No way to call the shop")
+        XCTAssertFalse(app.tabBars.firstMatch.exists, "The app's tabs shouldn't show")
+        XCTAssertFalse(element("homeBookButton").exists)
+        XCTAssertFalse(app.textFields.firstMatch.exists, "Nothing to fill in")
+        screenshot("59-Parent-Or-Guardian")
+    }
+
+    // MARK: Visit, reminders
 
     func testVisit() {
         launch()
@@ -1010,43 +1121,51 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("hours-monday").exists)
         screenshot("23-Visit-Hours")
 
+        // Nothing the owner hasn't checked about getting in: an invitation to call instead.
+        let access = element("visitAccessibilityCall")
+        scroll(toReveal: access)
+        XCTAssertTrue(access.label.contains("Questions about getting in or around the shop?"), access.label)
+        XCTAssertTrue(access.label.contains("(442) 341-3053"), access.label)
+        XCTAssertFalse(containing("ADA-compliant").exists)
+        XCTAssertFalse(containing("Wheelchair accessible").exists)
+        screenshot("23b-Visit-Good-To-Know")
+
         let reviews = element("visitSeeAllReviews")
         scroll(toReveal: reviews)
-        XCTAssertTrue(element("visitWebsiteLink").exists)
+        let website = element("visitWebsiteLink")
+        XCTAssertTrue(website.exists)
         screenshot("24-Visit-Links")
+        // The shop's new website, never the older one.
+        website.tap()
+        XCTAssertEqual(webPageURL(), "https://izzy-clipz.vercel.app")
+        closeWebPage()
+
         reviews.tap()
         XCTAssertTrue(element("googleReviews").waitForExistence(timeout: 15), "Visit's reviews link didn't open the reviews")
     }
 
-    func testGallery() {
+    /// Visit's Legal section opens each of the shop's policies on its website, in the in-app browser.
+    func testLegalPagesOnVisit() {
         launch()
-        tap("seeAllPhotos")
-        let first = element("photo-1")
-        XCTAssertTrue(first.waitForExistence(timeout: 10))
-        XCTAssertTrue(element("galleryInstagramButton").exists)
-        screenshot("28-Gallery")
-
-        first.tap()
-        let close = element("closePhoto")
-        XCTAssertTrue(close.waitForExistence(timeout: 10))
-        screenshot("29-Photo-Viewer")
-        let closeFrame = close.frame
-        app.swipeLeft()
-        // A tap that lands while the swiped page is still settling can be taken by the paging
-        // scroll, so it's tried a few times, by screen position (the button is pinned).
-        var closed = false
-        for _ in 0..<3 where !closed {
-            guard close.exists else {
-                closed = true
-                break
+        openTab("Visit")
+        XCTAssertTrue(element("visitDirectionsButton").waitForExistence(timeout: 10), "The Visit tab didn't show")
+        let pages = [
+            ("legal-privacy", "Privacy Policy", "https://izzy-clipz.vercel.app/privacy"),
+            ("legal-terms", "Terms of Service", "https://izzy-clipz.vercel.app/terms"),
+            ("legal-cancellation-policy", "Cancellation & No-Show Policy", "https://izzy-clipz.vercel.app/cancellation-policy"),
+            ("legal-accessibility", "Accessibility", "https://izzy-clipz.vercel.app/accessibility"),
+        ]
+        for (identifier, title, url) in pages {
+            let row = element(identifier)
+            scroll(toReveal: row)
+            XCTAssertTrue(row.label.contains(title), row.label)
+            if identifier == "legal-privacy" {
+                screenshot("24b-Visit-Legal")
             }
-            app.coordinate(withNormalizedOffset: .zero)
-                .withOffset(CGVector(dx: closeFrame.midX, dy: closeFrame.midY))
-                .tap()
-            closed = waitForDisappearance(of: close, timeout: 10)
+            row.tap()
+            XCTAssertEqual(webPageURL(), url, "\(title) opened the wrong page")
+            closeWebPage()
         }
-        XCTAssertTrue(closed, "The photo viewer didn't close")
-        XCTAssertTrue(first.waitForExistence(timeout: 10))
     }
 
     func testReminderSettings() {

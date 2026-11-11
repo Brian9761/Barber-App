@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// After booking: "You're booked", the appointment as the shop booked it (with the barber it
-/// assigned for "Any barber"), the reminders switch, Add to Calendar and Done. It replaces the
-/// booking steps, so going back can't book the same time twice.
+/// assigned for "Any barber"), the reminders switch, Add to Calendar, Book again (the same service
+/// and barber, at another day and time) and Done. It replaces the booking steps, so going back
+/// can't book the same time twice.
 struct BookedView: View {
     let appointmentID: String
 
@@ -105,6 +106,16 @@ struct BookedView: View {
             }
             .buttonStyle(.tertiary)
             .accessibilityIdentifier("addToCalendarButton")
+
+            // Another appointment like this one (the next cut, or one for someone else).
+            Button {
+                router.bookAgain(saved.snapshot)
+            } label: {
+                Label("Book again", systemImage: Symbol.calendar)
+            }
+            .buttonStyle(.tertiary)
+            .accessibilityHint("\(saved.title), on another day and time")
+            .accessibilityIdentifier("bookedBookAgainButton")
         }
     }
 }

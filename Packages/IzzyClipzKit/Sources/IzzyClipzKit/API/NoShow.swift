@@ -266,12 +266,13 @@ extension IzzyAPI.Appointment {
     /// What cancelling late may cost, for the appointment's reminders (`AppointmentPlanner`): a
     /// card on file under a policy that charges late cancellations, and the client hasn't cancelled
     /// or asked to before (after that, the first time decides, whenever they cancel again, so the
-    /// reminders leave it out). `nil` otherwise.
+    /// reminders leave it out). `nil` otherwise. It carries when it was booked, so the 15 minutes
+    /// after booking count as free too.
     public var lateCancelTerms: LateCancelTerms? {
         guard card != nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
               noShowFee.customerCancelledAt == nil
         else { return nil }
-        return LateCancelTerms(windowMinutes: window, feeLabel: noShowFee.amountLabel)
+        return LateCancelTerms(windowMinutes: window, feeLabel: noShowFee.amountLabel, bookedAt: createdAt)
     }
 }
 

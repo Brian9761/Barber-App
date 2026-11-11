@@ -5,21 +5,18 @@ import SwiftUI
 
 // MARK: - Hero
 
-/// The shop's six cuts as a photo pager you swipe through (no autoplay), with the open status on
-/// top and a button to the gallery in the corner. Each photo's caption and a "3 of 6" counter sit
-/// under it, on the canvas. Tapping a photo opens the gallery too.
+/// The shop from the street, so the first thing a client sees is where they're coming: the
+/// storefront at 1919 Mission Ave with the open status on top, and the address under it.
+///
+/// It used to be a pager of clients' cuts. A photo in which someone can be recognized goes in the
+/// app only with that person's written permission (a parent's or guardian's for anyone under 18),
+/// so the app shows no photos of people (docs/legal/research.md §16).
 struct HomeHero: View {
-    /// The pager's height.
+    /// The photo's height.
     let height: CGFloat
 
-    @Environment(AppRouter.self) private var router
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// The photo on screen, kept in step with the pager.
-    @State private var page: GalleryPhoto? = HomeHero.photos.first
-
-    /// The cuts, the textured crop first (it's the strongest opener). The storefront isn't here:
-    /// it's on the Directions tile and the Visit tab.
-    static let photos: [GalleryPhoto] = [.texturedCrop, .curls, .blueColor, .fullBeard, .fadeAndBeard, .classicBeard]
+    private let shop = AppData.shop
+    private let shape = RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous)
 
     /// `min(282, 0.32 × screen height)`: 213 pt on a 667 pt iPhone SE, 270 on an 844 pt iPhone,
     /// 282 from 882 pt up.
@@ -28,134 +25,35 @@ struct HomeHero: View {
     }
 
     var body: some View {
-        let current = page ?? Self.photos[0]
-        let index = Self.photos.firstIndex(of: current) ?? 0
         VStack(alignment: .leading, spacing: Theme.Space.s) {
-            card
-            caption(for: current, index: index)
+            photo
+            Text("\(shop.address.streetLine), \(shop.address.city)")
+                .textRole(.label)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, Theme.Space.xxs)
+                // The photo says it to VoiceOver.
+                .accessibilityHidden(true)
         }
     }
 
-    // MARK: Card
-
-    private var card: some View {
-        pager
+    private var photo: some View {
+        FillImage(name: Asset.storefront)
             .frame(maxWidth: .infinity)
             .frame(height: height)
+            .background(Theme.ink3)
+            .clipShape(shape)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("The storefront of \(shop.name) at \(shop.address.streetLine), \(shop.address.city), with the shop's sign over the windows")
+            .accessibilityAddTraits(.isImage)
+            .accessibilityIdentifier("homeHero")
             .overlay(alignment: .topLeading) {
                 LiveStatusPill(isOverPhoto: true)
                     // One line on the photo: the longest status still fits at xxxLarge. VoiceOver
                     // reads it in full.
                     .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                     .padding(Theme.Space.l)
-                    // Swipes that start on the pill still turn the page.
-                    .allowsHitTesting(false)
             }
-            .overlay(alignment: .bottomTrailing) {
-                galleryButton
-                    .padding(14)
-            }
-            .background(Theme.ink3)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.Radius.hero, style: .continuous))
-    }
-
-    private var galleryButton: some View {
-        NavigationLink(value: HomeRoute.gallery) {
-            Image(systemName: Symbol.gallery)
-        }
-        .buttonStyle(IconButtonStyle(fill: Theme.bone, foreground: Theme.ink))
-        .accessibilityLabel("See all photos")
-        .accessibilityHint("Opens the gallery")
-        .accessibilityIdentifier("seeAllPhotos")
-    }
-
-    private var pager: some View {
-        ScrollView(.horizontal) {
-            LazyHStack(spacing: 0) {
-                ForEach(Self.photos, id: \.self) { photo in
-                    FillImage(name: photo.assetName, anchor: photo.heroAnchor)
-                        .containerRelativeFrame(.horizontal)
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: openGallery)
-                }
-            }
-            .scrollTargetLayout()
-        }
-        .scrollTargetBehavior(.paging)
-        .scrollIndicators(.hidden)
-        .scrollPosition(id: $page)
-        // One adjustable element for VoiceOver: swipe up or down for the next photo, double-tap
-        // for the gallery.
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Fresh cuts")
-        .accessibilityValue(accessibilityValue)
-        .accessibilityAdjustableAction { direction in
-            switch direction {
-            case .increment: turnPage(by: 1)
-            case .decrement: turnPage(by: -1)
-            @unknown default: break
-            }
-        }
-        .accessibilityAction(.default, openGallery)
-        .accessibilityHint("Opens the gallery")
-        .accessibilityIdentifier("homeHeroPhotos")
-    }
-
-    /// "Textured crop with a fade" on the left, "1 of 6" on the right.
-    private func caption(for photo: GalleryPhoto, index: Int) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.l) {
-            Text(photo.caption)
-                .textRole(.label)
-                .foregroundStyle(Theme.smoke)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            Text("\(index + 1) of \(Self.photos.count)")
-                .textRole(.detail)
-                .foregroundStyle(Theme.bone)
-                .fixedSize()
-        }
-        .padding(.horizontal, Theme.Space.xxs)
-        // The pager reads the same thing as its value.
-        .accessibilityHidden(true)
-    }
-
-    // MARK: Actions
-
-    private var accessibilityValue: String {
-        let current = page ?? Self.photos[0]
-        let index = Self.photos.firstIndex(of: current) ?? 0
-        return "Photo \(index + 1) of \(Self.photos.count), \(current.caption)"
-    }
-
-    private func turnPage(by step: Int) {
-        let index = Self.photos.firstIndex(of: page ?? Self.photos[0]) ?? 0
-        let next = min(max(index + step, 0), Self.photos.count - 1)
-        guard next != index else { return }
-        withAnimation(reduceMotion ? nil : .snappy) {
-            page = Self.photos[next]
-        }
-    }
-
-    private func openGallery() {
-        router.homePath.append(HomeRoute.gallery)
-    }
-}
-
-private extension GalleryPhoto {
-    /// Where to crop each portrait photo for the landscape hero, so the head and the fade line stay
-    /// in view. Measured on each photo: the textured crop's head is near the top of the frame, the
-    /// lined-up beard's much lower.
-    var heroAnchor: UnitPoint {
-        let y: CGFloat
-        switch self {
-        case .texturedCrop: y = 0.1
-        case .curls: y = 0.27
-        case .blueColor: y = 0.35
-        case .fullBeard: y = 0.45
-        case .fadeAndBeard: y = 0.41
-        case .classicBeard: y = 0.30
-        }
-        return UnitPoint(x: 0.5, y: y)
     }
 }
 
@@ -530,7 +428,7 @@ struct HomeReviewsCard: View {
                     Text("See what clients say")
                         .textRole(.headline)
                         .foregroundStyle(Theme.bone)
-                    Text("Reviews on Google and Yelp")
+                    Text("Reviews from Google, with a link to Yelp")
                         .textRole(.caption)
                         .foregroundStyle(Theme.smoke)
                 }
@@ -542,7 +440,7 @@ struct HomeReviewsCard: View {
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel("See what clients say, on Google and Yelp")
+        .accessibilityLabel("See what clients say: reviews from Google, with a link to Yelp")
         .accessibilityHint("Opens the reviews")
         .accessibilityIdentifier("homeReviews")
     }

@@ -300,10 +300,10 @@ final class NoShowModelTests: XCTestCase {
     /// What the reminders say about cancelling late comes from the booking's own terms.
     func testTheTermsForTheReminders() throws {
         var appointment = try decoder.decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
-        XCTAssertEqual(appointment.lateCancelTerms, LateCancelTerms(windowMinutes: 60, feeLabel: "$35"))
+        XCTAssertEqual(appointment.lateCancelTerms, LateCancelTerms(windowMinutes: 60, feeLabel: "$35", bookedAt: appointment.createdAt))
         appointment.noShowFee?.lateCancelWindowMinutes = 90
         appointment.noShowFee?.amountCents = 1_750
-        XCTAssertEqual(appointment.lateCancelTerms, LateCancelTerms(windowMinutes: 90, feeLabel: "$17.50"))
+        XCTAssertEqual(appointment.lateCancelTerms, LateCancelTerms(windowMinutes: 90, feeLabel: "$17.50", bookedAt: appointment.createdAt))
 
         // Late cancellations weren't in the agreed policy: nothing to say.
         appointment.noShowFee?.lateCancelWindowMinutes = nil
