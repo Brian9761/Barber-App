@@ -932,7 +932,10 @@ final class SampleServerNoShowTests: XCTestCase {
 
     func testTheUsualSampleDayHasNoCardsOnFile() {
         let harness = Harness()
-        XCTAssertTrue(harness.server.appointments.allSatisfy { $0.card == nil && $0.noShowFee == nil })
+        // Today only: the UI tests' and the demo's sample server also has the 8 weeks before, with cards.
+        let today = harness.server.appointments(from: TestClock.today, to: TestClock.today)
+        XCTAssertFalse(today.isEmpty)
+        XCTAssertTrue(today.allSatisfy { $0.card == nil && $0.noShowFee == nil })
         XCTAssertNil(harness.appointment(named: "Kim Sample"))
         XCTAssertNil(harness.appointment(named: "Lee Sample"))
     }
