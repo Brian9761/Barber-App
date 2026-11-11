@@ -345,10 +345,14 @@ and nothing is sent to Stripe or recorded.
 - `IzzyClipzBusinessTests`: the stores, the checkout (the ticket, cash
   and other sales with their Idempotency-Key, card sales, receipts after
   the payment), today's sales and voiding, the shop's Stripe connection,
-  computer codes and sessions, the sample server, the simulated reader,
+  computer codes and sessions, Analytics (the periods in the shop's
+  calendar, the live refresh, the wording, the leaderboard's order, and
+  the sample server's numbers against [analytics.md](analytics.md) with
+  its 8 weeks of history), the sample server, the simulated reader,
   photos, sessions, Stripe's error codes, the legal pages and the age
-  check, and no-show protection (what an appointment's fee section says
-  and offers, charging it, the labels, and the settings screen's store).
+  check (the same cases as the customer app's), and no-show protection
+  (what an appointment's fee section says and offers, charging it, the
+  labels, and the settings screen's store).
 - `IzzyClipzBusinessUITests`: every flow on the in-memory sample server
   (`-ui-testing`), with screenshots named `O01-Sign-In` and so on. Launch
   arguments `-signed-in`, `-fake-offline`, `-fake-stripe-not-configured`,
@@ -358,8 +362,12 @@ and nothing is sent to Stripe or recorded.
   `-fake-stripe-not-connected` (Connect Stripe then connects at once),
   `-fake-stripe-needs-info` (the first try leaves details missing) or
   `-fake-stripe-cancel` (the first try closes the window). The sample day
-  has Diego's cash checkout in Today's sales, two computers signed in, and
-  computer codes that come in the same order (483920 first). For no-show protection, `-fake-cards-on-file`
+  has Marcus's card checkout and Diego's cash checkout (with the sample
+  pomade) in Today's sales, two computers signed in, and computer codes
+  that come in the same order (483920 first). The sample server also has
+  the 8 weeks before today (`FakeSampleHistory`), so Analytics has
+  history; `-fake-empty` starts with nothing at all. `AnalyticsUITests`
+  covers the Analytics tab. For no-show protection, `-fake-cards-on-file`
   adds three clients who booked online with Visa 4242 for a $35 haircut
   with Flowxbori: Kim Sample (10 AM, a no-show), Lee Sample (11:30 AM,
   cancelled in the app at 10:50 AM: a late cancellation) and Nia Sample
