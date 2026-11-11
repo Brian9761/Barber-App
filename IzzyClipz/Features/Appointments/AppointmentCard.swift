@@ -20,6 +20,7 @@ struct AppointmentCard: View {
 
     @Environment(AppRouter.self) private var router
     @Environment(AppointmentStore.self) private var store
+    @Environment(\.openURL) private var openURL
     @State private var isConfirmingRemove = false
     /// Cancelling it: the question, and the request. Made when the card first shows.
     @State private var cancelling: AppointmentCancelling?
@@ -67,6 +68,10 @@ struct AppointmentCard: View {
                  : "It only comes off this iPhone's list.")
         }
         .alert("Couldn't cancel", isPresented: Binding(get: { cancelling?.error != nil }, set: { if !$0 { cancelling?.clearError() } })) {
+            // The shop can always cancel it over the phone.
+            Button("Call the shop") {
+                openURL(AppData.shop.phone.callURL)
+            }
             Button("OK", role: .cancel) {}
         } message: {
             Text(cancelling?.error ?? "")

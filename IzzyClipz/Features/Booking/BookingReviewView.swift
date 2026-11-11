@@ -78,7 +78,7 @@ private struct BookingReviewScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.xl) {
-                BookingStepHeader(step: 5, title: "Review and book")
+                BookingStepHeader(step: 5, title: "Review and book", subtitle: "Check everything, then tap Book appointment.")
                 summary
                 // Worked out from the clock now; `noticeTimer` brings it back when the time comes
                 // inside the late-cancellation window.
@@ -270,7 +270,7 @@ private struct BookingReviewScreen: View {
     }
 }
 
-/// "No payment now — you'll pay at the shop", with how.
+/// "No payment now. You'll pay at the shop.", with how (the website's words).
 struct BookingPayAtShopNote: View {
     var body: some View {
         HStack(alignment: .top, spacing: Theme.Space.l) {
@@ -279,7 +279,7 @@ struct BookingPayAtShopNote: View {
                 .foregroundStyle(Theme.electric)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                Text("No payment now — you'll pay at the shop")
+                Text("No payment now. You'll pay at the shop.")
                     .textRole(.headline)
                     .foregroundStyle(Theme.bone)
                     .fixedSize(horizontal: false, vertical: true)
