@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LegalDocumentId } from './documents';
 import { parseInline, parseMarkdown, plainText, slugify, type Block, type Inline } from './markdown';
+import { findPlaceholders } from './placeholders';
 import { LEGAL_TEXTS } from './texts';
 
 // The Markdown the legal documents use, read into blocks the page draws: and the four documents
@@ -172,7 +173,11 @@ describe('the four documents', () => {
     const found = blocks.flatMap((block) =>
       block.kind === 'paragraph' ? placeholders(block.content) : block.kind === 'list' ? block.items.flatMap((item) => placeholders(item.content)) : [],
     );
-    expect(found).toContain("[TO FILL IN: the shop's email address]");
-    expect(found.length).toBeGreaterThanOrEqual(7);
+    // "- **Email us at [TO FILL IN: the shop's email address].**" and "- **Email:** [TO FILL IN: …]".
+    expect(found.filter((raw) => raw === "[TO FILL IN: the shop's email address]")).toHaveLength(2);
+    expect(found).toContain("[TO FILL IN: the LLC's exact registered name]");
+    // Every placeholder in the file is found, none lost inside the bold words.
+    expect(found).toHaveLength(findPlaceholders(read('accessibility.md')).length);
+    expect(found.length).toBeGreaterThanOrEqual(6);
   });
 });

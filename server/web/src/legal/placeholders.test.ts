@@ -59,7 +59,8 @@ describe('what a draft shows in its place', () => {
 });
 
 describe('an instruction to the owner, in a draft', () => {
-  // accessibility.md's lines about texting the shop: what the owner must do, not something to add.
+  // The lines about texting the shop that accessibility.md had until the shop said its number takes
+  // calls only: what the owner must do, not something to add.
   const LINE_13 = '[TO FILL IN: remove "text us" unless texts are confirmed]';
   const LINE_52 =
     "[TO FILL IN: keep this line only once you've confirmed this number takes texts and someone reads them during opening hours; otherwise delete every mention of texting us in this statement.]";

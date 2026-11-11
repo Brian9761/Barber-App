@@ -31,7 +31,15 @@ const PAGES = [
   ['/accessibility', 'Accessibility Statement', 'Accessibility · Izzy Clipz Barbershop'],
 ] as const;
 
-const main = () => within(screen.getByRole('main'));
+const main = () => within(screen.queryByRole('main') ?? screen.getByTestId('legal-page'));
+
+/** A document's page from Markdown of the test's own, as a draft or as published. */
+const renderArticle = (source: string, draft: boolean) =>
+  render(
+    <MemoryRouter future={ROUTER_FUTURE}>
+      <LegalArticle source={source} draft={draft} demo={false} />
+    </MemoryRouter>,
+  );
 
 describe('the legal pages, as drafts', () => {
   it.each(PAGES)('%s: one main heading, its title, the draft note, and no placeholder or checklist left in its words', async (path, heading, title) => {
@@ -65,18 +73,43 @@ describe('the legal pages, as drafts', () => {
     );
   });
 
-  it('shows an instruction to the owner only as “To be confirmed by the shop”', async () => {
-    renderApp('/accessibility');
-    await screen.findByRole('heading', { level: 1, name: 'Accessibility Statement' });
+  it.each(PAGES)('%s: names the business behind the shop in its first paragraph, as a note until the shop adds its name', async (path, heading) => {
+    renderApp(path);
+    await screen.findByRole('heading', { level: 1, name: heading });
+    expect(screen.getByTestId('legal-page').textContent).toContain(
+      "Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's exact registered name, a limited liability company.",
+    );
+  });
+
+  it('shows an instruction to the owner only as “To be confirmed by the shop”', () => {
+    // The documents have none today (the shop confirmed its number takes calls only), so this is
+    // checked with words of its own, as an instruction to the owner would read.
+    renderArticle(
+      [
+        '# Accessibility Statement',
+        '',
+        '- **If anything gets in your way:** call (442) 341-3053, text us [TO FILL IN: remove "text us" unless texts are confirmed] or email us.',
+        "- **Text us at (442) 341-3053.** [TO FILL IN: keep this line only once you've confirmed this number takes texts; otherwise delete every mention of texting us.]",
+      ].join('\n'),
+      true,
+    );
     const words = screen.getByTestId('legal-page').textContent ?? '';
     expect(words).not.toMatch(/keep this line|remove "text us"|otherwise delete|you've confirmed/);
     const notes = Array.from(document.querySelectorAll('mark.legal__placeholder')).map((mark) => mark.textContent);
-    expect(notes.filter((note) => note?.startsWith('To be confirmed by the shop'))).toEqual([
-      'To be confirmed by the shop',
-      'To be confirmed by the shop.',
-      'To be confirmed by the shop',
-    ]);
-    expect(words).toContain('call through a relay service by dialing 711, text us To be confirmed by the shop or email us');
+    expect(notes).toEqual(['To be confirmed by the shop', 'To be confirmed by the shop.']);
+    expect(words).toContain('call (442) 341-3053, text us To be confirmed by the shop or email us.');
+  });
+
+  it('the Accessibility Statement offers calls, relay calls and email, and no texts: the shop’s number takes calls only', async () => {
+    renderApp('/accessibility');
+    await screen.findByRole('heading', { level: 1, name: 'Accessibility Statement' });
+    const words = screen.getByTestId('legal-page').textContent ?? '';
+    const notes = Array.from(document.querySelectorAll('mark.legal__placeholder')).map((mark) => mark.textContent);
+    expect(notes.filter((note) => note?.startsWith('To be confirmed by the shop'))).toEqual([]);
+    expect(words).not.toMatch(/\btext us\b|\bText:|text you the details/i);
+    expect(words).toContain(
+      'call (442) 341-3053, call through a relay service by dialing 711, or email us (see "Other ways to book and get help").',
+    );
   });
 
   it('in the demo, says it’s the demo too', async () => {
@@ -122,19 +155,37 @@ describe('the legal pages, as drafts', () => {
     expect(hrefs.filter((href) => /izzyclipzbarbershop|squire/i.test(href))).toEqual([]);
   });
 
-  it('opens a new text message from the numbers offered for texts, and a call from the others', async () => {
-    renderApp('/accessibility');
-    await screen.findByRole('heading', { level: 1, name: 'Accessibility Statement' });
+  it('opens a new text message from a number offered for texts, and a call from the others', () => {
+    // With words of its own: the documents offer no texts today.
+    renderArticle(
+      [
+        '# Accessibility Statement',
+        '',
+        '- **Call us at (442) 341-3053** during opening hours.',
+        '- **Text us at (442) 341-3053.**',
+        '- **Text:** (442) 341-3053',
+        '- **Call:** (442) 341-3053, or dial 711 to call through a relay service',
+      ].join('\n'),
+      false,
+    );
     const numbers = main().getAllByRole('link', { name: '(442) 341-3053' });
     const hrefOf = (words: RegExp) => numbers.filter((link) => words.test(link.closest('li, p')?.textContent ?? '')).map((link) => link.getAttribute('href'));
     // "Text us at (442) 341-3053." and "Text: (442) 341-3053" text; "Call us at…", "Call: … or dial 711" call.
     expect(hrefOf(/^Text us at/)).toEqual(['sms:+14423413053']);
     expect(hrefOf(/^Text:/)).toEqual(['sms:+14423413053']);
-    expect(hrefOf(/^Call/).every((href) => href === 'tel:+14423413053')).toBe(true);
-    expect(hrefOf(/^Call/).length).toBeGreaterThan(1);
+    expect(hrefOf(/^Call/)).toEqual(['tel:+14423413053', 'tel:+14423413053']);
     expect(numberHref('4423413053', 'Questions? Call us at ')).toBe('tel:+14423413053');
     expect(numberHref('4423413053', 'If anything gets in your way, text us at ')).toBe('sms:+14423413053');
     expect(numberHref('4423413053', 'Some context, then ')).toBe('tel:+14423413053');
+  });
+
+  it('the Accessibility Statement’s numbers all call: it offers no texts', async () => {
+    renderApp('/accessibility');
+    await screen.findByRole('heading', { level: 1, name: 'Accessibility Statement' });
+    const numbers = main().getAllByRole('link', { name: '(442) 341-3053' });
+    expect(numbers.length).toBeGreaterThan(1);
+    expect(numbers.map((link) => link.getAttribute('href')).every((href) => href === 'tel:+14423413053')).toBe(true);
+    expect(document.querySelector('a[href^="sms:"]')).toBeNull();
   });
 
   it('draws tables with their headers, the first column naming each row, and quotes and code', async () => {
@@ -172,13 +223,6 @@ describe('a strict build, as the pages see it', () => {
 });
 
 describe('a legal page, as the shop publishes it (a strict build)', () => {
-  const renderArticle = (source: string, draft: boolean) =>
-    render(
-      <MemoryRouter future={ROUTER_FUTURE}>
-        <LegalArticle source={source} draft={draft} demo={false} />
-      </MemoryRouter>,
-    );
-
   it('has no draft note, and its dates as the shop wrote them', () => {
     renderArticle(filledIn(read('privacy.md')), false);
     expect(screen.queryByTestId('legal-draft')).toBeNull();
