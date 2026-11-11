@@ -438,6 +438,40 @@ private struct InfoButton: View {
     }
 }
 
+/// A name, how many and the money on one line, stacked at the largest text sizes.
+private struct ValueRow: View {
+    let name: String
+    let detail: String
+    let amount: String
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                    Text("\(detail) · \(amount)")
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                HStack(spacing: 8) {
+                    Text(name)
+                    Spacer(minLength: 8)
+                    Text(detail)
+                        .foregroundStyle(.secondary)
+                    Text(amount)
+                        .monospacedDigit()
+                        .frame(minWidth: 64, alignment: .trailing)
+                }
+            }
+        }
+        .font(.subheadline)
+        .padding(.vertical, 6)
+        .accessibilityElement(children: .combine)
+    }
+}
+
 /// A plain line in a card when there's nothing to show yet.
 private struct EmptyLine: View {
     let text: String
@@ -725,19 +759,8 @@ private struct TopServicesCard: View {
                 .accessibilityIdentifier("topServicesChart")
                 VStack(spacing: 0) {
                     ForEach(analytics.services) { service in
-                        HStack(spacing: 8) {
-                            Text(service.name)
-                            Spacer(minLength: 8)
-                            Text("\(service.count) done")
-                                .foregroundStyle(.secondary)
-                            Text(AnalyticsText.money(service.salesCents))
-                                .monospacedDigit()
-                                .frame(minWidth: 64, alignment: .trailing)
-                        }
-                        .font(.subheadline)
-                        .padding(.vertical, 6)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("service-\(service.serviceId)")
+                        ValueRow(name: service.name, detail: "\(service.count) done", amount: AnalyticsText.money(service.salesCents))
+                            .accessibilityIdentifier("service-\(service.serviceId)")
                     }
                 }
             }
@@ -756,19 +779,8 @@ private struct ProductsSoldCard: View {
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(analytics.products.enumerated()), id: \.offset) { _, product in
-                        HStack(spacing: 8) {
-                            Text(product.name)
-                            Spacer(minLength: 8)
-                            Text("\(product.quantity) sold")
-                                .foregroundStyle(.secondary)
-                            Text(AnalyticsText.money(product.salesCents))
-                                .monospacedDigit()
-                                .frame(minWidth: 64, alignment: .trailing)
-                        }
-                        .font(.subheadline)
-                        .padding(.vertical, 6)
-                        .accessibilityElement(children: .combine)
-                        .accessibilityIdentifier("product-\(product.name)")
+                        ValueRow(name: product.name, detail: "\(product.quantity) sold", amount: AnalyticsText.money(product.salesCents))
+                            .accessibilityIdentifier("product-\(product.name)")
                     }
                 }
             }
@@ -866,6 +878,8 @@ private struct DailySalesCard: View {
                             let x = location.x - geometry[plot].origin.x
                             if let date: String = proxy.value(atX: x) { selectedDate = date }
                         }
+                        // VoiceOver reads the bars themselves, and the audio graph.
+                        .accessibilityHidden(true)
                 }
             }
             .frame(height: 220)
@@ -890,14 +904,19 @@ private struct ProductivityCard: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        let columns = dynamicTypeSize.isAccessibilitySize
-            ? [GridItem(.flexible())]
-            : [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+        // Two tiles a row, one at the largest text sizes; every tile is built, so each is easy to reach.
+        let perRow = dynamicTypeSize.isAccessibilitySize ? 1 : 2
+        let tiles = store.tiles
+        let rows = stride(from: 0, to: tiles.count, by: perRow).map { Array(tiles[$0..<min($0 + perRow, tiles.count)]) }
         AnalyticsCard(title: "Business productivity", identifier: "productivityCard") {
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
-                ForEach(store.tiles) { tile in
-                    ProductivityTileView(tile: tile) {
-                        info = AnalyticsInfo(title: tile.title, text: tile.info)
+            Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+                ForEach(rows, id: \.first?.id) { row in
+                    GridRow {
+                        ForEach(row) { tile in
+                            ProductivityTileView(tile: tile) {
+                                info = AnalyticsInfo(title: tile.title, text: tile.info)
+                            }
+                        }
                     }
                 }
             }
