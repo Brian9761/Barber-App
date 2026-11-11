@@ -14,7 +14,8 @@ struct PaymentProgressView: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 24) {
-                    if checkout.mode.isTestMode {
+                    // About the card reader: a cash or other sale is saved the same way in test mode.
+                    if checkout.mode.isTestMode, !isSale {
                         TestModeBanner()
                     }
                     content
@@ -41,6 +42,14 @@ struct PaymentProgressView: View {
     }
 
     private var amountCents: Int { checkout.active?.request.amountCents ?? checkout.ticket.totalCents }
+
+    /// A cash or other sale (not a card payment).
+    private var isSale: Bool {
+        switch checkout.phase {
+        case .recording, .recorded, .recordFailed, .recordUnknown: return true
+        default: return false
+        }
+    }
 
     @ViewBuilder
     private var content: some View {

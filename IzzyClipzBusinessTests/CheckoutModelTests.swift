@@ -146,6 +146,26 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertTrue(pending.entries.isEmpty)
     }
 
+    /// The receipt shows what was charged, even if the ticket on screen changed while the payment
+    /// waited to be checked.
+    func testTheReceiptShowsTheTicketAsItWasCharged() async {
+        harness.server.options.completeStatusOverride = "processing"
+        let checkout = makeCheckout()
+        await charge(checkout, cents: 2500)
+        guard case .outcomeUnknown = checkout.phase else { return XCTFail("Expected a check, got \(checkout.phase)") }
+        checkout.backToEditing()
+        checkout.ticket.addAmount(500, name: "Tip")
+        checkout.charge()
+        guard case .outcomeUnknown = checkout.phase else { return XCTFail("The last card comes first, got \(checkout.phase)") }
+        harness.server.options.completeStatusOverride = nil
+        checkout.checkAgain()
+        await checkout.waitUntilSettled()
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(receipt.amountCents, 2500)
+        XCTAssertEqual(receipt.sale?.lines.map(\.name), ["Other"])
+        XCTAssertEqual(receipt.sale?.summary, "Sold $25 · Card · Izzy")
+    }
+
     func testRequiresPaymentMethodIsNotPaidAndRetriesTheSamePaymentIntent() async {
         harness.server.options.completeStatusOverride = "requires_payment_method"
         let checkout = makeCheckout()

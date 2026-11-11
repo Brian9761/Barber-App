@@ -110,8 +110,7 @@ struct TakePaymentView: View {
                 await workspace.recheckStatusIfNeeded()
                 async let payments: Void = checkout.loadPayments()
                 async let sales: Void = workspace.sales.refresh()
-                async let products: Void = workspace.products.refresh()
-                _ = await (payments, sales, products)
+                _ = await (payments, sales)
                 await checkout.syncPendingPayments()
             }
         }

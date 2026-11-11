@@ -133,6 +133,9 @@ final class CheckoutModel {
         let isPractice: Bool
         /// Set when nobody knows whether the card went through.
         var needsCheck = false
+        /// The ticket as it was charged, for the receipt (the one on screen may have changed since,
+        /// while a payment waits to be checked).
+        var ticket: CheckoutTicket?
     }
 
     // MARK: State
@@ -466,7 +469,8 @@ final class CheckoutModel {
             appointmentId: ticket.appointmentId,
             sale: ticket.newSale(method: .card)
         )
-        start { await self.run(request) }
+        let charged = ticket
+        start { await self.run(request, ticket: charged) }
     }
 
     /// Tries the same PaymentIntent again (after a decline, a cancellation or
@@ -475,7 +479,7 @@ final class CheckoutModel {
         guard let active, !active.needsCheck else { return }
         switch phase {
         case .declined, .cancelled, .failed, .notPaid:
-            start { await self.run(active.request) }
+            start { await self.run(active.request, ticket: active.ticket) }
         default:
             break
         }
@@ -579,7 +583,7 @@ final class CheckoutModel {
         await paymentsTask?.value
     }
 
-    private func run(_ request: IzzyAPI.NewPayment) async {
+    private func run(_ request: IzzyAPI.NewPayment, ticket charged: CheckoutTicket?) async {
         let mode = self.mode
         let terminal = currentTerminal
         let isPractice: Bool
@@ -616,12 +620,14 @@ final class CheckoutModel {
                 await abandoning?.value
             }
             if isPractice {
-                payment = ActivePayment(paymentIntentId: nil, clientSecret: "practice_\(UUID().uuidString)", request: request, isPractice: true)
+                payment = ActivePayment(paymentIntentId: nil, clientSecret: "practice_\(UUID().uuidString)", request: request, isPractice: true, ticket: charged)
             } else {
                 do {
                     let created = try await api.createPayment(request)
                     pending.add(created.paymentIntentId, at: clock())
-                    payment = ActivePayment(paymentIntentId: created.paymentIntentId, clientSecret: created.clientSecret, request: request, isPractice: false)
+                    payment = ActivePayment(
+                        paymentIntentId: created.paymentIntentId, clientSecret: created.clientSecret, request: request, isPractice: false, ticket: charged
+                    )
                 } catch {
                     phase = .failed(Self.message(for: error))
                     return
@@ -684,7 +690,7 @@ final class CheckoutModel {
                     amountCents: recorded.amountCents, paymentIntentId: recorded.id, isTestMode: mode.isTestMode,
                     stripeTestMode: stripeTestMode,
                     title: payment.request.description,
-                    sale: payment.request.sale != nil ? SaleReceipt(ticket: ticket, method: .card, barberName: barberName ?? "") : nil
+                    sale: payment.request.sale != nil ? payment.ticket.map { SaleReceipt(ticket: $0, method: .card, barberName: barberName ?? "") } : nil
                 ))
                 if let barberId = payment.request.sale?.barberId { defaults?.set(barberId, forKey: Self.lastBarberKey) }
                 if let appointmentId = recorded.appointmentId ?? payment.request.appointmentId {

@@ -328,11 +328,14 @@ final class SalesStoreTests: XCTestCase {
         let store = SalesStore(api: harness.api, shopTime: TestClock.shopTime, clock: { TestClock.now })
         await store.refresh()
         XCTAssertEqual(store.loadState, .loaded)
-        XCTAssertEqual(store.sales.map(\.customerName), ["Diego Sample"], "Diego's checkout this morning")
+        XCTAssertEqual(store.sales.map(\.customerName), ["Diego Sample", "Marcus Sample"], "This morning's checkouts, newest first")
         let diego = store.sales[0]
         XCTAssertEqual(diego.receiptLine, "Sold $63 · Cash · Carlos", "Carlos's $45 haircut and the $18 sample pomade")
         XCTAssertEqual(store.rowDetail(for: diego), "11 AM · Diego Sample · Carlos · Cash")
-        XCTAssertEqual(store.totalsText, "$63.00 · 1 sale")
+        let marcus = store.sales[1]
+        XCTAssertEqual(marcus.receiptLine, "Sold $40 · Card · Izzy", "His card payment's sale")
+        XCTAssertNotNil(marcus.paymentIntentId)
+        XCTAssertEqual(store.totalsText, "$103.00 · 2 sales")
     }
 
     func testVoidingACashSaleStopsItCountingAndUnpaysTheAppointment() async throws {
@@ -350,7 +353,7 @@ final class SalesStoreTests: XCTestCase {
         let after = try XCTUnwrap(store.sale(withID: diego.id))
         XCTAssertTrue(after.isVoided)
         XCTAssertEqual(after.voidReason, "Rang it up twice")
-        XCTAssertEqual(store.totalsText, "$0.00 · 0 sales", "Voided sales don't count")
+        XCTAssertEqual(store.totalsText, "$40.00 · 1 sale", "Voided sales don't count")
         XCTAssertEqual(store.voidMessages[diego.id], "The sale was voided, so it no longer counts in your sales.")
         XCTAssertEqual(voided, [diego.id])
         let appointment = try XCTUnwrap(harness.appointment(named: "Diego Sample"))

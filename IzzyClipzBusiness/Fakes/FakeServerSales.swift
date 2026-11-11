@@ -289,9 +289,17 @@ extension FakeServer {
 
     // MARK: Sample sales
 
-    /// Today's sample sale: Diego, who came at 10:30, checked out in cash with a haircut and the
-    /// sample pomade. Checkouts and Today's sales have something to show.
+    /// Today's sample sales, so checkouts and Today's sales have something to show: Marcus's 10 AM
+    /// haircut, paid by card at 10:50 (his card payment's sale), and Diego, who came at 10:30, checked
+    /// out in cash with a haircut and the sample pomade.
     func seedSales() {
+        if let marcus = appointments.first(where: { $0.customer.name == "Marcus Sample" }),
+           let index = payments.firstIndex(where: { $0.payment.appointmentId == marcus.id && $0.payment.isSucceeded }),
+           let draft = try? draftSale(barberId: marcus.barberId, appointmentId: marcus.id, customerName: nil, items: [.service(marcus.serviceId)]),
+           draft.totalCents == payments[index].payment.amountCents {
+            let sale = insertSale(draft, method: .card, paymentIntentId: payments[index].payment.id, soldAt: payments[index].payment.createdAt)
+            payments[index].payment.saleId = sale.id
+        }
         guard let diego = appointments.first(where: { $0.customer.name == "Diego Sample" }),
               let pomade = products.first(where: { $0.name == "Sample pomade" }),
               let draft = try? draftSale(

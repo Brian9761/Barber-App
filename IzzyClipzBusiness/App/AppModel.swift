@@ -123,6 +123,8 @@ final class AppModel {
     func signOut(notice: String? = nil) async {
         if let workspace { await workspace.tearDown() }
         try? environment.secrets.delete()
+        // The shop's last Sold by goes with the key (as on the website's Business area).
+        environment.defaults.removeObject(forKey: CheckoutModel.lastBarberKey)
         signInError = nil
         self.notice = notice
         phase = .signedOut

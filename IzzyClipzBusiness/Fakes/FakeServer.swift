@@ -804,7 +804,7 @@ final class FakeServer {
                 clientSecret: "pi_sample_\(counter)_secret_sample", receiptEmail: nil
             ))
         }
-        // Diego's checkout, in cash, and two computers signed in to the website's Business area.
+        // Marcus's card checkout and Diego's in cash, and two computers signed in to the website's Business area.
         seedSales()
         seedComputers()
     }

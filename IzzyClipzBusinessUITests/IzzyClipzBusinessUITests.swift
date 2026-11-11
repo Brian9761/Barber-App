@@ -80,7 +80,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(andre.waitForExistence(timeout: 10))
         XCTAssertTrue(andre.label.contains("11:30 AM"), "Got: \(andre.label)")
         XCTAssertTrue(andre.label.contains("Haircut & Beard with Izzy"))
-        XCTAssertTrue(element("appointment-Marcus Sample").label.contains("Paid $40.00"), "Marcus paid for his cut")
+        XCTAssertTrue(element("appointment-Marcus Sample").label.contains("Paid $40 · Card"), "Marcus paid for his cut by card")
         XCTAssertTrue(element("timeOff-Lunch").exists, "Flowxbori's lunch is blocked")
         XCTAssertTrue(app.staticTexts["Today"].exists)
         screenshot("O03-Schedule")
