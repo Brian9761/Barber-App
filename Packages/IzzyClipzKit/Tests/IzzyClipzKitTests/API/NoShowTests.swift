@@ -42,6 +42,34 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertEqual(declined.noShowFee?.reason, .noShow)
     }
 
+    func testTheShopsViewSaysWhenAVisitWasFirstCompleted() throws {
+        // The server's own answers: marked done at 11:05 AM, and a new booking not completed yet.
+        let updated = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("owner-appointment-updated.json")).appointment
+        XCTAssertEqual(updated.completedAt, utc(2026, 11, 2, 19, 5))
+        XCTAssertEqual(try encodeAPI(updated)["completedAt"], .string("2026-11-02T19:05:00Z"))
+        let created = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("owner-appointment-created.json")).appointment
+        XCTAssertNil(created.completedAt)
+        XCTAssertEqual(try encodeAPI(created)["completedAt"], .null, "the shop's view has it, null or not")
+
+        // The client's own view, and a server from before it, don't have it, and don't get it back either.
+        let mine = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try kitFixture("appointment.json")).appointment
+        XCTAssertNil(mine.completedAt)
+        XCTAssertNil(try encodeAPI(mine)["completedAt"])
+        let older = try decoder.decode(IzzyAPI.AppointmentsResponse.self, from: try kitFixture("owner-appointments.json")).appointments
+        XCTAssertEqual(older.map(\.completedAt), [nil, nil, nil, nil])
+        XCTAssertNil(try encodeAPI(older[0])["completedAt"])
+        // Whether the field was there isn't part of the value.
+        var members = try XCTUnwrap(JSONSerialization.jsonObject(with: try IzzyAPI.makeEncoder().encode(created)) as? [String: Any])
+        XCTAssertNotNil(members.removeValue(forKey: "completedAt"))
+        let withoutIt = try decoder.decode(IzzyAPI.Appointment.self, from: try JSONSerialization.data(withJSONObject: members))
+        XCTAssertNil(try encodeAPI(withoutIt)["completedAt"])
+        XCTAssertEqual(withoutIt, created)
+        // Constructed, it's written once it's set.
+        var made = withoutIt
+        made.completedAt = utc(2026, 11, 2, 19, 5)
+        XCTAssertEqual(try encodeAPI(made)["completedAt"], .string("2026-11-02T19:05:00Z"))
+    }
+
     func testAFeeFromAServerBeforeLateCancellations() throws {
         let old = try decodeAPI(IzzyAPI.NoShowFee.self, #"{ "amountCents": 2000, "status": "none", "chargedAt": null, "message": null }"#)
         XCTAssertEqual(old, IzzyAPI.NoShowFee(amountCents: 2000))

@@ -1025,33 +1025,51 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
 
   it('a completed booking with a card on file stays completed: never a no-show, even after it’s reopened', async () => {
     const DONE = { code: 'already_completed', message: "This appointment was marked completed, so it can't become a no-show." };
-    const { id } = await protectedBooking();
+    const booking = await protectedBooking();
+    const { id } = booking;
+    // The shop's view says when it was first completed (the client's never does): nothing yet.
+    const ownerView = async (appointmentId: string) =>
+      ((await h.call('GET', '/api/owner/appointments?date=2026-11-03', owner)).body.appointments as { id: string; completedAt: string | null }[]).find(
+        (a) => a.id === appointmentId,
+      )!;
+    expect((await ownerView(id)).completedAt).toBeNull();
     // 10:30 AM: the client came, and the visit is marked completed.
     h.setNow('2026-11-03T18:30:00Z');
-    expect((await setStatus(id, 'completed')).status).toBe(200);
+    const completed = await setStatus(id, 'completed');
+    expect(completed.status).toBe(200);
+    expect(completed.body.appointment.completedAt).toBe('2026-11-03T18:30:00Z');
     // 10:50 AM, after the end: marking it a no-show (by mistake) is refused.
     h.setNow('2026-11-03T18:50:00Z');
     const mark = await markNoShow(id);
     expect(mark.status).toBe(409);
     expect(mark.body.error).toEqual(DONE);
     expect((await feeRow(id)).status).toBe('completed');
-    // Reopened first, it still can't become one: the client came.
-    expect((await setStatus(id, 'booked')).status).toBe(200);
+    // Reopened first, it still can't become one: the client came. The shop's view still says so,
+    // so the website and the apps can tell before trying.
+    const reopened = await setStatus(id, 'booked');
+    expect(reopened.status).toBe(200);
+    expect(reopened.body.appointment).toMatchObject({ status: 'booked', completedAt: '2026-11-03T18:30:00Z' });
+    expect((await ownerView(id)).completedAt).toBe('2026-11-03T18:30:00Z');
+    const clientView = await h.call('GET', `/api/appointments/${id}`, { headers: { 'x-manage-token': booking.manageToken } });
+    expect(clientView.status, clientView.text).toBe(200);
+    expect(clientView.body.appointment).not.toHaveProperty('completedAt');
+    expect(clientView.body.appointment).not.toHaveProperty('sale');
     expect((await markNoShow(id)).body.error).toEqual(DONE);
     const res = await charge(id);
     expect(res.status).toBe(409);
     expect(res.body.error).toEqual({ code: 'not_chargeable', message: 'Mark the appointment as a no-show first.' });
-    // Completed again, and the fee can't be charged either.
-    expect((await setStatus(id, 'completed')).status).toBe(200);
+    // Completed again (it keeps the first time), and the fee can't be charged either.
+    h.setNow('2026-11-03T18:55:00Z');
+    expect((await setStatus(id, 'completed')).body.appointment.completedAt).toBe('2026-11-03T18:30:00Z');
     expect((await charge(id)).body.error).toEqual({ code: 'not_chargeable', message: "The appointment is marked completed, so there's no fee to charge." });
     expect(creates()).toHaveLength(0);
-    // A checkout counts as completed too.
+    // A checkout counts as completed too, and is remembered after its sale is voided and it's reopened.
     const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
     h.setNow('2026-11-03T20:30:00Z');
     const sale = await h.call('POST', '/api/owner/sales', { ...owner, body: { method: 'cash', appointmentId: other, items: [{ kind: 'service', serviceId: 'haircut' }] } });
     expect(sale.status, sale.text).toBe(201);
     await h.call('POST', `/api/owner/sales/${sale.body.sale.id}/void`, { ...owner, body: {} });
-    expect((await setStatus(other, 'booked')).status).toBe(200);
+    expect((await setStatus(other, 'booked')).body.appointment).toMatchObject({ status: 'booked', sale: null, completedAt: '2026-11-03T20:30:00Z' });
     h.setNow('2026-11-03T20:50:00Z');
     expect((await markNoShow(other)).body.error).toEqual(DONE);
     // Without a card there's no fee, so the shop can change it as before.

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { APIRequestContext, Page, TestInfo } from '@playwright/test';
-import { navLink, ownerCall, signInWithCode } from './business-support.js';
+import { navLink, ownerCall, ownerFetch, signInWithCode } from './business-support.js';
 import {
   expect,
   expectAccessible,
@@ -30,9 +30,10 @@ import {
 //   what they agree to.
 // - Izzy Clipz Business offers "Mark no-show" for a booking with a card on file only once it
 //   has ended, offers a charge until 7 days after the appointment and none after (saying why in
-//   a plain line), shows the server's answer when a visit that was completed is marked a
-//   no-show, and previews a flat fee capped at each service's price, which clients "may be
-//   charged". The demo's in-browser API follows the same rules, with no request.
+//   a plain line), never offers it for a visit that was completed and reopened (saying why in
+//   the server's words, which the server also answers), and previews a flat fee capped at each
+//   service's price, which clients "may be charged". The demo's in-browser API follows the same
+//   rules, with no request.
 //
 // On the real site, bookings with a card are made through the API (a card saved on the e2e
 // server's stand-in for Stripe's page) and moved back in time with /__e2e/appointments/move.
@@ -207,10 +208,7 @@ test.describe('on the real site', () => {
     page,
     request,
     phone,
-    browserConsole,
   }, testInfo) => {
-    // The browser's own line for the 409 the page shows (already_completed).
-    browserConsole.allow(/status of 409/);
     await setProtection(request, true);
     try {
       const barber = barberFor(testInfo);
@@ -275,10 +273,23 @@ test.describe('on the real site', () => {
       await view(page, testInfo, '07-business-reopen-completed');
       await reopen.getByRole('button', { name: 'Reopen' }).click();
       await expect(panel.getByTestId('status-changed')).toHaveText('Reopened: it’s booked again.');
-      // …and the server says so if someone tries.
-      await panel.getByRole('button', { name: 'Mark no-show' }).click();
-      await expect(panel.getByRole('alert')).toHaveText("This appointment was marked completed, so it can't become a no-show.");
+      // …and once it's reopened, after its end, "Mark no-show" isn't offered, nor a fee: the server's
+      // owner view says it was completed (completedAt), and the panel says why in the server's words.
+      const completedLine = "This appointment was marked completed, so it can't become a no-show.";
       await expect(panel.getByTestId('detail-badges')).toContainText('Booked');
+      await expect(panel.getByRole('button', { name: 'Mark done' })).toBeVisible();
+      await expect(panel.getByRole('button', { name: 'Mark no-show' })).toHaveCount(0);
+      await expect(panel.getByTestId('status-hint')).toContainText(completedLine);
+      await expect(panel.getByTestId('fee-status')).toHaveText(completedLine);
+      await expect(panel.getByTestId('fee-panel').getByRole('button')).toHaveCount(0);
+      await expect(panel).not.toContainText('Then you can charge the fee');
+      await expectAccessible(page, 'a visit that was completed, reopened');
+      await panel.getByTestId('fee-panel').scrollIntoViewIfNeeded();
+      await view(page, testInfo, '07b-business-reopened-completed');
+      // The server refuses it all the same.
+      const refused = await ownerFetch(request, 'PATCH', `/api/owner/appointments/${twoDaysAgo.id}`, { status: 'noShow' });
+      expect(refused.status()).toBe(409);
+      expect((await refused.json()).error).toEqual({ code: 'already_completed', message: completedLine });
     } finally {
       await setProtection(request, false);
     }
@@ -413,9 +424,22 @@ test.describe('in the demo', () => {
     await view(page, testInfo, '07-business-reopen-completed');
     await reopen.getByRole('button', { name: 'Reopen' }).click();
     await expect(panel.getByTestId('status-changed')).toHaveText('Reopened: it’s booked again.');
-    await panel.getByRole('button', { name: 'Mark no-show' }).click();
-    await expect(panel.getByRole('alert')).toHaveText("This appointment was marked completed, so it can't become a no-show.");
+    // Reopened after its end: no "Mark no-show", no fee, and why, in the server's words.
+    const completedLine = "This appointment was marked completed, so it can't become a no-show.";
     await expect(panel.getByTestId('detail-badges')).toContainText('Booked');
+    await expect(panel.getByRole('button', { name: 'Mark no-show' })).toHaveCount(0);
+    await expect(panel.getByTestId('status-hint')).toContainText(completedLine);
+    await expect(panel.getByTestId('fee-status')).toHaveText(completedLine);
+    await expect(panel.getByTestId('fee-panel').getByRole('button')).toHaveCount(0);
+    await expect(panel).not.toContainText('Then you can charge the fee');
+    await expectAccessible(page, 'the demo: a visit that was completed, reopened');
+    await panel.getByTestId('fee-panel').scrollIntoViewIfNeeded();
+    await view(page, testInfo, '07b-business-reopened-completed');
+    // Still so after a reload: the demo's stand-in keeps when it was first completed.
+    await page.reload();
+    await page.getByTestId('appointment').filter({ hasText: 'Kim Sample' }).click();
+    await expect(panel.getByRole('button', { name: 'Mark no-show' })).toHaveCount(0);
+    await expect(panel.getByTestId('fee-status')).toHaveText(completedLine);
     await panel.getByRole('button', { name: 'Close' }).click();
 
     // A late cancellation two weeks ago whose fee was never charged: too late now.

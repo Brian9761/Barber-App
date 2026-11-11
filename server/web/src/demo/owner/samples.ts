@@ -22,18 +22,16 @@ import { sampleBookings } from '../api';
 export const HISTORY_DAYS = 56;
 export const AHEAD_DAYS = 13;
 
-/** An appointment as the demo keeps it: the API's, with the price it was booked at and how it was paid by card. */
+/**
+ * An appointment as the demo keeps it: the API's, with the price it was booked at and how it was paid
+ * by card. Its `completedAt` (the API's own, as the server keeps `completed_at`) is missing in what an
+ * older demo kept: then only its status says.
+ */
 export interface DemoAppointment extends OwnerAppointment {
   /** What the appointment costs (the API only says its label). */
   priceCents: number;
   /** A card payment that paid it (Tap to Pay), which voiding a cash sale doesn't undo. */
   cardPayment: { amountCents: number; paidAt: string } | null;
-  /**
-   * When it was first marked completed or checked out, as the server keeps it (`completed_at`), and
-   * never sent: a booking with a card on file that was completed can't become a no-show, even after
-   * it's reopened. Missing in what an older demo kept: then only its status says.
-   */
-  completedAt?: string | null;
 }
 
 export interface DayData {

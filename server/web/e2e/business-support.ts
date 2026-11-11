@@ -11,6 +11,11 @@ export const OWNER_KEY = process.env.E2E_OWNER_KEY || 'e2e-owner-key-for-local-t
 
 const KEY_HEADERS = { Authorization: `Bearer ${OWNER_KEY}` };
 
+/** The owner API's answer as it is, refusals too (`ownerCall` expects success). */
+export function ownerFetch(request: APIRequestContext, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, data?: unknown) {
+  return request.fetch(path, { method, headers: KEY_HEADERS, ...(data !== undefined ? { data } : {}) });
+}
+
 /** The owner API with the key, as the Business app on the iPhone calls it. */
 export async function ownerCall<T>(request: APIRequestContext, method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string, data?: unknown): Promise<T> {
   const response = await request.fetch(path, { method, headers: KEY_HEADERS, ...(data !== undefined ? { data } : {}) });

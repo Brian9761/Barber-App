@@ -8,9 +8,15 @@ import type { Appointment } from '../api/types';
 /** How a sale was paid: Tap to Pay on the iPhone, cash, or another way the shop only records (Zelle, Cash App…). */
 export type SaleMethod = 'card' | 'cash' | 'other';
 
-/** An appointment as the shop sees it: with its checkout (its live sale), if any. */
+/** An appointment as the shop sees it: with its checkout (its live sale), if any, and when it was first completed. */
 export interface OwnerAppointment extends Appointment {
   sale: { id: string; totalCents: number; method: SaleMethod } | null;
+  /**
+   * When the shop first marked it completed or checked it out, or null. The server never clears it:
+   * a booking with a card on file that was completed can't become a no-show, even after it's reopened
+   * (`completed_at`). Missing from a server from before it.
+   */
+  completedAt: string | null;
 }
 
 export type SaleItemKind = 'service' | 'product' | 'custom';

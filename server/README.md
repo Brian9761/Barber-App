@@ -333,6 +333,6 @@ Contract (owner routes, all additive; a computer signed in with a code may use e
 - `GET /api/owner/sales?date=YYYY-MM-DD` (default today) → `{ date, sales (newest first, voided ones too), totals: { totalCents, count } }`; the totals leave voided sales out.
 - `POST /api/owner/sales/:id/void` with `{ reason? }` (or no body at all) → `{ sale, message }`.
 - `POST /api/owner/payments`: optional `sale` (above); 400 `amount_mismatch`. `Payment.saleId`: the card sale its success recorded (voided or not), or `null`.
-- Owner appointments gain `sale: { id, totalCents, method } | null`, the live sale; the client's own view of an appointment doesn't have it.
+- Owner appointments gain `sale: { id, totalCents, method } | null`, the live sale, and `completedAt` (when it was first marked completed or checked out, never cleared: a booking with a card on file that was completed can't become a no-show, even after it's reopened, so the website and the apps can tell before trying); the client's own view of an appointment has neither.
 - `GET /api/owner/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD[&barberId=…]` (inclusive shop-local days, both defaulting to today, at most 366 days, within 10 years of today) → `{ from, to, barberId, timeZone, generatedAt, granularity, totals, previous, productivity, topBarber, leaderboard, services, products, series, barbers }`, `Cache-Control: no-store` (see `docs/analytics.md` and `test/fixtures/contract/analytics.json`). An unknown barber is a 400.
 - New errors: 409 `not_checkoutable`, 409 `already_checked_out`, 400 `amount_mismatch`.

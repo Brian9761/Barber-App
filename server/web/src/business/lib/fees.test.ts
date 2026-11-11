@@ -12,6 +12,7 @@ import {
   appointmentBadges,
   canMarkNoShow,
   chargeableFee,
+  completedBefore,
   COMPLETED_NO_SHOW_MESSAGE,
   FEE_DEADLINE_DAYS,
   FEE_DEADLINE_MESSAGE,
@@ -158,6 +159,35 @@ describe('which fee can be charged', () => {
   it('words what the server answers when a no-show can’t be marked, as it does', () => {
     expect(NO_SHOW_BEFORE_END_MESSAGE).toBe(notStarted.error.message);
     expect(COMPLETED_NO_SHOW_MESSAGE).toBe(alreadyCompleted.error.message);
+  });
+
+  it('never offers "Mark no-show" for a booking with a card on file that was completed and reopened, and says why as the server does', () => {
+    // Marked done at 10:30 AM, then reopened: the server keeps when it was first completed, and refuses a no-show.
+    const reopened = booked({ completedAt: '2026-11-03T18:30:00Z' });
+    expect(completedBefore(reopened)).toBe(true);
+    for (const now of ['2026-11-03T18:10:00Z', '2026-11-03T18:50:00Z', '2026-11-04T18:00:00Z']) {
+      expect(canMarkNoShow(reopened, new Date(now)), now).toBe(false);
+      expect(noShowHint(reopened, new Date(now), ZONE), now).toBe(alreadyCompleted.error.message);
+      const panel = feePanel(reopened, new Date(now), ZONE)!;
+      expect(panel.status, now).toEqual({ kind: 'notCharged', note: alreadyCompleted.error.message });
+      expect(panel.action, now).toBeNull();
+      expect(panel.footer, now).toBeNull();
+    }
+    // Once the 7 days are over, that's what it says, as for any other booking.
+    expect(feePanel(reopened, new Date('2026-11-10T18:01:00Z'), ZONE)!.status).toEqual({ kind: 'notCharged', note: FEE_DEADLINE_MESSAGE });
+    // The server's own owner view of a checked-out visit says when (owner-appointments-with-sale.json): with a card, voided and reopened, the same.
+    expect(checkedOut.completedAt).toBe('2026-11-02T19:05:00Z');
+    expect(canMarkNoShow({ ...checkedOut, status: 'booked', sale: null, card: { brand: 'visa', last4: '4242' } }, new Date('2026-11-03T19:00:00Z'))).toBe(false);
+    // Without a card there's no fee, so it can still be marked as before.
+    const noCard = booked({ card: null, noShowFee: null, completedAt: '2026-11-03T18:30:00Z' });
+    expect(completedBefore(noCard)).toBe(false);
+    expect(canMarkNoShow(noCard, new Date('2026-11-03T18:50:00Z'))).toBe(true);
+    expect(noShowHint(noCard, new Date('2026-11-03T18:50:00Z'), ZONE)).toBeNull();
+    // Never completed: as before. And a server from before `completedAt` doesn't say, so only its answer does.
+    expect(canMarkNoShow(booked({ completedAt: null }), new Date('2026-11-03T18:50:00Z'))).toBe(true);
+    const { completedAt: _completedAt, ...older } = booked();
+    expect(canMarkNoShow(older as OwnerAppointment, new Date('2026-11-03T18:50:00Z'))).toBe(true);
+    expect(noShowHint(older as OwnerAppointment, new Date('2026-11-03T18:50:00Z'), ZONE)).toBeNull();
   });
 });
 

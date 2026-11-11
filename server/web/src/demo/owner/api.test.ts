@@ -283,18 +283,29 @@ describe('statuses and fees, like the server', () => {
     expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
   });
 
-  it('never makes a completed visit with a card on file a no-show, even once it’s reopened', async () => {
+  it('never makes a completed visit with a card on file a no-show, even once it’s reopened, and says when it was first completed, as the server does', async () => {
     const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+    expect(kim.completedAt).toBeNull();
     now = new Date('2026-11-04T21:00:00Z');
-    expect(await api.setStatus(kim.id, 'completed')).toMatchObject({ status: 'completed' });
+    expect(await api.setStatus(kim.id, 'completed')).toMatchObject({ status: 'completed', completedAt: '2026-11-04T21:00:00Z' });
     expect(await rejects(api.setStatus(kim.id, 'noShow'))).toEqual({ code: alreadyCompleted.error.code, status: 409, message: alreadyCompleted.error.message });
-    expect(await api.setStatus(kim.id, 'booked')).toMatchObject({ status: 'booked' });
+    // Reopened, it keeps when it was first completed (also in the day's list), so the page can tell before trying.
+    now = new Date('2026-11-04T21:05:00Z');
+    expect(await api.setStatus(kim.id, 'booked')).toMatchObject({ status: 'booked', completedAt: '2026-11-04T21:00:00Z' });
+    expect(byName(await api.appointments('2026-11-04'), 'Kim Sample').completedAt).toBe('2026-11-04T21:00:00Z');
     expect(await rejects(api.setStatus(kim.id, 'noShow'))).toMatchObject({ code: 'already_completed' });
+    expect(await api.setStatus(kim.id, 'completed')).toMatchObject({ completedAt: '2026-11-04T21:00:00Z' });
     // Nor one done on a day of history (checked out, its sale voided since).
     const lee = byName(await api.appointments('2026-11-03'), 'Lee Sample', 'israel-flores');
     expect(lee).toMatchObject({ status: 'completed' });
+    expect(lee.completedAt).not.toBeNull();
     if (lee.sale) await api.voidSale(lee.sale.id, null);
     expect(await rejects(api.setStatus(lee.id, 'noShow'))).toMatchObject({ code: 'already_completed' });
+    // What an older demo kept has no completedAt: it answers null, as a server does for one never completed.
+    const store = JSON.parse(localStorage.getItem(DEMO_BUSINESS_KEY)!) as { days: Record<string, { appointments: Record<string, unknown>[] }> };
+    for (const kept of store.days['2026-11-04']!.appointments) delete kept.completedAt;
+    localStorage.setItem(DEMO_BUSINESS_KEY, JSON.stringify(store));
+    expect((await api.appointments('2026-11-04')).every((a) => a.completedAt === null)).toBe(true);
     // Without a card on file, marking is the shop's call.
     const nate = byName(await api.appointments('2026-11-04'), 'Nate Sample');
     expect(nate.card).toBeNull();

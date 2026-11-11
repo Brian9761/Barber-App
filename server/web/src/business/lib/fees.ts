@@ -8,8 +8,9 @@
 //
 // The rules the shop's Cancellation & No-Show Policy promises: a no-show only once the
 // appointment has ended (for a booking with a card on file), never for a booking that was
-// completed, a late cancellation only more than 15 minutes after booking, and nothing
-// charged more than 7 days after the appointment.
+// completed (even reopened since: the server's `completedAt` says so), a late cancellation
+// only more than 15 minutes after booking, and nothing charged more than 7 days after the
+// appointment.
 
 import type { NoShowFee } from '../../api/types';
 import { cardLabel, windowLabel } from '../../lib/format';
@@ -171,12 +172,21 @@ export function noShowFrom(appointment: Pick<OwnerAppointment, 'start' | 'end' |
 }
 
 /**
- * Whether "Mark no-show" is offered: a booked appointment, from `noShowFrom`. (A booking with a card
- * on file that was marked completed never becomes a no-show, even once it's reopened: the server
- * says so, with `COMPLETED_NO_SHOW_MESSAGE`, since only it knows it was.)
+ * A booking with a card on file that was marked completed (or checked out) before, and reopened since:
+ * it never becomes a no-show, the client came (the server's `completedAt`, which it never clears; its
+ * 409 `already_completed`, `COMPLETED_NO_SHOW_MESSAGE`). A server from before `completedAt` doesn't
+ * say, and then only its answer does.
  */
-export function canMarkNoShow(appointment: Pick<OwnerAppointment, 'status' | 'start' | 'end' | 'card'>, now: Date): boolean {
-  return appointment.status === 'booked' && noShowFrom(appointment).getTime() <= now.getTime();
+export function completedBefore(appointment: Pick<OwnerAppointment, 'card' | 'completedAt'>): boolean {
+  return Boolean(appointment.card) && Boolean(appointment.completedAt);
+}
+
+/**
+ * Whether "Mark no-show" is offered: a booked appointment, from `noShowFrom`, unless it has a card on
+ * file and was completed before (`completedBefore`): then never, as the server refuses it.
+ */
+export function canMarkNoShow(appointment: Pick<OwnerAppointment, 'status' | 'start' | 'end' | 'card' | 'completedAt'>, now: Date): boolean {
+  return appointment.status === 'booked' && !completedBefore(appointment) && noShowFrom(appointment).getTime() <= now.getTime();
 }
 
 /** The client cancelled in the app less than the agreed window before the start, more than 15 minutes after booking: a late cancellation. */
@@ -251,6 +261,8 @@ function feeNote(appointment: OwnerAppointment, now: Date): string | null {
   if (appointment.noShowFee?.customerCancelledAt || found.message === FEE_DEADLINE_MESSAGE) return found.message;
   switch (appointment.status) {
     case 'booked':
+      // Completed before and reopened: it can't become a no-show, so there's no fee to charge.
+      if (completedBefore(appointment)) return COMPLETED_NO_SHOW_MESSAGE;
       return new Date(appointment.end).getTime() > now.getTime()
         ? "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee."
         : "If the client didn't come, mark a no-show. Then you can charge the fee.";
@@ -387,10 +399,13 @@ export function reopenWarning(appointment: OwnerAppointment, now: Date): string 
 /**
  * Under the status buttons of a booked appointment that can't be marked a no-show yet: when "Mark
  * no-show" shows. With a card on file, once it ends (until the start the client can still cancel
- * in the app, and a client who comes before the end isn't a no-show); without, once it starts.
+ * in the app, and a client who comes before the end isn't a no-show); without, once it starts. One
+ * with a card on file that was completed before never can, and says so in the server's words.
  */
 export function noShowHint(appointment: OwnerAppointment, now: Date, zone: string): string | null {
-  if (appointment.status !== 'booked' || canMarkNoShow(appointment, now)) return null;
+  if (appointment.status !== 'booked') return null;
+  if (completedBefore(appointment)) return COMPLETED_NO_SHOW_MESSAGE;
+  if (canMarkNoShow(appointment, now)) return null;
   const from = noShowFrom(appointment);
   const today = localDate(now, zone) === localDate(from, zone);
   const when = today ? `at ${timeLabel(from, zone)}` : `on ${dateTimeLabel(from, zone)}`;

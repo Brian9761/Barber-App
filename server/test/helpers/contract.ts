@@ -43,9 +43,10 @@ export const Appointment = z.strictObject({
     .nullable(),
 });
 
-/** The owner's view of an appointment: the client's view plus its checkout (live sale). */
+/** The owner's view of an appointment: the client's view plus its checkout (live sale), and when it was first completed (never cleared). */
 export const OwnerAppointment = Appointment.extend({
   sale: z.strictObject({ id, totalCents: int.min(0).max(1_000_000), method: z.enum(['card', 'cash', 'other']) }).nullable(),
+  completedAt: instant.nullable(),
 });
 
 export const Slot = z.strictObject({ start: instant, barberIds: z.array(id) });

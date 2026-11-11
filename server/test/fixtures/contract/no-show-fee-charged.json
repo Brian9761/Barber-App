@@ -38,6 +38,7 @@
       "lateCancelWindowMinutes": 60,
       "reason": "noShow"
     },
-    "sale": null
+    "sale": null,
+    "completedAt": null
   }
 }

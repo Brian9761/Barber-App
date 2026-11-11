@@ -151,9 +151,13 @@ function pause(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-/** An appointment as the API answers it: without what only the demo keeps, and with its fee's reason now. */
+/**
+ * An appointment as the API answers it: without what only the demo keeps, with when it was first
+ * completed (null in what an older demo kept), and with its fee's reason now.
+ */
 function answered(appointment: DemoAppointment): OwnerAppointment {
-  const { priceCents: _price, cardPayment: _card, completedAt: _completed, ...rest } = appointment;
+  const { priceCents: _price, cardPayment: _card, ...kept } = appointment;
+  const rest: OwnerAppointment = { ...kept, completedAt: kept.completedAt ?? null };
   const fee = rest.noShowFee;
   if (!fee) return structuredClone(rest);
   let reason: FeeReason | null = fee.status !== 'none' && fee.reason ? fee.reason : null;
