@@ -150,7 +150,7 @@ final class SessionTests: XCTestCase {
         let checkout = workspace.checkout
         server.options.offline = false
 
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         XCTAssertEqual(checkout.phase, .editing)
         XCTAssertEqual(checkout.validationMessage, "Still checking whether card payments are set up. Try again in a moment.")
@@ -177,7 +177,7 @@ final class SessionTests: XCTestCase {
         let checkout = workspace.checkout
         let checks = server.calls.filter { $0 == "ownerStatus" }.count
 
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         XCTAssertEqual(checkout.validationMessage, CheckoutModel.stillCheckingMessage)
         let checked = await eventually {
@@ -200,7 +200,7 @@ final class SessionTests: XCTestCase {
         let workspace = try XCTUnwrap(model.workspace)
         let checkout = workspace.checkout
 
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         XCTAssertEqual(checkout.validationMessage, CheckoutModel.stillCheckingMessage)
         let clearedEarly = await eventually(timeout: 0.2) { checkout.validationMessage == nil }

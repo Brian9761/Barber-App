@@ -37,7 +37,7 @@ final class CheckoutModelTests: XCTestCase {
     }
 
     private func charge(_ checkout: CheckoutModel, cents: Int) async {
-        checkout.entry = AmountEntry(cents: cents)
+        checkout.ring(cents)
         checkout.charge()
         await checkout.waitUntilSettled()
     }
@@ -47,8 +47,9 @@ final class CheckoutModelTests: XCTestCase {
     func testHappyPathMarksTheAppointmentPaidOnlyAfterTheServerSaysSucceeded() async throws {
         let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
         let checkout = makeCheckout()
-        XCTAssertTrue(checkout.prefill(.init(appointment: andre, catalog: .izzyClipz)))
-        XCTAssertEqual(checkout.entry.cents, 5500, "Izzy's Haircut & Beard is a fixed $55")
+        XCTAssertTrue(checkout.start(for: andre))
+        XCTAssertEqual(checkout.amountCents, 5500, "Izzy's Haircut & Beard is a fixed $55")
+        XCTAssertEqual(checkout.ticket.barberId, "israel-flores", "Sold by the appointment's barber")
         checkout.charge()
         await checkout.waitUntilSettled()
 
@@ -64,11 +65,16 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertTrue(pending.entries.isEmpty, "A confirmed payment is no longer pending")
         XCTAssertNil(checkout.active)
 
+        // The card sale was recorded with the payment, checking Andre out.
+        XCTAssertEqual(receipt.sale?.summary, "Sold $55 · Card · Izzy")
+        XCTAssertEqual(harness.appointment(named: "Andre Sample")?.sale?.method, .card)
+        XCTAssertEqual(harness.server.sales.last?.paymentIntentId, receipt.paymentIntentId)
+
         checkout.reset()
         XCTAssertEqual(checkout.phase, .editing)
-        XCTAssertEqual(checkout.entry.cents, 0)
-        XCTAssertNil(checkout.appointment)
-        XCTAssertEqual(checkout.receiptEmail, "")
+        XCTAssertEqual(checkout.amountCents, 0)
+        XCTAssertNil(checkout.ticket.appointment)
+        XCTAssertTrue(checkout.ticket.isEmpty)
     }
 
     func testTheRequestCarriesTheAmountNoteAndAppointment() async throws {
@@ -79,15 +85,37 @@ final class CheckoutModelTests: XCTestCase {
             return try await api!.base.createPayment(request)
         }
         let checkout = makeCheckout()
-        checkout.prefill(.init(appointment: andre, catalog: .izzyClipz))
-        checkout.entry = AmountEntry(cents: 6000)
+        checkout.start(for: andre)
+        let haircut = try XCTUnwrap(checkout.ticket.items.first)
+        checkout.ticket.setPrice(6000, of: haircut.id)
         checkout.note = "  Plus a tip  "
         checkout.charge()
         await checkout.waitUntilSettled()
         XCTAssertEqual(sent?.amountCents, 6000)
         XCTAssertEqual(sent?.appointmentId, andre.id)
-        XCTAssertEqual(sent?.description, "Plus a tip")
-        XCTAssertNil(sent?.receiptEmail)
+        XCTAssertEqual(sent?.description, "Plus a tip", "A note the owner types goes as typed")
+        XCTAssertNil(sent?.receiptEmail, "No email before the payment")
+        // The ticket goes with it, so the server records the sale once the card goes through.
+        XCTAssertEqual(sent?.sale?.appointmentId, andre.id)
+        XCTAssertEqual(sent?.sale?.barberId, "israel-flores")
+        XCTAssertEqual(sent?.sale?.items, [.service("haircut-and-beard", unitCents: 6000)])
+        XCTAssertEqual(sent?.sale?.totalCents, 6000)
+    }
+
+    func testTheDefaultDescriptionNamesTheServiceAndBarberButNeverTheClient() async throws {
+        let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        var sent: IzzyAPI.NewPayment?
+        api.createPaymentHandler = { [api] request in
+            sent = request
+            return try await api!.base.createPayment(request)
+        }
+        let checkout = makeCheckout()
+        checkout.start(for: andre)
+        checkout.charge()
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(sent?.description, "Haircut & Beard with Izzy")
+        XCTAssertFalse(sent?.description?.contains("Andre") ?? true, "Stripe keeps descriptions: no client names")
+        XCTAssertEqual(sent?.sale?.customerName, "Andre Sample", "The sale (the shop's own records) keeps the client's name")
     }
 
     // MARK: Only "succeeded" is paid
@@ -103,7 +131,7 @@ final class CheckoutModelTests: XCTestCase {
 
         // Back to the amount and a second tap: no new PaymentIntent while the first is unknown.
         checkout.backToEditing()
-        checkout.entry = AmountEntry(cents: 9900)
+        checkout.ring(9900)
         checkout.charge()
         await checkout.waitUntilSettled()
         guard case .outcomeUnknown = checkout.phase else { return XCTFail("A new charge started before the last one was checked") }
@@ -183,7 +211,7 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(checkout.phase, .cancelled)
         checkout.backToEditing()
         XCTAssertEqual(checkout.phase, .editing)
-        XCTAssertEqual(checkout.entry.cents, 2000, "The amount stays")
+        XCTAssertEqual(checkout.amountCents, 2000, "The amount stays")
 
         terminal.automaticOutcome = .approve
         checkout.charge()
@@ -211,7 +239,7 @@ final class CheckoutModelTests: XCTestCase {
 
     func testTwoQuickTapsStartOnePayment() async {
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 3500)
+        checkout.ring(3500)
         checkout.charge()
         checkout.charge()
         checkout.charge()
@@ -227,7 +255,7 @@ final class CheckoutModelTests: XCTestCase {
             return try await api!.base.payments(on: day)
         }
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 3500)
+        checkout.ring(3500)
         checkout.charge()
         let paid = await eventually { if case .succeeded = checkout.phase { return true } else { return false } }
         XCTAssertTrue(paid, "Got \(checkout.phase)")
@@ -236,7 +264,7 @@ final class CheckoutModelTests: XCTestCase {
         checkout.reset()
 
         // The next customer: Tap to Pay on iPhone starts their payment straight away.
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         let started = await eventually(timeout: 2) { checkout.phase != .editing }
         XCTAssertTrue(started, "Tap to Pay on iPhone did nothing while the list was loading")
@@ -277,7 +305,7 @@ final class CheckoutModelTests: XCTestCase {
             return try lateAnswer(payments)
         }
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 3500)
+        checkout.ring(3500)
         checkout.charge()
         let firstReload = await eventually { reloads == 1 }
         XCTAssertTrue(firstReload, "Got \(checkout.phase)")
@@ -372,7 +400,7 @@ final class CheckoutModelTests: XCTestCase {
     func testCancelWhileTapToPayGetsReady() async {
         terminal = SimulatedPaymentTerminal(automaticOutcome: .approve, stepDelay: .milliseconds(200))
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         let preparing = await eventually { checkout.phase == .preparing }
         XCTAssertTrue(preparing)
@@ -387,7 +415,7 @@ final class CheckoutModelTests: XCTestCase {
         // payment up, then the customer taps): Cancel works all that time.
         terminal.stepDelay = .milliseconds(300)
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         let collecting = await eventually { checkout.phase == .collecting }
         XCTAssertTrue(collecting, "Got \(checkout.phase)")
@@ -408,9 +436,24 @@ final class CheckoutModelTests: XCTestCase {
     func testAmountsOutsideTheServersRangeAreExplained() async {
         let checkout = makeCheckout()
         await charge(checkout, cents: 49)
-        XCTAssertEqual(checkout.validationMessage, Money.allowedRangeText)
+        XCTAssertEqual(checkout.validationMessage, Money.cardRangeText)
+        XCTAssertTrue(Money.cardRangeText.contains("$0.50 to $1,000.00"))
         await charge(checkout, cents: 100_001)
-        XCTAssertEqual(checkout.validationMessage, Money.allowedRangeText)
+        XCTAssertEqual(checkout.validationMessage, Money.cardRangeText)
+        XCTAssertEqual(api.createdPayments, 0)
+    }
+
+    func testAnEmptyTicketOrOneWithoutABarberIsExplained() async {
+        let checkout = makeCheckout()
+        checkout.ticket = CheckoutTicket(barberId: "israel-flores")
+        checkout.charge()
+        XCTAssertEqual(checkout.validationMessage, "Add a service, a product or an amount first.")
+        checkout.ticket = CheckoutTicket()
+        checkout.ticket.addAmount(2000, name: "")
+        checkout.charge()
+        XCTAssertEqual(checkout.validationMessage, "Pick who gets credit for this sale, under Sold by.")
+        checkout.chooseBarber("julian-ramos")
+        XCTAssertNil(checkout.validationMessage, "Picking a barber clears it")
         XCTAssertEqual(api.createdPayments, 0)
     }
 
@@ -422,48 +465,92 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(api.createdPayments, 0)
     }
 
-    func testABadReceiptEmailIsCaughtBeforeCharging() async {
+    // MARK: Email a receipt (after the payment only)
+
+    func testAReceiptIsOfferedOnlyAfterTheCardWentThroughAndTheAddressIsntKept() async throws {
         let checkout = makeCheckout()
-        checkout.receiptEmail = "client at example"
         await charge(checkout, cents: 2000)
-        XCTAssertEqual(checkout.phase, .editing)
-        XCTAssertNotNil(checkout.validationMessage)
-        XCTAssertEqual(api.createdPayments, 0)
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertTrue(receipt.offersReceiptEmail)
+        XCTAssertNil(harness.server.payments.last?.receiptEmail, "Nothing was asked before the card")
+
+        await checkout.emailReceipt(to: "client at example")
+        XCTAssertEqual(checkout.receiptEmailState, .failed("Check the email address: it should look like name@example.com."))
+        XCTAssertEqual(harness.server.receiptsSent, 0)
+
+        await checkout.emailReceipt(to: "  client@example.com ")
+        XCTAssertEqual(checkout.receiptEmailState, .sent)
+        XCTAssertEqual(harness.server.receiptsSent, 1, "Stripe emails it")
+        XCTAssertNil(harness.server.payments.last?.receiptEmail, "The address isn't kept")
+        XCTAssertFalse(String(describing: checkout.receiptEmailState).contains("example.com"), "Nor in the app")
+
+        checkout.reset()
+        XCTAssertEqual(checkout.receiptEmailState, .idle)
         XCTAssertTrue(CheckoutModel.looksLikeEmail("a.b@example.co"))
         XCTAssertFalse(CheckoutModel.looksLikeEmail("a@b"))
         XCTAssertFalse(CheckoutModel.looksLikeEmail("a@@b.com"))
         XCTAssertFalse(CheckoutModel.looksLikeEmail("a b@c.com"))
     }
 
-    func testPrefillUsesOnlyFixedCatalogPrices() throws {
+    func testNoReceiptIsOfferedForPracticeOrStripeTestKeys() async {
+        let practicing = makeCheckout()
+        practicing.startPractice()
+        await charge(practicing, cents: 2000)
+        guard case .succeeded(let practice) = practicing.phase else { return XCTFail("Got \(practicing.phase)") }
+        XCTAssertFalse(practice.offersReceiptEmail, "Nothing went to Stripe")
+        XCTAssertNil(practice.sale, "…and nothing was recorded")
+
+        let testKeys = makeCheckout(stripe: .init(configured: true, mode: .test, locationId: "tml_1"), sampleServer: false, deviceSupported: true)
+        await charge(testKeys, cents: 2000)
+        guard case .succeeded(let receipt) = testKeys.phase else { return XCTFail("Got \(testKeys.phase)") }
+        XCTAssertFalse(receipt.offersReceiptEmail, "Stripe doesn't email receipts in test mode")
+    }
+
+    func testAReceiptStripeTurnsDownSaysWhy() async {
+        let checkout = makeCheckout()
+        await charge(checkout, cents: 2000)
+        harness.server.options.offline = true
+        await checkout.emailReceipt(to: "client@example.com")
+        XCTAssertEqual(checkout.receiptEmailState, .failed(ErrorText.message(for: APIError.offline)))
+    }
+
+    // MARK: Checking out an appointment
+
+    func testCheckingOutAnAppointmentAddsItsServiceAtItsPrice() throws {
         let catalog = Catalog.izzyClipz
         let lightener = try XCTUnwrap(catalog.offerings.first { $0.serviceID == "lightener" })
         let eyebrows = try XCTUnwrap(catalog.offerings.first { $0.serviceID == "eyebrows" })
         let server = harness.server
         let from = server.makeAppointment(offering: lightener, start: TestClock.at(15), customer: .init(name: "A Sample"))
         let included = server.makeAppointment(offering: eyebrows, start: TestClock.at(16), customer: .init(name: "B Sample"))
-        let fromContext = CheckoutModel.AppointmentContext(appointment: from, catalog: catalog)
-        XCTAssertNil(fromContext.suggestedCents, "\"From $80\" isn't the final price")
-        XCTAssertEqual(fromContext.priceLabel, "From $80")
-        XCTAssertNil(CheckoutModel.AppointmentContext(appointment: included, catalog: catalog).suggestedCents)
 
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 1234)
-        checkout.prefill(fromContext)
-        XCTAssertEqual(checkout.entry.cents, 0, "No price is guessed")
-        XCTAssertTrue(fromContext.title.contains("A Sample"))
+        checkout.ring(1234)
+        XCTAssertTrue(checkout.start(for: from))
+        XCTAssertEqual(checkout.ticket.appointment?.clientName, "A Sample")
+        XCTAssertEqual(checkout.ticket.appointment?.priceLabel, "From $80")
+        XCTAssertEqual(checkout.ticket.barberId, lightener.barberID)
+        XCTAssertEqual(checkout.ticket.items.count, 1, "The ticket from before is replaced")
+        let item = try XCTUnwrap(checkout.ticket.items.first)
+        XCTAssertEqual(item.unitCents, 8000, "At the price it was booked at")
+        XCTAssertTrue(item.startsAtThisPrice, "\"From $80\": the owner checks the final price")
+        XCTAssertEqual(item.kind, .service(id: "lightener"))
+
+        checkout.start(for: included)
+        XCTAssertEqual(checkout.amountCents, 0, "Included with a cut: $0")
+        XCTAssertEqual(checkout.ticket.customerName, "B Sample")
     }
 
-    func testPrefillWaitsForARunningPayment() async throws {
+    func testCheckingOutWaitsForARunningPayment() async throws {
         terminal.automaticOutcome = nil
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         let waiting = await eventually { self.terminal.pendingTap != nil }
         XCTAssertTrue(waiting)
         let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
-        XCTAssertFalse(checkout.prefill(.init(appointment: andre, catalog: .izzyClipz)))
-        XCTAssertEqual(checkout.entry.cents, 2000)
+        XCTAssertFalse(checkout.start(for: andre))
+        XCTAssertEqual(checkout.amountCents, 2000)
         terminal.choose(.customerCancels)
         await checkout.waitUntilSettled()
         XCTAssertEqual(checkout.phase, .cancelled)
@@ -472,7 +559,7 @@ final class CheckoutModelTests: XCTestCase {
     func testCancelDuringTheTapStopsWithoutCharging() async {
         terminal.automaticOutcome = nil
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         let waiting = await eventually { checkout.phase == .collecting && self.terminal.pendingTap != nil }
         XCTAssertTrue(waiting)
@@ -487,7 +574,7 @@ final class CheckoutModelTests: XCTestCase {
         let server = harness.server
         terminal.onApproved = { server.cardApproved(clientSecret: $0) }
         let checkout = makeCheckout()
-        checkout.entry = AmountEntry(cents: 2000)
+        checkout.ring(2000)
         checkout.charge()
         let waiting = await eventually { self.terminal.pendingTap != nil }
         XCTAssertTrue(waiting)
@@ -560,7 +647,7 @@ final class CheckoutModelTests: XCTestCase {
         let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
         terminal.automaticOutcome = nil
         let checkout = makeCheckout()
-        checkout.prefill(.init(appointment: andre, catalog: .izzyClipz))
+        checkout.start(for: andre)
         checkout.charge()
         let waiting = await eventually { self.terminal.pendingTap != nil }
         XCTAssertTrue(waiting)

@@ -45,6 +45,8 @@ final class Workspace {
     let stripeConnection: StripeConnectionStore
     /// Settings → Use on a computer: sign-in codes and the computers signed in.
     let computers: ComputerAccessStore
+    /// Take payment → Today's sales, and voiding one.
+    let sales: SalesStore
 
     private static let setUpKey = "hasSetUpTapToPay"
     fileprivate static let educationKey = "hasSeenHowToTap"
@@ -67,7 +69,9 @@ final class Workspace {
             practiceTerminal: environment.practiceTerminal,
             pending: PendingPayments(defaults: environment.defaults),
             usesSampleServer: environment.usesSampleServer,
-            deviceSupportsTapToPay: environment.deviceSupportsTapToPay
+            deviceSupportsTapToPay: environment.deviceSupportsTapToPay,
+            catalog: environment.catalog,
+            defaults: environment.defaults
         )
         self.products = ProductsStore(api: api)
         self.noShow = NoShowSettingsStore(api: api, catalog: environment.catalog)
@@ -75,6 +79,8 @@ final class Workspace {
         self.computers = ComputerAccessStore(
             api: api, siteAddress: environment.businessSiteAddress, shopTime: environment.shopTime, clock: environment.clock
         )
+        let sales = SalesStore(api: api, shopTime: environment.shopTime, clock: environment.clock)
+        self.sales = sales
         checkout.update(stripe: status?.stripe, connection: status?.connection)
         checkout.onPaid = { [weak schedule] _ in
             Task { await schedule?.refresh() }
@@ -95,6 +101,18 @@ final class Workspace {
         // Connected, finished or disconnected in Settings: Take payment and Tap to Pay read the new status.
         stripeConnection.onChange = { [weak self] in
             Task { await self?.refreshStatus() }
+        }
+        // A sale saved (cash, other, or a card payment with its ticket): Today's sales and the
+        // schedule (the appointment is checked out) change.
+        checkout.onSaleRecorded = { [weak sales, weak schedule] in
+            Task {
+                await sales?.refresh()
+                await schedule?.refresh()
+            }
+        }
+        // A voided sale's appointment can be checked out again.
+        sales.onVoided = { [weak schedule] _ in
+            Task { await schedule?.refresh() }
         }
         #if canImport(StripeTerminal)
         if case .live = environment.backend {
@@ -233,12 +251,26 @@ final class Workspace {
 
     // MARK: Navigation
 
-    /// Take payment for an appointment: switches to the Take payment tab
-    /// with its price filled in. `false` while another payment is running.
+    /// Check out an appointment: switches to Take payment with its ticket (its client, sold by its
+    /// barber, its service at its price). `false` while another payment is running.
     @discardableResult
-    func takePayment(for appointment: IzzyAPI.Appointment) -> Bool {
-        let context = CheckoutModel.AppointmentContext(appointment: appointment, catalog: environment.catalog)
-        guard checkout.prefill(context) else { return false }
+    func checkOut(_ appointment: IzzyAPI.Appointment) -> Bool {
+        guard checkout.start(for: appointment) else { return false }
+        checkoutsStarted += 1
+        selectedTab = .payment
+        return true
+    }
+
+    /// Bumped by every checkout started from elsewhere, so Take payment shows its ticket (not a
+    /// sale it had open).
+    private(set) var checkoutsStarted = 0
+
+    /// Something extra for a client whose appointment is already paid: a walk-in ticket with their
+    /// name, sold by their barber. `false` while another payment is running.
+    @discardableResult
+    func checkOutExtra(for appointment: IzzyAPI.Appointment) -> Bool {
+        guard checkout.startExtra(for: appointment) else { return false }
+        checkoutsStarted += 1
         selectedTab = .payment
         return true
     }
