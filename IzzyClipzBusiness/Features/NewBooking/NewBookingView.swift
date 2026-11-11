@@ -304,10 +304,10 @@ private struct BookedSheet: View {
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
                 Spacer()
-                Button("Take payment") {
+                Button("Check out") {
                     let item = appointment
                     dismiss()
-                    workspace.takePayment(for: item)
+                    workspace.checkOut(item)
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("bookedTakePayment")

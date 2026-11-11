@@ -304,7 +304,10 @@ struct AppointmentBadges: Equatable {
             text: appointment.isCancelledLate ? "Cancelled late" : appointment.status.title,
             tone: .status(appointment.status)
         )]
-        if appointment.payment.status == .paid {
+        if let sale = appointment.sale {
+            // Checked out: "Paid $60 · Cash".
+            items.append(Item(text: sale.paidLabel, tone: .paid))
+        } else if appointment.payment.status == .paid {
             items.append(Item(text: appointment.payment.amountCents.map { "Paid \(Money.amount($0))" } ?? "Paid", tone: .paid))
         }
         if let fee = appointment.noShowFee {
@@ -331,7 +334,8 @@ struct AppointmentBadges: Equatable {
     var spoken: [String] { items.map(\.spoken) }
 }
 
-/// The Payment section of an appointment's details: the service's payment, and a fee charged to the
+/// The Payment section of an appointment's details: its checkout ("Paid $60 · Cash"), or the
+/// service's payment, and a fee charged to the
 /// card on file said apart from it. "Not paid yet $35" right under "No-show fee charged: $35" could
 /// be read as the fee not having gone through, or as the price still owed and taken at the counter.
 struct PaymentSummary: Equatable {
@@ -345,7 +349,11 @@ struct PaymentSummary: Equatable {
     init(appointment: IzzyAPI.Appointment) {
         let fee = appointment.noShowFee
         let feeCharged = fee?.status == .charged
-        if appointment.payment.status == .paid {
+        if let sale = appointment.sale {
+            // Checked out: "$60 · Cash".
+            title = "Paid"
+            value = "\(Price.currencyString(cents: sale.totalCents)) · \(sale.method.title)"
+        } else if appointment.payment.status == .paid {
             title = "Paid"
             value = appointment.payment.amountCents.map(Money.amount) ?? "Yes"
         } else {

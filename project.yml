@@ -133,9 +133,11 @@ targets:
         IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
         # YES only in the demo version (IZZY_DEMO_MODE below).
         IzzyDemoMode: $(IZZY_DEMO_MODE)
+        # The shop's website, for Settings → Legal (IZZY_WEBSITE_URL below).
+        IzzyWebsiteURL: $(IZZY_WEBSITE_URL)
         NSBluetoothAlwaysUsageDescription: Stripe's card payment software can also work with Bluetooth card readers, so iOS asks every app that includes it to explain Bluetooth. Izzy Clipz Business takes cards with Tap to Pay on iPhone and doesn't connect to Bluetooth devices.
         NSCameraUsageDescription: Take photos of the shop's products to show them in the Izzy Clipz app.
-        NSLocationWhenInUseUsageDescription: Card networks require the location of every card payment, so Stripe checks this iPhone's location while you take a payment with Tap to Pay on iPhone.
+        NSLocationWhenInUseUsageDescription: Stripe needs to know where card payments are taken, to reduce fraud and disputes, so it checks this iPhone's location while you take a payment with Tap to Pay on iPhone. Without it, Tap to Pay is turned off.
         NSPhotoLibraryUsageDescription: Choose photos of the shop's products to show them in the Izzy Clipz app.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
@@ -153,6 +155,9 @@ targets:
       path: IzzyClipzBusiness/IzzyClipzBusiness.entitlements
       properties:
         com.apple.developer.proximity-reader.payment.acceptance: true
+        # Apple's Declared Age Range (IzzyClipzBusiness/App/AgeCheck.swift), which California law asks
+        # of every app from January 1, 2027.
+        com.apple.developer.declared-age-range: true
     settings:
       base:
         PRODUCT_NAME: IzzyClipzBusiness
@@ -167,6 +172,10 @@ targets:
         # The demo version, signed in on the sample server (IzzyClipzBusiness/App/DemoMode.swift).
         # Only the test builds set YES (.github/workflows/test-builds.yml).
         IZZY_DEMO_MODE: NO
+        # The website Settings → Legal opens (the Privacy Policy, Terms of Service, Cancellation &
+        # No-Show Policy and Accessibility pages): the current public site, until the shop's own
+        # domain replaces it here (IzzyClipzBusiness/Support/Website.swift).
+        IZZY_WEBSITE_URL: https://izzy-clipz.vercel.app
 
   IzzyClipzBusinessTests:
     type: bundle.unit-test

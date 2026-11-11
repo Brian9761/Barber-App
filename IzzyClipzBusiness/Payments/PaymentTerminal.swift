@@ -1,4 +1,5 @@
 import Foundation
+import IzzyClipzKit
 
 /// A card reader the app can take a payment with: Tap to Pay on iPhone
 /// through Stripe Terminal (`StripeTapToPayTerminal`), or a stand-in that
@@ -106,6 +107,8 @@ struct TerminalIssue: Equatable, Sendable {
     let message: String
     /// Whether trying again later might work without changing anything.
     var canRetry = true
+    /// The owner fixes it in Settings → Card payments (Stripe): Take payment offers to go there.
+    var fixInSettings = false
 }
 
 /// What happened to a PaymentIntent the terminal processed. Only the server's
@@ -175,6 +178,38 @@ extension TerminalIssue {
         message: "The shop's Stripe account isn't connected to the server yet, so cards can't be charged. Add STRIPE_SECRET_KEY on the server, then come back. You can practice in test mode meanwhile.",
         canRetry: true
     )
+
+    /// The server takes card payments through the shop's own Stripe account (Stripe Connect), and
+    /// that account can't take them yet: connect it, or finish setting it up, in Settings.
+    static func stripeNotConnected(_ status: IzzyAPI.StripeConnection.Status) -> TerminalIssue {
+        let meanwhile = "You can still record cash and other payments, or practice in test mode."
+        switch status {
+        case .needsInfo:
+            return TerminalIssue(
+                title: "Finish setting up Stripe",
+                message: "Stripe needs a few more details before you can take cards. Tap Go to Settings, then Finish setting up. \(meanwhile)",
+                fixInSettings: true
+            )
+        case .pending:
+            return TerminalIssue(
+                title: "Stripe is checking your details",
+                message: "This usually takes a few minutes, and card payments start by themselves once Stripe is done. \(meanwhile)",
+                fixInSettings: true
+            )
+        case .restricted:
+            return TerminalIssue(
+                title: "Stripe paused card payments",
+                message: "Stripe needs something from you before cards work again. Tap Go to Settings, then Finish setting up. \(meanwhile)",
+                fixInSettings: true
+            )
+        case .notConnected, .active, .direct, .off, .unknown:
+            return TerminalIssue(
+                title: "Connect Stripe to take cards",
+                message: "Card payments go straight to the shop's own Stripe account. Tap Go to Settings, then Connect Stripe: it takes a few minutes. \(meanwhile)",
+                fixInSettings: true
+            )
+        }
+    }
 
     static let locationMissing = TerminalIssue(
         title: "Tap to Pay needs the shop's Stripe location",

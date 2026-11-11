@@ -7,8 +7,9 @@ import Foundation
 /// project.yml; the test builds set YES), which Info.plist passes on as `IzzyDemoMode`. The demo
 /// starts signed in with the sample owner key on `FakeServer`, with the real clock, and takes
 /// payments with the simulated reader ("Test mode — no real charge": no card is read and no money
-/// moves). Settings says it's the demo. Like the sample server, it forgets everything when the app
-/// closes.
+/// moves). The shop's Stripe account starts not connected, so Settings → Connect Stripe can be
+/// tried: a pretend Stripe step that connects a sample account after a moment. Settings says it's
+/// the demo. Like the sample server, it forgets everything when the app closes.
 enum DemoMode {
     /// The Info.plist key: `$(IZZY_DEMO_MODE)`, so "YES" in the demo version and "NO" in every
     /// other build.
@@ -44,6 +45,11 @@ enum DemoMode {
     static let serverLatency: Duration = .milliseconds(250)
     /// How long each step of the simulated reader takes (getting ready, reading the test card).
     static let readerStepDelay: Duration = .milliseconds(500)
+    /// How long the pretend Stripe step takes after Connect Stripe.
+    static let stripeWindowDelay: Duration = .milliseconds(1_200)
+
+    /// Under Settings → Card payments (Stripe) in the demo.
+    static let stripeNotice = "Demo version: Connect Stripe connects a sample account. No real Stripe account is used."
 
     /// The demo's environment: the sample server and the simulated reader with the real clock,
     /// signed in with the sample owner key.
@@ -52,7 +58,11 @@ enum DemoMode {
         let environment = AppEnvironment.sample(arguments: [LaunchArgument.signedIn], fixedClock: false, stepDelay: readerStepDelay)
         if case .sample(let server) = environment.backend {
             server.options.latency = serverLatency
+            server.options.stripeAccount = .none
         }
+        environment.stripeWindowDelay = stripeWindowDelay
+        // Like the real app: iOS's age range, where a law requires it (AgeCheck).
+        environment.asksForAgeRange = true
         return environment
     }
 }

@@ -38,7 +38,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         screenshot("O01-Sign-In")
         signIn(with: ownerKey)
         XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 15), "Signing in didn't open the schedule")
-        for tab in ["Schedule", "New booking", "Take payment", "Products", "Settings"] {
+        for tab in ["Schedule", "New booking", "Take payment", "Analytics", "Settings"] {
             XCTAssertTrue(tabButton(tab).exists, "Missing the \(tab) tab")
         }
         XCTAssertTrue(element("appointment-Andre Sample").waitForExistence(timeout: 10))
@@ -80,7 +80,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(andre.waitForExistence(timeout: 10))
         XCTAssertTrue(andre.label.contains("11:30 AM"), "Got: \(andre.label)")
         XCTAssertTrue(andre.label.contains("Haircut & Beard with Izzy"))
-        XCTAssertTrue(element("appointment-Marcus Sample").label.contains("Paid $40.00"), "Marcus paid for his cut")
+        XCTAssertTrue(element("appointment-Marcus Sample").label.contains("Paid $40 · Card"), "Marcus paid for his cut by card")
         XCTAssertTrue(element("timeOff-Lunch").exists, "Flowxbori's lunch is blocked")
         XCTAssertTrue(app.staticTexts["Today"].exists)
         screenshot("O03-Schedule")
@@ -133,7 +133,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tapDialogButton("Cancel appointment", identifier: "confirmCancelAppointment")
         XCTAssertTrue(statusShows("Cancelled"))
         XCTAssertTrue(reveal("detailPayment").label.contains("Not paid yet"))
-        XCTAssertFalse(element("takePaymentForAppointment").exists, "No payment for a cancelled appointment")
+        XCTAssertFalse(element("checkOutAppointment").exists, "No checkout for a cancelled appointment")
 
         app.navigationBars.buttons.element(boundBy: 0).tap()
         XCTAssertTrue(waitForLabel(element("appointment-Andre Sample"), containing: "Cancelled"))
@@ -250,17 +250,21 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     // MARK: Take payment
 
+    /// Check out Andre from the schedule and take his card with the simulated reader: the ticket has
+    /// his Haircut & Beard at $55, sold by Izzy, and the card sale checks him out.
     func testTakePaymentForAnAppointmentWithTheSimulatedReader() {
         launch()
         tap("appointment-Andre Sample")
-        tap("takePaymentForAppointment")
+        tap("checkOutAppointment")
         XCTAssertTrue(waitUntil(tabButton("Take payment"), toMatch: NSPredicate(format: "isSelected == true")), "Didn't switch to Take payment")
         let amount = element("paymentAmount")
         XCTAssertTrue(amount.waitForExistence(timeout: 10))
         XCTAssertEqual(amount.value as? String, "55 dollars", "Izzy's Haircut & Beard is $55")
         XCTAssertTrue(element("paymentAppointment").exists)
+        XCTAssertTrue(element("ticketItem-Haircut & Beard").exists, "The appointment's service is on the ticket")
+        XCTAssertTrue(element("soldBy-Izzy").isSelected, "Sold by the appointment's barber")
         XCTAssertTrue(element("testModeBanner").exists, "Test mode is labelled")
-        let button = element("tapToPayButton")
+        let button = reveal("tapToPayButton")
         XCTAssertEqual(button.label, "Tap to Pay on iPhone")
         screenshot("O10-Take-Payment")
 
@@ -273,27 +277,31 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(paid.waitForExistence(timeout: 15), "No result")
         XCTAssertEqual(paid.label, "Test payment approved")
         XCTAssertTrue(app.staticTexts["$55.00. Test mode: no card was charged."].exists)
+        XCTAssertTrue(waitForLabel(element("saleReceiptLine"), containing: "Sold $55 · Card · Izzy"), "The sale went with the payment")
+        XCTAssertTrue(element("emailReceipt").exists, "A receipt is offered once the card went through")
         screenshot("O12-Paid")
         tap("paymentDone")
         XCTAssertTrue(waitForDisappearance(of: paid))
         XCTAssertEqual(element("paymentAmount").value as? String, "0 dollars", "Ready for the next customer")
+        XCTAssertTrue(reveal("sale-Andre Sample").label.contains("Card"), "Today's sales lists it")
 
         tap("paymentsTodayLink")
         XCTAssertTrue(waitForLabel(element("paymentsTotal"), containing: "$95.00"), "Marcus's $40 and Andre's $55")
         screenshot("O13-Payments-Today")
 
-        // The schedule still shows Andre's details: they're paid now.
+        // The schedule still shows Andre's details: he's checked out now.
         openTab("Schedule")
         XCTAssertTrue(app.navigationBars["Appointment"].waitForExistence(timeout: 10), "The schedule lost Andre's details")
-        XCTAssertTrue(waitForLabel(reveal("detailPayment"), containing: "$55.00"), "The appointment shows the payment")
+        XCTAssertTrue(waitForLabel(reveal("detailPayment"), containing: "$55 · Card"), "The appointment shows the sale")
+        XCTAssertFalse(element("checkOutAppointment").exists, "Checked out once")
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(waitForLabel(element("appointment-Andre Sample"), containing: "Paid $55.00"))
+        XCTAssertTrue(waitForLabel(element("appointment-Andre Sample"), containing: "Paid $55 · Card"))
     }
 
     func testADeclinedCardCanBeTriedAgain() {
         launch()
         openTab("Take payment")
-        enterAmount("1250")
+        ringUp("1250")
         XCTAssertEqual(element("paymentAmount").value as? String, "12 dollars and 50 cents")
         tap("tapToPayButton")
         tap("simulateDecline")
@@ -309,7 +317,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     func testTheCustomerCancellingKeepsTheAmount() {
         launch()
         openTab("Take payment")
-        enterAmount("2000")
+        ringUp("2000")
         tap("tapToPayButton")
         tap("simulateCancel")
         XCTAssertTrue(element("statusCancelled").waitForExistence(timeout: 15))
@@ -321,7 +329,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     func testATooSmallAmountIsExplained() {
         launch()
         openTab("Take payment")
-        enterAmount("25")
+        ringUp("25")
         tap("tapToPayButton")
         XCTAssertTrue(waitForLabel(element("paymentValidation"), containing: "$0.50 to $1,000.00"))
         XCTAssertFalse(element("statusPreparing").exists || element("simulateApprove").exists, "No payment started")
@@ -336,10 +344,11 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         screenshot("O15-Payments-Not-Set-Up")
         tap("startPractice")
         XCTAssertTrue(element("testModeBanner").waitForExistence(timeout: 10))
-        enterAmount("500")
+        ringUp("500")
         tap("tapToPayButton")
         tap("simulateApprove")
         XCTAssertTrue(waitForLabel(element("statusPaid"), containing: "Test payment approved"))
+        XCTAssertFalse(element("emailReceipt").exists, "Nothing went to Stripe in practice, so there's no receipt")
         tap("paymentDone")
         tap("stopPractice")
         XCTAssertTrue(element("paymentsUnavailable").waitForExistence(timeout: 10))
@@ -348,7 +357,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     func testOnlyASucceededPaymentShowsPaid() {
         launch("-fake-payment-incomplete")
         openTab("Take payment")
-        enterAmount("3000")
+        ringUp("3000")
         tap("tapToPayButton")
         tap("simulateApprove")
         let notPaid = element("statusNotPaid")
@@ -357,11 +366,132 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("backToAmount")
     }
 
+    // MARK: Checkout
+
+    /// Andre pays cash: Check out from the schedule, Cash asks first with the amount and the barber,
+    /// the receipt says "Sold $55 · Cash · Izzy", and the schedule shows him paid.
+    func testACashCheckoutOfAnAppointmentShowsItPaid() {
+        launch()
+        tap("appointment-Andre Sample")
+        tap("checkOutAppointment")
+        XCTAssertTrue(waitUntil(tabButton("Take payment"), toMatch: NSPredicate(format: "isSelected == true")), "Didn't switch to Take payment")
+        XCTAssertTrue(element("paymentAppointment").waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Andre Sample"].exists, "The appointment's client")
+        XCTAssertTrue(element("ticketItem-Haircut & Beard").exists)
+        tap("payCash")
+        let question = text(containing: "Record a $55 cash sale for Izzy?")
+        XCTAssertTrue(question.waitForExistence(timeout: 10), "Cash asks first, with the amount and the barber")
+        screenshot("O46-Confirm-Cash-Sale")
+        tapDialogButton("Record cash sale", identifier: "confirmRecordSale")
+        let sold = element("statusSold")
+        XCTAssertTrue(sold.waitForExistence(timeout: 15), "No receipt")
+        XCTAssertEqual(sold.label, "Sold $55 · Cash · Izzy")
+        XCTAssertTrue(element("saleReceipt").exists)
+        screenshot("O47-Cash-Sale-Receipt")
+        tap("saleDone")
+        XCTAssertTrue(waitForDisappearance(of: sold))
+        XCTAssertEqual(element("paymentAmount").value as? String, "0 dollars", "The ticket is cleared")
+        XCTAssertTrue(reveal("sale-Andre Sample").label.contains("Sold $55 · Cash · Izzy"))
+
+        openTab("Schedule")
+        XCTAssertTrue(waitForLabel(reveal("detailPayment"), containing: "$55 · Cash"), "The appointment shows the sale")
+        XCTAssertFalse(element("checkOutAppointment").exists)
+        XCTAssertTrue(reveal("checkedOutStatus").exists, "It can't be reopened until its sale is voided")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        let row = element("appointment-Andre Sample")
+        XCTAssertTrue(waitForLabel(row, containing: "Paid $55 · Cash"), "Got: \(row.label)")
+    }
+
+    /// A walk-in buys two pomades and a beard oil (which has no price, so it asks for one), sold by
+    /// Cristian, paid another way (Zelle, say).
+    func testAProductOnlyWalkInSale() {
+        launch()
+        openTab("Take payment")
+        XCTAssertTrue(element("ticketEmpty").waitForExistence(timeout: 10))
+        tap("payOther")
+        XCTAssertTrue(waitForLabel(element("paymentValidation"), containing: "Add a service, a product or an amount first."))
+        tap("soldBy-Cristian")
+        XCTAssertTrue(element("soldBy-Cristian").isSelected)
+        tap("addProduct")
+        tap("pickProduct-Sample pomade")
+        let pomade = element("ticketItem-Sample pomade")
+        XCTAssertTrue(pomade.waitForExistence(timeout: 10), "The pomade isn't on the ticket")
+        reveal("quantity-Sample pomade").buttons["Increment"].tap()
+        XCTAssertTrue(waitUntil(element("paymentAmount"), toMatch: NSPredicate(format: "value == %@", "36 dollars")), "Two pomades: $36")
+
+        tap("addProduct")
+        tap("pickProduct-Sample beard oil")
+        XCTAssertTrue(element("amountEntryValue").waitForExistence(timeout: 10), "A product without a price asks for one")
+        enterAmount("1200")
+        tap("saveAmount")
+        XCTAssertTrue(element("ticketItem-Sample beard oil").waitForExistence(timeout: 10))
+        XCTAssertTrue(waitUntil(element("paymentAmount"), toMatch: NSPredicate(format: "value == %@", "48 dollars")))
+        typeInto("walkInName", "Walk-in Sample")
+        closeKeyboard()
+        screenshot("O48-Walk-In-Ticket")
+
+        tap("payOther")
+        XCTAssertTrue(text(containing: "Record a $48 sale paid another way for Cristian?").waitForExistence(timeout: 10))
+        tapDialogButton("Record sale", identifier: "confirmRecordSale")
+        XCTAssertTrue(waitForLabel(element("statusSold"), containing: "Sold $48 · Other · Cristian"))
+        tap("saleDone")
+        let row = reveal("sale-Walk-in Sample")
+        XCTAssertTrue(row.label.contains("Sold $48 · Other · Cristian"), "Got: \(row.label)")
+    }
+
+    /// Diego's cash sale from this morning is voided: it asks first (with an optional reason), and the
+    /// sale stays in the list, struck through.
+    func testVoidASale() {
+        launch()
+        openTab("Take payment")
+        let diego = reveal("sale-Diego Sample")
+        XCTAssertTrue(diego.label.contains("Sold $63 · Cash · Carlos"), "Got: \(diego.label)")
+        diego.tap()
+        XCTAssertTrue(waitForLabel(element("saleSummary"), containing: "Sold $63 · Cash · Carlos"))
+        screenshot("O49-Sale")
+        tap("voidSale")
+        let alert = app.alerts.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 10), "Void asks first")
+        XCTAssertTrue(alert.label.contains("Void this $63 cash sale?") || text(containing: "Void this $63 cash sale?").exists)
+        let reason = alert.textFields.firstMatch
+        if reason.waitForExistence(timeout: 5) {
+            reason.tap()
+            reason.typeText("Rang it up twice")
+        }
+        tapDialogButton("Void sale", identifier: "confirmVoidSale")
+        XCTAssertTrue(reveal("saleVoided").exists, "The sale shows it's voided")
+        XCTAssertTrue(waitForLabel(reveal("voidMessage"), containing: "no longer counts in your sales"))
+        XCTAssertFalse(element("voidSale").exists, "Voided once")
+        app.navigationBars.buttons.element(boundBy: 0).tap()
+        XCTAssertTrue(waitForLabel(reveal("sale-Diego Sample"), containing: "voided"))
+    }
+
+    /// After a card payment, the client may ask for a receipt: Stripe emails it, and the address isn't
+    /// kept. Nothing about an email is asked before the card.
+    func testEmailAReceiptAfterACardPayment() {
+        launch()
+        openTab("Take payment")
+        XCTAssertFalse(element("receiptEmail").exists, "No email before the payment")
+        ringUp("2500", soldBy: "Julian")
+        tap("tapToPayButton")
+        tap("simulateApprove")
+        XCTAssertTrue(element("statusPaid").waitForExistence(timeout: 15))
+        XCTAssertTrue(waitForLabel(element("saleReceiptLine"), containing: "Sold $25 · Card · Julian"))
+        tap("emailReceipt")
+        typeInto("receiptEmailField", "client@example.com")
+        screenshot("O50-Email-A-Receipt")
+        tap("sendReceipt")
+        XCTAssertTrue(reveal("receiptSent").waitForExistence(timeout: 10), "The receipt wasn't sent")
+        tap("paymentDone")
+        XCTAssertEqual(element("paymentAmount").value as? String, "0 dollars")
+    }
+
     // MARK: Products
 
+    /// The shop's products are in Settings now (they used to have a tab).
     func testAddEditHideAndDeleteAProduct() {
         launch()
-        openTab("Products")
+        openProducts()
         XCTAssertTrue(element("product-Sample pomade").waitForExistence(timeout: 10))
         XCTAssertTrue(element("product-Sample beard oil").label.contains("hidden"))
         screenshot("O16-Products")
@@ -399,12 +529,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     func testSettingsShowStatusHowToTapAndSignOut() {
         launch()
         openTab("Settings")
-        XCTAssertTrue(waitForLabel(element("stripeMode"), containing: "Test mode: no real money"))
-        XCTAssertTrue(element("stripeLocation").label.contains("tml_sample_location"))
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Connected"))
+        XCTAssertTrue(waitForLabel(reveal("stripeMode"), containing: "Test mode: no real money"))
+        XCTAssertTrue(reveal("stripeLocation").label.contains("tml_sample_location"))
+        screenshot("O18-Settings")
+        reveal("serverStatus")
         let online = app.descendants(matching: .any).matching(identifier: "serverStatus")
             .matching(NSPredicate(format: "label CONTAINS %@", "Online")).firstMatch
         XCTAssertTrue(online.waitForExistence(timeout: 10), "The server's health check")
-        screenshot("O18-Settings")
 
         tap("howToTap")
         XCTAssertTrue(element("howToTapDone").waitForExistence(timeout: 10))
@@ -416,6 +548,136 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("signOut")
         tapDialogButton("Sign out", identifier: "confirmSignOut")
         XCTAssertTrue(element("ownerKeyField").waitForExistence(timeout: 10), "Signing out didn't go back to sign in")
+    }
+
+    // MARK: The shop's Stripe account
+
+    /// The shop's own Stripe account isn't connected yet (`-fake-stripe-not-connected`): Take payment
+    /// says how to connect, with a button to Settings, where Connect Stripe opens Stripe's window (a
+    /// stand-in in UI tests) and comes back connected. Then Take payment takes cards.
+    func testConnectStripeFromSettings() {
+        launch("-fake-stripe-not-connected")
+        openTab("Take payment")
+        XCTAssertTrue(element("paymentsUnavailable").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "Connect Stripe to take cards").exists)
+        screenshot("O41-Payments-Connect-Stripe")
+        tap("goToStripeSettings")
+        XCTAssertTrue(waitUntil(tabButton("Settings"), toMatch: NSPredicate(format: "isSelected == true")), "Didn't go to Settings")
+        let status = reveal("stripeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "Not connected"), "Got: \(status.label)")
+        XCTAssertTrue(reveal("stripeMessage").label.contains("Connect your Stripe account to take card payments in the app."))
+        XCTAssertFalse(element("disconnectStripe").exists, "Nothing to disconnect yet")
+        screenshot("O42-Settings-Stripe-Not-Connected")
+
+        tap("connectStripe")
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "You're connected. You can take card payments now."))
+        let connected = reveal("stripeStatus")
+        XCTAssertTrue(waitForLabel(connected, containing: "Connected"), "Got: \(connected.label)")
+        XCTAssertTrue(connected.label.contains("Izzy Clipz Barbershop"), "Got: \(connected.label)")
+        XCTAssertTrue(waitForLabel(reveal("stripeMessage"), containing: "Payouts to your bank are on."))
+        XCTAssertTrue(reveal("openStripeDashboard").exists)
+        XCTAssertTrue(reveal("disconnectStripe").exists)
+        screenshot("O43-Settings-Stripe-Connected")
+
+        openTab("Take payment")
+        XCTAssertTrue(waitForDisappearance(of: element("paymentsUnavailable")), "Take payment still says to connect")
+        XCTAssertTrue(element("testModeBanner").waitForExistence(timeout: 10))
+    }
+
+    /// Stripe still needs details after its window (`-fake-stripe-needs-info`): Settings says so, and
+    /// Finish setting up opens it again.
+    func testStripeStillNeedingDetailsOffersFinishSettingUp() {
+        launch("-fake-stripe-needs-info")
+        openTab("Settings")
+        tap("connectStripe")
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "Stripe still needs a few details: tap Finish setting up."))
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Finish setting up"))
+        let finish = reveal("connectStripe")
+        XCTAssertTrue(waitForLabel(finish, containing: "Finish setting up"), "Got: \(finish.label)")
+        screenshot("O44-Settings-Stripe-Needs-Info")
+        finish.tap()
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "You're connected."))
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Connected"))
+    }
+
+    /// Closing Stripe's window (`-fake-stripe-cancel`) says nothing went wrong and shows no result:
+    /// the account the server started stays, so the button reads Finish setting up.
+    func testClosingStripesWindowShowsNoResult() {
+        launch("-fake-stripe-cancel")
+        openTab("Settings")
+        tap("connectStripe")
+        XCTAssertTrue(waitForLabel(reveal("connectStripe"), containing: "Finish setting up"))
+        XCTAssertFalse(element("stripeResult").exists, "Closing the window isn't a result")
+        XCTAssertFalse(element("stripeActionError").exists, "Closing the window isn't an error")
+    }
+
+    /// Disconnect asks first, says what stops, and leaves Connect Stripe.
+    func testDisconnectStripeAsksFirst() {
+        launch()
+        openTab("Settings")
+        tap("disconnectStripe")
+        XCTAssertTrue(text(containing: "Card payments stop until you connect Stripe again.").waitForExistence(timeout: 10))
+        tapDialogButton("Disconnect Stripe", identifier: "confirmDisconnectStripe")
+        XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Not connected"))
+        XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "Your Stripe account isn't closed"))
+        XCTAssertTrue(reveal("connectStripe").exists)
+    }
+
+    // MARK: Use on a computer
+
+    /// Settings → Use on a computer: the steps, a big code counting down (frozen at 10:00 with the
+    /// UI tests' fixed clock), a new code, and the computers signed in, signed out one and then all.
+    func testGetAComputerCodeAndSignComputersOut() {
+        launch()
+        openTab("Settings")
+        let link = reveal("computerAccessLink")
+        XCTAssertTrue(waitForLabel(link, containing: "2 computers signed in"), "Got: \(link.label)")
+        link.tap()
+        let code = element("computerCode")
+        XCTAssertTrue(code.waitForExistence(timeout: 10), "No code")
+        XCTAssertEqual(code.label, "Code 4 8 3, 9 2 0")
+        XCTAssertTrue(waitForLabel(element("computerCodeExpiry"), containing: "Expires in 10:00"))
+        XCTAssertTrue(element("computerSite").label.hasSuffix("/business"), "Got: \(element("computerSite").label)")
+        XCTAssertTrue(element("computerIntro").label.contains("See your schedule, sales and analytics on a computer."))
+        screenshot("O45-Use-On-A-Computer")
+
+        tap("newComputerCode")
+        XCTAssertTrue(waitForLabel(element("computerCode"), containing: "2 7 1, 8 4 6"))
+
+        let mac = reveal("computer-Chrome on Mac")
+        XCTAssertTrue(mac.label.contains("Last used today at 10:45 AM"), "Got: \(mac.label)")
+        XCTAssertTrue(reveal("computer-Safari on iPad").exists)
+        tap("signOutComputer-Chrome on Mac")
+        XCTAssertTrue(waitForDisappearance(of: element("computer-Chrome on Mac")))
+        tap("signOutAllComputers")
+        XCTAssertTrue(text(containing: "Every computer goes back to the website's sign-in page.").waitForExistence(timeout: 10))
+        tapDialogButton("Sign out all computers", identifier: "confirmSignOutAllComputers")
+        XCTAssertTrue(reveal("computersEmpty").exists, "No computers left")
+        XCTAssertFalse(element("computer-Safari on iPad").exists)
+    }
+
+    /// Settings → Legal opens the website's four policies in the in-app browser (UI tests see the
+    /// address instead of Safari).
+    func testTheLegalPagesOpenTheWebsite() {
+        launch()
+        openTab("Settings")
+        let pages = [
+            ("legal-privacy", "Privacy Policy", "/privacy"),
+            ("legal-terms", "Terms of Service", "/terms"),
+            ("legal-cancellation-policy", "Cancellation & No-Show Policy", "/cancellation-policy"),
+            ("legal-accessibility", "Accessibility", "/accessibility"),
+        ]
+        for (identifier, title, path) in pages {
+            let row = reveal(identifier)
+            XCTAssertTrue(row.label.contains(title), "Got: \(row.label)")
+            if identifier == "legal-privacy" { screenshot("O40-Settings-Legal") }
+            row.tap()
+            let address = element("webURL")
+            XCTAssertTrue(address.waitForExistence(timeout: 10), "\(title) didn't open")
+            XCTAssertEqual(address.label, "https://izzy-clipz.vercel.app" + path)
+            tap("webDone")
+            XCTAssertTrue(waitForDisappearance(of: address))
+        }
     }
 
     // MARK: No-show protection
@@ -640,6 +902,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("noShowSettingsProblem")))
         closeKeyboard()
         XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $25"))
+        XCTAssertTrue(waitForLabel(reveal("noShowCapNote"), containing: "A fee is never more than the booked service's price."))
         let warning = reveal("noShowClientWarning")
         XCTAssertTrue(waitForLabel(warning, containing: "Late Cancellation & No-Show Fee"), "Got: \(warning.label)")
         XCTAssertTrue(warning.label.contains("may be charged $25."), "Got: \(warning.label)")
@@ -720,7 +983,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         launch("-fake-empty")
         XCTAssertTrue(element("scheduleEmpty").waitForExistence(timeout: 10))
         screenshot("O20-Empty-Day")
-        openTab("Products")
+        openProducts()
         XCTAssertTrue(element("productsEmpty").waitForExistence(timeout: 10))
     }
 
@@ -742,7 +1005,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(card.waitForExistence(timeout: 10), "Still offline: the card says so again")
         tap("startPractice")
         XCTAssertTrue(element("testModeBanner").waitForExistence(timeout: 10))
-        enterAmount("500")
+        ringUp("500")
         tap("tapToPayButton")
         tap("simulateApprove")
         XCTAssertTrue(waitForLabel(element("statusPaid"), containing: "Test payment approved"))
@@ -750,6 +1013,13 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     // MARK: Helpers
+
+    /// Settings → Products.
+    private func openProducts(file: StaticString = #filePath, line: UInt = #line) {
+        openTab("Settings", file: file, line: line)
+        tap("productsLink", file: file, line: line)
+        XCTAssertTrue(app.navigationBars["Products"].waitForExistence(timeout: 10), "Products didn't open", file: file, line: line)
+    }
 
     private func signIn(with key: String) {
         let field = element("ownerKeyField")
@@ -763,6 +1033,16 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("servicePicker")
         tapButton(name)
         XCTAssertTrue(element("servicePicker").waitForExistence(timeout: 10), "Didn't come back from the service list")
+    }
+
+    /// Take payment: Sold by `barber`, and one amount on the ticket from the keypad ("1250" is $12.50).
+    private func ringUp(_ digits: String, soldBy barber: String = "Izzy", file: StaticString = #filePath, line: UInt = #line) {
+        tap("soldBy-\(barber)", file: file, line: line)
+        tap("addAmount", file: file, line: line)
+        XCTAssertTrue(element("amountEntryValue").waitForExistence(timeout: 10), "The keypad didn't open", file: file, line: line)
+        enterAmount(digits)
+        tap("saveAmount", file: file, line: line)
+        XCTAssertTrue(waitForDisappearance(of: element("amountEntryValue")), "The keypad didn't close", file: file, line: line)
     }
 
     /// Types an amount on the keypad: "1250" is $12.50.

@@ -1,8 +1,9 @@
 import IzzyClipzKit
 import SwiftUI
 
-/// One appointment: the client (call or text), what and when, the card on
-/// file and its fee, payment, and what the owner can do with it.
+/// One appointment: the client (call or text), what and when, Check out (the main action until
+/// it's checked out, then "Paid $60 · Cash"), the card on file and its fee, payment, and what the
+/// owner can do with it.
 struct AppointmentDetailView: View {
     let appointmentID: String
     let store: ScheduleStore
@@ -72,6 +73,7 @@ struct AppointmentDetailView: View {
                 }
             }
 
+            checkOutSection(appointment)
             contactSection(appointment)
             NoShowFeeSection(appointment: appointment, now: now, store: store)
             paymentSection(appointment)
@@ -109,10 +111,11 @@ struct AppointmentDetailView: View {
             isPresented: $confirmsAnotherPayment,
             titleVisibility: .visible
         ) {
-            Button("Take another payment") { startPayment(appointment) }
+            Button("Check out something extra") { startExtra(appointment) }
+                .accessibilityIdentifier("confirmCheckOutExtra")
             Button("Not now", role: .cancel) {}
         } message: {
-            Text("\(appointment.payment.amountCents.map(Money.amount) ?? "A payment") was already paid for this appointment. Take another payment only for something extra, like a product or a tip.")
+            Text("\(appointment.payment.amountCents.map(Money.amount) ?? "A payment") was already paid for this appointment by card. Check out again only for something extra, like a product or a tip.")
         }
         .alert(
             "Finish the current payment first",
@@ -160,6 +163,31 @@ struct AppointmentDetailView: View {
         }
     }
 
+    /// Check out: the main action for a booked or completed appointment that isn't checked out yet.
+    /// Once it is, the Payment section says "Paid $60 · Cash".
+    @ViewBuilder
+    private func checkOutSection(_ appointment: IzzyAPI.Appointment) -> some View {
+        if appointment.canCheckOut {
+            Section {
+                Button {
+                    if appointment.payment.status == .paid {
+                        confirmsAnotherPayment = true
+                    } else {
+                        startCheckout(appointment)
+                    }
+                } label: {
+                    Label("Check out", systemImage: "cart")
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .accessibilityHint("Opens Take payment with \(appointment.serviceName) on the ticket.")
+                .accessibilityIdentifier("checkOutAppointment")
+            } footer: {
+                Text("Ring up the service, any products, and how the client paid: card, cash or another way.")
+            }
+        }
+    }
+
     @ViewBuilder
     private func paymentSection(_ appointment: IzzyAPI.Appointment) -> some View {
         let summary = PaymentSummary(appointment: appointment)
@@ -169,6 +197,13 @@ struct AppointmentDetailView: View {
             if appointment.payment.status == .paid, let paidAt = appointment.payment.paidAt {
                 LabeledContent("When", value: store.shopTime.dayAndTime(paidAt))
             }
+            if appointment.sale != nil {
+                Text("Checked out. To change the sale, void it in Take payment → Today's sales.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("detailSaleNote")
+            }
             if let feeNote = summary.feeNote {
                 // A charged fee isn't the service's payment: said here, so it isn't taken again.
                 Text(feeNote)
@@ -176,19 +211,6 @@ struct AppointmentDetailView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("detailPaymentFeeNote")
-            }
-            if appointment.status != .cancelled {
-                Button {
-                    if appointment.payment.status == .paid {
-                        confirmsAnotherPayment = true
-                    } else {
-                        startPayment(appointment)
-                    }
-                } label: {
-                    Label(appointment.payment.status == .paid ? "Take another payment" : "Take payment", systemImage: "wave.3.right.circle")
-                        .frame(minHeight: BusinessTheme.minimumTapSize)
-                }
-                .accessibilityIdentifier("takePaymentForAppointment")
             }
         }
     }
@@ -198,7 +220,8 @@ struct AppointmentDetailView: View {
         Section {
             switch appointment.status {
             case .booked:
-                actionButton("Mark completed", systemImage: "checkmark.circle", id: "markCompleted", disabled: isBusy) {
+                // Done without checking out (the service still counts at its booked price).
+                actionButton("Mark done", systemImage: "checkmark.circle", id: "markCompleted", disabled: isBusy) {
                     Task { await store.setStatus(.completed, for: appointment) }
                 }
                 // A booking with a card on file is a no-show only once it has ended (the client may still come until then).
@@ -211,12 +234,19 @@ struct AppointmentDetailView: View {
                     confirmsCancel = true
                 }
             case .completed, .noShow, .cancelled:
-                actionButton("Reopen", systemImage: "arrow.uturn.backward.circle", id: "reopenAppointment", disabled: isBusy) {
-                    if let warning = FeePanel.reopenWarning(for: appointment, now: now) {
-                        reopenWarning = warning
-                    } else {
-                        Task { await store.setStatus(.booked, for: appointment) }
+                // A checked-out appointment stays completed until its sale is voided (the server's rule).
+                if appointment.sale == nil {
+                    actionButton("Reopen", systemImage: "arrow.uturn.backward.circle", id: "reopenAppointment", disabled: isBusy) {
+                        if let warning = FeePanel.reopenWarning(for: appointment, now: now) {
+                            reopenWarning = warning
+                        } else {
+                            Task { await store.setStatus(.booked, for: appointment) }
+                        }
                     }
+                } else {
+                    Text("Checked out")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("checkedOutStatus")
                 }
             }
         } header: {
@@ -235,6 +265,8 @@ struct AppointmentDetailView: View {
                 }
             case .cancelled:
                 Text("Reopening books the time again, if nobody else has taken it.")
+            case .completed where appointment.sale != nil:
+                Text("To reopen it, void its sale first, in Take payment → Today's sales.")
             case .completed, .noShow:
                 Text("Reopening sets it back to booked.")
             }
@@ -263,8 +295,14 @@ struct AppointmentDetailView: View {
         return message
     }
 
-    private func startPayment(_ appointment: IzzyAPI.Appointment) {
-        if !workspace.takePayment(for: appointment) {
+    private func startCheckout(_ appointment: IzzyAPI.Appointment) {
+        if !workspace.checkOut(appointment) {
+            paymentBusyMessage = "A payment is in progress on the Take payment tab. Finish or cancel it, then try again."
+        }
+    }
+
+    private func startExtra(_ appointment: IzzyAPI.Appointment) {
+        if !workspace.checkOutExtra(for: appointment) {
             paymentBusyMessage = "A payment is in progress on the Take payment tab. Finish or cancel it, then try again."
         }
     }

@@ -121,6 +121,23 @@ final class ScriptedAPI: OwnerAPI {
         if let paymentsHandler { return try await paymentsHandler(date) }
         return try await base.payments(on: date)
     }
+
+    // Sales and receipts go to the sample server. (`stripeConnection()` and the other Stripe Connect
+    // and computer routes aren't passed on: they answer 404, like a server from before them.)
+    var recordSaleHandler: ((IzzyAPI.NewSale, IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Sale)?
+    /// Every `Idempotency-Key` a sale was sent with, in order.
+    private(set) var saleKeys: [IzzyAPI.IdempotencyKey] = []
+
+    func recordSale(_ sale: IzzyAPI.NewSale, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Sale {
+        saleKeys.append(idempotencyKey)
+        if let recordSaleHandler { return try await recordSaleHandler(sale, idempotencyKey) }
+        return try await base.recordSale(sale, idempotencyKey: idempotencyKey)
+    }
+    func sales(on date: LocalDate) async throws -> IzzyAPI.SalesDay { try await base.sales(on: date) }
+    func voidSale(id: String, reason: String?) async throws -> IzzyAPI.VoidedSale { try await base.voidSale(id: id, reason: reason) }
+    func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment {
+        try await base.sendReceipt(paymentId: paymentId, email: email)
+    }
 }
 
 /// A fresh, empty UserDefaults for one test.
@@ -140,4 +157,12 @@ func eventually(timeout: TimeInterval = 5, _ condition: () -> Bool) async -> Boo
         try? await Task.sleep(for: .milliseconds(10))
     }
     return condition()
+}
+
+extension CheckoutModel {
+    /// A walk-in ticket of one amount ("Other"), sold by Izzy: what a quick card payment is now.
+    func ring(_ cents: Int, soldBy barberId: String = "israel-flores") {
+        ticket = CheckoutTicket(barberId: barberId)
+        ticket.addAmount(cents, name: "")
+    }
 }

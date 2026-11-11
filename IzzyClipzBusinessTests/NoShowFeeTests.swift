@@ -157,10 +157,15 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertEqual(summary.title, "Not paid yet")
         XCTAssertEqual(summary.value, andre.priceLabel)
         XCTAssertNil(summary.feeNote)
-        summary = PaymentSummary(appointment: try XCTUnwrap(harness.appointment(named: "Marcus Sample")))
+        var marcus = try XCTUnwrap(harness.appointment(named: "Marcus Sample"))
+        summary = PaymentSummary(appointment: marcus)
         XCTAssertEqual(summary.title, "Paid")
-        XCTAssertEqual(summary.value, "$40.00")
+        XCTAssertEqual(summary.value, "$40 · Card", "Checked out: the sale and how it was paid")
         XCTAssertNil(summary.feeNote)
+        // Paid by card before sales existed (no sale): the amount paid, as before.
+        marcus.sale = nil
+        summary = PaymentSummary(appointment: marcus)
+        XCTAssertEqual(summary.value, "$40.00")
 
         let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
         XCTAssertEqual(PaymentSummary(appointment: kim).title, "Not paid yet", "nothing charged yet")
@@ -417,7 +422,10 @@ final class NoShowFeeTests: XCTestCase {
         func badges(_ name: String) throws -> [String] {
             AppointmentBadges(appointment: try XCTUnwrap(harness.appointment(named: name))).spoken
         }
-        XCTAssertEqual(try badges("Marcus Sample"), ["Completed", "Paid $40.00"])
+        XCTAssertEqual(try badges("Marcus Sample"), ["Completed", "Paid $40 · Card"])
+        var paidBeforeSales = try XCTUnwrap(harness.appointment(named: "Marcus Sample"))
+        paidBeforeSales.sale = nil
+        XCTAssertEqual(AppointmentBadges(appointment: paidBeforeSales).spoken, ["Completed", "Paid $40.00"])
         XCTAssertEqual(try badges("Jay Sample"), ["No-show"])
         XCTAssertEqual(try badges("Sam Sample"), ["Cancelled"])
         XCTAssertEqual(try badges("Andre Sample"), ["Booked"])

@@ -196,7 +196,7 @@ struct NoShowSettingsView: View {
     }
 
     private var exampleSection: some View {
-        Section("Example") {
+        Section {
             if store.examples.isEmpty {
                 Text("Fix the fee above to see an example.")
                     .foregroundStyle(.secondary)
@@ -206,6 +206,14 @@ struct NoShowSettingsView: View {
                         .monospacedDigit()
                         .accessibilityIdentifier("noShowExample")
                 }
+            }
+        } header: {
+            Text("Example")
+        } footer: {
+            if let note = store.capNote {
+                // The cap: never more than the service's price (the Cancellation & No-Show Policy's promise).
+                Text(note)
+                    .accessibilityIdentifier("noShowCapNote")
             }
         }
     }

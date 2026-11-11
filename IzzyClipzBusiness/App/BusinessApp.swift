@@ -18,22 +18,29 @@ struct BusinessApp: App {
 struct RootView: View {
     let model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    /// iOS's age range, asked at launch where a law requires it (`AgeCheck`); never kept.
+    @State private var ageCheck = AgeCheck.Outcome.notAsked
 
     var body: some View {
         Group {
-            switch model.phase {
-            case .launching:
-                ProgressView()
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("Loading")
-            case .signedOut:
-                SignInView(model: model)
-            case .signedIn(let workspace):
-                MainTabView(workspace: workspace, model: model)
-                    .id(ObjectIdentifier(workspace))
+            if AgeCheck.showsUnderAgeScreen(ageCheck) {
+                UnderAgeView()
+            } else {
+                switch model.phase {
+                case .launching:
+                    ProgressView()
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Loading")
+                case .signedOut:
+                    SignInView(model: model)
+                case .signedIn(let workspace):
+                    MainTabView(workspace: workspace, model: model)
+                        .id(ObjectIdentifier(workspace))
+                }
             }
         }
+        .ageRangeCheck(isEnabled: model.environment.asksForAgeRange, outcome: $ageCheck)
         .task { await model.start() }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
@@ -44,7 +51,7 @@ struct RootView: View {
     }
 }
 
-/// Schedule, New booking, Take payment, Products, Settings.
+/// Schedule, New booking, Take payment, Analytics, Settings (the shop's products are in Settings).
 struct MainTabView: View {
     @Bindable var workspace: Workspace
     let model: AppModel
@@ -60,9 +67,9 @@ struct MainTabView: View {
             TakePaymentView(checkout: workspace.checkout, workspace: workspace)
                 .tabItem { Label("Take payment", systemImage: "wave.3.right.circle") }
                 .tag(Workspace.Tab.payment)
-            ProductsView(store: workspace.products, allowsTestPhoto: workspace.environment.usesSampleServer)
-                .tabItem { Label("Products", systemImage: "bag") }
-                .tag(Workspace.Tab.products)
+            AnalyticsTab(workspace: workspace)
+                .tabItem { Label("Analytics", systemImage: "chart.bar.xaxis") }
+                .tag(Workspace.Tab.analytics)
             SettingsView(workspace: workspace, model: model)
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(Workspace.Tab.settings)
