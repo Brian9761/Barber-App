@@ -6,9 +6,12 @@ import UIKit
 struct CallButton<Label: View>: View {
     @Environment(\.openURL) private var openURL
     @State private var showsNumber = false
+    /// What VoiceOver says for the button: "Call Izzy Clipz" unless a sentence says more.
+    private let spokenLabel: String
     private let label: Label
 
-    init(@ViewBuilder label: () -> Label) {
+    init(spokenLabel: String? = nil, @ViewBuilder label: () -> Label) {
+        self.spokenLabel = spokenLabel ?? "Call \(AppData.shop.name)"
         self.label = label()
     }
 
@@ -20,7 +23,7 @@ struct CallButton<Label: View>: View {
         } label: {
             label
         }
-        .accessibilityLabel("Call \(AppData.shop.name)")
+        .accessibilityLabel(spokenLabel)
         .accessibilityHint(AppData.shop.phone.spoken)
         .alert("Call \(AppData.shop.name)", isPresented: $showsNumber) {
             Button("Copy Number") {

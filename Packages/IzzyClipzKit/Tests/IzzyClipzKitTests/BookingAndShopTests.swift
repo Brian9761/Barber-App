@@ -91,4 +91,16 @@ final class ShopInfoTests: XCTestCase {
         }
         XCTAssertEqual(shop.schedule.hours(on: .sunday)?.label, "10 AM – 6 PM")
     }
+
+    /// The shop's new website, never the older Squarespace one (whose booking button goes to Squire).
+    func testWebsiteIsTheNewOne() {
+        XCTAssertEqual(shop.websiteURL.absoluteString, "https://izzy-clipz.vercel.app")
+        XCTAssertFalse(shop.websiteURL.absoluteString.contains("izzyclipzbarbershop.net"))
+    }
+
+    /// No accessibility lines until the owner has checked what's there: "ADA-compliant" is a legal
+    /// claim no inspection backs up. The apps ask clients to call with questions instead.
+    func testNoUncheckedAccessibilityClaims() {
+        XCTAssertEqual(shop.accessibility, [])
+    }
 }

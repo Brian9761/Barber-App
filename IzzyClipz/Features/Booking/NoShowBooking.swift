@@ -87,7 +87,8 @@ enum NoShowRequirement: Equatable {
 
 /// The "Full Service Cancellation & No-Show Fee" notice on Pick a day and time and on Review: the
 /// server's title and message, and for a picked time that starts less than the late-cancellation
-/// window from now, "This time is less than 1 hour away, so cancelling it may be charged $40."
+/// window from now, "This time is less than 1 hour away, so cancelling it more than 15 minutes after
+/// booking may be charged $40." (the Kit's words: cancelling within 15 minutes of booking is free).
 /// Only when protection applies to the booking.
 struct NoShowWarningContent: Equatable {
     let title: String

@@ -112,7 +112,7 @@ final class DemoTour: XCTestCase {
         back()
         pause(1)
 
-        // The reviews, live from Google and Yelp
+        // The reviews, live from Google, and the link to Yelp
         tap("homeReviews")
         pause(3)
         capture("Reviews")

@@ -428,7 +428,7 @@ struct HomeReviewsCard: View {
                     Text("See what clients say")
                         .textRole(.headline)
                         .foregroundStyle(Theme.bone)
-                    Text("Reviews on Google and Yelp")
+                    Text("Reviews from Google, with a link to Yelp")
                         .textRole(.caption)
                         .foregroundStyle(Theme.smoke)
                 }
@@ -440,7 +440,7 @@ struct HomeReviewsCard: View {
             .contentShape(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         }
         .buttonStyle(.pressable)
-        .accessibilityLabel("See what clients say, on Google and Yelp")
+        .accessibilityLabel("See what clients say: reviews from Google, with a link to Yelp")
         .accessibilityHint("Opens the reviews")
         .accessibilityIdentifier("homeReviews")
     }

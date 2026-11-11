@@ -9,9 +9,9 @@ enum AppData {
     static let bookingCalendar = BookingCalendar(clock: clock)
 }
 
-/// Where the shop's reviews live on Google and Yelp.
+/// Where the shop's reviews live on Yelp.
 enum ReviewLinks {
-    /// The shop's Yelp page, for "Read our reviews on Yelp" when the server has no Yelp data.
+    /// The shop's Yelp page, for "Read our reviews on Yelp": Yelp's reviews are linked, never shown.
     static let yelpPage = URL(string: "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")!
 }
 

@@ -993,15 +993,22 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("googleTermsLink").exists)
     }
 
-    func testReviewsWithYelp() {
+    /// Even when the shop's server sends Yelp's reviews, the app shows only Google's and links to
+    /// Yelp: a Yelp rating never sits next to Google's.
+    func testReviewsNeverShowYelpsRating() {
         launch(UITestArguments.yelp)
         tap("homeReviews")
         XCTAssertTrue(element("googleReviews").waitForExistence(timeout: 15))
-        let yelp = element("yelpReviews")
+        XCTAssertTrue(element("googleRating").exists)
+        let yelp = element("yelpReviewsButton")
         scroll(toReveal: yelp)
-        XCTAssertTrue(yelp.exists, "The server has Yelp data: its own section")
-        XCTAssertTrue(element("yelpRating").exists)
-        screenshot("26-Reviews-Yelp")
+        XCTAssertFalse(element("yelpReviews").exists, "Yelp's reviews are only linked")
+        XCTAssertFalse(element("yelpRating").exists, "No Yelp rating next to Google's")
+        XCTAssertFalse(containing("Sample Yelp").exists, "No Yelp review shows")
+        screenshot("26-Reviews-Yelp-Link")
+        yelp.tap()
+        XCTAssertEqual(webPageURL(), "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")
+        closeWebPage()
     }
 
     func testReviewsUnavailable() {
@@ -1032,6 +1039,15 @@ final class IzzyClipzUITests: XCTestCase {
         scroll(toReveal: element("hours-sunday"))
         XCTAssertTrue(element("hours-monday").exists)
         screenshot("23-Visit-Hours")
+
+        // Nothing the owner hasn't checked about getting in: an invitation to call instead.
+        let access = element("visitAccessibilityCall")
+        scroll(toReveal: access)
+        XCTAssertTrue(access.label.contains("Questions about getting in or around the shop?"), access.label)
+        XCTAssertTrue(access.label.contains("(442) 341-3053"), access.label)
+        XCTAssertFalse(containing("ADA-compliant").exists)
+        XCTAssertFalse(containing("Wheelchair accessible").exists)
+        screenshot("23b-Visit-Good-To-Know")
 
         let reviews = element("visitSeeAllReviews")
         scroll(toReveal: reviews)

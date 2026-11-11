@@ -522,10 +522,57 @@ private struct VisitInfoSection: View {
                 VisitDivider()
                 VisitInfoRow(symbol: Symbol.payment, title: "Payment", items: shop.paymentMethods)
                 VisitDivider()
-                VisitInfoRow(symbol: Symbol.accessibility, title: "Accessibility", items: shop.accessibility)
+                if shop.accessibility.isEmpty {
+                    VisitAccessibilityCallRow()
+                } else {
+                    VisitInfoRow(symbol: Symbol.accessibility, title: "Accessibility", items: shop.accessibility)
+                }
             }
             .card(padding: Theme.Space.xxs)
         }
+    }
+}
+
+/// "Accessibility" while the owner hasn't checked what to say about getting in (no lines in the
+/// shop's data): an invitation to call, the whole row calling the shop, with the number in the
+/// link color. It claims nothing about the building (docs/legal/research.md §10).
+private struct VisitAccessibilityCallRow: View {
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    static var text: String {
+        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) and we'll help."
+    }
+
+    var body: some View {
+        CallButton(spokenLabel: "Accessibility: \(Self.text)") {
+            HStack(alignment: .top, spacing: Theme.Space.l) {
+                VisitIconTile(symbol: Symbol.accessibility)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text("Accessibility")
+                        .textRole(.headline)
+                        .foregroundStyle(Theme.bone)
+                    Text(Self.styledText)
+                        .textRole(.body)
+                        .foregroundStyle(Theme.smoke)
+                }
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+            }
+            .padding(Theme.Space.m)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.pressable)
+        .accessibilityIdentifier("visitAccessibilityCall")
+    }
+
+    /// The sentence with the number electric and underlined, so it reads as something to tap.
+    private static var styledText: AttributedString {
+        var text = AttributedString(Self.text)
+        if let range = text.range(of: AppData.shop.phone.display) {
+            text[range].swiftUI.foregroundColor = Theme.electric
+            text[range].swiftUI.underlineStyle = .single
+        }
+        return text
     }
 }
 
@@ -665,7 +712,7 @@ private struct VisitLinksSection: View {
             VisitLinkRow(
                 symbol: Symbol.reviews,
                 title: "Reviews",
-                detail: "On Google and Yelp",
+                detail: "From Google, with a link to Yelp",
                 trailingSymbol: Symbol.chevron
             )
         }

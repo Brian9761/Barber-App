@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// What clients say, live from Google (and Yelp when the shop's server has it), each in its own
-/// section with its own attribution, never mixed and never added up into one rating. Then the
-/// screen's one red, "Leave a review on Google".
+/// What clients say, live from Google, in its own section with Google's attribution, then a plain
+/// link to the shop's reviews on Yelp, and the screen's one red, "Leave a review on Google".
+///
+/// Yelp's reviews are only linked, never shown, whatever the shop's server sends: Yelp's API terms
+/// describe the API as for non-commercial uses and bar showing Yelp's ratings next to other
+/// reviews, so a Yelp rating never sits beside Google's (docs/legal/research.md §12.2).
 ///
 /// Google's terms shape this screen: nothing from Google is stored (the reviews are asked for
 /// when the screen opens and kept in memory only), the section says "Reviews from Google Maps",
@@ -18,7 +21,7 @@ struct ReviewsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: Theme.Space.section) {
-                Text("What clients say about \(shop.name) on Google and Yelp, as they wrote it.")
+                Text("What clients say about \(shop.name) on Google, as they wrote it.")
                     .textRole(.body)
                     .foregroundStyle(Theme.smoke)
                     .fixedSize(horizontal: false, vertical: true)
@@ -84,13 +87,15 @@ struct ReviewsView: View {
 
     // MARK: Yelp
 
-    @ViewBuilder private var yelpSection: some View {
-        let yelp = reviews.value?.yelp
-        if let yelp, yelp.available {
-            YelpReviewsSection(source: yelp)
-        } else {
+    /// Only a link to the shop's page on Yelp, as it is (not the address Yelp's API gives).
+    private var yelpSection: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Text("Clients review the shop on Yelp too.")
+                .textRole(.body)
+                .foregroundStyle(Theme.smoke)
+                .fixedSize(horizontal: false, vertical: true)
             Button {
-                router.openOutside(yelp?.url ?? ReviewLinks.yelpPage)
+                router.openOutside(ReviewLinks.yelpPage)
             } label: {
                 Label("Read our reviews on Yelp", systemImage: Symbol.external)
             }
@@ -171,50 +176,6 @@ struct GoogleMapsAttribution: View {
             .lineLimit(1)
             .fixedSize()
             .accessibilityIdentifier("googleAttribution")
-    }
-}
-
-// MARK: - Yelp
-
-/// Yelp's rating, count and excerpts, in their own container with Yelp's name on it, each excerpt
-/// linking to the full review on Yelp.
-private struct YelpReviewsSection: View {
-    let source: IzzyAPI.ReviewSource
-    @Environment(AppRouter.self) private var router
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xl) {
-            Text("Reviews from Yelp")
-                .textRole(.headline)
-                .foregroundStyle(Theme.bone)
-                .accessibilityAddTraits(.isHeader)
-
-            if let summary = source.summary {
-                ReviewScore(rating: summary, site: "Yelp")
-                    .accessibilityIdentifier("yelpRating")
-            }
-
-            ForEach(Array(source.reviews.enumerated()), id: \.offset) { _, review in
-                ThirdPartyReviewRow(review: review, linkTitle: "Read more on Yelp", site: "Yelp")
-                if review != source.reviews.last {
-                    SummaryDivider()
-                }
-            }
-
-            Button {
-                router.openOutside(source.url)
-            } label: {
-                Label("Read our reviews on Yelp", systemImage: Symbol.external)
-            }
-            .buttonStyle(.tertiary)
-            .accessibilityIdentifier("yelpReviewsButton")
-        }
-        .padding(Theme.Space.xl)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.ink3, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(Theme.line))
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("yelpReviews")
     }
 }
 

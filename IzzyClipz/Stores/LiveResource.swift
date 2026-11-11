@@ -64,9 +64,10 @@ final class LiveResource<Value> {
 /// The shop's products for the Shop tab.
 typealias ProductsStore = LiveResource<[IzzyAPI.Product]>
 
-/// Google's (and Yelp's) rating and reviews, for the Reviews screen only: it asks when it opens and
-/// on pull to refresh (at most every 5 minutes), and Home never does, because each Google answer
-/// counts against the server's daily limit, which every client shares.
+/// Google's rating and reviews (Yelp's, if the server sends them, aren't shown), for the Reviews
+/// screen only: it asks when it opens and on pull to refresh (at most every 5 minutes), and Home
+/// never does, because each Google answer counts against the server's daily limit, which every
+/// client shares.
 typealias ReviewsStore = LiveResource<IzzyAPI.ReviewsResponse>
 
 extension LiveResource where Value == IzzyAPI.ReviewsResponse {
