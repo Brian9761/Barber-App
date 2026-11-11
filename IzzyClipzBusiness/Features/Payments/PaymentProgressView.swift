@@ -9,6 +9,11 @@ import SwiftUI
 struct PaymentProgressView: View {
     let checkout: CheckoutModel
     let workspace: Workspace
+    /// The receipt's email field has the keyboard: its Send receipt is the action then, so the
+    /// bar's Done (which closes this screen without sending) steps aside until the keyboard goes,
+    /// instead of sitting over Send receipt just above the keyboard. Return sends too, and a swipe
+    /// down closes the keyboard.
+    @FocusState private var typingReceiptEmail: Bool
 
     var body: some View {
         NavigationStack {
@@ -25,6 +30,7 @@ struct PaymentProgressView: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
+            .scrollDismissesKeyboard(.interactively)
             .safeAreaInset(edge: .bottom) {
                 buttons
                     .padding(.horizontal, 24)
@@ -113,7 +119,7 @@ struct PaymentProgressView: View {
                 SaleReceiptCard(receipt: sale)
             }
             if receipt.offersReceiptEmail {
-                ReceiptEmailOffer(checkout: checkout)
+                ReceiptEmailOffer(checkout: checkout, focus: $typingReceiptEmail)
             }
         case .recording(let method):
             StatusBlock(symbol: method == .cash ? "banknote" : "ellipsis.circle", title: "Saving the sale", detail: Money.amount(amountCents), id: "statusRecording") {
@@ -177,13 +183,16 @@ struct PaymentProgressView: View {
                     secondary("Cancel", id: "cancelPayment") { checkout.cancel() }
                 }
             case .succeeded:
-                primary("Done", id: "paymentDone") {
-                    checkout.reset()
-                    if workspace.owesHowToTap {
-                        // After this screen has gone, so Apple's sheet has something to show over.
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(700))
-                            await workspace.showHowToTap()
+                // Not while the receipt's email is being typed: Send receipt is the action then.
+                if !typingReceiptEmail {
+                    primary("Done", id: "paymentDone") {
+                        checkout.reset()
+                        if workspace.owesHowToTap {
+                            // After this screen has gone, so Apple's sheet has something to show over.
+                            Task {
+                                try? await Task.sleep(for: .milliseconds(700))
+                                await workspace.showHowToTap()
+                            }
                         }
                     }
                 }
@@ -379,6 +388,8 @@ private struct PaymentRow: View {
 /// kept in the app (it lives only on this screen).
 struct ReceiptEmailOffer: View {
     let checkout: CheckoutModel
+    /// Whether the email field has the keyboard (the screen's Done steps aside meanwhile).
+    var focus: FocusState<Bool>.Binding
     @State private var showsField = false
     @State private var email = ""
 
@@ -400,15 +411,15 @@ struct ReceiptEmailOffer: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .frame(minHeight: BusinessTheme.minimumTapSize)
+                        .focused(focus)
+                        .submitLabel(.send)
+                        .onSubmit(send)
                         .accessibilityIdentifier("receiptEmailField")
                     if case .failed(let message) = checkout.receiptEmailState {
                         InlineMessage(text: message, systemImage: "exclamationmark.octagon.fill", color: .red)
                             .accessibilityIdentifier("receiptError")
                     }
-                    Button {
-                        let address = email
-                        Task { await checkout.emailReceipt(to: address) }
-                    } label: {
+                    Button(action: send) {
                         HStack {
                             Text("Send receipt")
                             if checkout.receiptEmailState == .sending { ProgressView() }
@@ -434,5 +445,10 @@ struct ReceiptEmailOffer: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func send() {
+        let address = email
+        Task { await checkout.emailReceipt(to: address) }
     }
 }
