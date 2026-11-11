@@ -68,7 +68,7 @@ final class AnalyticsUITests: XCTestCase {
         XCTAssertTrue(reveal("service-haircut").exists, "top services")
 
         // One barber: his numbers, and the leaderboard and top barber stay the whole shop's.
-        tap("scope-israel-flores", searchingFirst: .up)
+        revealBelowBar("scope-israel-flores").tap()
         XCTAssertTrue(waitForLabel(element("periodLine"), containing: "This year: Jan 1 – Nov 2 · Izzy"))
         XCTAssertTrue(waitUntil(element("scope-israel-flores"), toMatch: NSPredicate(format: "isSelected == true")))
         XCTAssertTrue(waitForLabel(element("analyticsLive"), containing: "Live"))
@@ -90,7 +90,7 @@ final class AnalyticsUITests: XCTestCase {
         screenshot("O74-Analytics-Month-Day-Tapped")
 
         // Back to the whole shop.
-        tap("scope-shop", searchingFirst: .up)
+        revealBelowBar("scope-shop").tap()
         XCTAssertTrue(waitForLabel(element("periodLine"), containing: "This month: Nov 1 – Nov 2 · Whole shop"))
     }
 
@@ -183,7 +183,7 @@ final class AnalyticsUITests: XCTestCase {
     private func tapSegment(_ name: String, of identifier: String, file: StaticString = #filePath, line: UInt = #line) {
         var segment = app.buttons.matching(NSPredicate(format: "label == %@", name)).firstMatch
         if element(identifier).waitForExistence(timeout: 5) {
-            let control = reveal(identifier, searchingFirst: .up, file: file, line: line)
+            let control = revealBelowBar(identifier, file: file, line: line)
             if control.buttons[name].exists { segment = control.buttons[name] }
         }
         XCTAssertTrue(segment.waitForExistence(timeout: 10), "No \(name) in \(identifier)", file: file, line: line)
@@ -258,6 +258,23 @@ final class AnalyticsUITests: XCTestCase {
             }
         }
         XCTAssertTrue(isOnScreen(target), "Couldn't find \(identifier) on the screen", file: file, line: line)
+        return target
+    }
+
+    /// Reveals a control on the Analytics screen and, if it has scrolled up under the navigation bar,
+    /// brings it back below the bar. On iOS 26 the page slides under the bar, where a control still
+    /// reads as on screen and hittable, but a tap lands on the bar: the period picker stayed on Year
+    /// after two taps on Month that way.
+    @discardableResult
+    private func revealBelowBar(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let target = reveal(identifier, searchingFirst: .up, file: file, line: line)
+        let bar = app.navigationBars["Analytics"]
+        for _ in 0..<6 {
+            guard target.exists, bar.exists, target.frame.minY < bar.frame.maxY else { break }
+            drag(.up)
+            settle(target)
+        }
+        XCTAssertFalse(bar.exists && target.frame.minY < bar.frame.maxY, "\(identifier) is still under the navigation bar", file: file, line: line)
         return target
     }
 

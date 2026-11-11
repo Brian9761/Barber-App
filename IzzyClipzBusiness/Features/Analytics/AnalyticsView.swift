@@ -127,6 +127,9 @@ struct AnalyticsView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 24)
             .background(cardBackground)
+            // A container of its own, so its title, message and Try again keep their own names
+            // (an identifier on the whole view would otherwise replace Try again's).
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("analyticsLoadError")
         } else {
             LoadingCards()

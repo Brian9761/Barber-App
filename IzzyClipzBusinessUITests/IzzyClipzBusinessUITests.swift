@@ -416,7 +416,10 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("pickProduct-Sample pomade")
         let pomade = element("ticketItem-Sample pomade")
         XCTAssertTrue(pomade.waitForExistence(timeout: 10), "The pomade isn't on the ticket")
-        reveal("quantity-Sample pomade").buttons["Increment"].tap()
+        // The stepper's + button: "Increment" on older iOS, "quantity-Sample pomade-Increment" (with
+        // a label ending in "Increment") on iOS 26.
+        let quantity = reveal("quantity-Sample pomade")
+        quantity.buttons.matching(NSPredicate(format: "identifier ENDSWITH %@ OR label ENDSWITH %@", "Increment", "Increment")).firstMatch.tap()
         XCTAssertTrue(waitUntil(element("paymentAmount"), toMatch: NSPredicate(format: "value == %@", "36 dollars")), "Two pomades: $36")
 
         tap("addProduct")
