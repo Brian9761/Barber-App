@@ -219,10 +219,15 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   await shot(page, testInfo, 'b08-fee-charged', { panel: true });
   await panel.getByRole('button', { name: 'Close' }).click();
 
-  // Sign out: the demo opens again with its one button.
+  // Sign out: the demo opens again with its one button. The barber picked last at checkout goes
+  // with the sign-in, as the Privacy Policy says ("Both when staff sign out").
+  const lastBarber = () => page.evaluate(() => localStorage.getItem('izzy.business.lastBarber.v1'));
+  expect(await lastBarber()).not.toBeNull();
   await signOutButton(page, testInfo).click();
   await page.getByTestId('sign-out-dialog').getByRole('button', { name: 'Sign out', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Open the Business demo' })).toBeVisible();
+  expect(await lastBarber()).toBeNull();
+  expect(await page.evaluate(() => localStorage.getItem('izzy.demo.business.session.v1'))).toBeNull();
 
   // Nothing went to /api, from the pages, the service worker or anything else.
   expect(fromBrowser).toEqual([]);

@@ -302,6 +302,9 @@ test('Sign out signs this computer out, and a computer signed out from the iPhon
   browserConsole.allow(/401/);
   await signInWithCode(page, request);
   const signedIn = await ownerCall<{ sessions: unknown[] }>(request, 'GET', '/api/owner/computer-sessions');
+  // The barber picked last at checkout (as a sale leaves it) goes with the sign-in, as the Privacy Policy says.
+  const lastBarber = () => page.evaluate(() => localStorage.getItem('izzy.business.lastBarber.v1'));
+  await page.evaluate(() => localStorage.setItem('izzy.business.lastBarber.v1', JSON.stringify('carlos-rafael')));
   await signOutButton(page, testInfo).click();
   const dialog = page.getByTestId('sign-out-dialog');
   await expect(dialog.getByRole('heading')).toHaveText('Sign out on this computer?');
@@ -309,16 +312,19 @@ test('Sign out signs this computer out, and a computer signed out from the iPhon
   await expect(page.getByTestId('signed-out-line')).toContainText("You're signed out on this computer.");
   await expect(page.getByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem('izzy.business.session.v1'))).toBeNull();
+  expect(await lastBarber()).toBeNull();
   const after = await ownerCall<{ sessions: unknown[] }>(request, 'GET', '/api/owner/computer-sessions');
   expect(after.sessions.length).toBe(signedIn.sessions.length - 1);
   await shot(page, testInfo, 'b10-signed-out');
 
   // Signed in again, then signed out from the iPhone (every computer): the next page drops back to sign-in.
   await signInWithCode(page, request);
+  await page.evaluate(() => localStorage.setItem('izzy.business.lastBarber.v1', JSON.stringify('carlos-rafael')));
   await ownerCall(request, 'DELETE', '/api/owner/computer-sessions');
   await navLink(page, 'Analytics').click();
   await expect(page.getByTestId('signed-out-line')).toContainText('This computer was signed out.');
   await expect(page.getByLabel('6-digit code')).toBeVisible();
+  expect(await lastBarber()).toBeNull();
   await expectAccessible(page, 'signed out from the iPhone');
   await shot(page, testInfo, 'b11-signed-out-from-iphone');
 });

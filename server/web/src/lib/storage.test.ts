@@ -207,4 +207,24 @@ describe('this computer’s sign-in to Izzy Clipz Business', () => {
     pruneBusinessSession(NOW);
     expect(localStorage.getItem('izzy.business.session.v1')).not.toBeNull();
   });
+
+  it('takes the barber picked last at checkout with the sign-in, also one left from an earlier sign-out', () => {
+    localStorage.setItem('izzy.business.session.v1', session('2026-11-02T18:00:00Z'));
+    localStorage.setItem('izzy.business.lastBarber.v1', JSON.stringify('carlos-rafael'));
+    pruneBusinessSession(new Date('2026-11-02T17:59:59Z'));
+    expect(localStorage.getItem('izzy.business.lastBarber.v1')).not.toBeNull();
+    pruneBusinessSession(new Date('2026-11-02T18:00:00Z'));
+    expect(localStorage.getItem('izzy.business.lastBarber.v1')).toBeNull();
+
+    // Signed out before signing out took it too: no sign-in left, so it goes.
+    localStorage.setItem('izzy.business.lastBarber.v1', JSON.stringify('carlos-rafael'));
+    pruneBusinessSession(NOW);
+    expect(localStorage.getItem('izzy.business.lastBarber.v1')).toBeNull();
+
+    // The demo's sign-in keeps it as the real one does.
+    localStorage.setItem('izzy.demo.business.session.v1', session('2026-12-02T18:00:00Z'));
+    localStorage.setItem('izzy.business.lastBarber.v1', JSON.stringify('carlos-rafael'));
+    pruneBusinessSession(NOW);
+    expect(localStorage.getItem('izzy.business.lastBarber.v1')).not.toBeNull();
+  });
 });

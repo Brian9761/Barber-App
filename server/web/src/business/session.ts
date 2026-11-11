@@ -6,10 +6,13 @@
 //
 // The demo keeps its own sign-in under a key of its own, so the real site, should it
 // ever open at the demo's address, never sends the demo's token to the shop's server.
+//
+// The barber picked last at checkout (lib/ticket.ts) goes with the sign-in: signing out
+// (here, from the iPhone or from another computer) removes both, as the Privacy Policy says.
 
 import { useSyncExternalStore } from 'react';
 import { isDemo } from '../demo/mode';
-import { BUSINESS_SESSION_KEY, DEMO_BUSINESS_SESSION_KEY, readJSON, removeKey, writeJSON } from '../lib/storage';
+import { BUSINESS_LAST_BARBER_KEY, BUSINESS_SESSION_KEY, DEMO_BUSINESS_SESSION_KEY, readJSON, removeKey, writeJSON } from '../lib/storage';
 import type { SignedIn } from './types';
 
 export const SESSION_KEY = BUSINESS_SESSION_KEY;
@@ -52,6 +55,12 @@ function isStoredSession(value: unknown): value is StoredSession {
   );
 }
 
+/** This computer's sign-in has ended: it goes, and the barber picked last at checkout with it. */
+function forgetSignIn(): void {
+  removeKey('local', key());
+  removeKey('local', BUSINESS_LAST_BARBER_KEY);
+}
+
 /** The session kept here, or null; `expired` when one was kept but its 30 days have run out. */
 function load(): { session: StoredSession | null; expired: boolean } {
   const stored = readJSON('local', key());
@@ -59,7 +68,7 @@ function load(): { session: StoredSession | null; expired: boolean } {
   // One that ran out is gone (the server would say so on the first call anyway), and the
   // sign-in page says why, as it does when the server turns a session down.
   if (Date.parse(stored.expiresAt) <= Date.now()) {
-    removeKey('local', key());
+    forgetSignIn();
     return { session: null, expired: true };
   }
   return { session: stored, expired: false };
@@ -115,9 +124,9 @@ export const session = {
     set({ session: stored, reason: 'none', note: null });
   },
 
-  /** Signed out on this computer ("Sign out"), with anything more to say about it. */
+  /** Signed out on this computer ("Sign out"), with anything more to say about it. The barber picked last goes too. */
   signOut(note: string | null = null): void {
-    removeKey('local', key());
+    forgetSignIn();
     loaded = true;
     set({ session: null, reason: 'signedOut', note });
   },
@@ -129,7 +138,7 @@ export const session = {
   expire(token: string): void {
     ensureLoaded();
     if (state.session?.token !== token) return;
-    removeKey('local', key());
+    forgetSignIn();
     set({ session: null, reason: 'expired', note: null });
   },
 

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import sessionFixture from '../../../test/fixtures/contract/computer-session-created.json';
+import { BUSINESS_LAST_BARBER_KEY } from '../lib/storage';
+import { lastBarber, rememberBarber } from './lib/ticket';
 import { DEMO_SESSION_KEY, SESSION_KEY, session } from './session';
 
 // This computer's sign-in: the session token under one localStorage key (the demo's under
@@ -30,6 +32,44 @@ describe('this computer’s session', () => {
     session.signOut('A note');
     expect(session.current()).toEqual({ session: null, reason: 'signedOut', note: 'A note' });
     expect(localStorage.getItem(SESSION_KEY)).toBeNull();
+  });
+
+  it('forgets the barber picked last at checkout when staff sign out, as the Privacy Policy says', () => {
+    session.signIn(sessionFixture as never);
+    rememberBarber('carlos-rafael');
+    expect(lastBarber()).toBe('carlos-rafael');
+    session.signOut();
+    expect(lastBarber()).toBeNull();
+    expect(localStorage.getItem(BUSINESS_LAST_BARBER_KEY)).toBeNull();
+    expect(Object.keys(localStorage)).toEqual([]);
+  });
+
+  it('forgets the barber picked last when the server ends the session (signed out from the iPhone), or its 30 days run out', () => {
+    session.signIn(sessionFixture as never);
+    rememberBarber('carlos-rafael');
+    session.expire('some-older-token');
+    expect(lastBarber()).toBe('carlos-rafael');
+    session.expire(sessionFixture.token);
+    expect(lastBarber()).toBeNull();
+
+    session.reset();
+    localStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({ token: 'x'.repeat(43), id: 'a', name: 'Old', createdAt: '2020-01-01T00:00:00Z', expiresAt: '2020-01-31T00:00:00Z' }),
+    );
+    rememberBarber('carlos-rafael');
+    expect(session.current().reason).toBe('expired');
+    expect(lastBarber()).toBeNull();
+  });
+
+  it('keeps the barber picked last while signed in, and the demo’s sign out forgets it too', () => {
+    vi.stubEnv('VITE_DEMO_MODE', '1');
+    session.signIn(sessionFixture as never);
+    rememberBarber('carlos-rafael');
+    expect(session.token()).toBe(sessionFixture.token);
+    expect(lastBarber()).toBe('carlos-rafael');
+    session.signOut();
+    expect(Object.keys(localStorage)).toEqual([]);
   });
 
   it('ends only the session the server turned down, not one signed in since', () => {
