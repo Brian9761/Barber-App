@@ -251,7 +251,7 @@ enum FakeAnalytics {
 
     /// Days from `from` to `to`: negative when `to` is earlier.
     static func days(from: LocalDate, to: LocalDate) -> Int {
-        to >= from ? IzzyAPI.AnalyticsQuery(from: from, to: to).dayCount - 1 : -(IzzyAPI.AnalyticsQuery(from: to, to: from).dayCount - 1)
+        AnalyticsDayRange.days(from: from, to: to)
     }
 
     /// One series entry's days: a single day ("2026-11-01"), or the part of a month ("2026-11")
