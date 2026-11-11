@@ -183,7 +183,7 @@ struct SaleDetailView: View {
                     .accessibilityIdentifier("voidSale")
                 } footer: {
                     Text(sale.method == .card
-                        ? "For a mistake: the sale stops counting. Voiding doesn't refund the card: refund the card in your Stripe Dashboard."
+                        ? "For a mistake: the sale stops counting. Voiding doesn't refund the card. Refund the card in your Stripe Dashboard."
                         : "For a mistake: the sale stops counting in your sales.")
                 }
             }

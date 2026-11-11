@@ -117,7 +117,7 @@ final class SalesStore {
         var text = "It stops counting in your sales"
         text += sale.appointmentId != nil ? ", and the appointment can be checked out again." : "."
         if sale.method == .card {
-            text += " Voiding doesn't refund the card: refund the card in your Stripe Dashboard."
+            text += " Voiding doesn't refund the card. Refund the card in your Stripe Dashboard."
         }
         return text
     }

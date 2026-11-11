@@ -365,7 +365,7 @@ final class SalesStoreTests: XCTestCase {
 
     func testVoidingACardSaleSaysToRefundTheCardInStripe() async throws {
         let card = IzzyAPI.Sale(id: "s", barberId: "israel-flores", barberName: "Izzy", method: .card, paymentIntentId: "pi_1", items: [], soldAt: TestClock.now)
-        XCTAssertTrue(SalesStore.voidExplanation(for: card).contains("refund the card in your Stripe Dashboard"))
+        XCTAssertTrue(SalesStore.voidExplanation(for: card).contains("Refund the card in your Stripe Dashboard."))
         XCTAssertEqual(IzzyAPI.VoidedSale(sale: card).message, "The sale was voided, so it no longer counts in your sales. Voiding doesn't refund the card: refunds are made in the Stripe Dashboard.")
     }
 
