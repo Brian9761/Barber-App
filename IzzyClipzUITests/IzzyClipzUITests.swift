@@ -371,6 +371,12 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(containing("Carlos").exists, "The review should name Carlos")
         bookAppointment()
         XCTAssertTrue(element("bookedSummary").label.contains("Carlos"), element("bookedSummary").label)
+
+        // "Book again" on the confirmation: Carlos's haircut again, at the times.
+        tap("bookedBookAgainButton")
+        waitForPickedDay()
+        XCTAssertTrue(containing("Haircut with Carlos").exists, "Book again didn't keep the service and the barber")
+        XCTAssertTrue(labeled("Step 3 of 5").exists)
     }
 
     /// Flowxbori's second haircut (an hour) is its own offering, booked as such.
@@ -624,22 +630,26 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("appointmentCard")), "The appointment is still listed")
     }
 
-    /// The shop cancelled it: the app finds out when it opens and says so, on Home too. Booking
-    /// another time, later than the cancelled one, puts the new appointment on Home under the
-    /// shop's cancellation (it used to stay hidden until the cancelled time was over).
+    /// The shop cancelled it: the app finds out when it opens and says so, on Home too. "Book
+    /// another time" starts the same service with the same barber at the times. Booking another
+    /// time, later than the cancelled one, puts the new appointment on Home under the shop's
+    /// cancellation (it used to stay hidden until the cancelled time was over).
     func testShopCancelledAppointment() {
         launch(UITestArguments.bookedAppointment, UITestArguments.shopCancels, UITestArguments.savedDetails)
         XCTAssertTrue(labeled("Cancelled by the shop").waitForExistence(timeout: 20), "Home doesn't say the shop cancelled it")
-        XCTAssertTrue(element("bookAgainButton").exists)
+        let bookAgain = element("bookAgainButton")
+        XCTAssertTrue(bookAgain.exists)
+        XCTAssertEqual(bookAgain.label, "Book another time")
         XCTAssertFalse(element("cancelAppointmentButton").exists)
-        scroll(toReveal: element("bookAgainButton"))
+        scroll(toReveal: bookAgain)
         screenshot("36-Cancelled-By-The-Shop")
         tap("bookAgainButton")
-        XCTAssertTrue(element("chooseAnyBarber").waitForExistence(timeout: 10), "Book another time didn't start booking the service")
-        assertSelectedTab("Book")
-
-        tap("chooseAnyBarber")
+        // The seeded booking is a haircut with Carlos: straight to his times.
         waitForTimes()
+        assertSelectedTab("Book")
+        XCTAssertTrue(containing("Haircut with Carlos").exists, "Book another time didn't keep the service and the barber")
+        XCTAssertTrue(labeled("Step 3 of 5").exists)
+
         // The cancelled one is 2 to 14 days out (FakeShopAPI.seedBooking), so this is after it.
         pickOpenDay(atLeast: 15)
         pickFirstTime()
@@ -655,6 +665,37 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(cancelled.exists, "Home no longer says the shop cancelled the earlier one")
         XCTAssertTrue(element("bookAgainButton").exists)
         XCTAssertLessThan(cancelled.frame.minY, next.frame.minY, "The earlier, cancelled appointment should come first")
+    }
+
+    /// A cancelled appointment offers "Book again": the same service with the same barber, straight
+    /// to the day and time (with "Pick a barber" a step back), then booked as usual.
+    func testBookAgainFromACancelledAppointment() {
+        launch(UITestArguments.bookedAppointment, UITestArguments.savedDetails)
+        openTab("Book")
+        let cancel = element("cancelAppointmentButton")
+        XCTAssertTrue(cancel.waitForExistence(timeout: 15), "Book doesn't show the booked appointment")
+        scroll(toReveal: cancel)
+        cancel.tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Cancel appointment", "cancelAppointmentButton")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "No confirmation before cancelling")
+        confirm.tap()
+        XCTAssertTrue(labeled("Cancelled").waitForExistence(timeout: 15), "The appointment doesn't say it's cancelled")
+
+        let bookAgain = element("bookAgainButton")
+        XCTAssertTrue(bookAgain.waitForExistence(timeout: 10), "A cancelled appointment has no Book again")
+        XCTAssertEqual(bookAgain.label, "Book again")
+        scroll(toReveal: bookAgain)
+        screenshot("36b-Book-Again")
+        bookAgain.tap()
+        waitForTimes()
+        XCTAssertTrue(containing("Haircut with Carlos").exists, "Book again didn't keep the service and the barber")
+        XCTAssertTrue(labeled("Step 3 of 5").exists)
+        pickFirstTime()
+        continueToDetails()
+        XCTAssertEqual(element("nameField").value as? String, "Sample Client", "The remembered name isn't filled in")
+        continueToReview()
+        bookAppointment()
+        XCTAssertTrue(element("bookedSummary").label.contains("Carlos"), element("bookedSummary").label)
     }
 
     /// Offline, Home still shows the appointment as it was, and says it couldn't check it with the

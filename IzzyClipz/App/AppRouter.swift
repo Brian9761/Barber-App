@@ -157,6 +157,33 @@ struct BookingDetailsInProgress: Hashable {
     }
 }
 
+/// Where "Book again" starts a booking like an earlier appointment (on a past or cancelled
+/// appointment's card, and on "You're booked"): the same service with the same barber, straight to
+/// the day and time, or a step back when that isn't on the menu any more.
+enum BookAgain: Equatable {
+    /// The same barber's version of the service: the day-and-time step.
+    case times(BookingChoice)
+    /// The barber doesn't offer it any more (or the booking had no barber): pick one for the service.
+    case barbers(serviceID: String)
+    /// The service isn't on the menu any more: pick a service.
+    case services
+
+    /// Where a booking like `appointment` starts.
+    static func restart(for appointment: IzzyAPI.Appointment, catalog: Catalog = AppData.catalog) -> BookAgain {
+        guard catalog.service(withID: appointment.serviceId) != nil else { return .services }
+        // The exact item booked, so Flowxbori's hour-long haircut stays the hour-long one.
+        if let offering = catalog.offering(withID: appointment.offeringId), offering.serviceID == appointment.serviceId {
+            return .times(.offering(offering))
+        }
+        // Otherwise the barber's version of the service, when they have just the one.
+        let theirs = catalog.offerings(forService: appointment.serviceId).filter { $0.barberID == appointment.barberId }
+        if theirs.count == 1, let offering = theirs.first {
+            return .times(.offering(offering))
+        }
+        return .barbers(serviceID: appointment.serviceId)
+    }
+}
+
 /// What the time step is told when the client is sent back to it: reload, and say why (e.g.
 /// someone else booked the time first).
 struct TimeStepNotice: Equatable {
@@ -251,6 +278,16 @@ final class AppRouter {
         detailsInProgress = nil
         bookingPath = [.chooseService(barberID: barberID)]
         selectedTab = .book
+    }
+
+    /// "Book again": a booking like `appointment`, the same service with the same barber, at the
+    /// day and time (`BookAgain`). Going back shows "Pick a barber", to choose someone else.
+    func bookAgain(_ appointment: IzzyAPI.Appointment) {
+        switch BookAgain.restart(for: appointment) {
+        case .times(let choice): startBooking(choice: choice)
+        case .barbers(let serviceID): startBooking(serviceID: serviceID)
+        case .services: startBooking()
+        }
     }
 
     /// Switches to the Book tab at the calendar for a service on a barber's own menu. Going back
