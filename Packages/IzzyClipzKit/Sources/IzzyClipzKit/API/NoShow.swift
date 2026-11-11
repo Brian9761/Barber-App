@@ -200,13 +200,21 @@ extension IzzyAPI.Appointment {
 
     /// Why the shop can't mark this appointment a no-show now, as the server answers
     /// (`PATCH /api/owner/appointments/:id`), or `nil` when it can: a booking with a card on file
-    /// only once it has ended (409 `not_started`), and never once it's completed (409
-    /// `already_completed`; the server also remembers a completed booking that was reopened since,
-    /// which the shop's view now says in `completedAt`, and this rule doesn't read yet). One without
-    /// a card can always be marked. Ignores the checkout rule (a checked-out appointment needs its
-    /// sale voided first).
+    /// only once it has ended (409 `not_started`), and never once it's been completed, even if it
+    /// was reopened since (409 `already_completed`, "This appointment was marked completed, so it
+    /// can't become a no-show.": `completedBefore`, from the shop's view's `completedAt`). One
+    /// without a card can always be marked. Ignores the checkout rule (a checked-out appointment
+    /// needs its sale voided first).
     public func noShowMarkRefusal(at now: Date) -> String? {
-        IzzyAPI.NoShowRule.noShowMarkRefusal(status: status, hasCard: card != nil, end: end, now: now)
+        IzzyAPI.NoShowRule.noShowMarkRefusal(status: status, hasCard: card != nil, end: end, now: now, completedBefore: completedAt != nil)
+    }
+
+    /// A booking with a card on file that the shop marked completed (or checked out), now or before
+    /// it was reopened: it never becomes a no-show, since the client came (the server's
+    /// `completedAt`, which it never clears). Always `false` in the client's own view, and from a
+    /// server from before `completedAt`, where only the server's answer says so.
+    public var completedBefore: Bool {
+        card != nil && completedAt != nil
     }
 
     /// Whether the shop can mark this appointment a no-show now (`noShowMarkRefusal(at:)` is `nil`).
@@ -890,10 +898,12 @@ extension IzzyAPI {
         }
 
         /// Why the server refuses to mark a booking a no-show now (`PATCH …/:id` with `noShow`), or
-        /// `nil`: a booking with a card on file only once it has ended, and never once it's completed.
-        public static func noShowMarkRefusal(status: AppointmentStatus, hasCard: Bool, end: Date, now: Date) -> String? {
+        /// `nil`: a booking with a card on file only once it has ended, and never once it's completed,
+        /// or was completed before it was reopened (`completedBefore`: the shop's view's
+        /// `completedAt` is set), whatever the time, as the server checks it first.
+        public static func noShowMarkRefusal(status: AppointmentStatus, hasCard: Bool, end: Date, now: Date, completedBefore: Bool = false) -> String? {
             guard hasCard, status != .noShow else { return nil }
-            if status == .completed { return completedNoShowMessage }
+            if status == .completed || completedBefore { return completedNoShowMessage }
             return end > now ? noShowBeforeEndMessage : nil
         }
 

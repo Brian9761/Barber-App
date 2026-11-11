@@ -173,9 +173,11 @@ enum FakeSampleHistory {
                 appointment.status = .completed
                 appointment.sale = IzzyAPI.AppointmentSale(sale: sale)
                 appointment.payment = IzzyAPI.AppointmentPayment(status: .paid, amountCents: sale.totalCents, paidAt: sale.soldAt)
+                appointment.completedAt = sale.soldAt
             } else if outcome < 0.84 {
                 // Marked Done without a checkout: it counts at its booked price.
                 appointment.status = .completed
+                appointment.completedAt = end.addingTimeInterval(60)
             } else if outcome < 0.91 {
                 appointment.status = .noShow
                 // A no-show's fee is charged only once the appointment has ended.

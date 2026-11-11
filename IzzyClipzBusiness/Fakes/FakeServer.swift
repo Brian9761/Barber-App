@@ -108,9 +108,6 @@ final class FakeServer {
     private(set) var bookingKeys: [IzzyAPI.IdempotencyKey] = []
     /// What each key booked: the appointment's ID and the request, to recognize Book again.
     private var keyed: [IzzyAPI.IdempotencyKey: (id: String, request: IzzyAPI.NewAppointment)] = [:]
-    /// The appointments that were ever marked completed, like the server's `completed_at`: one with a
-    /// card on file never becomes a no-show, even after it's reopened. A checkout completes one too.
-    var everCompleted: Set<String> = []
     /// The shop's sales (checkouts), in the order they were made, voided ones too (`FakeServerSales.swift`).
     var sales: [IzzyAPI.Sale] = []
     /// What each sale's `Idempotency-Key` recorded, to recognize Record again after a lost answer.
@@ -373,16 +370,21 @@ final class FakeServer {
         }
         // Like the server: a booking with a card on file is a no-show only once it has ended (a client
         // who comes before the end isn't one), and never once it was marked completed, even after
-        // it's reopened (the client came).
+        // it's reopened (the client came): `completedAt`, which is never cleared.
         if status == .noShow, appointment.card != nil, appointment.status != .noShow {
-            if appointment.status == .completed || everCompleted.contains(id) {
+            if appointment.status == .completed || appointment.completedAt != nil {
                 throw APIError.server(code: IzzyAPI.ErrorCode.alreadyCompleted, message: IzzyAPI.NoShowRule.completedNoShowMessage, status: 409)
             }
             if appointment.end > now() {
                 throw APIError.server(code: IzzyAPI.ErrorCode.notStarted, message: IzzyAPI.NoShowRule.noShowBeforeEndMessage, status: 409)
             }
         }
-        if status == .completed || appointment.status == .completed { everCompleted.insert(id) }
+        // When it was first marked completed, as the server keeps it: set once, kept when it's reopened.
+        // (One that's completed without it, from before, counts as completed now, as the server's
+        // migration did.)
+        if status == .completed || appointment.status == .completed {
+            appointment.completedAt = appointment.completedAt ?? now()
+        }
         let previous = appointment.status
         appointment.status = status
         if status == .cancelled {

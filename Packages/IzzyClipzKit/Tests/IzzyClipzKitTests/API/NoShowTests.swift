@@ -197,6 +197,46 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertFalse(appointment.canBeMarkedNoShow(at: end), "already one")
     }
 
+    /// A booking with a card on file that was completed and reopened since (the shop's view's
+    /// `completedAt`) never becomes a no-show, before or after its end, in the server's own words.
+    func testABookingCompletedBeforeNeverBecomesANoShow() throws {
+        var appointment = try decoder.decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
+        let end = appointment.end
+        XCTAssertNotNil(appointment.card)
+        XCTAssertFalse(appointment.completedBefore)
+        appointment.completedAt = end.addingTimeInterval(-600)
+        XCTAssertTrue(appointment.completedBefore)
+        for moment in [end.addingTimeInterval(-3_600), end, end.addingTimeInterval(60), end.addingTimeInterval(86_400)] {
+            XCTAssertEqual(appointment.noShowMarkRefusal(at: moment), "This appointment was marked completed, so it can't become a no-show.", "\(moment)")
+            XCTAssertEqual(appointment.noShowMarkRefusal(at: moment), IzzyAPI.NoShowRule.completedNoShowMessage)
+            XCTAssertFalse(appointment.canBeMarkedNoShow(at: moment), "\(moment)")
+        }
+        // The server's owner view of a visit marked done (owner-appointment-updated.json) says when;
+        // with a card on file and reopened, it's refused the same.
+        var updated = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("owner-appointment-updated.json")).appointment
+        XCTAssertEqual(updated.completedAt, utc(2026, 11, 2, 19, 5))
+        updated.status = .booked
+        updated.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
+        XCTAssertTrue(updated.completedBefore)
+        XCTAssertEqual(updated.noShowMarkRefusal(at: updated.end.addingTimeInterval(60)), IzzyAPI.NoShowRule.completedNoShowMessage)
+        // Without a card there's no fee, so it can still be marked whenever, as before.
+        appointment.card = nil
+        XCTAssertFalse(appointment.completedBefore)
+        XCTAssertNil(appointment.noShowMarkRefusal(at: end.addingTimeInterval(-3_600)))
+        XCTAssertTrue(appointment.canBeMarkedNoShow(at: end.addingTimeInterval(-3_600)))
+        // The rule on its own, as the server checks it: completed before comes first, whatever the time.
+        XCTAssertEqual(
+            IzzyAPI.NoShowRule.noShowMarkRefusal(status: .booked, hasCard: true, end: end, now: end.addingTimeInterval(-60), completedBefore: true),
+            IzzyAPI.NoShowRule.completedNoShowMessage
+        )
+        XCTAssertEqual(
+            IzzyAPI.NoShowRule.noShowMarkRefusal(status: .booked, hasCard: true, end: end, now: end.addingTimeInterval(-60)),
+            IzzyAPI.NoShowRule.noShowBeforeEndMessage
+        )
+        XCTAssertNil(IzzyAPI.NoShowRule.noShowMarkRefusal(status: .booked, hasCard: false, end: end, now: end, completedBefore: true))
+        XCTAssertNil(IzzyAPI.NoShowRule.noShowMarkRefusal(status: .noShow, hasCard: true, end: end, now: end, completedBefore: true))
+    }
+
     /// An earlier try with no final answer: "Check again" is always there, whatever happened since,
     /// because the server then only asks Stripe how that try went.
     func testAPendingFeeCanAlwaysBeCheckedAgain() throws {

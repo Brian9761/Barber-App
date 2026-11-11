@@ -132,6 +132,8 @@ struct FeePanel: Equatable {
         case .booked:
             // More than 7 days after the start, no fee can be charged any more: say that instead.
             if refusal == IzzyAPI.NoShowRule.feeDeadlineMessage { return refusal }
+            // Completed before and reopened: it can't become a no-show, so there's no fee to charge.
+            if appointment.completedBefore { return IzzyAPI.NoShowRule.completedNoShowMessage }
             return appointment.end > now
                 ? "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee."
                 : "If the client didn't come, mark a no-show. Then you can charge the fee."
@@ -213,9 +215,12 @@ struct FeePanel: Equatable {
 
     /// Under the status buttons of a booking with a card on file that hasn't ended: "Mark no-show"
     /// isn't offered yet, because until the start the client can still cancel in the app, and a
-    /// client who comes before the end isn't a no-show. Worded as the website's Business area does.
+    /// client who comes before the end isn't a no-show. One that was completed before and reopened
+    /// is never offered it, and says so in the server's words ("This appointment was marked
+    /// completed, so it can't become a no-show."). Worded as the website's Business area does.
     static func noShowHint(for appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime) -> String? {
         guard appointment.status == .booked, !appointment.canMarkNoShow(at: now) else { return nil }
+        if appointment.completedBefore { return IzzyAPI.NoShowRule.completedNoShowMessage }
         let today = shopTime.day(containing: now) == shopTime.day(containing: appointment.end)
         let when = today ? "at \(shopTime.time(appointment.end))" : "on \(shopTime.dayAndTime(appointment.end))"
         let why = appointment.start > now
@@ -247,8 +252,9 @@ struct FeePanel: Equatable {
 extension IzzyAPI.Appointment {
     /// Whether "Mark no-show" is offered for a booked appointment, by the server's rule (the Kit's
     /// `canBeMarkedNoShow(at:)`): for a booking with a card on file only once it has ended (the
-    /// server answers `not_started` before, so the client may still come), for others whenever it's
-    /// booked, as before.
+    /// server answers `not_started` before, so the client may still come) and never once it was
+    /// completed, even if it was reopened since (`completedAt`; the server answers
+    /// `already_completed`), for others whenever it's booked, as before.
     func canMarkNoShow(at now: Date) -> Bool {
         status == .booked && canBeMarkedNoShow(at: now)
     }

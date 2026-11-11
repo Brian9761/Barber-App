@@ -862,7 +862,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// Nia Sample booked online with a card for 2:30 PM. Until her haircut ends (3:15 PM) she may
-    /// still come, so there's no Mark no-show yet, and no fee to charge.
+    /// still come, so there's no Mark no-show yet, and no fee to charge. Once she's marked done and
+    /// reopened, there's never one.
     func testANoShowWithACardWaitsForTheEnd() {
         launch("-fake-cards-on-file")
         let row = reveal("appointment-Nia Sample")
@@ -874,6 +875,20 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(reveal("markCompleted").exists)
         XCTAssertFalse(element("markNoShow").exists, "Not before the end")
         XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: "once the appointment ends at 3:15 PM"))
+
+        // Marked done, then reopened: the client came, so it never becomes a no-show (the server's
+        // `completedAt`), and the details say so in the server's words.
+        tap("markCompleted")
+        XCTAssertTrue(statusShows("Completed"))
+        tap("reopenAppointment")
+        XCTAssertTrue(statusShows("Booked"))
+        let completedLine = "This appointment was marked completed, so it can't become a no-show."
+        XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: completedLine))
+        XCTAssertFalse(element("markNoShow").exists, "Never, once it was completed")
+        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: completedLine))
+        XCTAssertFalse(element("chargeFee").exists)
+        screenshot("O33-Completed-Then-Reopened")
+
         tap("cancelAppointment")
         XCTAssertTrue(text(containing: "There's no fee when the shop cancels.").waitForExistence(timeout: 10))
     }

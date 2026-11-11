@@ -1135,23 +1135,80 @@ final class NoShowFeeTests: XCTestCase {
     }
 
     /// A client who came (the visit marked completed) is never a no-show, even once it's reopened:
-    /// the server answers 409 `already_completed`, and the details say it in its words.
+    /// the sample server keeps when it was first completed (`completedAt`), as the server does, so the
+    /// details offer no Mark no-show and say why in the server's words, and a view from before
+    /// `completedAt` that still offers it gets the server's 409 `already_completed`.
     func testACompletedVisitWithACardNeverBecomesANoShow() async throws {
         let harness = Harness(options: cardsOnFile(), now: TestClock.at(15, 30))
         let store = makeStore(harness.api, now: TestClock.at(15, 30))
         await store.refresh()
         let nia = try XCTUnwrap(store.appointments.first { $0.customer.name == "Nia Sample" })
+        XCTAssertNil(nia.completedAt)
+        XCTAssertFalse(nia.completedBefore)
+        XCTAssertTrue(nia.canMarkNoShow(at: store.now), "ended, and never completed")
         let completed = await store.setStatus(.completed, for: nia)
         XCTAssertTrue(completed)
-        let reopened = await store.setStatus(.booked, for: try XCTUnwrap(store.appointment(withID: nia.id)))
+        let done = try XCTUnwrap(store.appointment(withID: nia.id))
+        XCTAssertEqual(done.completedAt, TestClock.at(15, 30), "when it was marked done")
+        let reopened = await store.setStatus(.booked, for: done)
         XCTAssertTrue(reopened)
         let booked = try XCTUnwrap(store.appointment(withID: nia.id))
-        XCTAssertTrue(booked.canMarkNoShow(at: store.now), "the app can't see that it was completed: the server says so")
-        let marked = await store.setStatus(.noShow, for: booked)
-        XCTAssertFalse(marked)
-        XCTAssertEqual(store.actionError, "This appointment was marked completed, so it can't become a no-show.")
-        XCTAssertEqual(store.appointment(withID: nia.id)?.status, .booked)
+        XCTAssertEqual(booked.status, .booked)
+        XCTAssertEqual(booked.completedAt, TestClock.at(15, 30), "kept when it's reopened")
+        XCTAssertTrue(booked.completedBefore)
+
+        // No Mark no-show and no fee, and the details say why in the server's words.
+        let line = "This appointment was marked completed, so it can't become a no-show."
+        XCTAssertFalse(booked.canMarkNoShow(at: store.now))
+        XCTAssertEqual(booked.noShowMarkRefusal(at: store.now), line)
+        XCTAssertEqual(FeePanel.noShowHint(for: booked, now: store.now, shopTime: TestClock.shopTime), line)
+        XCTAssertEqual(panel(booked, at: store.now)?.status, .notCharged(note: line))
         XCTAssertNil(panel(booked, at: store.now)?.action)
+        XCTAssertNil(panel(booked, at: store.now)?.footer)
+        // Before its end too: it never can, whatever the time.
+        XCTAssertEqual(FeePanel.noShowHint(for: booked, now: TestClock.at(14, 40), shopTime: TestClock.shopTime), line)
+        XCTAssertFalse(booked.canMarkNoShow(at: booked.end.addingTimeInterval(86_400)))
+        // Once the 7 days are over, that's what the fee says, as for any other booking.
+        let weekOn = booked.start.addingTimeInterval(7 * 24 * 60 * 60 + 60)
+        XCTAssertEqual(panel(booked, at: weekOn)?.status, .notCharged(note: IzzyAPI.NoShowRule.feeDeadlineMessage))
+
+        // A view from before `completedAt` still offers it: the sample server refuses, as the server does.
+        var older = booked
+        older.completedAt = nil
+        XCTAssertTrue(older.canMarkNoShow(at: store.now))
+        let marked = await store.setStatus(.noShow, for: older)
+        XCTAssertFalse(marked)
+        XCTAssertEqual(store.actionError, line)
+        XCTAssertEqual(store.appointment(withID: nia.id)?.status, .booked)
+
+        // Marked done again later (half an hour on), it keeps the first time.
+        let later = Harness(options: cardsOnFile(), now: TestClock.at(16, 0))
+        later.server.appointments = harness.server.appointments
+        let again = try later.server.setStatus(.completed, of: nia.id)
+        XCTAssertEqual(again.completedAt, TestClock.at(15, 30))
+    }
+
+    /// Checking out completes a visit too, and when it was first checked out is kept: a booking with
+    /// a card on file whose sale is voided and that's reopened still can't become a no-show.
+    func testACheckedOutVisitWithACardKeepsWhenItWasCompleted() async throws {
+        let harness = Harness(options: cardsOnFile(), now: TestClock.at(15, 30))
+        let nia = try XCTUnwrap(harness.appointment(named: "Nia Sample"))
+        let draft = try harness.server.draftSale(barberId: nia.barberId, appointmentId: nia.id, customerName: nil, items: [.service(nia.serviceId)])
+        let sale = harness.server.insertSale(draft, method: .cash, paymentIntentId: nil, soldAt: TestClock.at(15, 20))
+        let checkedOut = try XCTUnwrap(harness.appointment(named: "Nia Sample"))
+        XCTAssertEqual(checkedOut.status, .completed)
+        XCTAssertEqual(checkedOut.completedAt, TestClock.at(15, 20))
+        _ = try harness.server.voidSale(id: sale.id, reason: nil)
+        let reopened = try harness.server.setStatus(.booked, of: nia.id)
+        XCTAssertEqual(reopened.completedAt, TestClock.at(15, 20), "kept: the server never clears it")
+        XCTAssertTrue(reopened.completedBefore)
+        XCTAssertFalse(reopened.canMarkNoShow(at: TestClock.at(15, 30)))
+        XCTAssertThrowsError(try harness.server.setStatus(.noShow, of: nia.id)) { error in
+            XCTAssertEqual(
+                error as? APIError,
+                .server(code: IzzyAPI.ErrorCode.alreadyCompleted, message: IzzyAPI.NoShowRule.completedNoShowMessage, status: 409)
+            )
+        }
     }
 
     /// No fee can be charged more than 7 days after the appointment's start; exactly 7 days after still counts.

@@ -183,7 +183,8 @@ extension FakeServer {
             if !paidByCard(id) {
                 appointment.payment = IzzyAPI.AppointmentPayment(status: .paid, amountCents: sale.totalCents, paidAt: soldAt)
             }
-            everCompleted.insert(id)
+            // Checking out completes it, as the server keeps it: the first time only.
+            appointment.completedAt = appointment.completedAt ?? soldAt
             Self.refreshFeeReason(&appointment)
             appointments[index] = appointment
         }

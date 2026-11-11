@@ -156,7 +156,11 @@ time:
   the client never cancelled. **Mark no-show** shows only once a booking
   with a card on file has ended: until then the client may still come
   (and can cancel in the app until the start). A visit marked completed
-  never becomes a no-show, even once it's reopened: the client came.
+  (or checked out) never becomes a no-show, even once it's reopened: the
+  client came. The server says when it was first completed
+  (`completedAt`), so a reopened one offers no **Mark no-show**, and its
+  details say "This appointment was marked completed, so it can't become
+  a no-show."
 - **A late cancellation**: the client cancelled in the app less than the
   window before the start (1 hour to begin with), and more than 15
   minutes after booking. Cancelling earlier, or within 15 minutes of
