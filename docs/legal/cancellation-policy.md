@@ -3,7 +3,7 @@
 **Effective date:** [TO FILL IN: the day this version goes live]\
 **Last updated:** [TO FILL IN: the same day]
 
-This policy explains how to cancel an appointment with Izzy Clipz Barbershop ("Izzy Clipz", "we", "us"), and when a fee may be charged if you cancel late or don't come. It's part of our [Terms of Service](terms.md).
+This policy explains how to cancel an appointment with Izzy Clipz Barbershop ("Izzy Clipz", "we", "us"), and when a fee may be charged if you cancel late or don't come. It's part of our [Terms of Service](terms.md). Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company.
 
 ## The short version
 

@@ -3,7 +3,7 @@
 **Effective date:** [TO FILL IN: the day this version goes live]\
 **Last updated:** [TO FILL IN: the same day]
 
-This policy explains what information Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") collects through its website, its installable web apps and its iPhone apps, why we collect it, who else receives it, how long we keep it, and the choices you have.
+This policy explains what information Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") collects through its website, its installable web apps and its iPhone apps, why we collect it, who else receives it, how long we keep it, and the choices you have. Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company.
 
 ## The short version
 

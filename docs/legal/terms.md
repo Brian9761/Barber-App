@@ -3,7 +3,7 @@
 **Effective date:** [TO FILL IN: the day this version goes live]\
 **Last updated:** [TO FILL IN: the same day]
 
-These terms are the rules for using the website, the installable web app and the iPhone app of Izzy Clipz Barbershop ("Izzy Clipz", "we", "us"), and for booking appointments through them. Please read them before you book.
+These terms are the rules for using the website, the installable web app and the iPhone app of Izzy Clipz Barbershop ("Izzy Clipz", "we", "us"), and for booking appointments through them. Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company. Please read these terms before you book.
 
 ## The short version
 
