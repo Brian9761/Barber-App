@@ -343,7 +343,7 @@ struct PaymentsTodayView: View {
                 }
             }
         }
-        .navigationTitle("Payments today")
+        .navigationTitle("Card payments today")
         .refreshable { await checkout.loadPayments() }
     }
 }

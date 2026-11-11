@@ -179,7 +179,7 @@ card, the fee agreed at booking and what it covers. **Charge no-show fee
 ($35)** or **Charge late cancellation fee ($35)** asks first ("Charge $35
 to Kim Sample's Visa •••• 4242?"), then shows Stripe's answer:
 
-- **Charged**: the money is in Stripe, and Payments today lists it. Only a
+- **Charged**: the money is in Stripe, and Card payments today lists it. Only a
   charge Stripe confirms counts as charged.
 - **Declined**, with the bank's reason in plain words. **Charge again**
   tries once more (it asks first), or ask the client to pay at the shop.
@@ -196,7 +196,7 @@ to Kim Sample's Visa •••• 4242?"), then shows Stripe's answer:
 
 When no answer comes back at all (a dropped connection, say), the app
 loads the day again and shows the fee as the server has it. If the charge
-went through after all, it shows as charged (and Payments today lists
+went through after all, it shows as charged (and Card payments today lists
 it); if Stripe said no, the decline shows. "We don't know yet if the card
 was charged" shows only while that's still true: the day couldn't be
 loaded, or the fee is still waiting for Stripe.
