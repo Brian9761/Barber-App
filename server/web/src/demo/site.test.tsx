@@ -6,6 +6,9 @@ import { DEMO_STORE_KEY, loadAppointments, saveAppointment } from '../lib/storag
 import { newToken } from '../lib/tokens';
 import { FLOW45, renderApp } from '../test/api';
 
+/** What the demo's "Forget me" says it did, as the Privacy Policy puts it: what it kept about the visitor goes; its offline copies of the site stay. */
+const DEMO_FORGOTTEN = "Done. This computer no longer keeps your details, the demo's bookings or Izzy Clipz Business's sample shop. The copies of the site's own pages stay, so it still works offline.";
+
 // The site as the demo build has it: every API call answered in the browser by the demo's
 // stand-in for the shop (vite.config.ts swaps src/api/backend.ts for src/demo/backend.ts).
 vi.mock('../api/backend', async () => {
@@ -70,16 +73,18 @@ describe('My appointments in the demo', () => {
     expect(localStorage.getItem(DEMO_STORE_KEY)).not.toBeNull();
     renderApp('/appointments');
     await screen.findByTestId('appointment-card');
-    expect(screen.getByTestId('forget-computer').textContent).toContain('the bookings made in the demo, and anything else the demo kept here');
+    expect(screen.getByTestId('forget-computer').textContent).toContain("This computer can forget your details, the bookings made in the demo and Izzy Clipz Business's sample shop.");
 
     await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
     const dialog = screen.getByTestId('forget-dialog');
     expect(dialog.textContent).toContain(
-      "This computer will forget your name and number, the bookings made in the demo, and anything else the demo kept here, Izzy Clipz Business's sample shop included.",
+      "This computer will forget your details, the bookings made in the demo and Izzy Clipz Business's sample shop. The copies of the site's own pages stay, so it still works offline.",
     );
     expect(dialog.textContent).not.toContain('stay booked');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Forget me' }));
-    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps anything from the demo.');
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe(DEMO_FORGOTTEN);
+    // Where the focus goes: the button that asked is gone.
+    expect(document.activeElement).toBe(screen.getByTestId('forget-status'));
     expect(loadAppointments()).toEqual([]);
     expect(localStorage.getItem(DEMO_STORE_KEY)).toBeNull();
     // Nothing of the client's anywhere in this browser's storage.
@@ -96,7 +101,7 @@ describe('My appointments in the demo', () => {
     renderApp('/appointments');
     await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
     await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
-    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps anything from the demo.');
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe(DEMO_FORGOTTEN);
     expect(loadCard()).toBeNull();
     await vi.waitFor(() => expect(deleteCard).toHaveBeenCalledTimes(1));
     await expect(deleteCard.mock.results[0]!.value).rejects.toMatchObject({ code: 'not_found', status: 404 });
@@ -130,10 +135,10 @@ describe('My appointments in the demo', () => {
     localStorage.setItem('izzy.visits.v1', '1');
     renderApp('/appointments');
     expect(await screen.findByText('No appointments booked on this computer yet.')).toBeTruthy();
-    expect(screen.getByTestId('forget-computer').textContent).toContain('anything else the demo kept here');
+    expect(screen.getByTestId('forget-computer').textContent).toContain("Izzy Clipz Business's sample shop");
     await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
     await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
-    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe('Done. This computer no longer keeps anything from the demo.');
+    expect((await screen.findByTestId('forgotten-notice')).textContent).toBe(DEMO_FORGOTTEN);
     expect(Object.keys(localStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
     expect(Object.keys(sessionStorage).filter((key) => key.startsWith('izzy.'))).toEqual([]);
     // Nothing left, so nothing more to forget.

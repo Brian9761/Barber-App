@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ErrorCode, errorMessage, isApiError } from '../api/client';
 import type { Catalog } from '../api/types';
@@ -77,7 +77,8 @@ function remembersAnything(saved: SavedAppointment[]): boolean {
  * progress and the appointments listed here. The appointments stay booked with the shop.
  * (In the demo, the bookings made in it go too: they only ever lived in this browser; and so
  * does what the Add to Home Screen bar kept, and Izzy Clipz Business's sample shop, sign-in and
- * barber picked last, so the demo leaves nothing behind.)
+ * barber picked last, so the demo keeps nothing about the visitor. The service worker's copies
+ * of the site's own pages stay, so it still works offline, as the Privacy Policy says.)
  * Gives back the key of the card this browser held, if any, for the shop to delete it.
  */
 function forgetThisComputer(): string | null {
@@ -125,6 +126,10 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [forgotten, setForgotten] = useState(false);
   const [cardRemoval, setCardRemoval] = useState<CardRemovalState | null>(null);
+  // What "Forget me" did is said in a status region that's always on the page, so screen readers
+  // read it out as it appears; and it takes the focus, in view: the button that asked is gone by then.
+  const forgetStatus = useRef<HTMLDivElement>(null);
+  const [showForgotten, setShowForgotten] = useState(false);
   // The demo's stand-in for the shop is in this browser, so it can always be asked.
   const online = useOnline() || demo;
   // Offline, the page doesn't show what it last heard from the shop: it could have changed since.
@@ -136,28 +141,42 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
     // "Forget me" on our website), and a problem reaching the shop never keeps anything here.
     const cardToken = forgetThisComputer();
     setForgotten(true);
+    setShowForgotten(true);
     reload();
     setCardRemoval(cardToken ? { status: 'asking' } : null);
     if (cardToken) void deleteSavedCard(cardToken).then(setCardRemoval);
   };
+  useEffect(() => {
+    if (!showForgotten) return;
+    setShowForgotten(false);
+    const status = forgetStatus.current;
+    if (!status) return;
+    status.focus({ preventScroll: true });
+    // Below the sticky nav (the page's scroll-padding). (Optional: jsdom, where the unit tests run, has no scrolling.)
+    status.scrollIntoView?.({ block: 'nearest' });
+  }, [showForgotten]);
   const cardLine = forgetMeCardLine(cardRemoval, catalog.shop.phone.display);
-  const forgottenNotice = forgotten ? (
-    <>
-      <Notice tone="success" role="status" testId="forgotten-notice">
-        <p>
-          {demo
-            ? `Done. This ${device} no longer keeps anything from the demo.`
-            : `Done. This ${device} no longer keeps your details, card or appointments. Your appointments are still booked with the shop.`}
-        </p>
-        {cardLine && cardRemoval?.status !== 'failed' ? <p data-testid="card-removal">{cardLine}</p> : null}
-      </Notice>
-      {cardLine && cardRemoval?.status === 'failed' ? (
+  const forgottenNotice = (
+    <div className={`appointments__forgotten${forgotten ? ' is-shown' : ''}`}>
+      <div ref={forgetStatus} className="appointments__forgotten-status" role="status" tabIndex={-1} data-testid="forget-status">
+        {forgotten ? (
+          <Notice tone="success" testId="forgotten-notice">
+            <p>
+              {demo
+                ? `Done. This ${device} no longer keeps your details, the demo's bookings or Izzy Clipz Business's sample shop. The copies of the site's own pages stay, so it still works offline.`
+                : `Done. This ${device} no longer keeps your details, card or appointments. Your appointments are still booked with the shop.`}
+            </p>
+            {cardLine && cardRemoval?.status !== 'failed' ? <p data-testid="card-removal">{cardLine}</p> : null}
+          </Notice>
+        ) : null}
+      </div>
+      {forgotten && cardLine && cardRemoval?.status === 'failed' ? (
         <Notice tone="warning" role="alert" testId="card-removal">
           <p>{cardLine}</p>
         </Notice>
       ) : null}
-    </>
-  ) : null;
+    </div>
+  );
 
   // Check each one with the shop: it may have been cancelled by the shop, or completed. With no
   // connection, the page says so instead, and checks again once the connection is back.
@@ -204,15 +223,12 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
     };
   }, [reload, online, attempt]);
 
-  const upcoming = saved.filter((s) => new Date(s.appointment.end) > now);
-  const past = saved.filter((s) => new Date(s.appointment.end) <= now).reverse();
-  const next = upcoming.find((s) => s.appointment.status === 'booked');
-
   // Offline in an app just added to the Home Screen, appointments may still be on their way in.
   const carriedWaiting = offline && carriedAppointments().some((c) => !saved.some((s) => s.id === c.id));
+  let content: ReactNode;
   if (offline && (saved.length > 0 || carriedWaiting)) {
-    return (
-      <div className="container container--narrow appointments">
+    content = (
+      <>
         <div className="status-message card card--gray" role="status" data-testid="appointments-offline">
           <h2>You're offline.</h2>
           <p className="lead secondary">Your appointments show here again once you're back online and they're checked with the shop.</p>
@@ -224,14 +240,11 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
           </button>
         </div>
         <ForgetComputer catalog={catalog} device={device} onForget={forget} />
-      </div>
+      </>
     );
-  }
-
-  if (saved.length === 0) {
-    return (
-      <div className="container container--narrow appointments">
-        {forgottenNotice}
+  } else if (saved.length === 0) {
+    content = (
+      <>
         <div className="status-message card card--gray">
           <h2>No appointments booked on this {device} yet.</h2>
           <p className="lead secondary">When you book here, your appointment shows up on this page, so you can check it or cancel it.</p>
@@ -243,12 +256,43 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
           </p>
         </div>
         {remembersAnything(saved) ? <ForgetComputer catalog={catalog} device={device} onForget={forget} /> : null}
-      </div>
+      </>
     );
+  } else {
+    content = <AppointmentsListed catalog={catalog} device={device} saved={saved} refreshError={refreshError} now={now} onChange={reload} onForget={forget} />;
   }
 
+  // The status region stays in the same place whichever of these shows, so it's never mounted with its message.
   return (
     <div className="container container--narrow appointments">
+      {forgottenNotice}
+      {content}
+    </div>
+  );
+}
+
+function AppointmentsListed({
+  catalog,
+  device,
+  saved,
+  refreshError,
+  now,
+  onChange,
+  onForget,
+}: {
+  catalog: Catalog;
+  device: DeviceWord;
+  saved: SavedAppointment[];
+  refreshError: string | null;
+  now: Date;
+  onChange: () => void;
+  onForget: () => void;
+}) {
+  const upcoming = saved.filter((s) => new Date(s.appointment.end) > now);
+  const past = saved.filter((s) => new Date(s.appointment.end) <= now).reverse();
+  const next = upcoming.find((s) => s.appointment.status === 'booked');
+  return (
+    <>
       {refreshError ? (
         <Notice tone="info" role="status">
           <p>Couldn't check for changes. {refreshError}</p>
@@ -262,7 +306,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
         <ul className="appointment-list">
           {upcoming.map((item) => (
             <li key={item.id}>
-              <AppointmentCard catalog={catalog} device={device} item={item} isNext={item.id === next?.id} now={now} onChange={reload} />
+              <AppointmentCard catalog={catalog} device={device} item={item} isNext={item.id === next?.id} now={now} onChange={onChange} />
             </li>
           ))}
         </ul>
@@ -275,7 +319,7 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
           <ul className="appointment-list">
             {past.map((item) => (
               <li key={item.id}>
-                <AppointmentCard catalog={catalog} device={device} item={item} isNext={false} now={now} onChange={reload} />
+                <AppointmentCard catalog={catalog} device={device} item={item} isNext={false} now={now} onChange={onChange} />
               </li>
             ))}
           </ul>
@@ -286,8 +330,8 @@ function AppointmentList({ catalog }: { catalog: Catalog }) {
           Book another appointment
         </Link>
       </div>
-      <ForgetComputer catalog={catalog} device={device} onForget={forget} />
-    </div>
+      <ForgetComputer catalog={catalog} device={device} onForget={onForget} />
+    </>
   );
 }
 
@@ -302,7 +346,7 @@ function ForgetComputer({ catalog, device, onForget }: { catalog: Catalog; devic
       </h2>
       <p className="secondary">
         {demo
-          ? `This ${device} can forget your name and number, the bookings made in the demo, and anything else the demo kept here.`
+          ? `This ${device} can forget your details, the bookings made in the demo and Izzy Clipz Business's sample shop.`
           : `This ${device} can forget your name, number, saved card and the appointments listed here. They stay booked with the shop.`}
       </p>
       <div>
@@ -336,8 +380,8 @@ function ForgetComputer({ catalog, device, onForget }: { catalog: Catalog; devic
       >
         {demo ? (
           <p>
-            This {device} will forget your name and number, the bookings made in the demo, and anything else the demo kept here, Izzy Clipz Business's
-            sample shop included.
+            This {device} will forget your details, the bookings made in the demo and Izzy Clipz Business's sample shop. The copies of the site's own
+            pages stay, so it still works offline.
           </p>
         ) : (
           <>

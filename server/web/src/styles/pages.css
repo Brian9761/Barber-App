@@ -952,6 +952,17 @@
   padding-bottom: var(--space-20);
 }
 
+/* What "Forget me" did. Its status region is always on the page, so screen readers read the message
+   out as it appears; until then it takes no room (out of the grid, so no gap either). */
+.appointments__forgotten {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.appointments__forgotten:not(.is-shown) {
+  position: absolute;
+}
+
 .appointments__section {
   display: grid;
   gap: var(--space-4);

@@ -18,6 +18,7 @@ import {
   setLiveReviews,
   setProtection,
   SHOTS_DIR,
+  tabTo,
   test,
   watchOtherSites,
 } from './support.js';
@@ -441,4 +442,46 @@ test('the browser keeps only what the Privacy Policy lists: one cookie on the re
   await page.getByRole('button', { name: /^Not you\? Forget me on this/ }).click();
   await expect(remember).not.toBeChecked();
   expect(await page.evaluate(() => localStorage.getItem('izzy.details.v1'))).toBeNull();
+});
+
+test('"Forget me" on My appointments says what it did where the focus goes, in view, from the keyboard alone', async ({ page, phone }, testInfo) => {
+  const demo = isDemo(testInfo);
+  // A booking, so My appointments is long and "Forget me" is far down it.
+  await page.goto('/book?service=haircut');
+  await page.getByTestId('any-barber').click();
+  await (await firstTime(page)).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expectStep(page, 4, 'Your details');
+  await fillDetails(page, { name: 'Gone Person', phone });
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByTestId('book-button').click();
+  await expect(page.getByTestId('booked-title')).toHaveText(demo ? 'Demo booking made' : "You're booked");
+
+  await page.goto('/appointments');
+  await expect(page.getByTestId('appointment-card')).toBeVisible();
+  // The status region is there all along, empty, so what appears in it is read out.
+  const status = page.getByTestId('forget-status');
+  await expect(status).toHaveAttribute('role', 'status');
+  await expect(status).toBeEmpty();
+  const forget = page.getByRole('button', { name: /^Forget me on this (computer|phone)$/ });
+  await tabTo(page, forget, 120);
+  await page.keyboard.press('Enter');
+  const dialog = page.getByTestId('forget-dialog');
+  await expect(dialog.getByRole('button', { name: 'Keep everything' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Forget me', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+
+  // The button that asked is gone: the focus goes to what happened, on screen below the nav, not to the page itself.
+  await expect(page.getByTestId('forgotten-notice')).toContainText(
+    demo ? "no longer keeps your details, the demo's bookings or Izzy Clipz Business's sample shop. The copies of the site's own pages stay" : 'no longer keeps your details, card or appointments',
+  );
+  await expect(page.getByTestId('forget-computer')).toHaveCount(0);
+  await expect(status).toBeFocused();
+  await expect(status, 'the focus ring shows').toHaveCSS('outline-style', 'solid');
+  await expect(status).toBeInViewport({ ratio: 1 });
+  const nav = (await page.getByRole('navigation', { name: 'Izzy Clipz' }).boundingBox())!;
+  expect((await status.boundingBox())!.y, 'below the nav').toBeGreaterThanOrEqual(nav.y + nav.height);
+  await expectAccessible(page, 'My appointments after Forget me');
+  await view(page, testInfo, 'legal-13-forget-me-done');
 });

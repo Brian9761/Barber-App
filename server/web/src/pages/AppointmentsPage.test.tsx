@@ -287,6 +287,48 @@ describe('on a shared computer', () => {
     expect(api.calls.filter((c) => c.method === 'POST')).toEqual([]);
   });
 
+  it('says what Forget me did where the focus goes, in a status region that was on the page all along', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
+    mockApi([['GET /api/appointments/*', { body: { appointment: fixtureAppointment } }]]);
+    renderApp('/appointments');
+    await screen.findByTestId('appointment-card');
+    // There before anything is said in it, so screen readers read out what appears in it.
+    const status = screen.getByTestId('forget-status');
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.textContent).toBe('');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    await screen.findByText('No appointments booked on this computer yet.');
+    // The same region, now with the message, and the focus on it: the button that asked is gone.
+    expect(screen.getByTestId('forget-status')).toBe(status);
+    expect(within(status).getByTestId('forgotten-notice').textContent).toBe(
+      'Done. This computer no longer keeps your details, card or appointments. Your appointments are still booked with the shop.',
+    );
+    expect(screen.queryByTestId('forget-computer')).toBeNull();
+    expect(document.activeElement).toBe(status);
+    expect(status.tabIndex).toBe(-1);
+  });
+
+  it('keeps the status region in place offline too, and focuses it after Forget me there', async () => {
+    at('2026-11-02T17:00:00Z');
+    saveAppointment(fixtureAppointment, MANAGE);
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mockApi([]);
+    renderApp('/appointments');
+    await screen.findByTestId('appointments-offline');
+    const status = screen.getByTestId('forget-status');
+    expect(status.textContent).toBe('');
+    await userEvent.click(screen.getByRole('button', { name: 'Forget me on this computer' }));
+    await userEvent.click(within(screen.getByTestId('forget-dialog')).getByRole('button', { name: 'Forget me' }));
+    await screen.findByText('No appointments booked on this computer yet.');
+    expect(screen.getByTestId('forget-status')).toBe(status);
+    expect(status.textContent).toContain('Done.');
+    expect(document.activeElement).toBe(status);
+  });
+
   it('says the card is deleted when no appointment needs it', async () => {
     rememberDetails({ name: 'Ana Flores', phone: '(442) 555-0123', email: '' });
     storeCard({ token: newToken(), card: cardSaved.card, phone: '+14425550123' }, true);
