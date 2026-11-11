@@ -36,7 +36,7 @@ Our website is also available as a public demo, and our iPhone apps have demo ve
 - no card is ever asked for, and nothing is charged;
 - the reviews are samples, so no photos load from Google or Yelp.
 
-Our hosting provider still processes your IP address and browser details to deliver the demo website's pages (see "Technical information"). "Forget me" clears everything the demo website stored on your device, and "Reset the demo" puts the sample shop in Izzy Clipz Business back as it started.
+Our hosting provider still processes your IP address and browser details to deliver the demo website's pages (see "Technical information"). "Forget me" clears what the demo website kept about you on your device: your details, the demo's bookings and the sample shop in Izzy Clipz Business. "Reset the demo" puts that sample shop back as it started. The copies of the website's own pages that it keeps to work offline stay until you clear your browser's data for our website.
 
 The rest of this policy describes the real versions.
 
@@ -121,7 +121,7 @@ We share your information only as described here.
 
 - **Stripe** saves cards on file, processes card payments and charges agreed fees. [Stripe's Privacy Policy](https://stripe.com/privacy)
 - **Vercel** hosts our website, our server and the shop's product photos, in the United States, and keeps the hosting logs described above. [Vercel's Privacy Notice](https://vercel.com/legal/privacy-notice)
-- **Neon** hosts our database in the United States. [Neon's Privacy Policy](https://neon.com/privacy-policy)
+- **Neon**, a Databricks company, hosts our database in the United States. [Databricks Privacy Notice, which covers Neon](https://www.databricks.com/legal/privacynotice)
 - **Apple** provides the App Store, Tap to Pay on iPhone and the maps in our app, and Apple Pay if you use it on Stripe's page. [Apple's Privacy Policy](https://www.apple.com/legal/privacy/)
 
 We share with each provider only what it needs. Vercel and Neon process your information for us under data protection terms that require them to keep it secure and to use it only to provide their services to us. Stripe and Apple also use some information for their own purposes, such as preventing fraud and meeting legal requirements, as their privacy policies explain.
@@ -158,7 +158,7 @@ Our website also keeps a few things in your browser's storage, for your convenie
 | The booking you're in the middle of, including your details (and, while you add a card, what's needed to come back from Stripe's page) | When you book, close the tab or choose "Forget me" |
 | The last appointment you booked in this tab, so its confirmation can be shown again | When you close the tab or choose "Forget me" |
 | Whether the "Add to Home Screen" bar was closed, and a count of visits for that bar | When you clear your browser's data for our website |
-| For shop staff only: the computer's sign-in to Izzy Clipz Business (never the owner key), and the barber last picked at checkout | The sign-in: when staff sign out, or after 30 days (the next time our website is opened on that computer) |
+| For shop staff only: the computer's sign-in to Izzy Clipz Business (never the owner key), and the barber last picked at checkout | Both when staff sign out. The sign-in also ends after 30 days (the next time our website is opened on that computer) |
 
 A browser that reopens a closed tab can bring back what that tab kept, so on a shared computer, use "Forget me" before you leave.
 
