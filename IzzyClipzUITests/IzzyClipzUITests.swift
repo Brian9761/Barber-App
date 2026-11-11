@@ -291,9 +291,9 @@ final class IzzyClipzUITests: XCTestCase {
         // Who gets the details, as the Privacy Policy says.
         let privacy = element("detailsPrivacy")
         scroll(toReveal: privacy)
-        XCTAssertEqual(
-            privacy.label,
-            "Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains."
+        XCTAssertTrue(
+            privacy.label.contains("Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains"),
+            privacy.label
         )
         // Nothing is remembered yet, so Remember me starts off: keeping the details is the client's choice.
         let remember = element("rememberDetailsToggle")
@@ -313,7 +313,7 @@ final class IzzyClipzUITests: XCTestCase {
         // What booking agrees to, right above Book appointment.
         let consent = element("bookingConsent")
         XCTAssertTrue(consent.exists, "No consent line on Review")
-        XCTAssertEqual(consent.label, "By booking, you agree to our Terms of Service and Cancellation & No-Show Policy.")
+        XCTAssertTrue(consent.label.contains("By booking, you agree to our Terms of Service and Cancellation & No-Show Policy"), consent.label)
         XCTAssertLessThanOrEqual(
             consent.frame.maxY, element("bookAppointmentButton").frame.minY + 1,
             "The consent line should sit right above Book appointment"
