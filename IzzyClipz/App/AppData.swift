@@ -9,6 +9,20 @@ enum AppData {
     static let bookingCalendar = BookingCalendar(clock: clock)
 }
 
+/// What the Visit tab says about getting in and around the shop: only the lines the owner checked
+/// and confirmed (the shop's data, one each), then always an invitation to call, since the entrance
+/// isn't confirmed step-free. Never "ADA" (docs/legal/research.md §10). The website's Visit page
+/// says the same.
+enum VisitAccessibility {
+    /// "Room for a wheelchair inside, at the chairs and the counter" and "Accessible parking near the entrance".
+    static var lines: [String] { AppData.shop.accessibility }
+
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    static var callLine: String {
+        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) and we'll help."
+    }
+}
+
 /// Where the shop's reviews live on Yelp.
 enum ReviewLinks {
     /// The shop's Yelp page, for "Read our reviews on Yelp": Yelp's reviews are linked, never shown.

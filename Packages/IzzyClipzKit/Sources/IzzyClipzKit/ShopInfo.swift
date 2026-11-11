@@ -95,9 +95,10 @@ public struct ShopInfo: Sendable {
     public let websiteURL: URL
     public let paymentMethods: [String]
     public let highlights: [String]
-    /// What's there for getting in and around the shop, only as the owner has checked it: empty
-    /// until then (a line like "ADA-compliant entrance" is a legal claim no inspection backs up), and
-    /// the apps ask clients to call with questions instead.
+    /// What's there for getting in and around the shop, only the lines the owner has checked and
+    /// confirmed, in plain words (never "ADA-compliant", a legal claim no inspection backs up). The
+    /// apps and the website show them, and always ask clients to call with questions after them,
+    /// since the entrance isn't confirmed step-free.
     public let accessibility: [String]
     /// The shop's Google Maps place ID, used for its Maps page and "Write a review".
     public let googlePlaceID: String

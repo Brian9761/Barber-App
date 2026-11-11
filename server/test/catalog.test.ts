@@ -102,10 +102,11 @@ describe('GET /api/catalog', () => {
     expect(shop.googleReviewUrl).toBe('https://search.google.com/local/writereview?placeid=ChIJGz5HChRv3IARYJJy_6jyRm8');
     expect(shop.highlights).toContain('Walk-ins welcome');
     expect(shop.about.length).toBeGreaterThan(0);
-    // Empty until the owner has checked what's there (docs/legal/OWNER-CHECKLIST.md): the website's
-    // Visit page then asks clients to call about getting in. Any line put back is plain text.
-    expect(Array.isArray(shop.accessibility)).toBe(true);
-    for (const line of shop.accessibility as unknown[]) expect(line).toMatch(/\S/);
+    // Only the two lines the owner checked and confirmed (docs/legal/OWNER-CHECKLIST.md), in plain
+    // words: no "ADA", and no step-free entrance, which he didn't confirm. The website's Visit page
+    // shows them, then always asks clients to call about getting in.
+    expect(shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Accessible parking near the entrance']);
+    for (const line of shop.accessibility as string[]) expect(line).not.toMatch(/ADA|step-free/i);
   });
 
   it('describes every service, in menu order by category, with the favorites marked', async () => {

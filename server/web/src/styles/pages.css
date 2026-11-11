@@ -790,6 +790,18 @@
   font-weight: 600;
 }
 
+/* The owner's confirmed lines, one each, then the call line. */
+.know-list__access {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.know-list__lines {
+  display: grid;
+  gap: var(--space-1);
+  list-style: none;
+}
+
 .visit__about.visit__section {
   gap: var(--space-4);
 }

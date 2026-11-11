@@ -98,9 +98,18 @@ final class ShopInfoTests: XCTestCase {
         XCTAssertFalse(shop.websiteURL.absoluteString.contains("izzyclipzbarbershop.net"))
     }
 
-    /// No accessibility lines until the owner has checked what's there: "ADA-compliant" is a legal
-    /// claim no inspection backs up. The apps ask clients to call with questions instead.
-    func testNoUncheckedAccessibilityClaims() {
-        XCTAssertEqual(shop.accessibility, [])
+    /// Only the accessibility lines the owner checked and confirmed, in that order: "ADA-compliant" is
+    /// a legal claim no inspection backs up, and he didn't confirm a step-free entrance (the apps and
+    /// the website ask clients to call about getting in, after these lines).
+    func testOnlyTheAccessibilityLinesTheOwnerConfirmed() {
+        XCTAssertEqual(shop.accessibility, [
+            "Room for a wheelchair inside, at the chairs and the counter",
+            "Accessible parking near the entrance",
+        ])
+        for line in shop.accessibility {
+            XCTAssertNil(line.range(of: "ADA", options: .caseInsensitive), line)
+            XCTAssertNil(line.range(of: "step-free", options: .caseInsensitive), line)
+            XCTAssertNotEqual(line, "Wheelchair accessible")
+        }
     }
 }

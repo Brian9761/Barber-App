@@ -1121,13 +1121,20 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("hours-monday").exists)
         screenshot("23-Visit-Hours")
 
-        // Nothing the owner hasn't checked about getting in: an invitation to call instead.
+        // Only the two lines the owner confirmed about getting in and around the shop, then always an
+        // invitation to call, since the entrance isn't confirmed step-free.
+        let lines = element("visitAccessibilityLines")
+        scroll(toReveal: lines)
+        XCTAssertEqual(lines.label, "Accessibility: Room for a wheelchair inside, at the chairs and the counter. Accessible parking near the entrance")
         let access = element("visitAccessibilityCall")
         scroll(toReveal: access)
         XCTAssertTrue(access.label.contains("Questions about getting in or around the shop?"), access.label)
         XCTAssertTrue(access.label.contains("(442) 341-3053"), access.label)
+        XCTAssertGreaterThan(access.frame.minY, lines.frame.minY, "The call line comes after the lines")
+        XCTAssertGreaterThanOrEqual(access.frame.height, 44, "Big enough to tap")
         XCTAssertFalse(containing("ADA-compliant").exists)
         XCTAssertFalse(containing("Wheelchair accessible").exists)
+        XCTAssertFalse(containing("Step-free").exists)
         screenshot("23b-Visit-Good-To-Know")
 
         let reviews = element("visitSeeAllReviews")

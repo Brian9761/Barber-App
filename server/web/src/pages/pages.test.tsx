@@ -166,26 +166,47 @@ describe('Visit', () => {
     expect(document.body.textContent).not.toContain('never online');
   });
 
-  it('lists the shop’s accessibility features once the owner has checked them and they are in the catalog', () => {
-    const checked = ['Step-free entrance', 'Parking at the door'];
+  const CALL_LINE = "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.";
+
+  /** Visit, with the catalog's accessibility lines as `lines`. */
+  function renderVisitWith(lines: string[]) {
     render(
       <MemoryRouter initialEntries={['/visit']} future={ROUTER_FUTURE}>
-        <CatalogProvider initial={{ ...catalog, shop: { ...catalog.shop, accessibility: checked } }}>
+        <CatalogProvider initial={{ ...catalog, shop: { ...catalog.shop, accessibility: lines } }}>
           <App />
         </CatalogProvider>
       </MemoryRouter>,
     );
-    expect(screen.getByTestId('visit-accessibility').textContent).toBe(checked.join(' · '));
+  }
+
+  it('lists the two accessibility lines the owner confirmed, then always asks people to call about getting in', () => {
+    // The server's catalog (data/catalog.json, from the Kit, and its contract fixture).
+    expect(catalog.shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Accessible parking near the entrance']);
+    renderApp('/visit');
+    const lines = within(screen.getByTestId('visit-accessibility-lines')).getAllByRole('listitem');
+    expect(lines.map((li) => li.textContent)).toEqual(catalog.shop.accessibility);
+    // The entrance isn't confirmed step-free, so the call line is there too, after the lines.
+    const call = screen.getByTestId('visit-accessibility-call');
+    expect(call.textContent).toBe(CALL_LINE);
+    expect(within(call).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
+    expect(screen.getByTestId('visit-accessibility-lines').compareDocumentPosition(call) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByTestId('visit-accessibility').textContent).toBe(`${catalog.shop.accessibility.join('')}${CALL_LINE}`);
+    expect(document.body.textContent).not.toMatch(/\bADA\b|Wheelchair accessible|step-free/i);
   });
 
-  it('until the owner has checked them, asks people to call about getting in, with the number to call', () => {
-    // The server's catalog lists none for now (data/catalog.json and its contract fixture).
-    expect(catalog.shop.accessibility).toEqual([]);
-    renderApp('/visit');
-    const line = screen.getByTestId('visit-accessibility');
-    expect(line.textContent).toBe("Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.");
-    expect(within(line).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
-    expect(document.body.textContent).not.toMatch(/ADA|Wheelchair accessible/);
+  it('shows whatever lines the catalog has, one each, with the call line after them', () => {
+    const checked = ['Step-free entrance', 'Parking at the door'];
+    renderVisitWith(checked);
+    expect(within(screen.getByTestId('visit-accessibility-lines')).getAllByRole('listitem').map((li) => li.textContent)).toEqual(checked);
+    expect(screen.getByTestId('visit-accessibility-call').textContent).toBe(CALL_LINE);
+  });
+
+  it('with no lines in the catalog, only asks people to call about getting in, with the number to call', () => {
+    renderVisitWith([]);
+    const access = screen.getByTestId('visit-accessibility');
+    expect(access.textContent).toBe(CALL_LINE);
+    expect(screen.queryByTestId('visit-accessibility-lines')).toBeNull();
+    expect(within(access).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
   });
 });
 

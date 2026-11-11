@@ -81,7 +81,7 @@
   ],
   "shop": {
     "about": ["Walk-ins are welcome, and appointments are available for your convenience."],
-    "accessibility": ["Wheelchair accessible"],
+    "accessibility": ["Room for a wheelchair inside, at the chairs and the counter", "Accessible parking near the entrance"],
     "address": {
       "city": "Oceanside",
       "lines": ["1919 Mission Ave, Ste 105", "Oceanside, CA 92058"],
@@ -106,7 +106,7 @@
     "paymentMethods": ["Credit card", "Gift card"],
     "phone": { "display": "(442) 341-3053", "e164": "+14423413053" },
     "tagline": "Traditional & modern cuts in Oceanside",
-    "websiteUrl": "https://www.izzyclipzbarbershop.net"
+    "websiteUrl": "https://izzy-clipz.vercel.app"
   },
   "slotIntervalMinutes": 30,
   "timeZone": "America/Los_Angeles",

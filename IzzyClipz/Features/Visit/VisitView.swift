@@ -522,47 +522,84 @@ private struct VisitInfoSection: View {
                 VisitDivider()
                 VisitInfoRow(symbol: Symbol.payment, title: "Payment", items: shop.paymentMethods)
                 VisitDivider()
-                if shop.accessibility.isEmpty {
-                    VisitAccessibilityCallRow()
-                } else {
-                    VisitInfoRow(symbol: Symbol.accessibility, title: "Accessibility", items: shop.accessibility)
-                }
+                VisitAccessibilityRow(lines: VisitAccessibility.lines)
             }
             .card(padding: Theme.Space.xxs)
         }
     }
 }
 
-/// "Accessibility" while the owner hasn't checked what to say about getting in (no lines in the
-/// shop's data): an invitation to call, the whole row calling the shop, with the number in the
-/// link color. It claims nothing about the building (docs/legal/research.md §10).
-private struct VisitAccessibilityCallRow: View {
+/// "Accessibility": the lines the owner checked and confirmed about getting in and around the shop
+/// (the shop's data), one each, then always an invitation to call, since the entrance isn't
+/// confirmed step-free. The invitation calls the shop, with the number in the link color: the
+/// whole row while there are no lines, the sentence under them otherwise. It claims nothing the
+/// owner hasn't checked, and never "ADA" (docs/legal/research.md §10).
+private struct VisitAccessibilityRow: View {
+    let lines: [String]
+
     /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
-    static var text: String {
-        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) and we'll help."
-    }
+    static var text: String { VisitAccessibility.callLine }
 
     var body: some View {
-        CallButton(spokenLabel: "Accessibility: \(Self.text)") {
+        if lines.isEmpty {
+            CallButton(spokenLabel: "Accessibility: \(Self.text)") {
+                HStack(alignment: .top, spacing: Theme.Space.l) {
+                    VisitIconTile(symbol: Symbol.accessibility)
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        title
+                        callSentence
+                    }
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                }
+                .padding(Theme.Space.m)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressable)
+            .accessibilityIdentifier("visitAccessibilityCall")
+        } else {
             HStack(alignment: .top, spacing: Theme.Space.l) {
                 VisitIconTile(symbol: Symbol.accessibility)
-                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                    Text("Accessibility")
-                        .textRole(.headline)
-                        .foregroundStyle(Theme.bone)
-                    Text(Self.styledText)
-                        .textRole(.body)
-                        .foregroundStyle(Theme.smoke)
+                VStack(alignment: .leading, spacing: Theme.Space.s) {
+                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                        title
+                        ForEach(lines, id: \.self) { line in
+                            Text(line)
+                                .textRole(.body)
+                                .foregroundStyle(Theme.smoke)
+                        }
+                    }
+                    .accessibilityElement(children: .ignore)
+                    // Full stops between the lines: they have commas of their own.
+                    .accessibilityLabel("Accessibility: \(lines.joined(separator: ". "))")
+                    .accessibilityIdentifier("visitAccessibilityLines")
+                    CallButton(spokenLabel: Self.text) {
+                        callSentence
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, minHeight: Theme.minimumTapSize, alignment: .leading)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.pressable)
+                    .accessibilityIdentifier("visitAccessibilityCall")
                 }
-                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
             .padding(Theme.Space.m)
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.pressable)
-        .accessibilityIdentifier("visitAccessibilityCall")
+    }
+
+    private var title: some View {
+        Text("Accessibility")
+            .textRole(.headline)
+            .foregroundStyle(Theme.bone)
+    }
+
+    private var callSentence: some View {
+        Text(Self.styledText)
+            .textRole(.body)
+            .foregroundStyle(Theme.smoke)
     }
 
     /// The sentence with the number electric and underlined, so it reads as something to tap.

@@ -105,19 +105,23 @@ function VisitDetails({ catalog }: { catalog: Catalog }) {
           </div>
           <div className="know-list__row">
             <dt>Accessibility</dt>
-            {/* Only what the owner has checked (catalog.json); until then, a call away. */}
-            <dd data-testid="visit-accessibility">
+            {/* Only what the owner has checked and confirmed (catalog.json), one line each, then
+                always a call away: the entrance isn't confirmed step-free. Never "ADA". */}
+            <dd className="know-list__access" data-testid="visit-accessibility">
               {shop.accessibility.length > 0 ? (
-                shop.accessibility.join(' · ')
-              ) : (
-                <>
-                  Questions about getting in or around the shop? Call{' '}
-                  <a className="inline-link nowrap" href={`tel:${shop.phone.e164}`}>
-                    {shop.phone.display}
-                  </a>{' '}
-                  and we'll help.
-                </>
-              )}
+                <ul className="know-list__lines" data-testid="visit-accessibility-lines">
+                  {shop.accessibility.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <p data-testid="visit-accessibility-call">
+                Questions about getting in or around the shop? Call{' '}
+                <a className="inline-link nowrap" href={`tel:${shop.phone.e164}`}>
+                  {shop.phone.display}
+                </a>{' '}
+                and we'll help.
+              </p>
             </dd>
           </div>
         </dl>

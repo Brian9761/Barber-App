@@ -29,8 +29,9 @@ import {
 // (playwright.demo.config.ts), at a computer's size and a phone's: every page's footer links
 // them; Izzy Clipz Business does too, with its own skip link, titles and focus; booking says
 // what it agrees to, the fee notice links its policy, and Your details says where the details
-// go; Reviews shows Google's and only links to Yelp; Visit claims no accessibility feature
-// nobody has checked; and the browser keeps only what the Privacy Policy lists.
+// go; Reviews shows Google's and only links to Yelp; Visit shows only the accessibility lines the
+// owner confirmed, then asks people to call about getting in; and the browser keeps only what the
+// Privacy Policy lists.
 // Screenshots go to E2E_LEGAL_SHOTS_DIR (or with the others), named "<run>-legal-…".
 
 const LEGAL_SHOTS = resolve(process.env.E2E_LEGAL_SHOTS_DIR || SHOTS_DIR);
@@ -305,7 +306,7 @@ test('booking says what it agrees to right above Book appointment, the fee notic
   }
 });
 
-test('Reviews shows Google’s reviews and only links to Yelp; Visit asks people to call about getting in', async ({ page, request }, testInfo) => {
+test('Reviews shows Google’s reviews and only links to Yelp; Visit shows the confirmed accessibility lines and asks people to call about getting in', async ({ page, request }, testInfo) => {
   const demo = isDemo(testInfo);
   if (!demo) await setLiveReviews(request, true);
   try {
@@ -329,10 +330,16 @@ test('Reviews shows Google’s reviews and only links to Yelp; Visit asks people
   }
 
   await page.goto('/visit');
-  const line = page.getByTestId('visit-accessibility');
+  // The two lines the owner confirmed, one each, then always the call line (the entrance isn't
+  // confirmed step-free).
+  await expect(page.getByTestId('visit-accessibility-lines').getByRole('listitem')).toHaveText([
+    'Room for a wheelchair inside, at the chairs and the counter',
+    'Accessible parking near the entrance',
+  ]);
+  const line = page.getByTestId('visit-accessibility-call');
   await expect(line).toHaveText("Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.");
   await expect(line.getByRole('link', { name: '(442) 341-3053' })).toHaveAttribute('href', 'tel:+14423413053');
-  await expect(page.locator('main')).not.toContainText(/ADA|Wheelchair accessible/);
+  await expect(page.locator('main')).not.toContainText(/\bADA\b|Wheelchair accessible|step-free/i);
   await expectAccessible(page, '/visit');
   await whole(page, testInfo, 'legal-09-visit');
   await scrollToTop(page.getByRole('heading', { level: 2, name: 'Good to know' }));
