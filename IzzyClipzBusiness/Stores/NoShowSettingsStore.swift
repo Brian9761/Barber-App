@@ -250,6 +250,20 @@ final class NoShowSettingsStore {
         }
     }
 
+    /// Under the example: a fee is never more than the booked service's price, said with the example
+    /// item a flat fee is capped for ("A $16 seniors haircut is charged $16, not $25."), and how long a
+    /// fee can be charged. `nil` while what's on screen can't be saved.
+    var capNote: String? {
+        guard let settings = previewSettings else { return nil }
+        var note = "A fee is never more than the booked service's price."
+        if settings.feeMode == .flat,
+           let capped = exampleItems.first(where: { $0.price.cents > 0 && $0.price.cents < settings.flatCents }) {
+            let price = Price.currencyString(cents: capped.price.cents)
+            note += " \(Self.article(forDollars: capped.price.cents / 100)) \(price) \(capped.name.lowercased()) is charged \(price), not \(Price.currencyString(cents: settings.flatCents))."
+        }
+        return note + " It can be charged up to 7 days after the appointment."
+    }
+
     /// "A" or "An", as "$8", "$11", "$18" and "$80" are said: "an eight-dollar…".
     static func article(forDollars dollars: Int) -> String {
         let vowelSound = dollars == 8 || dollars == 11 || dollars == 18 || (80...89).contains(dollars) || (800...899).contains(dollars)

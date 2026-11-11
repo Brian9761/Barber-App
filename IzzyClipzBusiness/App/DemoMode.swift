@@ -61,6 +61,8 @@ enum DemoMode {
             server.options.stripeAccount = .none
         }
         environment.stripeWindowDelay = stripeWindowDelay
+        // Like the real app: iOS's age range, where a law requires it (AgeCheck).
+        environment.asksForAgeRange = true
         return environment
     }
 }

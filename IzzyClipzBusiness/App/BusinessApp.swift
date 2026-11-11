@@ -18,22 +18,29 @@ struct BusinessApp: App {
 struct RootView: View {
     let model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    /// iOS's age range, asked at launch where a law requires it (`AgeCheck`); never kept.
+    @State private var ageCheck = AgeCheck.Outcome.notAsked
 
     var body: some View {
         Group {
-            switch model.phase {
-            case .launching:
-                ProgressView()
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("Loading")
-            case .signedOut:
-                SignInView(model: model)
-            case .signedIn(let workspace):
-                MainTabView(workspace: workspace, model: model)
-                    .id(ObjectIdentifier(workspace))
+            if AgeCheck.showsUnderAgeScreen(ageCheck) {
+                UnderAgeView()
+            } else {
+                switch model.phase {
+                case .launching:
+                    ProgressView()
+                        .controlSize(.large)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .accessibilityLabel("Loading")
+                case .signedOut:
+                    SignInView(model: model)
+                case .signedIn(let workspace):
+                    MainTabView(workspace: workspace, model: model)
+                        .id(ObjectIdentifier(workspace))
+                }
             }
         }
+        .ageRangeCheck(isEnabled: model.environment.asksForAgeRange, outcome: $ageCheck)
         .task { await model.start() }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }

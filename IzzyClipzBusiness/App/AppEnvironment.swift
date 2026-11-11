@@ -76,6 +76,9 @@ final class AppEnvironment {
     /// arguments), and how long it takes (a moment in the demo, so it reads as a step).
     var stripeFirstTry: FakeStripeConnector.FirstTry = .finishes
     var stripeWindowDelay: Duration = .zero
+    /// Ask iOS for the person's age range at launch (`AgeCheck`): the real app and the demo, never UI
+    /// tests, unit tests or previews (iOS's sheet would get in their way).
+    var asksForAgeRange = false
 
     init(
         backend: Backend,
@@ -188,7 +191,7 @@ final class AppEnvironment {
         #else
         terminal = SimulatedPaymentTerminal()
         #endif
-        return AppEnvironment(
+        let environment = AppEnvironment(
             backend: .live(baseURL: baseURL(bundle: bundle)),
             secrets: KeychainSecretStore(),
             shopTime: shopTime,
@@ -199,6 +202,8 @@ final class AppEnvironment {
             deviceSupportsTapToPay: TapToPayEducation.isSupportedOnThisDevice,
             canShowAppleEducation: true
         )
+        environment.asksForAgeRange = true
+        return environment
     }
 
     /// The sample server with options from launch arguments: UI tests,

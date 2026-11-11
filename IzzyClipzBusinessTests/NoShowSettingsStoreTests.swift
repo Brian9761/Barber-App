@@ -269,6 +269,7 @@ final class NoShowSettingsStoreTests: XCTestCase {
         store.draft.enabled = true
         XCTAssertEqual(store.exampleItems.map(\.name), ["Haircut", "Hot Lather Shave"], "the owner's haircut and the cheapest item")
         XCTAssertEqual(store.examples, ["A $40 haircut: $40", "A $5 hot lather shave: $5"])
+        XCTAssertEqual(store.capNote, "A fee is never more than the booked service's price. It can be charged up to 7 days after the appointment.")
         XCTAssertEqual(store.clientWarning, IzzyAPI.NoShowWarning(
             title: "Full Service Cancellation & No-Show Fee",
             message: "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($40). Cancelling in the app more than 1 hour before is free."
@@ -298,6 +299,10 @@ final class NoShowSettingsStoreTests: XCTestCase {
         store.draft.feeMode = .flat
         store.draft.flatText = "25"
         XCTAssertEqual(store.examples, ["A $40 haircut: $25", "A $5 hot lather shave: $5"], "a flat fee is never more than the service's price")
+        XCTAssertEqual(
+            store.capNote,
+            "A fee is never more than the booked service's price. A $5 hot lather shave is charged $5, not $25. It can be charged up to 7 days after the appointment."
+        )
         XCTAssertEqual(store.clientPolicy?.contains("may charge $25 to this card"), true)
         store.draft.lateCancelWindowMinutes = 120
         store.draft.lateCancelEnabled = false
@@ -312,6 +317,7 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.clientWarning?.message.contains("less than 2 hours before"), true)
         // Something that can't be saved has no preview.
         store.draft.flatText = "abc"
+        XCTAssertNil(store.capNote)
         XCTAssertEqual(store.examples, [])
         XCTAssertNil(store.clientWarning)
         XCTAssertNil(store.clientPolicy)

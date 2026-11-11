@@ -1,9 +1,12 @@
 # Izzy Clipz Business (the owner app)
 
 The shop owner's iPhone app: the schedule, walk-ins and phone bookings,
-blocked time, the shop's products, and card payments with Tap to Pay on
-iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
-`project.yml` (bundle ID `com.izzyclipz.business`, iOS 18 or later).
+blocked time, checkouts (services, products and amounts, paid by card
+with Tap to Pay on iPhone through Stripe, in cash or another way), the
+shop's analytics and products, and the shop's own Stripe account. It's
+the `IzzyClipzBusiness` target and scheme in `project.yml` (bundle ID
+`com.izzyclipz.business`, iOS 18 or later). The tabs are Schedule, New
+booking, Take payment, Analytics and Settings.
 
 ## What each tab does
 
@@ -11,8 +14,13 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
   one barber. Refreshes every minute while it's on screen, and on pull.
   Today's schedule moves on to the new day after the app sat open overnight
   (an appointment left open stays until you go back).
-  Tap an appointment to call or text the client, mark it completed or
-  no-show, cancel it (the app asks first), reopen it, or take payment.
+  Tap an appointment to call or text the client, **Check out** (the main
+  action for a booked or completed appointment that isn't checked out:
+  it opens Take payment with its service on the ticket), mark it done or
+  a no-show, cancel it (the app asks first), or reopen it. A checked-out
+  appointment says "Paid $60 · Cash" and stays completed until its sale is
+  voided (Take payment → Today's sales). An appointment paid by card
+  before sales existed asks before checking out something extra.
   An online booking with a card on file shows the card and its fee, and
   lets you charge a no-show or a late cancellation (see
   [No-show protection](#no-show-protection)). Rows say "Card on file ·
@@ -28,19 +36,55 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
   checked again. The client's name is needed; a phone number is optional.
   If the connection drops before the answer arrives, Book again finds the
   booking that went through instead of booking the client twice.
-- **Take payment**: the amount on the keypad (filled in from an
-  appointment's fixed price), an optional note and receipt email, then
-  **Tap to Pay on iPhone**. Cancel works until the card is read; from
-  then on the screen says Processing. The result screen says Paid,
-  Declined, Cancelled or what to check; only a payment Stripe confirms as
-  succeeded shows as paid. **Payments today** lists what came in,
-  including no-show and late cancellation fees (labelled as such, with
-  their own subtotal). If the app can't reach the server, Take payment
-  says so, with Check again and Practice in test mode.
-- **Products**: add, edit (photo from the library or the camera), hide or
-  show in the customer app, delete.
-- **Settings**: server and Stripe status, **No-show protection**, Tap to
-  Pay setup and "How to Tap", the owner key, sign out, version.
+- **Take payment** is a checkout ("Check out"):
+  - **Who it's for**: the appointment it started from, or "Walk-in" with
+    an optional name. ✕ makes it a walk-in for the same client.
+  - **Sold by**: the barber who gets credit (required): the appointment's
+    barber, otherwise the last one chosen on this iPhone.
+  - **Items**, each with its price (tap to change it), a quantity for
+    products, and a remove button: **+ Service** (the barber's services at
+    that barber's prices; a "From" price is where it starts), **+ Product**
+    (the shop's products with photos, hidden ones too; one without a price
+    asks for it) and **+ Amount** (the keypad, named "Other" or whatever you
+    type). Checking out an appointment adds its service at its price.
+  - The **total**, then **How are they paying?**: **Tap to Pay on iPhone**
+    (when the iPhone can take cards), **Cash**, or **Other** (Squire, Zelle,
+    Cash App…, recorded only). Cash and Other ask first ("Record a $60
+    cash sale for Izzy?"), then show the receipt ("Sold $60 · Cash ·
+    Izzy") with the items; **Done** clears the ticket. If the answer gets
+    lost, **Record again** sends the same sale with the same
+    Idempotency-Key, so it's never saved twice.
+  - A card goes through Tap to Pay as before: Cancel works until the card
+    is read, then the screen says Processing, and only a payment Stripe
+    confirms as succeeded shows as paid. The ticket goes with the payment,
+    and the server records the card sale when it goes through. The
+    payment's description at Stripe is what was sold and who sold it
+    ("Haircut & Beard with Izzy"), never the client's name; a note you type
+    is sent as typed.
+  - **No email is asked before a card payment.** Once it went through,
+    **Email a receipt (optional)** sends the client a receipt through
+    Stripe (`POST /api/owner/payments/:id/receipt`). The address goes to
+    Stripe only: neither the app nor the server keeps it (California's
+    Song-Beverly Credit Card Act; docs/legal/research.md §9.3).
+  - **Today's sales** at the bottom: time, client, barber, method and
+    total, voided ones struck through. A sale opens to its details; **Void
+    sale** asks first, with an optional reason (for a card: refund it in
+    the Stripe Dashboard: voiding doesn't refund it). **Card payments
+    today** lists the card money that came in, including no-show and late
+    cancellation fees.
+  - If the app can't reach the server, Take payment says so, with Check
+    again and Practice in test mode. While the shop's own Stripe account
+    isn't connected, it says how to connect, with **Go to Settings**; cash
+    and other sales work meanwhile.
+- **Analytics**: the shop's sales, top barbers, services and products.
+- **Settings**: **Products** (add, edit with a photo from the library or
+  the camera, hide or show in the customer app, delete), **Card payments
+  (Stripe)** (see [The shop's own Stripe account](#the-shops-own-stripe-account-stripe-connect)),
+  **Use on a computer**, **No-show protection**, Tap to Pay setup and "How
+  to Tap", the server's status, the owner key, **Legal** (the Privacy
+  Policy, Terms of Service, Cancellation & No-Show Policy and
+  Accessibility pages of the shop's website, in the in-app browser), sign
+  out, version.
 
 ## Going live
 
@@ -54,7 +98,9 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
    app then shows "Set up", "Test mode" and the location.
 3. **Apple**: Tap to Pay on iPhone needs Apple's entitlement
    `com.apple.developer.proximity-reader.payment.acceptance` (already in
-   `IzzyClipzBusiness.entitlements`).
+   `IzzyClipzBusiness.entitlements`), and Apple's Declared Age Range needs
+   `com.apple.developer.declared-age-range` (also there; with automatic
+   signing Xcode turns the capability on for the app ID).
    - The **Account Holder** of an **organization** Apple Developer account
      requests it at developer.apple.com/contact/request/tap-to-pay-on-iphone
      (name Stripe as the payment provider, United States).
@@ -71,7 +117,10 @@ iPhone through Stripe. It's the `IzzyClipzBusiness` target and scheme in
    a passcode, signed in to iCloud): Settings → **Set up Tap to Pay on
    iPhone**. Apple asks the owner to accept its terms once, the iPhone
    configures itself (a progress bar, up to a couple of minutes), then
-   "How to Tap" shows. Allow location when asked: card networks need it.
+   "How to Tap" shows. Allow location when asked: "Stripe needs to know
+   where card payments are taken, to reduce fraud and disputes, so it
+   checks this iPhone's location while you take a payment with Tap to Pay
+   on iPhone. Without it, Tap to Pay is turned off."
 5. **Test**: with the `sk_test_…` key, take a payment with a Stripe
    physical test card (amounts ending in .00 approve, .05 declines).
    Real cards and Apple Pay don't work in test mode.
@@ -115,9 +164,11 @@ time:
   keep a fee for a client who wants their time back, ask them to book
   again in the app.
 
-A fee is never more than the booked service's price, and it can be
-charged only up to 7 days after the appointment's start: after that, the
-details say it can't be. Each booking keeps the fee and window it was
+A fee is never more than the booked service's price (the settings'
+example says so, with the cheap service a flat fee is capped for), and it
+can be charged only up to 7 days after the appointment's start: after
+that, Charge goes away and the details say why ("It's more than 7 days
+after the appointment, so the fee can't be charged."). Each booking keeps the fee and window it was
 booked with, so a change in Settings only affects new bookings. Turning
 protection off works the same way: new online bookings don't need a
 card, and bookings already made with one keep their fee, which you can
@@ -202,15 +253,24 @@ pays Stripe's fees and sees everything in his own Stripe Dashboard).
   endpoint). `STRIPE_TERMINAL_LOCATION_ID` isn't needed: the server makes
   the shop's Terminal location on his account as soon as it can take card
   payments. The steps are in `server/README.md` (Stripe Connect).
-- **The owner**: Settings → **Connect Stripe** opens Stripe's own window,
-  where he signs in or signs up and finishes setting up. Back in the app,
-  Settings shows what Stripe says: "Connected. Card payments are on.", or
-  what's left to do ("Finish setting up Stripe to take card payments.",
-  "Stripe is checking your details…", "Stripe paused card payments: open
-  Stripe to fix it."). Until it's connected, Tap to Pay, saving cards and
-  no-show protection stay off ("Connect Stripe in Settings to take card
-  payments."). Disconnecting only forgets the account in the app; it stays
-  open at Stripe.
+- **The owner**: Settings → **Card payments (Stripe)** shows where the
+  account stands: "Connected" with a green check and the business name,
+  "Not connected", "Finish setting up", "Stripe is checking your details",
+  "Paused by Stripe", "Uses the server's Stripe key" or "Not set up on the
+  server", with the server's own message ("Connected. Card payments are
+  on. Payouts to your bank are on."). **Connect Stripe** (or **Finish
+  setting up**) opens Stripe's own window (`ASWebAuthenticationSession`,
+  sharing Safari's sign-in), where he signs in or signs up and finishes
+  setting up. Back in the app it says "You're connected. You can take card
+  payments now." or "Stripe still needs a few details: tap Finish setting
+  up." Closing the window shows nothing new (the account the server
+  started stays, so the button then reads Finish setting up). **Open
+  Stripe Dashboard** opens Stripe in Safari. **Disconnect Stripe** asks
+  first: card payments stop until he connects again, and cards clients
+  saved stay with the old account. Disconnecting only forgets the account
+  in the app; it stays open at Stripe. Until it's connected, Tap to Pay,
+  saving cards and no-show protection stay off: Take payment says how to
+  connect, with Go to Settings.
 - **Tap to Pay after connecting**: the first time the app connects Tap to
   Pay with his own account, Apple asks him to accept its Tap to Pay terms
   again (with the shop's Apple ID), because each Stripe account that takes
@@ -220,11 +280,34 @@ pays Stripe's fees and sees everything in his own Stripe Dashboard).
 ## Using the Business area on a computer
 
 The website's Business area signs in with a code, never the owner key:
-Settings → **Use on a computer** shows a 6-digit code for 10 minutes, and
-the owner types it on the website. The computer stays signed in for 30
-days; Settings can sign any computer (or all of them) out, and so can the
-website's Sign out. Tap to Pay, new codes and disconnecting Stripe stay in
+Settings → **Use on a computer** ("See your schedule, sales and analytics
+on a computer.") says to go to the server's `/business` page on the
+computer and type the code. The code is big and grouped ("483 920"), with
+"Expires in 9:42" counting down; it works once, for 10 minutes, and **Get
+a new code** replaces it. The computer stays signed in for 30 days;
+**Computers signed in** lists each one with when it was last used and
+**Sign out**, and **Sign out all computers** asks first. The website's
+Sign out works too. Tap to Pay, new codes and disconnecting Stripe stay in
 the app on the iPhone. A new `OWNER_KEY` signs every computer out.
+
+## The legal pages and the age check
+
+- **Settings → Legal** opens the Privacy Policy, Terms of Service,
+  Cancellation & No-Show Policy and Accessibility pages of the shop's
+  website (`/privacy`, `/terms`, `/cancellation-policy`, `/accessibility`)
+  in the in-app browser. The website's address is the build setting
+  `IZZY_WEBSITE_URL` in `project.yml` (Info.plist `IzzyWebsiteURL`): the
+  current public site, `https://izzy-clipz.vercel.app`, until the shop's
+  own domain replaces it there, in that one place.
+- **Apple's Declared Age Range** (California's Digital Age Assurance Act,
+  from January 1, 2027; docs/legal/research.md §4.2): on iOS 26 and later
+  the app asks iOS, when it opens, whether age rules apply to the person
+  (iOS 26.2 and later can tell; nothing is asked where no law requires
+  it), and only then for their age range against one gate, 13. iOS shows
+  its own sheet the first time. Someone under 13 sees "Izzy Clipz Business
+  is for the shop's team" with the shop's number, and no details are
+  taken. Nothing is stored; any other answer, an error or an older iOS
+  just carries on.
 
 ## Test mode
 
@@ -235,16 +318,24 @@ and nothing is sent to Stripe or recorded.
 
 ## Tests
 
-- `IzzyClipzBusinessTests`: the stores, the checkout, the sample server,
-  the simulated reader, photos, sessions, Stripe's error codes, and
-  no-show protection (what an appointment's fee section says and offers,
-  charging it, the labels, and the settings screen's store).
+- `IzzyClipzBusinessTests`: the stores, the checkout (the ticket, cash
+  and other sales with their Idempotency-Key, card sales, receipts after
+  the payment), today's sales and voiding, the shop's Stripe connection,
+  computer codes and sessions, the sample server, the simulated reader,
+  photos, sessions, Stripe's error codes, the legal pages and the age
+  check, and no-show protection (what an appointment's fee section says
+  and offers, charging it, the labels, and the settings screen's store).
 - `IzzyClipzBusinessUITests`: every flow on the in-memory sample server
   (`-ui-testing`), with screenshots named `O01-Sign-In` and so on. Launch
   arguments `-signed-in`, `-fake-offline`, `-fake-stripe-not-configured`,
   `-fake-slot-taken`, `-fake-payment-incomplete`, `-fake-empty` and others
   (see `LaunchArgument` in `AppEnvironment.swift`) make the sample server
-  misbehave on purpose. For no-show protection, `-fake-cards-on-file`
+  misbehave on purpose. The shop's Stripe account is connected unless
+  `-fake-stripe-not-connected` (Connect Stripe then connects at once),
+  `-fake-stripe-needs-info` (the first try leaves details missing) or
+  `-fake-stripe-cancel` (the first try closes the window). The sample day
+  has Diego's cash checkout in Today's sales, two computers signed in, and
+  computer codes that come in the same order (483920 first). For no-show protection, `-fake-cards-on-file`
   adds three clients who booked online with Visa 4242 for a $35 haircut
   with Flowxbori: Kim Sample (10 AM, a no-show), Lee Sample (11:30 AM,
   cancelled in the app at 10:50 AM: a late cancellation) and Nia Sample

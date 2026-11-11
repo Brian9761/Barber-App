@@ -900,6 +900,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("noShowSettingsProblem")))
         closeKeyboard()
         XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $25"))
+        XCTAssertTrue(waitForLabel(reveal("noShowCapNote"), containing: "A fee is never more than the booked service's price."))
         let warning = reveal("noShowClientWarning")
         XCTAssertTrue(waitForLabel(warning, containing: "Late Cancellation & No-Show Fee"), "Got: \(warning.label)")
         XCTAssertTrue(warning.label.contains("may be charged $25."), "Got: \(warning.label)")

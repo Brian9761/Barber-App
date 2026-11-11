@@ -155,6 +155,9 @@ targets:
       path: IzzyClipzBusiness/IzzyClipzBusiness.entitlements
       properties:
         com.apple.developer.proximity-reader.payment.acceptance: true
+        # Apple's Declared Age Range (IzzyClipzBusiness/App/AgeCheck.swift), which California law asks
+        # of every app from January 1, 2027.
+        com.apple.developer.declared-age-range: true
     settings:
       base:
         PRODUCT_NAME: IzzyClipzBusiness
