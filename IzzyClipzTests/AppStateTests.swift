@@ -180,7 +180,7 @@ final class AppRouterTests: XCTestCase {
         XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: changed, note: "Low fade", remember: true))
 
         router.rememberedDetailsChanged(to: nil)
-        XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: true))
+        XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: false))
     }
 
     /// A booking's late answer only moves the flow while its review is the step on screen.

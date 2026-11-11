@@ -28,7 +28,8 @@ struct CalendarEventEditor: UIViewControllerRepresentable {
         calendarEvent.timeZone = shop.timeZone
         calendarEvent.location = "\(shop.fullName), \(shop.address.singleLine)"
         calendarEvent.notes = event.notes
-        calendarEvent.url = shop.websiteURL
+        // The shop's website (never its older one), from the build setting IZZY_WEBSITE_URL.
+        calendarEvent.url = Website.baseURL
         if includesAlert {
             calendarEvent.addAlarm(EKAlarm(relativeOffset: -60 * 60))
         }

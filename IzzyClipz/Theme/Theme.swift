@@ -276,6 +276,8 @@ enum Symbol {
     static let sparkles = "sparkles"
     static let warning = "exclamationmark.triangle.fill"
     static let remindersOff = "bell.slash"
+    static let privacy = "hand.raised"
+    static let terms = "doc.text"
 
     /// Includes the symbols the shop data refers to.
     static var all: [String] {
@@ -286,7 +288,7 @@ enum Symbol {
             team, starFilled, starHalf, starEmpty, favorite, favoriteFilled, included, clock, calendar, calendarAdd,
             calendarClock, payment, accessibility, walkIn, firstAvailable, quote, info, map, location,
             checkmark, success, partner, shipping, reviews, morning, afternoon, evening, sparkles, warning, remindersOff,
-            photoUnavailable, person,
+            photoUnavailable, person, privacy, terms,
         ]
         let data = Catalog.izzyClipz.services.map(\.symbol) + ServiceCategory.allCases.map(\.symbol)
         return Array(Set(own + data)).sorted()

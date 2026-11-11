@@ -155,6 +155,16 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertTrue(APIConfiguration.makeAPI(demo: true, uiTesting: false) is FakeShopAPI, "The demo never uses the network")
     }
 
+    /// The website the app links to (Visit's Website row and Share link, calendar events and the
+    /// legal pages) comes from the build setting IZZY_WEBSITE_URL: the current public site until
+    /// the shop's own domain replaces it there, never the older website.
+    func testTheWebsiteIsTheNewOne() throws {
+        let info = try XCTUnwrap(Bundle.main.infoDictionary)
+        XCTAssertNotNil(info[Website.infoKey], "Info.plist has no IzzyWebsiteURL")
+        XCTAssertEqual(Website.baseURL.absoluteString, "https://izzy-clipz.vercel.app")
+        XCTAssertEqual(Website.LegalPage.privacy.url().absoluteString, "https://izzy-clipz.vercel.app/privacy")
+    }
+
     func testContactLinks() {
         let shop = AppData.shop
         XCTAssertEqual(shop.phone.callURL.scheme, "tel")

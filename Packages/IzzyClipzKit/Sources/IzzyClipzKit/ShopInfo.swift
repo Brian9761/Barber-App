@@ -88,6 +88,10 @@ public struct ShopInfo: Sendable {
     public let timeZoneIdentifier: String
     public let schedule: WeeklySchedule
     public let instagramHandle: String
+    /// The shop's new website, with its booking and legal pages: https://izzy-clipz.vercel.app, the
+    /// current public site, until the shop's own domain replaces it. Never the older
+    /// izzyclipzbarbershop.net (on Squarespace, its booking button going to Squire), which the legal
+    /// documents don't cover. The apps link to their build setting `IZZY_WEBSITE_URL` first.
     public let websiteURL: URL
     public let paymentMethods: [String]
     public let highlights: [String]

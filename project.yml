@@ -57,6 +57,8 @@ targets:
         IzzyAPIBaseURL: https://izzy-clipz-api.vercel.app
         # YES only in the demo version (IZZY_DEMO_MODE below).
         IzzyDemoMode: $(IZZY_DEMO_MODE)
+        # The shop's website, for Visit's Website row and legal pages (IZZY_WEBSITE_URL below).
+        IzzyWebsiteURL: $(IZZY_WEBSITE_URL)
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UIApplicationSupportsIndirectInputEvents: true
@@ -81,6 +83,11 @@ targets:
         # The demo version, on its in-memory sample server (IzzyClipz/App/DemoMode.swift). Only
         # the test builds set YES (.github/workflows/test-builds.yml).
         IZZY_DEMO_MODE: NO
+        # The website the app links to: Visit's Website row and Share link, calendar events, and the
+        # Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility pages.
+        # The current public site, until the shop's own domain replaces it here
+        # (IzzyClipz/App/Website.swift).
+        IZZY_WEBSITE_URL: https://izzy-clipz.vercel.app
 
   IzzyClipzTests:
     type: bundle.unit-test

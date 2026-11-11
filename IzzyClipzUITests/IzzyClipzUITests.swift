@@ -288,7 +288,18 @@ final class IzzyClipzUITests: XCTestCase {
         tapPinned("hideKeyboard")
         XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "Hide keyboard didn't put it away")
         XCTAssertTrue(waitForDisappearance(of: element("hideKeyboard")), "The button stays only while typing")
-        XCTAssertEqual(element("rememberDetailsToggle").value as? String, "1", "Remember me starts on")
+        // Who gets the details, as the Privacy Policy says.
+        let privacy = element("detailsPrivacy")
+        scroll(toReveal: privacy)
+        XCTAssertEqual(
+            privacy.label,
+            "Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains."
+        )
+        // Nothing is remembered yet, so Remember me starts off: keeping the details is the client's choice.
+        let remember = element("rememberDetailsToggle")
+        scroll(toReveal: remember)
+        XCTAssertEqual(remember.value as? String, "0", "Remember me starts off")
+        flipSwitch(remember)
         screenshot("14-Book-Details")
 
         continueToReview()
@@ -299,6 +310,14 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("bookingSummary").waitForExistence(timeout: 10))
         XCTAssertTrue(containing("Any barber").exists, "The review should say any barber")
         XCTAssertTrue(containing("Low fade, please").exists, "The note is on the review")
+        // What booking agrees to, right above Book appointment.
+        let consent = element("bookingConsent")
+        XCTAssertTrue(consent.exists, "No consent line on Review")
+        XCTAssertEqual(consent.label, "By booking, you agree to our Terms of Service and Cancellation & No-Show Policy.")
+        XCTAssertLessThanOrEqual(
+            consent.frame.maxY, element("bookAppointmentButton").frame.minY + 1,
+            "The consent line should sit right above Book appointment"
+        )
         screenshot("15-Book-Review")
 
         bookAppointment()
@@ -1016,10 +1035,40 @@ final class IzzyClipzUITests: XCTestCase {
 
         let reviews = element("visitSeeAllReviews")
         scroll(toReveal: reviews)
-        XCTAssertTrue(element("visitWebsiteLink").exists)
+        let website = element("visitWebsiteLink")
+        XCTAssertTrue(website.exists)
         screenshot("24-Visit-Links")
+        // The shop's new website, never the older one.
+        website.tap()
+        XCTAssertEqual(webPageURL(), "https://izzy-clipz.vercel.app")
+        closeWebPage()
+
         reviews.tap()
         XCTAssertTrue(element("googleReviews").waitForExistence(timeout: 15), "Visit's reviews link didn't open the reviews")
+    }
+
+    /// Visit's Legal section opens each of the shop's policies on its website, in the in-app browser.
+    func testLegalPagesOnVisit() {
+        launch()
+        openTab("Visit")
+        XCTAssertTrue(element("visitDirectionsButton").waitForExistence(timeout: 10), "The Visit tab didn't show")
+        let pages = [
+            ("legal-privacy", "Privacy Policy", "https://izzy-clipz.vercel.app/privacy"),
+            ("legal-terms", "Terms of Service", "https://izzy-clipz.vercel.app/terms"),
+            ("legal-cancellation-policy", "Cancellation & No-Show Policy", "https://izzy-clipz.vercel.app/cancellation-policy"),
+            ("legal-accessibility", "Accessibility", "https://izzy-clipz.vercel.app/accessibility"),
+        ]
+        for (identifier, title, url) in pages {
+            let row = element(identifier)
+            scroll(toReveal: row)
+            XCTAssertTrue(row.label.contains(title), row.label)
+            if identifier == "legal-privacy" {
+                screenshot("24b-Visit-Legal")
+            }
+            row.tap()
+            XCTAssertEqual(webPageURL(), url, "\(title) opened the wrong page")
+            closeWebPage()
+        }
     }
 
     func testReminderSettings() {

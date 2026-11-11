@@ -494,6 +494,8 @@ final class BookingDetailsInProgressTests: XCTestCase {
         XCTAssertEqual(BookingDetailsInProgress.start(kept: typed, saved: saved), typed)
     }
 
+    /// "Remember me" starts on only when this iPhone already remembers the client; a new client
+    /// chooses to be remembered (it starts off).
     func testANewBookingStartsFromWhatsRemembered() {
         let saved = CustomerDetails(name: "Sample Client", phone: "(442) 555-0123")
         XCTAssertEqual(
@@ -502,18 +504,31 @@ final class BookingDetailsInProgressTests: XCTestCase {
         )
         XCTAssertEqual(
             BookingDetailsInProgress.start(kept: nil, saved: nil),
-            BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "", remember: true)
+            BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "", remember: false),
+            "Nothing remembered: Remember me starts off"
         )
+    }
+
+    /// A booking draft doesn't keep a card for next time unless the client said so.
+    func testADraftStartsWithoutRememberMe() throws {
+        let offering = try XCTUnwrap(AppData.catalog.offering(withID: TestData.carlosHaircutID))
+        let draft = BookingDraft(
+            plan: BookingPlan(choice: .offering(offering), start: TestData.friday),
+            customer: CustomerDetails(name: "Alex", phone: "(442) 555-0123"),
+            note: ""
+        )
+        XCTAssertFalse(draft.remember)
     }
 
     /// The remembered name and number were changed or forgotten in "Your details" mid-booking:
     /// the booking fills in the new ones (or none), so Continue can't remember the old ones again.
-    /// The note stays, and "Remember me" is on as for a new booking.
+    /// The note stays. "Remember me" is on for details this iPhone now remembers, and off once
+    /// they're forgotten.
     func testChangedOrForgottenDetailsReplaceTheTypedOnes() {
         let kept = BookingDetailsInProgress(customer: CustomerDetails(name: "Alex", phone: "(442) 555-0123"), note: "Low fade", remember: true)
         let changed = CustomerDetails(name: "Alex Smith", phone: "(442) 555-0199")
         XCTAssertEqual(kept.remembering(changed), BookingDetailsInProgress(customer: changed, note: "Low fade", remember: true))
-        XCTAssertEqual(kept.remembering(nil), BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: true))
+        XCTAssertEqual(kept.remembering(nil), BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: false))
 
         // "Remember me" was off for someone else's details: saving new ones remembers those.
         let forSomeoneElse = BookingDetailsInProgress(customer: CustomerDetails(name: "Sam", phone: "4425550124"), note: "", remember: false)

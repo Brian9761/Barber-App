@@ -127,8 +127,9 @@ struct BookingDraft: Hashable {
     let customer: CustomerDetails
     let note: String
     /// "Remember me on this iPhone" on the details step: a card added for this booking is kept
-    /// for next time, or (off) forgotten once it's booked.
-    var remember = true
+    /// for next time, or (off, as it starts unless this iPhone already remembers the client)
+    /// deleted once it's booked.
+    var remember = false
 }
 
 /// What the client has typed on the details step, kept while they're booking: going back to the
@@ -140,16 +141,19 @@ struct BookingDetailsInProgress: Hashable {
     var remember: Bool
 
     /// What the details step starts with: what was typed earlier in this booking, or else the
-    /// name and number remembered from last time, with no note and "Remember me" on.
+    /// name and number remembered from last time, with no note. "Remember me" starts off unless
+    /// this iPhone already remembers the client: keeping their details, and a card they add, for
+    /// next time is their choice to make (docs/legal/research.md §8.3 item 9).
     static func start(kept: BookingDetailsInProgress?, saved: CustomerDetails?) -> BookingDetailsInProgress {
-        kept ?? BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: "", remember: true)
+        kept ?? BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: "", remember: saved != nil)
     }
 
     /// The same booking after the client changed the remembered name and number in "Your
-    /// details" (`saved`), or forgot them (`nil`): those are the ones it fills in now, with
-    /// "Remember me" on, and the note stays. Otherwise Continue would remember the old ones again.
+    /// details" (`saved`), or forgot them (`nil`): those are the ones it fills in now, and the note
+    /// stays. "Remember me" is on for details this iPhone now remembers, and off once they're
+    /// forgotten. Otherwise Continue would remember the old ones again.
     func remembering(_ saved: CustomerDetails?) -> BookingDetailsInProgress {
-        BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: note, remember: true)
+        BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: note, remember: saved != nil)
     }
 }
 

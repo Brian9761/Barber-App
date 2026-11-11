@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Step 5: everything on one card (each part with "Change"), the note that nothing is paid now,
-/// and the screen's one red, "Book appointment".
+/// and the screen's one red, "Book appointment", with "By booking, you agree to our Terms of
+/// Service and Cancellation & No-Show Policy." (both linked) right above it.
 ///
 /// With no-show protection (the shop's server says this booking needs a card), Review also shows
 /// the "Full Service Cancellation & No-Show Fee" notice and a "Card on file" section: the card on
@@ -112,6 +113,14 @@ private struct BookingReviewScreen: View {
         }
         .screenBackground()
         .stickyBottomBar {
+            // What booking agrees to, right above the button that does it, with both linked
+            // (docs/legal/research.md §8.4).
+            LegalLinksText(text: LegalCopy.bookingConsent, pages: LegalCopy.bookingConsentPages)
+                .textRole(.caption)
+                .foregroundStyle(Theme.bone)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("bookingConsent")
             Button(action: book) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: Theme.Space.s) {

@@ -2,8 +2,10 @@ import SwiftUI
 
 /// Step 4: who the appointment is for. A name and a US mobile number (so the shop knows who's
 /// coming and can reach them), and an optional note for the barber. The name and number are
-/// filled in from last time and remembered for next time, unless the client turns that off.
-/// Everything typed here is kept while they book, so a trip back to the times doesn't lose it.
+/// filled in from last time; "Remember me on this iPhone" keeps them for next time, and starts off
+/// unless this iPhone already remembers the client. Under the form, who gets the details, with the
+/// Privacy Policy linked. Everything typed here is kept while they book, so a trip back to the
+/// times doesn't lose it.
 struct BookingDetailsView: View {
     let plan: BookingPlan
 
@@ -14,7 +16,7 @@ struct BookingDetailsView: View {
     @State private var name = ""
     @State private var phone = ""
     @State private var note = ""
-    @State private var remember = true
+    @State private var remember = false
     /// Problems show once the client tries to continue, not while they type.
     @State private var showsProblems = false
     @State private var didFill = false
@@ -40,7 +42,9 @@ struct BookingDetailsView: View {
                 BookingStepHeader(
                     step: 4,
                     title: "Your details",
-                    subtitle: "So the shop knows who's coming and can reach you if anything changes."
+                    subtitle: DemoMode.isOn
+                        ? "This is the demo: your details stay on this iPhone and aren't sent anywhere."
+                        : "So the shop knows who's coming and can reach you if anything changes."
                 )
 
                 VStack(alignment: .leading, spacing: Theme.Space.l) {
@@ -86,10 +90,20 @@ struct BookingDetailsView: View {
                 .tint(Theme.electric)
                 .accessibilityIdentifier("rememberDetailsToggle")
 
-                Text("Your name and number are sent only to \(AppData.shop.name), to book and manage this appointment.")
-                    .textRole(.caption)
-                    .foregroundStyle(Theme.smoke)
-                    .fixedSize(horizontal: false, vertical: true)
+                // Who gets the details, as the Privacy Policy says (docs/legal/research.md §1).
+                if DemoMode.isOn {
+                    Text(LegalCopy.demoDetailsPrivacy)
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("detailsPrivacy")
+                } else {
+                    LegalLinksText(text: LegalCopy.detailsPrivacy, pages: LegalCopy.detailsPrivacyPages)
+                        .textRole(.caption)
+                        .foregroundStyle(Theme.smoke)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("detailsPrivacy")
+                }
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, Theme.Space.s)

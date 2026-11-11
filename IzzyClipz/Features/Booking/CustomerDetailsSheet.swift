@@ -16,6 +16,11 @@ struct CustomerDetailsSheet: View {
 
     private var details: CustomerDetails { CustomerDetails(name: name, phone: phone) }
 
+    /// Under the name and number: when they leave this iPhone, with the Privacy Policy linked.
+    static let footer = "Filled in when you book. They leave this iPhone only with a booking, as our Privacy Policy explains."
+    /// The same in the demo version, where nothing leaves the iPhone.
+    static let demoFooter = "Filled in when you book. In the demo, they stay on this iPhone."
+
     var body: some View {
         NavigationStack {
             Form {
@@ -40,7 +45,11 @@ struct CustomerDetailsSheet: View {
                             .foregroundStyle(Theme.caution)
                     }
                 } footer: {
-                    Text("Filled in when you book. They're sent to \(AppData.shop.name) only with a booking.")
+                    if DemoMode.isOn {
+                        Text(Self.demoFooter)
+                    } else {
+                        LegalLinksText(text: Self.footer, pages: LegalCopy.detailsPrivacyPages)
+                    }
                 }
                 if let card = cards.saved {
                     Section {
