@@ -4,13 +4,13 @@
 **Last updated:** [TO FILL IN: the same day]\
 **Last reviewed:** [TO FILL IN: the day this statement was last checked against the live website and apps]
 
-Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") wants everyone to be able to book with us and visit the shop, including people with disabilities. This statement covers our website, our installable web apps and our iPhone apps.
+Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") wants everyone to be able to book with us and visit the shop, including people with disabilities. This statement covers our website, our installable web apps and our iPhone apps. Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company.
 
 ## The short version
 
 - **Our goal** is for our website and apps to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at Level AA.
 - **We've worked toward it, but we haven't confirmed that everything meets it yet.** No outside expert has audited our website or apps.
-- **If anything gets in your way, contact us the way that works best for you:** call (442) 341-3053, call through a relay service by dialing 711, text us [TO FILL IN: remove "text us" unless texts are confirmed] or email us (see "Other ways to book and get help"). We'll book your appointment for you and help with anything else you need.
+- **If anything gets in your way, contact us the way that works best for you:** call (442) 341-3053, call through a relay service by dialing 711, or email us (see "Other ways to book and get help"). We'll book your appointment for you and help with anything else you need.
 - **Tell us about problems** and we'll get back to you within 5 business days.
 
 ## Our goal
@@ -47,9 +47,8 @@ We aim for our website and apps to meet the [Web Content Accessibility Guideline
 
 You never have to use our website or apps to book.
 
-- **Call us at (442) 341-3053** during opening hours. We'll book, change or cancel your appointment for you, tell you about our services and prices, and read you the cancellation terms. We can also text you the details.
+- **Call us at (442) 341-3053** during opening hours. We'll book, change or cancel your appointment for you, tell you about our services and prices, and read you the cancellation terms.
 - **Call through a relay service.** If you're deaf, hard of hearing or have a speech disability, dial 711 to call us through a relay service. We welcome relay calls.
-- **Text us at (442) 341-3053.** [TO FILL IN: keep this line only once you've confirmed this number takes texts and someone reads them during opening hours; otherwise delete every mention of texting us in this statement.]
 - **Email us at [TO FILL IN: the shop's email address].**
 - **Walk in.** Walk-ins are welcome, depending on which barbers are free.
 - **At the shop.** If you need help getting in, or any other accommodation during your visit, contact us before you come or tell us when you arrive. Service animals are welcome.
@@ -59,13 +58,12 @@ You never have to use our website or apps to book.
 If something on our website or in our apps is hard to use, please tell us:
 
 - **Call:** (442) 341-3053, or dial 711 to call through a relay service
-- **Text:** (442) 341-3053 [TO FILL IN: keep this line only if texts are confirmed, as in "Other ways to book and get help"]
 - **Email:** [TO FILL IN: the shop's email address]
 - **Visit or write:** Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058
 
 It helps to tell us which page or screen it was, what you were trying to do, and what device, browser or app and assistive technology (such as a screen reader) you were using.
 
-**What happens next:** if you were trying to book, we'll book it for you, right away if you call, or as soon as we see your text or email during opening hours. We'll get back to you about the problem within 5 business days, tell you what we're going to do about it, and fix problems in our own website and apps as soon as we can.
+**What happens next:** if you were trying to book, we'll book it for you, right away if you call, or as soon as we see your email during opening hours. We'll get back to you about the problem within 5 business days, tell you what we're going to do about it, and fix problems in our own website and apps as soon as we can.
 
 ## Updates to this statement
 

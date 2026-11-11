@@ -3,7 +3,7 @@
 **Effective date:** [TO FILL IN: the day this version goes live]\
 **Last updated:** [TO FILL IN: the same day]
 
-This policy explains what information Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") collects through its website, its installable web apps and its iPhone apps, why we collect it, who else receives it, how long we keep it, and the choices you have.
+This policy explains what information Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") collects through its website, its installable web apps and its iPhone apps, why we collect it, who else receives it, how long we keep it, and the choices you have. Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company.
 
 ## The short version
 
@@ -228,6 +228,13 @@ If a security breach affects your personal information, we'll notify you as Cali
 ## Children
 
 Our website and apps are for a general audience and aren't directed to children under 13. We don't knowingly collect personal information from children under 13. A parent or guardian should book for a child. If you think a child under 13 has given us personal information, contact us and we'll delete it.
+
+**Your age range in our iPhone apps.** Laws such as California's Digital Age Assurance Act require apps to ask the phone for its user's age range. So on iOS 26 or later, our iPhone apps may ask your iPhone for it when you open them, through Apple's Declared Age Range feature. Your iPhone asks whether to share it, or follows the choice already set in its settings.
+
+- The app learns only whether you're under 13 or 13 or older.
+- It keeps the answer only while it's open. It never saves it, and never sends it to us or anyone else.
+- If you're under 13, the Izzy Clipz app takes no details: it asks a parent or guardian to book and shows the shop's phone number. Izzy Clipz Business, which is for the shop's team, says the same.
+- If you don't share your age range, the apps work as usual.
 
 ## Your choices and rights
 
