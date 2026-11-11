@@ -354,7 +354,7 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 | `izzy.lastBooked.v1` | sessionStorage | The last booking's id | When the tab closes; "Forget me" |
 | `izzy.visits.v1`, `izzy.visitCounted.v1`, `izzy.installHint.v1` | localStorage and sessionStorage | How many visits, and whether (and when) the Add to Home Screen bar was closed or the app installed | Never; used only for that bar |
 | `izzy.business.session.v1` | localStorage | This computer's Business session: token, id, name and dates. Never the owner key. | Sign out; when the server refuses the session; after 30 days |
-| `izzy.business.lastBarber.v1` | localStorage | The barber last picked for "Sold by" (an id only) | Never |
+| `izzy.business.lastBarber.v1` | localStorage | The barber last picked for "Sold by" (an id only) | With the sign-in: sign out; when the server refuses the session; after 30 days. A page that opens with no sign-in left also removes one left over. |
 | Demo only: `izzy.demo.v1`, `izzy.demo.appointments.v1`, `izzy.demo.business.v1`, `izzy.demo.business.session.v1` | localStorage | Demo bookings with a manage token and a 53-bit scrambled code of the number (no name, number, email or note); the Business demo's sample shop and sign-in | "Forget me"; "Reset the demo"; 60 days after a booking ends. The real site deletes them if it's opened at the demo's address. |
 
 "Forget me on this computer" on My appointments clears the details, the card, the appointment list, the cookie and the booking in progress (`server/web/src/pages/AppointmentsPage.tsx` (web)). It changes nothing on the server: the appointments stay booked.
