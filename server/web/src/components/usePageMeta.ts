@@ -13,11 +13,15 @@ function setMeta(attribute: 'name' | 'property', key: string, content: string): 
   element.setAttribute('content', content);
 }
 
+/** A page's whole title: "Privacy Policy · Izzy Clipz Barbershop". A title that already names the shop (Home's) is used as it is. */
+export function fullTitle(title: string): string {
+  return title.includes(SITE_NAME) ? title : `${title} · ${SITE_NAME}`;
+}
+
 /** Each page's own <title>, description and Open Graph tags. */
 export function usePageMeta(title: string, description: string): void {
   useEffect(() => {
-    // A title that already names the shop (Home's) is used as it is.
-    const full = title.includes(SITE_NAME) ? title : `${title} · ${SITE_NAME}`;
+    const full = fullTitle(title);
     document.title = full;
     setMeta('name', 'description', description);
     setMeta('property', 'og:title', full);

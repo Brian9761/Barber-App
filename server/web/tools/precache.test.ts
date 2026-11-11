@@ -27,7 +27,9 @@ beforeEach(() => {
     'assets/index-abc123.js.map': '{}',
     'assets/inter-latin-wght-normal-x.woff2': 'font',
     'assets/inter-cyrillic-wght-normal-x.woff2': 'font',
+    'privacy/index.html': '<!doctype html><div id="root"><h1>Privacy Policy</h1></div>',
   };
+  mkdirSync(join(dir, 'privacy'));
   for (const [name, content] of Object.entries(files)) writeFileSync(join(dir, name), content);
 });
 
@@ -38,7 +40,7 @@ afterEach(() => {
 const HOSTING = '{"headers":[{"source":"/(.*)","headers":[{"key":"x-frame-options","value":"DENY"}]}]}';
 
 describe('the service worker’s files', () => {
-  it('are the site’s own, not the share image, the robots file, the hosting settings, the worker or other alphabets', () => {
+  it('are the site’s own, not the share image, the robots file, the hosting settings, the worker, the legal pages’ plain HTML or other alphabets', () => {
     expect(precacheEntries(dir, HOSTING).map((entry) => entry.url)).toEqual([
       '/assets/index-abc123.js',
       '/assets/inter-latin-wght-normal-x.woff2',
@@ -47,6 +49,9 @@ describe('the service worker’s files', () => {
       '/manifest.webmanifest',
       '/offline.html',
     ]);
+    // Online the worker asks the network for a legal page first, and offline the app's own page opens it.
+    for (const name of ['privacy/index.html', 'terms/index.html', 'cancellation-policy/index.html', 'accessibility/index.html']) expect(precached(name), name).toBe(false);
+    expect(precached('business/index.html')).toBe(true);
     expect(precached('assets/inter-latin-ext-wght-normal-x.woff2')).toBe(true);
     expect(precached('assets/inter-greek-wght-normal-x.woff2')).toBe(false);
   });

@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Locator, Page, TestInfo } from '@playwright/test';
 import { navLink, signInWithCode } from './business-support.js';
@@ -18,6 +18,7 @@ import {
   setLiveReviews,
   setProtection,
   SHOTS_DIR,
+  siteTookOver,
   tabTo,
   test,
   watchOtherSites,
@@ -87,6 +88,8 @@ for (const doc of DOCS) {
   test(`${doc.path}: a draft that says so, with its sections, no placeholder showing, and nothing in the way`, async ({ page }, testInfo) => {
     const otherSites = watchOtherSites(page, testInfo);
     await page.goto(doc.path);
+    // Its plain HTML first (tools/prerender.ts), then the site's own page in its place once the script runs.
+    await siteTookOver(page);
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(doc.heading);
     await expect(page.locator('h1')).toHaveCount(1);
     await expect(page).toHaveTitle(`${doc.title} · Izzy Clipz Barbershop`);
@@ -484,4 +487,140 @@ test('"Forget me" on My appointments says what it did where the focus goes, in v
   expect((await status.boundingBox())!.y, 'below the nav').toBeGreaterThanOrEqual(nav.y + nav.height);
   await expectAccessible(page, 'My appointments after Forget me');
   await view(page, testInfo, 'legal-13-forget-me-done');
+});
+
+/** Each document's one main heading, its <title>, and words from it (a section's heading), as the build writes its plain HTML. */
+const PLAIN = [
+  { path: '/privacy', heading: 'Privacy Policy', title: 'Privacy Policy', words: 'Who we share your information with' },
+  { path: '/terms', heading: 'Terms of Service', title: 'Terms of Service', words: '4. Prices and paying' },
+  { path: '/cancellation-policy', heading: 'Cancellation &amp; No-Show Policy', title: 'Cancellation &amp; No-Show Policy', words: 'Bookings with a card on file' },
+  { path: '/accessibility', heading: 'Accessibility Statement', title: 'Accessibility', words: 'Other ways to book and get help' },
+] as const;
+
+test('the build has the four legal pages as plain HTML, with their headings and words and no placeholder as written, served at their addresses', async ({
+  request,
+}, testInfo) => {
+  test.skip(isPhone(testInfo), 'Once is enough: the same files');
+  // The build this run serves: the shop's (../public) or the demo's (dist-demo).
+  const built = resolve(isDemo(testInfo) ? 'dist-demo' : '../public');
+  for (const doc of PLAIN) {
+    const html = readFileSync(join(built, doc.path.slice(1), 'index.html'), 'utf8');
+    expect(html.match(/<h1[\s>]/g), doc.path).toHaveLength(1);
+    expect(html, doc.path).toMatch(new RegExp(`<h1 [^>]*>${doc.heading}</h1>`));
+    expect(html, doc.path).toContain(`<title>${doc.title} · Izzy Clipz Barbershop</title>`);
+    expect(html, doc.path).toMatch(/<meta name="description" content="[^"]{40,}" \/>/);
+    expect(html, doc.path).toContain(`>${doc.words}</h2>`);
+    expect(html, doc.path).toContain(DRAFT);
+    expect(html, doc.path).not.toContain('[TO FILL IN');
+    expect(html, doc.path).not.toContain('OWNER-CHECKLIST');
+    // The site's script is there to take over, and the note for browsers without it comes first.
+    expect(html, doc.path).toMatch(/<script type="module" crossorigin src="\/assets\/main-[^"]+\.js"><\/script>/);
+    expect(html.indexOf('data-testid="noscript"'), doc.path).toBeLessThan(html.indexOf('<div id="root">'));
+    // Served at the page's address, with or without a trailing slash, with the hosting's headers.
+    for (const address of [doc.path, `${doc.path}/`]) {
+      const served = await request.get(address);
+      expect(served.status(), address).toBe(200);
+      expect(await served.text(), address).toBe(html);
+      expect(served.headers()['x-content-type-options'], address).toBe('nosniff');
+      if (isDemo(testInfo)) expect(served.headers()['x-robots-tag'], address).toBe('noindex');
+    }
+  }
+  // Every other page is still the site's own page.
+  expect(await (await request.get('/book/time')).text()).toContain('<div id="root"></div>');
+});
+
+test.describe('without JavaScript', () => {
+  test.use({ javaScriptEnabled: false, serviceWorkers: 'block' });
+
+  /** The screen as it is (no script runs to wait for). */
+  async function plainView(page: Page, testInfo: TestInfo, name: string): Promise<void> {
+    mkdirSync(LEGAL_SHOTS, { recursive: true });
+    await page.screenshot({ path: join(LEGAL_SHOTS, `${testInfo.project.name}-${name}.png`), animations: 'disabled' });
+  }
+
+  /** The note every page starts with: first, in its own colours, with the shop's number and the four policies. */
+  async function expectNote(page: Page): Promise<Locator> {
+    const note = page.getByTestId('noscript');
+    await expect(note).toBeVisible();
+    expect((await note.boundingBox())!.y, 'first on the page').toBe(0);
+    await expect(note).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    await expect(note).toHaveCSS('color', 'rgb(29, 29, 31)');
+    await expect(note.getByRole('link', { name: '(442) 341-3053' })).toHaveAttribute('href', 'tel:+14423413053');
+    const policies = [
+      ['Privacy Policy', '/privacy'],
+      ['Terms of Service', '/terms'],
+      ['Cancellation & No-Show Policy', '/cancellation-policy'],
+      ['Accessibility', '/accessibility'],
+    ] as const;
+    for (const [name, href] of policies) await expect(note.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
+    return note;
+  }
+
+  test('Home starts with a note anyone can read, with the shop’s number and the four policies, which open', async ({ page }, testInfo) => {
+    await page.goto('/');
+    const note = await expectNote(page);
+    await expect(note).toContainText(
+      'This website needs JavaScript for online booking and for most of its pages. To book, call Izzy Clipz Barbershop at (442) 341-3053, or come by 1919 Mission Ave, Ste 105, Oceanside, CA 92058.',
+    );
+    await expect(note).toContainText('Our policies open without it:');
+    await expect(note).toBeInViewport({ ratio: 1 });
+    await plainView(page, testInfo, 'legal-14-home-without-javascript');
+
+    await note.getByRole('link', { name: 'Privacy Policy' }).click();
+    await expect(page).toHaveURL(/\/privacy$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Privacy Policy');
+  });
+
+  test('/privacy is the policy itself, readable: its title, its draft note, its sections and its words, and the other policies a link away', async ({
+    page,
+  }, testInfo) => {
+    await page.goto('/privacy');
+    await expectNote(page);
+    await expect(page).toHaveTitle('Privacy Policy · Izzy Clipz Barbershop');
+    await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /^What Izzy Clipz Barbershop collects/);
+    const heading = page.getByRole('heading', { level: 1 });
+    await expect(heading).toHaveText('Privacy Policy');
+    await expect(page.locator('h1')).toHaveCount(1);
+    await expect(heading).toBeInViewport();
+    const draft = page.getByTestId('legal-draft');
+    await expect(draft).toContainText(DRAFT);
+    if (isDemo(testInfo)) await expect(draft).toContainText(DEMO_LINE);
+    await expect(page.getByTestId('legal-dates')).toContainText('Effective date: Not in effect yet');
+    // Dark words on the page's white, at a readable measure (the legal pages' own styles).
+    const intro = page.getByText('This policy explains what information Izzy Clipz Barbershop');
+    await expect(intro).toBeVisible();
+    await expect(intro).toHaveCSS('color', 'rgb(29, 29, 31)');
+    await expect(page.getByRole('main')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+    expect((await intro.boundingBox())!.width).toBeLessThanOrEqual(760);
+    const section = page.getByRole('heading', { level: 2, name: 'Who we share your information with' });
+    await section.scrollIntoViewIfNeeded();
+    await expect(section).toBeVisible();
+    const words = await page.getByTestId('legal-page').innerText();
+    expect(words).toContain('Neon, a Databricks company, hosts our database in the United States.');
+    expect(words).not.toContain('TO FILL IN');
+    expect(words).not.toContain('OWNER-CHECKLIST');
+    await expect(page.locator('mark.legal__placeholder').first()).toHaveText(/^To be added by the shop: /);
+    await page.getByTestId('noscript').scrollIntoViewIfNeeded();
+    await plainView(page, testInfo, 'legal-15-privacy-without-javascript');
+
+    // Another policy, from the footer, opens as plain HTML too.
+    await page.getByRole('contentinfo').getByRole('navigation', { name: 'Legal' }).getByRole('link', { name: 'Terms of Service' }).click();
+    await expect(page).toHaveURL(/\/terms$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Terms of Service');
+    await expect(page).toHaveTitle('Terms of Service · Izzy Clipz Barbershop');
+  });
+});
+
+test('with JavaScript, the site takes a legal page over from its plain HTML: its own nav, and “On this page” as the site has it', async ({ page }, testInfo) => {
+  await page.goto('/cancellation-policy');
+  await siteTookOver(page);
+  await expect(page.locator('h1')).toHaveCount(1);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cancellation & No-Show Policy');
+  // The site's own nav: its Book link, and on a phone its menu.
+  await expect(page.locator('nav.globalnav .globalnav__book')).toBeVisible();
+  if (isPhone(testInfo)) await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
+  // "On this page" as the site has it: open on a computer, closed on a phone.
+  const details = page.getByRole('navigation', { name: 'On this page' }).locator('details');
+  if (isPhone(testInfo)) await expect(details).not.toHaveAttribute('open');
+  else await expect(details).toHaveAttribute('open', '');
 });

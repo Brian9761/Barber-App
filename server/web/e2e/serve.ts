@@ -1,8 +1,9 @@
 // The end-to-end tests' server: the real API on PGlite (Postgres in WASM, served
 // over the wire protocol by pglite-socket, as in the server's own tests) with the
 // migrations and the catalog's barbers, and the built site from ../public, from
-// one Node server routed like Vercel: files on disk first, /api to the API, and
-// every other path to index.html.
+// one Node server routed like Vercel: /api to the API, files on disk first, then
+// the rewrites in ../vercel.json (each legal page's plain HTML, Business's page,
+// and index.html for every other path but /assets/).
 //
 //   npm run build && npm run serve:local     (then open http://127.0.0.1:4173)
 //
@@ -43,6 +44,7 @@ import { configFromEnv } from '../../src/config.js';
 import { createPool, poolDb } from '../../src/db.js';
 import type { Deps, StripeClient } from '../../src/deps.js';
 import { migrate, seedBarbers } from '../../src/migrate.js';
+import { rewriteFor, rewritesOf } from '../tools/hosting.js';
 
 const PORT = Number(process.env.E2E_PORT) || 4173;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -50,6 +52,8 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 const E2E_OWNER_KEY = process.env.E2E_OWNER_KEY || 'e2e-owner-key-for-local-tests-only';
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('../../public/', import.meta.url)));
 const FIXTURES = new URL('../../test/fixtures/', import.meta.url);
+/** The hosting's rewrites, as Vercel applies them once no file matches (../vercel.json). */
+const REWRITES = rewritesOf(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'));
 
 if (!existsSync(join(PUBLIC_DIR, 'index.html'))) {
   console.error(`No built site in ${PUBLIC_DIR}. Run \`npm run build\` in server/web first.`);
@@ -436,11 +440,13 @@ const server = createServer(async (req, res) => {
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return await api(req, res);
     const file = siteFile(url.pathname);
     if (file) return serveFile(res, file);
-    // A hashed file that isn't there is a real 404, not the page.
-    if (url.pathname.startsWith('/assets/')) return send(res, 404, 'Not found', 'text/plain');
-    // Izzy Clipz Business's pages have their own page, with its own manifest and icons (vercel.json).
-    if (url.pathname === '/business' || url.pathname.startsWith('/business/')) return serveFile(res, join(PUBLIC_DIR, 'business', 'index.html'));
-    return serveFile(res, join(PUBLIC_DIR, 'index.html'));
+    // Then vercel.json's rewrites: each legal page's plain HTML, Izzy Clipz Business's own page (with
+    // its own manifest and icons), and the site's page for every other path. A hashed file under
+    // /assets/ that isn't there matches none: a real 404, not the page.
+    const destination = rewriteFor(REWRITES, url.pathname);
+    const rewritten = destination ? siteFile(destination) : null;
+    if (rewritten) return serveFile(res, rewritten);
+    return send(res, 404, 'Not found', 'text/plain');
   } catch (error) {
     console.error(error);
     if (!res.headersSent) send(res, 500, JSON.stringify({ error: { code: 'server_error', message: 'The end-to-end server failed.' } }));

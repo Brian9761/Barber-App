@@ -139,6 +139,14 @@ export async function settle(page: Page): Promise<void> {
   });
 }
 
+/**
+ * A legal page opened at its address comes as plain HTML first (tools/prerender.ts), which the
+ * site's script then draws over: this waits until it has, so a test acts on the site's page.
+ */
+export async function siteTookOver(page: Page): Promise<void> {
+  await expect(page.locator('[data-prerendered]')).toHaveCount(0);
+}
+
 /** Nothing sticks out sideways: the page never scrolls left and right. */
 export async function expectFits(page: Page, what: string): Promise<void> {
   const overflow = await page.evaluate(() => {

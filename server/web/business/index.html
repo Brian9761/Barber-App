@@ -20,12 +20,23 @@
     <link rel="manifest" href="/business/manifest.webmanifest" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Without JavaScript: first on the page, in colours of its own (the page behind it is black). -->
     <noscript>
-      <p style="font: 17px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; padding: 24px">
-        Izzy Clipz Business needs JavaScript. Use the Izzy Clipz Business app on the shop's iPhone, or turn JavaScript on.
-      </p>
+      <div
+        data-testid="noscript"
+        style="background: #fff; color: #1d1d1f; font: 17px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; padding: 20px 24px; border-bottom: 1px solid #d2d2d7"
+      >
+        <p style="margin: 0 0 8px">Izzy Clipz Business needs JavaScript. Use the Izzy Clipz Business app on the shop's iPhone, or turn JavaScript on.</p>
+        <p style="margin: 0">
+          The shop's policies open without it:
+          <a href="/privacy" style="color: #0066cc">Privacy Policy</a>,
+          <a href="/terms" style="color: #0066cc">Terms of Service</a>,
+          <a href="/cancellation-policy" style="color: #0066cc">Cancellation &amp; No-Show Policy</a> and
+          <a href="/accessibility" style="color: #0066cc">Accessibility</a>.
+        </p>
+      </div>
     </noscript>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

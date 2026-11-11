@@ -4,6 +4,14 @@
   "rewrites": [
     { "source": "/business", "destination": "/business/index.html" },
     { "source": "/business/(.*)", "destination": "/business/index.html" },
+    { "source": "/privacy", "destination": "/privacy/index.html" },
+    { "source": "/privacy/", "destination": "/privacy/index.html" },
+    { "source": "/terms", "destination": "/terms/index.html" },
+    { "source": "/terms/", "destination": "/terms/index.html" },
+    { "source": "/cancellation-policy", "destination": "/cancellation-policy/index.html" },
+    { "source": "/cancellation-policy/", "destination": "/cancellation-policy/index.html" },
+    { "source": "/accessibility", "destination": "/accessibility/index.html" },
+    { "source": "/accessibility/", "destination": "/accessibility/index.html" },
     { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
   ],
   "headers": [

@@ -6,6 +6,7 @@ import { build as viteBuild, type Plugin, type Rollup } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { legalDocuments, legalStrict } from './tools/legal.js';
 import { precacheEntries, precacheVersion } from './tools/precache.js';
+import { legalPages } from './tools/prerender.js';
 
 // The website builds into ../public, which Vercel serves next to the API (one
 // project, one origin). In development, `npm run dev` here proxies /api to the
@@ -182,6 +183,15 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       legalDocuments({ strict, dir: LEGAL_DIR }),
+      // The four legal pages as plain HTML too, readable without JavaScript (tools/prerender.ts).
+      legalPages({
+        root: here('.'),
+        entry: here('./src/legal/prerender.tsx'),
+        legalPage: here('./src/legal/LegalPage.tsx'),
+        draft: !strict,
+        demo,
+        origin: siteOrigin(),
+      }),
       absoluteSocialLinks(),
       businessPages(),
       ...(demo ? [demoBackend(), demoHosting()] : []),

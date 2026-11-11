@@ -1,5 +1,18 @@
 import type { Locator, Page } from '@playwright/test';
-import { expectAccessible, expect, expectFits, expectLogosStandOut, firstTime, isPhone, screenshot, setLiveReviews, tabTo, test, watchOtherSites } from './support.js';
+import {
+  expectAccessible,
+  expect,
+  expectFits,
+  expectLogosStandOut,
+  firstTime,
+  isPhone,
+  screenshot,
+  setLiveReviews,
+  siteTookOver,
+  tabTo,
+  test,
+  watchOtherSites,
+} from './support.js';
 
 // Every page (the four legal ones too) opens with its one main heading and its title, works
 // from the nav on a desktop and a phone, logs nothing as an error, has no serious
@@ -32,6 +45,8 @@ test.describe('every page', () => {
     test(`${page.path} opens with its heading, title and description`, async ({ page: tab }, testInfo) => {
       const otherSites = watchOtherSites(tab, testInfo);
       await tab.goto(page.path);
+      // The legal pages come as plain HTML first: the site draws its own page over it.
+      await siteTookOver(tab);
       await expect(tab.getByRole('heading', { level: 1, name: page.heading })).toBeVisible();
       // One main heading.
       await expect(tab.locator('h1')).toHaveCount(1);
@@ -275,6 +290,7 @@ test('in forced colors (Windows High Contrast), the controls keep their edges, f
   expect((await drawn(page.locator('.segmented').first())).border, 'the device picker’s frame').toBeGreaterThanOrEqual(1);
   // "On this page" on a legal page has a frame too.
   await page.goto('/privacy');
+  await siteTookOver(page);
   expect((await drawn(page.locator('.legal-toc'))).border, '“On this page”').toBeGreaterThanOrEqual(1);
 });
 

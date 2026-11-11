@@ -1,6 +1,7 @@
 // The demo version's end-to-end server: dist-demo/ as a static site, hosted the
-// way its own vercel.json tells Vercel to (files first, then the page for every
-// other path but /api/ and /assets/, with the headers it sets), and nothing else.
+// way its own vercel.json tells Vercel to (files first, then its rewrites: each
+// legal page's plain HTML, Business's page, and the site's page for every other
+// path but /api/ and /assets/, with the headers it sets), and nothing else.
 // There's no API: the demo answers in the browser.
 //
 //   npm run build:demo && npm run serve:demo     (then open http://127.0.0.1:4174)
@@ -17,6 +18,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { rewriteFor, rewritesOf, sourcePattern } from '../tools/hosting.js';
 
 const PORT = Number(process.env.E2E_DEMO_PORT) || 4174;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -29,23 +31,7 @@ if (!existsSync(join(DEMO_ROOT, 'index.html')) || !existsSync(join(DEMO_ROOT, 'v
 }
 
 interface HostingSettings {
-  rewrites?: { source: string; destination: string }[];
   headers?: { source: string; headers: { key: string; value: string }[] }[];
-}
-
-/**
- * A vercel.json `source` as a regular expression: what's in parentheses already is one
- * ("(.*)", "((?!api/|assets/).*)"), and the rest is the path as written.
- */
-function sourcePattern(source: string): RegExp {
-  let pattern = '';
-  let depth = 0;
-  for (const char of source) {
-    if (char === '(') depth += 1;
-    pattern += depth > 0 ? char : char.replace(/[.*+?^${}|[\]\\]/g, '\\$&');
-    if (char === ')') depth -= 1;
-  }
-  return new RegExp(`^${pattern}$`);
 }
 
 interface Site {
@@ -54,12 +40,13 @@ interface Site {
   headerRules: { pattern: RegExp; headers: { key: string; value: string }[] }[];
 }
 
-/** A folder deployed as its vercel.json says. */
+/** A folder deployed as its vercel.json says (its sources read as Vercel reads them: tools/hosting.ts). */
 function site(root: string): Site {
-  const hosting = JSON.parse(readFileSync(join(root, 'vercel.json'), 'utf8')) as HostingSettings;
+  const text = readFileSync(join(root, 'vercel.json'), 'utf8');
+  const hosting = JSON.parse(text) as HostingSettings;
   return {
     root,
-    rewrites: (hosting.rewrites ?? []).map((rule) => ({ pattern: sourcePattern(rule.source), destination: rule.destination })),
+    rewrites: rewritesOf(text),
     headerRules: (hosting.headers ?? []).map((rule) => ({ pattern: sourcePattern(rule.source), headers: rule.headers })),
   };
 }
@@ -152,11 +139,12 @@ const server = createServer(async (req, res) => {
     if (pathname.startsWith('/__e2e/')) return await plumbing(req, res, pathname);
     if (pathname === '/api' || pathname.startsWith('/api/')) apiRequests.push(`${req.method} ${pathname}`);
 
-    // Files first, then the rewrites (the page, for every path but /api/ and /assets/), like Vercel.
+    // Files first, then the rewrites (each legal page's plain HTML, Business's page, and the site's
+    // page for every other path but /api/ and /assets/), like Vercel.
     let file = siteFile(pathname);
     if (!file) {
-      const rewrite = current.rewrites.find((rule) => rule.pattern.test(pathname));
-      if (rewrite) file = siteFile(rewrite.destination);
+      const destination = rewriteFor(current.rewrites, pathname);
+      if (destination) file = siteFile(destination);
     }
     const headers = { 'content-type': file ? (TYPES[extname(file)] ?? 'application/octet-stream') : 'text/plain; charset=utf-8', ...headersFor(pathname) };
     if (!file) return send(res, 404, 'Not found', headers);

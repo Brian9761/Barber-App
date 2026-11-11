@@ -30,13 +30,29 @@
     <meta name="twitter:image:alt" content="The Izzy Clipz logo: the shop's name in white western letters on black, with a barber pole and a straight razor" />
   </head>
   <body>
-    <div id="root"></div>
+    <!--
+      Without JavaScript: first on every page, in colours of its own (the page behind it is black).
+      The four policies are pages of their own built as plain HTML (tools/prerender.ts), so they open.
+    -->
     <noscript>
-      <p style="font: 17px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; padding: 24px">
-        This page needs JavaScript to book online. To book, call Izzy Clipz Barbershop at
-        <a href="tel:+14423413053">(442) 341-3053</a>, or come by 1919 Mission Ave, Ste 105, Oceanside, CA 92058.
-      </p>
+      <div
+        data-testid="noscript"
+        style="background: #fff; color: #1d1d1f; font: 17px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; padding: 20px 24px; border-bottom: 1px solid #d2d2d7"
+      >
+        <p style="margin: 0 0 8px">
+          This website needs JavaScript for online booking and for most of its pages. To book, call Izzy Clipz Barbershop at
+          <a href="tel:+14423413053" style="color: #0066cc; white-space: nowrap">(442) 341-3053</a>, or come by 1919 Mission Ave, Ste 105, Oceanside, CA 92058.
+        </p>
+        <p style="margin: 0">
+          Our policies open without it:
+          <a href="/privacy" style="color: #0066cc">Privacy Policy</a>,
+          <a href="/terms" style="color: #0066cc">Terms of Service</a>,
+          <a href="/cancellation-policy" style="color: #0066cc">Cancellation &amp; No-Show Policy</a> and
+          <a href="/accessibility" style="color: #0066cc">Accessibility</a>.
+        </p>
+      </div>
     </noscript>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

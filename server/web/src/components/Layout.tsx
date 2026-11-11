@@ -12,7 +12,8 @@ import { Logo } from './Logo';
 import { PageErrorBoundary, PageLoadFailed } from './PageError';
 import { CallLink } from './ui';
 
-const NAV_LINKS = [
+/** The nav's pages (the legal pages' plain HTML has them too: src/legal/prerender.tsx). */
+export const NAV_LINKS = [
   { to: '/services', label: 'Services' },
   { to: '/barbers', label: 'Barbers' },
   { to: '/reviews', label: 'Reviews' },

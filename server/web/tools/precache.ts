@@ -9,6 +9,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import type { PrecacheEntry } from '../src/sw/routes.js';
+import { LEGAL_PAGE_FILES } from './prerender.js';
 
 export function sha256(content: string | Buffer): string {
   return createHash('sha256').update(content).digest('hex');
@@ -16,11 +17,14 @@ export function sha256(content: string | Buffer): string {
 
 /**
  * Files the service worker doesn't keep: the picture link previews show, the file for search
- * engines, the hosting settings and the worker itself; and Inter's alphabets other than Latin,
- * which the site's own words never use (a browser downloads them only if a page needs them).
+ * engines, the hosting settings and the worker itself; the legal pages as plain HTML (online the
+ * worker asks the network for a legal page first, and offline the app's own page opens it); and
+ * Inter's alphabets other than Latin, which the site's own words never use (a browser downloads
+ * them only if a page needs them).
  */
 export function precached(name: string): boolean {
   if (['og-image.png', 'robots.txt', 'vercel.json', 'sw.js'].includes(name) || name.endsWith('.map')) return false;
+  if (LEGAL_PAGE_FILES.includes(name)) return false;
   return !/^assets\/inter-(?!latin)/.test(name);
 }
 
