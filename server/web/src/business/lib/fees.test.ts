@@ -177,7 +177,8 @@ describe('which fee can be charged', () => {
     expect(feePanel(reopened, new Date('2026-11-10T18:01:00Z'), ZONE)!.status).toEqual({ kind: 'notCharged', note: FEE_DEADLINE_MESSAGE });
     // The server's own owner view of a checked-out visit says when (owner-appointments-with-sale.json): with a card, voided and reopened, the same.
     expect(checkedOut.completedAt).toBe('2026-11-02T19:05:00Z');
-    expect(canMarkNoShow({ ...checkedOut, status: 'booked', sale: null, card: { brand: 'visa', last4: '4242' } }, new Date('2026-11-03T19:00:00Z'))).toBe(false);
+    const voidedAndReopened: OwnerAppointment = { ...checkedOut, status: 'booked', sale: null, card: { brand: 'visa', last4: '4242' } };
+    expect(canMarkNoShow(voidedAndReopened, new Date('2026-11-03T19:00:00Z'))).toBe(false);
     // Without a card there's no fee, so it can still be marked as before.
     const noCard = booked({ card: null, noShowFee: null, completedAt: '2026-11-03T18:30:00Z' });
     expect(completedBefore(noCard)).toBe(false);
