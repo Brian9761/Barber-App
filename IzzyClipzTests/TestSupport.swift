@@ -18,6 +18,10 @@ final class ScriptedShopAPI: ShopAPI {
     var noShowPolicyHandler: (IzzyAPI.BookingTarget) throws -> IzzyAPI.NoShowPolicy = { _ in .notRequired }
     var startCardCheckoutHandler: (IzzyAPI.BookingTarget, IzzyAPI.CardToken) throws -> IzzyAPI.CardCheckout = { _, _ in throw APIError.offline }
     var saveCardHandler: (String, IzzyAPI.CardToken) throws -> IzzyAPI.SavedCard = { _, _ in throw APIError.offline }
+    /// Deleting a card: deleted at once unless a test says otherwise.
+    var deleteCardHandler: (IzzyAPI.CardToken) throws -> IzzyAPI.CardDeletion = { _ in
+        IzzyAPI.CardDeletion(status: .deleted, message: "Your saved card is deleted. It can't be charged any more.")
+    }
 
     private(set) var availabilityQueries: [IzzyAPI.AvailabilityQuery] = []
     private(set) var bookings: [IzzyAPI.NewAppointment] = []
@@ -31,6 +35,8 @@ final class ScriptedShopAPI: ShopAPI {
     private(set) var noShowPolicyRequests: [IzzyAPI.BookingTarget] = []
     private(set) var cardCheckouts: [(target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken)] = []
     private(set) var cardSaves: [(sessionId: String, token: IzzyAPI.CardToken)] = []
+    /// Every card the app asked the shop to delete, in order.
+    private(set) var cardDeletions: [IzzyAPI.CardToken] = []
 
     func health() async throws -> IzzyAPI.Health { try healthHandler() }
 
@@ -79,6 +85,11 @@ final class ScriptedShopAPI: ShopAPI {
     func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard {
         cardSaves.append((sessionId, token))
         return try saveCardHandler(sessionId, token)
+    }
+
+    func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion {
+        cardDeletions.append(token)
+        return try deleteCardHandler(token)
     }
 
     /// Every day asked for, with no openings.

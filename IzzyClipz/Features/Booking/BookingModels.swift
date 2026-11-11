@@ -180,7 +180,8 @@ extension BookingDraft {
 /// `NoShowRequirement`). When the server needs a card after all (`card_required`), or the policy
 /// changed (`policy_changed`), the policy is loaded again so Review shows what's true now, and a
 /// card the server doesn't know is dropped from this iPhone. After booking with "Remember me" off,
-/// the card is forgotten too.
+/// the card is forgotten too, and the shop is asked to delete it (`CardDeleter`): it keeps the card
+/// only while this booking can still be charged.
 @MainActor
 @Observable
 final class BookingSubmitter {
@@ -233,6 +234,9 @@ final class BookingSubmitter {
 
     private(set) var isBooking = false
     private(set) var failure: Failure?
+    /// The request asking the shop to delete a card this iPhone just let go of (after a booking
+    /// made without Remember me, or a card the server turned down). Nobody waits for it but tests.
+    @ObservationIgnored private(set) var cardDeletion: Task<CardRemoval, Never>?
 
     private let api: any ShopAPI
     private let appointments: AppointmentStore
@@ -308,7 +312,12 @@ final class BookingSubmitter {
     private func settleNoShow(after error: APIError, target: IzzyAPI.BookingTarget, sent: IzzyAPI.NoShowAgreement?) async {
         switch error {
         case .cardRequired:
-            if let sent { cards?.forget(sent.cardToken) }
+            if let sent {
+                cards?.forget(sent.cardToken)
+                // Its key is gone from this iPhone, so nobody could use it again: the shop deletes
+                // it, if it has it.
+                deleteCard(sent.cardToken)
+            }
             await policies?.reload(target)
         case .policyChanged:
             await policies?.reload(target)
@@ -317,15 +326,27 @@ final class BookingSubmitter {
         }
     }
 
-    /// Booked: with "Remember me" off the card is forgotten too, like the name and number; with it
-    /// on, the card is kept for next time.
+    /// Booked: with "Remember me" on, the card is kept for next time. Off, it's forgotten, like the
+    /// name and number, and the shop is asked to delete it: its key leaves this iPhone, so nobody
+    /// could use or remove the card again, and the shop keeps it only while this booking can still
+    /// be charged (it answers "scheduled"). That's how a card saved without Remember me is used for
+    /// that booking only: the server can't see the box.
     private func keepOrForgetCard(after draft: BookingDraft) {
         guard let cards else { return }
         if draft.remember {
             cards.setRemembered(true)
         } else {
+            let token = cards.saved?.token
             cards.forget()
+            if let token { deleteCard(token) }
         }
+    }
+
+    /// Asks the shop to delete the card saved under `token`, without waiting: the client has
+    /// nothing to do whatever it answers.
+    private func deleteCard(_ token: IzzyAPI.CardToken) {
+        let api = self.api
+        cardDeletion = Task { await CardDeleter.delete(token, api: api) }
     }
 
     static func failure(for error: APIError, start: Date, calendar: BookingCalendar) -> Failure {

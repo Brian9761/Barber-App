@@ -146,6 +146,9 @@ struct LateCancelNoticeTimer: Equatable {
 ///
 /// If Stripe saved the card but the shop's server didn't answer (offline, say), Try again finishes
 /// saving that same card without the card page: the server answers a repeat with the same card.
+///
+/// A new card replaces the one before ("Change"): that one's key leaves this iPhone, so the shop is
+/// asked to delete it (`CardDeleter`), once no booking needs it.
 @MainActor
 @Observable
 final class CardSetup {
@@ -170,6 +173,8 @@ final class CardSetup {
     /// the client closed the card page.
     private(set) var failure: String?
     private var unfinished: Unfinished?
+    /// The request asking the shop to delete the card a new one replaced. Nobody waits for it but tests.
+    @ObservationIgnored private(set) var cardDeletion: Task<CardRemoval, Never>?
 
     @ObservationIgnored private let api: any ShopAPI
     @ObservationIgnored private let saver: any CardSaver
@@ -249,7 +254,13 @@ final class CardSetup {
             let card = try await api.saveCard(sessionId: attempt.sessionId, token: attempt.token)
             unfinished = nil
             let stored = StoredCard(token: attempt.token, card: card)
+            let replaced = cards.saved?.token
             cards.save(stored, remember: remember)
+            if let replaced, replaced != stored.token {
+                // The card before can't be used from this iPhone any more: the shop deletes it.
+                let api = self.api
+                cardDeletion = Task { await CardDeleter.delete(replaced, api: api) }
+            }
             return stored
         } catch where error.isCancellation {
             unfinished = attempt
@@ -312,10 +323,14 @@ enum RememberedDetails {
         cards.setRemembered(remember)
     }
 
-    /// "Forget my details": the name and number, and the card with them.
-    static func forget(_ savedDetails: CustomerDetailsStore, cards: SavedCardStore) {
+    /// "Forget my details": the name and number, and the card with them. Returns the forgotten
+    /// card's key, for the shop to delete the card too (`CardDeleter`).
+    @discardableResult
+    static func forget(_ savedDetails: CustomerDetailsStore, cards: SavedCardStore) -> IzzyAPI.CardToken? {
+        let token = cards.saved?.token
         savedDetails.forget()
         cards.forget()
+        return token
     }
 }
 
@@ -387,12 +402,18 @@ enum NoShowCopy {
     }
 
     /// Under the card on "You're booked": "Nothing is charged now. If you don't come, or cancel less
-    /// than 1 hour before, the shop may charge $45."
+    /// than 1 hour before, the shop may charge $45." For a time booked when it was already less than
+    /// the window away, it adds that cancelling within 15 minutes of booking is free (the grace
+    /// period, as the server counts it).
     static func bookedCardDetail(_ appointment: IzzyAPI.Appointment) -> String? {
         guard appointment.card != nil, let fee = appointment.noShowFee else { return nil }
         if let window = fee.lateCancelWindowMinutes {
             let before = IzzyAPI.NoShowRule.windowLabel(minutes: window)
-            return "Nothing is charged now. If you don't come, or cancel less than \(before) before, the shop may charge \(fee.amountLabel)."
+            let detail = "Nothing is charged now. If you don't come, or cancel less than \(before) before, the shop may charge \(fee.amountLabel)."
+            guard IzzyAPI.NoShowRule.cancellingMayBeCharged(start: appointment.start, now: appointment.createdAt, windowMinutes: window) else {
+                return detail
+            }
+            return detail + " Cancelling within \(IzzyAPI.NoShowRule.lateCancelGraceMinutes) minutes of booking is free."
         }
         return "Nothing is charged now. If you don't come, the shop may charge \(fee.amountLabel)."
     }
@@ -408,8 +429,13 @@ enum NoShowCopy {
 
     /// Your details: the card's section, under the name and number.
     static let detailsCardHeader = "Card on file"
-    static let detailsCardNote = "Used when the shop asks for a card to book. Stripe keeps the card; this iPhone keeps only a key to it. Appointments already booked keep their card."
+    static let detailsCardNote = "Used when the shop asks for a card to book. Stripe keeps the card; this iPhone keeps only a key to it. Removing it deletes it at the shop as soon as no appointment needs it."
     static let removeCardButton = "Remove card"
+
+    /// What "Remove card" asks first: it's deleted at the shop, which can't be undone.
+    static let removeCardTitle = "Remove your card?"
+    static let removeCardMessage = "The shop deletes it as soon as no appointment needs it, and then it can't be charged. You'll add a card again the next time one is needed."
+    static let keepCardButton = "Keep it"
 
     /// What "Forget my details" asks first: the card goes too, when there's one.
     static func forgetDetailsTitle(hasCard: Bool) -> String {
@@ -417,6 +443,12 @@ enum NoShowCopy {
     }
 
     static func forgetDetailsMessage(hasCard: Bool) -> String {
-        hasCard ? "You'll type them again, and add a card, next time you book." : "You'll type them again next time you book."
+        hasCard
+            ? "The shop deletes the card as soon as no appointment needs it. You'll type them again, and add a card, next time you book."
+            : "You'll type them again next time you book."
     }
+
+    /// Your details once "Forget my details" went through with a card: the name, number and card
+    /// are gone from this iPhone, and under it what the shop said about the card.
+    static let forgottenNote = "Your name, number and card are forgotten on this iPhone."
 }

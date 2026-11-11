@@ -16,7 +16,8 @@ import Foundation
 ///   for a no-show or a cancellation less than 1 hour before): it gives the same policy and warning,
 ///   makes Checkout Sessions (`completeCardCheckout` stands for the client on Stripe's page), saves
 ///   cards under their tokens, and turns a booking down without a usable card (`card_required`) or
-///   with another policy than today's (`policy_changed`), with the server's words.
+///   with another policy than today's (`policy_changed`), with the server's words. It deletes a
+///   card the client removes (`deleteCard`) now, or once no booking needs it, as the server does.
 ///
 /// Launch arguments make it misbehave on purpose, so the app's error states can be tested; see
 /// `Options`. Everything it returns that isn't the shop's real menu (sample reviews, sample
@@ -84,6 +85,8 @@ final class FakeShopAPI: ShopAPI {
         let isSeeded: Bool
         /// What was asked for, to recognize a retry; `nil` for a seeded booking.
         var request: IzzyAPI.NewAppointment? = nil
+        /// The card token of the saved card it was booked with, when it has one.
+        var cardToken: String? = nil
     }
 
     /// A Checkout Session in setup mode, as Stripe keeps it for the server.
@@ -99,6 +102,10 @@ final class FakeShopAPI: ShopAPI {
     private struct SavedCardRecord {
         let sessionId: String
         let card: IzzyAPI.SavedCard
+        /// The client removed it (or asked to): it can't book again.
+        var deleteRequested = false
+        /// Deleted at Stripe: it can't be charged any more.
+        var removed = false
     }
 
     /// Who pays what for a no-show or a late cancellation, as the server works it out for a booking.
@@ -236,7 +243,10 @@ final class FakeShopAPI: ShopAPI {
         }
         bookingCount += 1
         let token = manageToken.rawValue
-        stored[appointment.id] = Stored(appointment: appointment, token: token, isSeeded: false, request: request)
+        stored[appointment.id] = Stored(
+            appointment: appointment, token: token, isSeeded: false, request: request,
+            cardToken: card == nil ? nil : request.noShow?.cardToken.rawValue
+        )
         markBusy(offering.barberID, from: appointment.start, minutes: appointment.durationMinutes)
         if options.loseBookingResponseOnce {
             // Booked, but the answer never reaches the phone.
@@ -472,6 +482,54 @@ final class FakeShopAPI: ShopAPI {
         return card
     }
 
+    /// `DELETE /api/cards`, as the server answers (`deleteCard` in server/src/cards.ts): the card
+    /// can't book again from now on, and it's deleted at once unless a booking still needs it (it's
+    /// still booked, could still be charged a fee within 7 days of its start, or a fee is pending),
+    /// then it's `scheduled`. Asking again answers the same; a token with no card is a 404.
+    func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion {
+        try await respond()
+        guard var record = savedCards[token.rawValue] else {
+            throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "We couldn't find that card.", status: 404)
+        }
+        record.deleteRequested = true
+        if !record.removed, !isCardNeeded(token.rawValue) {
+            record.removed = true
+        }
+        savedCards[token.rawValue] = record
+        return record.removed
+            ? IzzyAPI.CardDeletion(status: .deleted, message: CardRemovalState.deletedMessage)
+            : IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage)
+    }
+
+    /// Whether a booking still needs the card saved under `token`, as the server decides
+    /// (`bookingNeedsCard` in server/src/retention.ts): a fee for it is pending, or it can still be
+    /// charged one before the 7-day deadline (it's still booked, it's a no-show, or the client
+    /// cancelled late). A fee already charged doesn't need it any more.
+    private func isCardNeeded(_ token: String) -> Bool {
+        stored.values.contains { entry in
+            guard entry.cardToken == token else { return false }
+            let appointment = entry.appointment
+            if appointment.noShowFee?.status == .pending { return true }
+            if appointment.noShowFee?.status == .charged
+                || IzzyAPI.NoShowRule.isPastFeeDeadline(start: appointment.start, now: now) { return false }
+            if appointment.status == .booked { return true }
+            let fee = appointment.noShowFee
+            let found = IzzyAPI.NoShowRule.feeCase(
+                status: appointment.status, cancelledBy: appointment.cancelledBy, start: appointment.start,
+                customerCancelledAt: fee?.customerCancelledAt, lateCancelWindowMinutes: fee?.lateCancelWindowMinutes,
+                createdAt: appointment.createdAt
+            )
+            if case .chargeable = found { return true }
+            return false
+        }
+    }
+
+    /// Whether the client removed the card saved under `token` (or asked to), and whether it's
+    /// deleted at Stripe. For tests.
+    func cardRemoval(for token: IzzyAPI.CardToken) -> (requested: Bool, deleted: Bool)? {
+        savedCards[token.rawValue].map { ($0.deleteRequested, $0.removed) }
+    }
+
     /// `cs_test_…` or `cs_live_…` with 1 to 200 letters and digits after it, as the server checks.
     private static func isCheckoutSessionID(_ id: String) -> Bool {
         for prefix in ["cs_test_", "cs_live_"] where id.hasPrefix(prefix) {
@@ -514,7 +572,8 @@ final class FakeShopAPI: ShopAPI {
         guard let agreement = request.noShow else {
             throw APIError.cardRequired(message: "Add a card to book this time. You won't be charged now.")
         }
-        guard let saved = savedCards[agreement.cardToken.rawValue] else {
+        // A card the client removed (or asked to) doesn't book again, as on the server.
+        guard let saved = savedCards[agreement.cardToken.rawValue], !saved.deleteRequested else {
             throw APIError.cardRequired(message: "We couldn't find your saved card. Add it again.")
         }
         guard saved.card.isValid(at: request.start, in: shop.timeZone) else {

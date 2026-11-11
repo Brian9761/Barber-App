@@ -851,8 +851,9 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("cancelAppointmentButton")))
     }
 
-    /// Your details shows the card saved with the last booking; Remove card takes it off this
-    /// iPhone, so the next booking asks for a card again.
+    /// Your details shows the card saved with the last booking; Remove card asks first, takes it
+    /// off this iPhone and has the shop delete it (once the booking made with it no longer needs
+    /// it), so the next booking asks for a card again.
     func testRemovingTheCardInYourDetails() {
         launch(UITestArguments.noShowProtection, UITestArguments.savedDetails)
         bookCarlosHaircutWithANewCard()
@@ -864,8 +865,20 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(element("removeCardButton").exists)
         screenshot("57-Your-Details-Card")
         tapInSheet("removeCardButton")
+        // Deleting it at the shop can't be undone, so it asks first.
+        XCTAssertTrue(containing("Remove your card?").waitForExistence(timeout: 10), "No question before removing the card")
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@ AND identifier != %@", "Remove card", "removeCardButton")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "No Remove card in the question")
+        confirm.tap()
         XCTAssertTrue(waitForDisappearance(of: card), "Remove card didn't take the card away")
         XCTAssertFalse(element("removeCardButton").exists)
+        // The booking made with it is still ahead, so the shop deletes it once that's over.
+        let removal = element("cardRemovalMessage")
+        XCTAssertTrue(
+            waitUntil(removal, toMatch: NSPredicate(format: "label CONTAINS %@", "as soon as your appointments no longer need it")),
+            "Your details doesn't say what the shop did with the card"
+        )
+        screenshot("57b-Your-Details-Card-Removed")
         closeYourDetails()
         XCTAssertTrue(element("customerDetailsRow").exists, "Removing the card keeps the name and number")
 
@@ -890,6 +903,15 @@ final class IzzyClipzUITests: XCTestCase {
         let forget = app.buttons.matching(NSPredicate(format: "label == %@", "Forget")).firstMatch
         XCTAssertTrue(forget.waitForExistence(timeout: 10))
         forget.tap()
+        // The card goes at the shop too: Your details stays to say what the shop answered.
+        let removal = element("cardRemovalMessage")
+        XCTAssertTrue(
+            waitUntil(removal, toMatch: NSPredicate(format: "label CONTAINS %@", "as soon as your appointments no longer need it")),
+            "Your details doesn't say what the shop did with the card"
+        )
+        XCTAssertTrue(element("detailsForgottenNote").exists, "It doesn't say the details are forgotten")
+        screenshot("58b-Details-And-Card-Forgotten")
+        tapToClose(app.navigationBars["Your details"].buttons["Close"], closing: element("detailsSheetName"), "Your details didn't close")
         XCTAssertTrue(waitForDisappearance(of: element("customerDetailsRow")), "The details are still remembered")
 
         openDetailsOfCarlosHaircut()
