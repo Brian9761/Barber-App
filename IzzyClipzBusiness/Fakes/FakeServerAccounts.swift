@@ -124,7 +124,7 @@ extension FakeServer {
             let digits = String(shopCounter)
             let created = current.addingTimeInterval(-signedIn)
             return IzzyAPI.ComputerSession(
-                id: "00000000-0000-4000-a000-" + String(repeating: "0", count: max(0, 12 - digits.count)) + digits,
+                id: "00000000-0000-4000-c000-" + String(repeating: "0", count: max(0, 12 - digits.count)) + digits,
                 name: name, createdAt: created, lastUsedAt: current.addingTimeInterval(-used),
                 expiresAt: created.addingTimeInterval(30 * 86_400)
             )
