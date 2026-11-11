@@ -483,6 +483,37 @@ final class FakeSampleHistoryTests: XCTestCase {
         XCTAssertTrue(history.appointments.contains { $0.status == .completed && $0.sale == nil }, "some marked Done without a checkout")
     }
 
+    /// The demo version, with the real clock: every period has numbers (at least this morning's
+    /// sample visits), and the four weeks before today look like a working shop.
+    func testTheDemoHasNumbersForEveryPeriod() async throws {
+        let environment = DemoMode.environment()
+        guard case .sample(let server) = environment.backend else { return XCTFail("not the sample server") }
+        server.options.latency = .zero
+        let store = AnalyticsStore(
+            api: environment.api(ownerKey: FakeServer.ownerKey), shopTime: environment.shopTime, catalog: environment.catalog,
+            clock: environment.clock
+        )
+        for period in AnalyticsPeriod.presets {
+            store.select(period)
+            await store.refresh()
+            let analytics = try XCTUnwrap(store.shown, period.title)
+            XCTAssertTrue(store.isLive, period.title)
+            XCTAssertGreaterThan(analytics.totals.salesCents, 0, period.title)
+            XCTAssertEqual(analytics.leaderboard.count, 5, period.title)
+            XCTAssertNotNil(analytics.topBarber, period.title)
+        }
+        let today = store.today
+        XCTAssertNil(store.selectCustom(from: today.adding(days: -28), to: today.adding(days: -1)))
+        await store.refresh()
+        let weeks = try XCTUnwrap(store.shown)
+        XCTAssertGreaterThan(weeks.previous.salesCents, 0, "the four weeks before that have history too")
+        XCTAssertGreaterThan(weeks.productivity.chairTimeBooked, 0.3)
+        XCTAssertLessThan(weeks.productivity.chairTimeBooked, 0.9)
+        XCTAssertFalse(weeks.products.isEmpty)
+        XCTAssertGreaterThan(weeks.totals.feesCents, 0)
+        XCTAssertEqual(store.rankedLeaderboard.first?.entry.name, "Izzy")
+    }
+
     func testNoHistoryClientIsOneOfTodaysSampleClients() async {
         let todays = Set(Harness(options: FakeServer.Options()).server.appointments.map(\.customer.name))
         let history = Set(history().appointments.map(\.customer.name))
