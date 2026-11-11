@@ -4,7 +4,7 @@ A native iPhone app for **Izzy Clipz Barbershop**, 1919 Mission Ave, Ste 105, Oc
 
 Built with SwiftUI for iOS 17 and later. Clients book an appointment with a barber (or whoever is free) on the shop's live calendar, with **no payment up front**: they pay at the shop (when the shop turns on no-show protection, a card is saved on Stripe's page for its no-show and late-cancellation fees, and nothing is charged at booking). They can cancel in the app, book the same service with the same barber again from a past appointment, get reminders, see the shop's own products (sold only at the shop) and read the shop's Google reviews as they are today, with a link to its Yelp page. No account is needed. The shop's Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility Statement are a tap away on Visit, and linked where booking agrees to them.
 
-The app talks to the shop's own small server in [`server/`](server/README.md) (bookings, availability, products, reviews). The shop runs its day from the separate owner app, Izzy Clipz Business, in the same project: the schedule, walk-ins, checkouts with services and products, the Analytics tab, the shop's products and its own Stripe account (see [docs/owner-app.md](docs/owner-app.md)).
+The app talks to the shop's own small server in [`server/`](server/README.md) (bookings, availability, products, reviews), which also serves the shop's website from [`server/web/`](server/web/README.md): the pages and online booking for clients, the four legal documents, and Izzy Clipz Business on a computer at `/business`. The shop runs its day from the separate owner app, Izzy Clipz Business, in the same project: the schedule, walk-ins, checkouts with services and products, the Analytics tab, the shop's products and its own Stripe account (see [docs/owner-app.md](docs/owner-app.md)).
 
 The look is the shop's dark "Street Drip" palette (ink, bone and one red action per screen) on the system font, with the shop's logo.
 
@@ -81,6 +81,7 @@ IzzyClipzTests/            App unit tests
 IzzyClipzUITests/          End-to-end UI tests that also capture screenshots, and the recorded demo tour
 IzzyClipzBusiness/         The owner app, Izzy Clipz Business, with its own tests (IzzyClipzBusinessTests/, IzzyClipzBusinessUITests/)
 server/                    The shop's server (Vercel and Postgres), with its own README
+  web/                     The shop's website (Vite, React, TypeScript): pages, booking, the legal pages and Izzy Clipz Business, with its own README
 docs/                      The owner app (owner-app.md), the analytics' definitions (analytics.md) and the legal documents (legal/)
 project.yml                XcodeGen spec the Xcode project is generated from
 scripts/generate_assets.py Builds the storefront photo and the color sets
