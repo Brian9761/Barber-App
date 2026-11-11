@@ -264,12 +264,17 @@ test('products, no-show settings and computers work in the demo, and Reset bring
   await page.reload();
   await expect(page.getByTestId('product').filter({ hasText: 'Sample hair clay' })).toContainText('$24');
 
-  // No-show protection saves.
+  // No-show protection saves. The demo says plainly that its client bookings never ask for a card, so
+  // the notice never shows there (src/demo/api.ts), whatever Stripe's state.
   await navLink(page, 'Settings').click();
   const noShow = page.getByTestId('no-show-settings');
+  await expect(noShow.getByTestId('no-show-stripe-note')).toHaveText(
+    "In the demo, client bookings never ask for a card, with Stripe connected or not, so the fee notice doesn't show there.",
+  );
   await noShow.getByRole('checkbox', { name: 'No-show protection' }).check();
+  await expect(noShow.getByTestId('client-view-note')).toContainText("In the demo, client bookings never ask for a card, so it doesn't show there.");
   await noShow.getByRole('button', { name: 'Save' }).click();
-  await expect(noShow.getByTestId('no-show-saved')).toHaveText('Saved. New bookings use these settings.');
+  await expect(noShow.getByTestId('no-show-saved')).toHaveText("Saved. In the demo, client bookings never ask for a card, so the fee notice doesn't show there.");
   await expectAccessible(page, 'the demo’s Settings');
   await shot(page, testInfo, 'b11-settings');
 

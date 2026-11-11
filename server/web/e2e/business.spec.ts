@@ -281,8 +281,14 @@ test('no-show protection saves, and Settings shows Stripe, this computer and the
     await section.getByRole('radio', { name: 'Flat amount' }).check();
     await section.getByLabel('Flat fee').fill('25');
     await section.getByRole('combobox', { name: 'Cancelling less than' }).selectOption({ label: '2 hours before' });
+    // The real site's words: where clients see the notice, and that new bookings use the settings (none of the demo's).
+    await expect(section.getByTestId('client-view-note')).toHaveText(
+      'For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.',
+    );
+    await expect(section.getByTestId('no-show-stripe-note')).toHaveText("Stripe isn't set up on the server yet, so clients aren't asked for a card, even with this on.");
     await section.getByRole('button', { name: 'Save' }).click();
     await expect(section.getByTestId('no-show-saved')).toHaveText('Saved. New bookings use these settings.');
+    await expect(section).not.toContainText('In the demo');
     const saved = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
     expect(saved).toMatchObject({ enabled: true, feeMode: 'flat', flatCents: 2500, lateCancelWindowMinutes: 120 });
     await expectAccessible(page, 'Settings');

@@ -704,6 +704,11 @@ describe('Settings', () => {
     const flat = within(section).getByLabelText('Flat fee');
     await userEvent.clear(flat);
     await userEvent.type(flat, '25');
+    // What clients see, on the real site: where the notice shows; nothing of the demo's.
+    expect(within(section).getByTestId('client-view-note').textContent).toBe(
+      'For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.',
+    );
+    expect(section.textContent).not.toContain('In the demo');
     await userEvent.click(within(section).getByRole('button', { name: 'Save' }));
     expect((await within(section).findByTestId('no-show-saved')).textContent).toBe('Saved. New bookings use these settings.');
     expect(api.calls.find((c) => c.method === 'PATCH')!.body).toEqual({ enabled: true, feeMode: 'flat', flatCents: 2500 });

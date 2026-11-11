@@ -196,7 +196,7 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
   const exampleFee = noShow.exampleFee(preview, catalog);
   const notice = preview && exampleFee !== null ? noShow.clientNotice(exampleFee, exampleFee, preview) : null;
   const policy = preview && exampleFee !== null ? noShow.policyText(exampleFee, exampleFee, preview) : null;
-  const stripeLine = noShow.stripeNote(stripe, draft.enabled);
+  const stripeLine = noShow.stripeNote(stripe, draft.enabled, demo());
 
   const save = async () => {
     if (problem) {
@@ -345,8 +345,8 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
                 <p>{notice.message}</p>
               </Notice>
               <p className="secondary small">{policy}</p>
-              <p className="secondary small">
-                For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.
+              <p className="secondary small" data-testid="client-view-note">
+                {noShow.clientViewNote(demo())}
               </p>
             </div>
           ) : null}
@@ -359,7 +359,7 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
           <span>{saveError}</span>
         </p>
       ) : null}
-      {saved && !changed ? <SuccessLine testId="no-show-saved">Saved. New bookings use these settings.</SuccessLine> : null}
+      {saved && !changed ? <SuccessLine testId="no-show-saved">{noShow.savedLine(demo())}</SuccessLine> : null}
       <div className="biz-settings__actions">
         <button type="button" className="button button--primary" onClick={() => void save()} disabled={saving || !changed}>
           {saving ? 'Saving…' : 'Save'}

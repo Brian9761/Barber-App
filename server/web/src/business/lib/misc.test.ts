@@ -162,6 +162,25 @@ describe('No-show protection', () => {
     expect(noShow.stripeNote(stripeActive as StripeConnection, true)).toContain('Stripe is in test mode');
     expect(noShow.stripeNote(stripeActive as StripeConnection, false)).toBeNull();
   });
+
+  it('says plainly in the demo that client bookings never ask for a card, so the notice never shows there', () => {
+    // The real site: what new bookings do, and where the notice shows.
+    expect(noShow.savedLine(false)).toBe('Saved. New bookings use these settings.');
+    expect(noShow.clientViewNote(false)).toBe(
+      'For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.',
+    );
+    // The demo: its client side never asks for a card (src/demo/api.ts), Stripe connected or not.
+    expect(noShow.savedLine(true)).toBe("Saved. In the demo, client bookings never ask for a card, so the fee notice doesn't show there.");
+    expect(noShow.clientViewNote(true)).toBe(
+      "For the example haircut. On the real site, the notice shows while clients pick a day and time and on Review, and they agree to the policy before booking. In the demo, client bookings never ask for a card, so it doesn't show there.",
+    );
+    const demoNote = "In the demo, client bookings never ask for a card, with Stripe connected or not, so the fee notice doesn't show there.";
+    for (const connection of [stripeNotConnected, stripeOff, stripeActive]) {
+      for (const enabled of [true, false]) expect(noShow.stripeNote(connection as StripeConnection, enabled, true)).toBe(demoNote);
+    }
+    // Nothing until the Stripe status is in.
+    expect(noShow.stripeNote(null, true, true)).toBeNull();
+  });
 });
 
 describe('this computer’s name in the app’s list', () => {

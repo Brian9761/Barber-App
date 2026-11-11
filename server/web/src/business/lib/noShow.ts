@@ -233,9 +233,32 @@ export function summary(settings: NoShowSettings): string {
   return `On: ${fee} for ${cases}`;
 }
 
-/** What Stripe's set-up means for clients, when it changes things: no card is asked for without Stripe, and test keys turn real cards down. */
-export function stripeNote(connection: StripeConnection | null, enabled: boolean): string | null {
+/**
+ * The demo's client side never asks for a card (src/demo/api.ts answers "not required", as the
+ * Cancellation & No-Show Policy says of the demo), so the fee notice never shows there: the demo's
+ * Settings say so, where the real site's say what new bookings do.
+ */
+export const DEMO_NO_CARD = 'In the demo, client bookings never ask for a card, so the fee notice doesn\'t show there.';
+
+/** The line once the settings are saved. */
+export function savedLine(demo: boolean): string {
+  return demo ? `Saved. ${DEMO_NO_CARD}` : 'Saved. New bookings use these settings.';
+}
+
+/** Under "What clients see": where the notice shows (in the demo, where it would, and that it doesn't there). */
+export function clientViewNote(demo: boolean): string {
+  return demo
+    ? "For the example haircut. On the real site, the notice shows while clients pick a day and time and on Review, and they agree to the policy before booking. In the demo, client bookings never ask for a card, so it doesn't show there."
+    : 'For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.';
+}
+
+/**
+ * What Stripe's set-up means for clients, when it changes things: no card is asked for without Stripe, and test keys
+ * turn real cards down. In the demo, Stripe changes nothing for clients: no card is asked for either way.
+ */
+export function stripeNote(connection: StripeConnection | null, enabled: boolean, demo = false): string | null {
   if (!connection) return null;
+  if (demo) return "In the demo, client bookings never ask for a card, with Stripe connected or not, so the fee notice doesn't show there.";
   const ready = connection.status === 'active' || connection.status === 'direct';
   if (!ready) {
     return connection.mode === 'connect'

@@ -36,3 +36,27 @@ describe('Reset the demo', () => {
     expect(localStorage.getItem('izzy.business.lastBarber.v1')).toBeNull();
   });
 });
+
+describe('No-show protection in the demo', () => {
+  it('says plainly that client bookings in the demo never ask for a card, so the notice doesn’t show there', async () => {
+    renderApp('/business');
+    await userEvent.click(await screen.findByRole('button', { name: 'Open the Business demo' }));
+    await screen.findByTestId('today-page');
+    renderApp('/business/settings');
+    const sections = await screen.findAllByTestId('no-show-settings');
+    const section = sections[sections.length - 1]!;
+    // Before Stripe is connected, connecting it isn't what makes clients get asked for a card: nothing does, in the demo.
+    expect((await within(section).findByTestId('no-show-stripe-note')).textContent).toBe(
+      "In the demo, client bookings never ask for a card, with Stripe connected or not, so the fee notice doesn't show there.",
+    );
+    await userEvent.click(within(section).getByRole('checkbox', { name: 'No-show protection' }));
+    expect(within(section).getByTestId('client-view-note').textContent).toBe(
+      "For the example haircut. On the real site, the notice shows while clients pick a day and time and on Review, and they agree to the policy before booking. In the demo, client bookings never ask for a card, so it doesn't show there.",
+    );
+    await userEvent.click(within(section).getByRole('button', { name: 'Save' }));
+    expect((await within(section).findByTestId('no-show-saved')).textContent).toBe(
+      "Saved. In the demo, client bookings never ask for a card, so the fee notice doesn't show there.",
+    );
+    expect(section.textContent).not.toContain('New bookings use these settings');
+  });
+});
