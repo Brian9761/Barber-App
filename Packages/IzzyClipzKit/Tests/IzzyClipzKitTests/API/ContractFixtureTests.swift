@@ -54,6 +54,8 @@ final class ContractFixtureTests: XCTestCase {
         kind(IzzyAPI.SavedCardResponse.self, "POST /api/cards", has("card")),
         kind(IzzyAPI.CardDeletionResponse.self, "DELETE /api/cards", has("cardDeletion")),
         kind(IzzyAPI.NoShowSettingsResponse.self, "{ noShowSettings }", has("noShowSettings")),
+        // The website's catalog is the Kit's own export, served as is.
+        kind(CatalogExport.Document.self, "GET /api/catalog", has("firstAvailable")),
         // The shop's own Stripe account and signing in on a computer
         kind(IzzyAPI.StripeConnection.self, "GET /api/owner/stripe", has("dashboardUrl")),
         kind(IzzyAPI.StripeConnectLink.self, "POST /api/owner/stripe/connect", { $0["url"] != nil && $0["expiresAt"] != nil }),

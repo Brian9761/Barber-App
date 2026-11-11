@@ -1,0 +1,277 @@
+/* Base: the reset, the type roles and focus, for every page. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Room for the sticky nav when the page jumps to an anchor. */
+  scroll-padding-top: calc(var(--nav-total) + var(--space-4));
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: var(--font-text);
+  font-size: var(--text-body);
+  line-height: 1.47059;
+  font-weight: 400;
+  letter-spacing: -0.022em;
+  color: var(--color-text);
+  /* Black behind the translucent nav, like apple.com's dark nav; pages paint their own white. */
+  background: var(--color-black);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+main {
+  flex: 1 0 auto;
+  display: block;
+  background: var(--color-bg);
+}
+
+main:focus {
+  outline: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure,
+blockquote {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: inherit;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--text-h1);
+  line-height: 1.07143;
+  letter-spacing: -0.005em;
+}
+
+h2 {
+  font-size: var(--text-h2);
+  line-height: 1.08349;
+  letter-spacing: -0.003em;
+}
+
+h3 {
+  font-size: var(--text-h3);
+  line-height: 1.125;
+  letter-spacing: 0.004em;
+}
+
+h4 {
+  font-size: var(--text-h4);
+  line-height: 1.19048;
+  font-weight: 600;
+  letter-spacing: 0.011em;
+}
+
+ul,
+ol {
+  padding: 0;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+img {
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+a {
+  color: var(--color-action);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* Links inside sentences are underlined, so they never depend on color alone. */
+p a,
+li a.inline-link,
+.inline-link {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.on-dark {
+  --color-focus: var(--color-link-on-dark);
+  color: var(--color-bone);
+}
+
+.on-dark a:not(.button) {
+  color: var(--color-link-on-dark);
+}
+
+/* Nothing on this site moves by itself; for people who ask for less motion, nothing moves at all. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  top: var(--space-2);
+  left: calc(var(--space-2) + var(--safe-left));
+  z-index: 1000;
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-pill);
+  background: var(--color-action);
+  color: #fff;
+  font-weight: 600;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus-visible {
+  /* Below the status bar when it's opened from the Home Screen. */
+  transform: translateY(var(--safe-top));
+  outline-color: #fff;
+  outline-offset: 2px;
+}
+
+/* Page width */
+.container {
+  width: 100%;
+  max-width: calc(var(--content-width) + 2 * var(--gutter));
+  margin: 0 auto;
+  /* Turned sideways, a notched iPhone's notch takes a side: the content stays clear of it. */
+  padding: 0 max(var(--gutter), var(--safe-right)) 0 max(var(--gutter), var(--safe-left));
+}
+
+.container--wide {
+  max-width: calc(var(--content-wide) + 2 * var(--gutter));
+}
+
+.container--narrow {
+  max-width: calc(var(--content-narrow) + 2 * var(--gutter));
+}
+
+/* Text roles */
+.eyebrow {
+  font-size: var(--text-h4);
+  line-height: 1.19;
+  font-weight: 600;
+  letter-spacing: 0.011em;
+  color: var(--color-text-secondary);
+}
+
+.on-dark .eyebrow {
+  color: var(--color-smoke);
+}
+
+.lead {
+  font-size: var(--text-lead);
+  line-height: 1.38;
+  letter-spacing: 0.009em;
+  font-weight: 400;
+}
+
+.secondary {
+  color: var(--color-text-secondary);
+}
+
+.on-dark .secondary {
+  color: var(--color-smoke);
+}
+
+.small {
+  font-size: var(--text-small);
+  line-height: 1.4;
+  letter-spacing: -0.016em;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Printed (a policy, say), a page is just its content: no nav, ribbons, footer or Reload bar. */
+@media print {
+  body,
+  main {
+    background: #fff;
+  }
+
+  .skip-link,
+  .globalnav,
+  .app-ribbons,
+  .globalfooter,
+  .update-bar,
+  .biz-globalbar,
+  .biz-localnav,
+  .biz-footer {
+    display: none !important;
+  }
+}

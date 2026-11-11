@@ -1,24 +1,69 @@
 {
   "barbers" : [
     {
+      "bio" : "Izzy is a licensed barber and educator who believes a haircut is more than a service. It's an experience. He's the shop's go-to for color, lightener and perms, and a straight-razor shave specialist.",
       "id" : "israel-flores",
-      "name" : "Izzy"
+      "instagram" : {
+        "handle" : "izzy_clipz_",
+        "url" : "https://www.instagram.com/izzy_clipz_/"
+      },
+      "monogram" : "IZ",
+      "name" : "Izzy",
+      "specialties" : [
+        "Color & lightener",
+        "Perms",
+        "VIP service",
+        "Hot towel shaves"
+      ],
+      "title" : "Owner · Barber"
     },
     {
+      "bio" : "Every haircut with Carlos comes with mustache and eyebrow detail, straight-razor work and styling.",
       "id" : "carlos-rafael",
-      "name" : "Carlos"
+      "monogram" : "CA",
+      "name" : "Carlos",
+      "specialties" : [
+        "Detail work",
+        "Straight-razor finish",
+        "Styling"
+      ],
+      "title" : "Barber"
     },
     {
+      "bio" : "Custom cuts, haircut and beard combos, hot towel shaves and seniors' cuts.",
       "id" : "flowxbori",
-      "name" : "Flowxbori"
+      "monogram" : "FL",
+      "name" : "Flowxbori",
+      "specialties" : [
+        "Custom cuts",
+        "Hot towel shaves",
+        "Seniors"
+      ],
+      "title" : "Barber"
     },
     {
+      "bio" : "Custom cuts, military cuts, haircut and beard combos and quick hot towel shaves.",
       "id" : "cristian-ceja",
-      "name" : "Cristian"
+      "monogram" : "CR",
+      "name" : "Cristian",
+      "specialties" : [
+        "Custom cuts",
+        "Military cuts",
+        "Beard work"
+      ],
+      "title" : "Barber"
     },
     {
+      "bio" : "Custom cuts, haircut and beard combos, hot towel shaves and seniors' cuts.",
       "id" : "julian-ramos",
-      "name" : "Julian"
+      "monogram" : "JU",
+      "name" : "Julian",
+      "specialties" : [
+        "Custom cuts",
+        "Hot towel shaves",
+        "Seniors"
+      ],
+      "title" : "Barber"
     }
   ],
   "firstAvailable" : [
@@ -164,6 +209,7 @@
       "barberId" : "carlos-rafael",
       "durationMinutes" : 45,
       "id" : "carlos-rafael/9343fc67-b196-4604-987e-a4a9b6b4cc41",
+      "note" : "Includes mustache & eyebrows, plus straight-razor detail and styling.",
       "priceCents" : 4500,
       "priceKind" : "fixed",
       "priceLabel" : "$45",
@@ -173,6 +219,7 @@
       "barberId" : "carlos-rafael",
       "durationMinutes" : 45,
       "id" : "carlos-rafael/ff42ccab-844e-4afd-9ee1-0f6c5e2cf930",
+      "note" : "Includes mustache & eyebrows, plus straight-razor detail and styling.",
       "priceCents" : 3500,
       "priceKind" : "fixed",
       "priceLabel" : "$35",
@@ -361,54 +408,139 @@
   ],
   "services" : [
     {
+      "category" : "Haircuts",
+      "description" : "A custom cut tailored to you, starting with a consultation and finished with clipper and shear work.",
       "id" : "haircut",
-      "name" : "Haircut"
+      "name" : "Haircut",
+      "popular" : true
     },
     {
+      "category" : "Haircuts",
+      "description" : "A clean, sharp cut with clipper and shear work and a straight-razor finish.",
       "id" : "military-haircut",
-      "name" : "Military Haircut"
+      "name" : "Military Haircut",
+      "popular" : false
     },
     {
+      "category" : "Haircuts",
+      "description" : "A classic cut for seniors with shear and clipper work and a trimmer finish.",
       "id" : "seniors-haircut",
-      "name" : "Seniors Haircut"
+      "name" : "Seniors Haircut",
+      "popular" : false
     },
     {
+      "category" : "Packages",
+      "description" : "The full service: a custom haircut plus beard work with a hot towel and a straight-razor finish.",
       "id" : "haircut-and-beard",
-      "name" : "Haircut & Beard"
+      "name" : "Haircut & Beard",
+      "popular" : true
     },
     {
+      "category" : "Packages",
+      "description" : "The works in one appointment: a haircut, a shave and a facial.",
       "id" : "vip",
-      "name" : "VIP"
+      "name" : "VIP",
+      "popular" : true
     },
     {
+      "category" : "Shaves",
+      "description" : "A classic straight-razor shave, prepped with pre-lather and hot towels.",
       "id" : "hot-towel-shave",
-      "name" : "Hot Towel Shave"
+      "name" : "Hot Towel Shave",
+      "popular" : true
     },
     {
+      "category" : "Color & Texture",
+      "description" : "Lightening only, no color. The final price depends on the design and your hair length.",
       "id" : "lightener",
-      "name" : "Lightener Process"
+      "name" : "Lightener Process",
+      "popular" : false
     },
     {
+      "category" : "Color & Texture",
+      "description" : "A perm for lasting curl and texture. Plan on about four hours in the chair.",
       "id" : "perm",
-      "name" : "Perm"
+      "name" : "Perm",
+      "popular" : false
     },
     {
+      "category" : "Add-ons",
+      "description" : "Hot lather and a straight razor on the sides and back of your fade.",
       "id" : "hot-lather-shave",
-      "name" : "Hot Lather Shave"
+      "name" : "Hot Lather Shave",
+      "popular" : false
     },
     {
+      "category" : "Add-ons",
+      "description" : "A straight-razor eyebrow cleanup.",
       "id" : "eyebrows",
-      "name" : "Eyebrows"
+      "name" : "Eyebrows",
+      "popular" : false
     },
     {
+      "category" : "Add-ons",
+      "description" : "Mustache detail with a trimmer or straight razor.",
       "id" : "mustache",
-      "name" : "Mustache"
+      "name" : "Mustache",
+      "popular" : false
     },
     {
+      "category" : "Add-ons",
+      "description" : "Enhancement spray on your lineup or haircut for extra definition.",
       "id" : "enhancements",
-      "name" : "Enhancements"
+      "name" : "Enhancements",
+      "popular" : false
     }
   ],
+  "shop" : {
+    "about" : [
+      "Welcome to Izzy Clipz. We cater to both traditional and modern hairstyles, making us your one-stop destination for exceptional grooming services.",
+      "At Izzy Clipz, a haircut is more than just a service. It's an experience. Izzy and his team are dedicated to helping you look and feel your best, whether you're after a fresh cut, a bold new color or a precision shave.",
+      "Walk-ins are welcome, and appointments are available for your convenience."
+    ],
+    "accessibility" : [],
+    "address" : {
+      "city" : "Oceanside",
+      "lines" : [
+        "1919 Mission Ave, Ste 105",
+        "Oceanside, CA 92058"
+      ],
+      "postalCode" : "92058",
+      "state" : "CA",
+      "street" : "1919 Mission Ave",
+      "unit" : "Ste 105"
+    },
+    "appleMapsDirectionsUrl" : "https://maps.apple.com/?daddr=1919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058&dirflg=d",
+    "appleMapsUrl" : "https://maps.apple.com/?q=Izzy%20Clipz%20Barbershop&address=1919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058&ll=33.2034409,-117.364815",
+    "coordinate" : {
+      "latitude" : 33.2034409,
+      "longitude" : -117.364815
+    },
+    "fullName" : "Izzy Clipz Barbershop",
+    "googleMapsDirectionsUrl" : "https://www.google.com/maps/dir/?api=1&destination=Izzy%20Clipz%20Barbershop,%201919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058",
+    "googleMapsUrl" : "https://www.google.com/maps/search/?api=1&query=Izzy%20Clipz%20Barbershop&query_place_id=ChIJGz5HChRv3IARYJJy_6jyRm8",
+    "googleReviewUrl" : "https://search.google.com/local/writereview?placeid=ChIJGz5HChRv3IARYJJy_6jyRm8",
+    "highlights" : [
+      "Walk-ins welcome",
+      "Appointments available",
+      "Traditional & modern styles"
+    ],
+    "instagram" : {
+      "handle" : "izzy_clipz_barbershop_",
+      "url" : "https://www.instagram.com/izzy_clipz_barbershop_/"
+    },
+    "name" : "Izzy Clipz",
+    "paymentMethods" : [
+      "Credit card",
+      "Gift card"
+    ],
+    "phone" : {
+      "display" : "(442) 341-3053",
+      "e164" : "+14423413053"
+    },
+    "tagline" : "Traditional & modern cuts in Oceanside",
+    "websiteUrl" : "https://izzy-clipz.vercel.app"
+  },
   "slotIntervalMinutes" : 30,
   "timeZone" : "America/Los_Angeles",
   "windowDays" : 60

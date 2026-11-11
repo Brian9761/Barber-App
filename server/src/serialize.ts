@@ -131,10 +131,16 @@ export interface Appointment {
   } | null;
   /** The appointment's checkout (its live sale), or null. Only the shop sees it. */
   sale: { id: string; totalCents: number; method: SaleMethod } | null;
+  /**
+   * When the shop first marked it completed or checked it out, or null; never cleared, so a booking
+   * with a card on file that was completed can't become a no-show, even after it's reopened (see
+   * `patchOwnerAppointment`). Only the shop sees it.
+   */
+  completedAt: string | null;
 }
 
-/** What a client sees of their own appointment: everything but the shop's checkout. */
-export type CustomerAppointment = Omit<Appointment, 'sale'>;
+/** What a client sees of their own appointment: everything but the shop's checkout and when it was first completed. */
+export type CustomerAppointment = Omit<Appointment, 'sale' | 'completedAt'>;
 
 const STATUS_OUT: Record<AppointmentRow['status'], AppointmentStatus> = {
   booked: 'booked',
@@ -191,12 +197,13 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
       row.sale_id && row.sale_total_cents !== null && row.sale_method
         ? { id: row.sale_id, totalCents: row.sale_total_cents, method: row.sale_method }
         : null,
+    completedAt: row.completed_at ? formatInstant(row.completed_at) : null,
   };
 }
 
-/** The appointment as its client sees it (the customer endpoints): without the shop's checkout. */
+/** The appointment as its client sees it (the customer endpoints): without the shop's checkout, or when it was first completed. */
 export function customerAppointmentJSON(row: AppointmentRow): CustomerAppointment {
-  const { sale: _sale, ...appointment } = appointmentJSON(row);
+  const { sale: _sale, completedAt: _completedAt, ...appointment } = appointmentJSON(row);
   return appointment;
 }
 

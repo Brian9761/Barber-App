@@ -22,6 +22,7 @@ import { Router } from './router.js';
 import { deleteStripeConnect, getOwnerStripe, postStripeConnect, stripeConnectRefresh, stripeConnectReturn } from './stripeconnect.js';
 import { deleteTimeOff, listTimeOff, postTimeOff } from './timeoff.js';
 import { VERSION } from './version.js';
+import { getCatalog } from './website.js';
 
 /** The routes of API v1 (the contract is summarized in README.md). */
 export function createRouter(): Router {
@@ -29,6 +30,7 @@ export function createRouter(): Router {
     new Router()
       // Public
       .on('GET', '/api/health', async () => json({ ok: true, version: VERSION }))
+      .on('GET', '/api/catalog', getCatalog)
       .on('GET', '/api/availability', getAvailability)
       .on('POST', '/api/appointments', postAppointment)
       .on('GET', '/api/appointments/:id', getAppointment)

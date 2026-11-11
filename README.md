@@ -183,7 +183,7 @@ Collected October 16, 28 and 30, 2026 from the shop's website ([izzyclipzbarbers
 
 Please confirm these with the shop before publishing.
 
-The logo is the official one the shop sent, and the storefront photo is the shop's own, from its website. The app bundles no photo of a person: the earlier photos of clients' cuts are gone, and one goes back in only with that person's written permission. The team has no headshots online, so barbers appear as monograms.
+The logo is the official one the shop sent, and the storefront photo is the shop's own, from its website. The apps and the website show no photo of a person: the earlier photos of clients' cuts are gone, and one goes back in only with that person's written permission. The team has no headshots online, so barbers appear as monograms.
 
 ## Publishing to the App Store
 

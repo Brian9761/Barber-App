@@ -2,7 +2,9 @@ name: Server
 
 # Type-checks and tests the API in server/ on Linux: against PGlite (Postgres in
 # WASM, through pglite-socket) on Node 22 and 24, and against a real Postgres
-# service so concurrent bookings really race.
+# service so concurrent bookings really race. Builds and tests the website in
+# server/web: type checks, unit tests, the build, and Playwright end to end
+# against the real API on PGlite.
 on:
   push:
     paths: ['server/**', '.github/workflows/server.yml']
@@ -76,3 +78,70 @@ jobs:
           npm run migrate
           npm run migrate | tee migrate.log
           grep -q "(0 new)" migrate.log
+
+  web:
+    name: Website (build, unit and end-to-end tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            server/web/package-lock.json
+      # The end-to-end server runs the API's own code, so the server's packages too.
+      - run: npm ci
+      - run: npm ci
+        working-directory: server/web
+      - run: npm run typecheck
+        working-directory: server/web
+      - run: npm test
+        working-directory: server/web
+      - run: npm run build
+        working-directory: server/web
+      - name: The site builds into public/, which stays out of git
+        run: test -f public/index.html && test -z "$(git status --porcelain --ignored=no -- public)"
+      - name: Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+        working-directory: server/web
+      - run: npm run e2e
+        working-directory: server/web
+        env:
+          E2E_SHOTS_DIR: ${{ github.workspace }}/web-shots
+      # The demo version: the same site answering in the browser, with no API at all.
+      - run: npm run build:demo
+        working-directory: server/web
+      - name: The demo builds into dist-demo/ with its hosting settings, and stays out of git
+        working-directory: server/web
+        run: test -f dist-demo/index.html && test -f dist-demo/sw.js && test -f dist-demo/vercel.json && test -z "$(git status --porcelain --ignored=no -- dist-demo)"
+      # What takes the demo's place once it's retired (the end-to-end tests swap it in).
+      - run: npm run build:retired
+        working-directory: server/web
+        env:
+          DEMO_MOVED_TO: https://izzy-clipz.example
+      - name: The retired demo builds into dist-retired/, and stays out of git
+        working-directory: server/web
+        run: test -f dist-retired/index.html && test -f dist-retired/sw.js && test -f dist-retired/vercel.json && test -z "$(git status --porcelain --ignored=no -- dist-retired)"
+      - run: npm run e2e:demo
+        working-directory: server/web
+        env:
+          E2E_SHOTS_DIR: ${{ github.workspace }}/web-shots/demo
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-screenshots
+          path: web-shots
+          if-no-files-found: warn
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: website-playwright-report
+          path: |
+            server/web/playwright-report
+            server/web/test-results
+          if-no-files-found: ignore

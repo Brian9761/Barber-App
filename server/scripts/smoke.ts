@@ -17,6 +17,11 @@
 // (card_required), then books an item with no fee instead (an add-on that's
 // included with a cut), since a card can only be saved on Stripe's own page.
 // With SMOKE_OWNER_KEY it also prints the no-show settings.
+//
+// The website: the catalog it reads (/api/catalog, with the shop's details),
+// its pages (/ and a deep link such as /book/time answer with index.html) and a
+// real 404 for a missing file under /assets/. SMOKE_WEBSITE=off skips the pages,
+// for `npm run dev`, which serves only the API.
 
 import { randomBytes } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -57,6 +62,24 @@ let booked: { id: string; token: string } | undefined;
 try {
   const health = await call('GET', '/api/health');
   check(health.status === 200 && health.body?.ok === true, `health ${JSON.stringify(health.body)}`);
+
+  const catalog = await call('GET', '/api/catalog');
+  check(
+    catalog.status === 200 && typeof catalog.body?.shop?.phone?.e164 === 'string' && Array.isArray(catalog.body?.services),
+    `the website's catalog answers with the shop's details (${catalog.status} ${catalog.body?.error?.code ?? ''})`,
+  );
+  if (process.env.SMOKE_WEBSITE !== 'off') {
+    for (const path of ['/', '/book/time']) {
+      const page = await fetch(`${base}${path}`);
+      const html = await page.text();
+      check(
+        page.status === 200 && (page.headers.get('content-type') ?? '').includes('text/html') && html.includes('id="root"'),
+        `the website answers ${path} with its page (${page.status} ${page.headers.get('content-type') ?? ''})`,
+      );
+    }
+    const missing = await fetch(`${base}/assets/izzy-smoke-missing.js`);
+    check(missing.status === 404, `a missing website file is a 404, not the page (${missing.status})`);
+  }
 
   if (owner) {
     const me = await call('GET', '/api/owner/me', { headers: owner });

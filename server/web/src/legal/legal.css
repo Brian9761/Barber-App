@@ -1,0 +1,274 @@
+/*
+ * The legal pages (LegalPage.tsx): one calm column at a readable measure (about 70 characters),
+ * with room between the lines, headings that step down clearly, and tables that fit a phone.
+ */
+
+.legal {
+  padding-top: var(--space-10);
+  padding-bottom: var(--space-20);
+}
+
+.legal__article {
+  max-width: 36em;
+  margin: 0 auto;
+  line-height: 1.6;
+  /* A long address or link breaks rather than pushing the page sideways. */
+  overflow-wrap: break-word;
+}
+
+.legal__article > * + *,
+.legal__list > li > * + *,
+.legal__quote > * + * {
+  margin-top: var(--space-4);
+}
+
+.legal__article > .legal__title {
+  margin-top: var(--space-8);
+  font-size: clamp(34px, 4.2vw, 48px);
+  line-height: 1.08;
+}
+
+.legal__article > .legal-toc:first-child + .legal__title,
+.legal__article > .legal__title:first-child {
+  margin-top: 0;
+}
+
+.legal__dates {
+  color: var(--color-text-secondary);
+}
+
+.legal__article > .legal__dates {
+  margin-top: var(--space-3);
+}
+
+.legal__article > .legal__h2 {
+  margin-top: var(--space-12);
+  font-size: clamp(26px, 2.6vw, 32px);
+  line-height: 1.16;
+  letter-spacing: 0.002em;
+}
+
+.legal__article > .legal__h3 {
+  margin-top: var(--space-8);
+  font-family: var(--font-text);
+  font-size: var(--text-h4);
+  line-height: 1.24;
+  font-weight: 600;
+  letter-spacing: 0.011em;
+}
+
+.legal__article > .legal__h2 + *,
+.legal__article > .legal__h3 + * {
+  margin-top: var(--space-3);
+}
+
+/* Reached from a link to its section: a ring only for the keyboard, clear of the words. */
+.legal__h2:focus-visible,
+.legal__h3:focus-visible {
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
+/* Links in the text are underlined, so they never depend on color alone. */
+.legal__article a:not(.legal-toc__link) {
+  text-decoration: underline;
+  text-underline-offset: 0.18em;
+}
+
+.legal__list {
+  padding-left: 1.25em;
+}
+
+.legal__list > li + li,
+.legal__list .legal__list {
+  margin-top: var(--space-2);
+}
+
+.legal__list > li::marker {
+  color: var(--color-text-secondary);
+}
+
+/* A quote or paragraph indented under an item's words (which aren't an element of their own). */
+.legal__list > li > .legal__quote,
+.legal__list > li > p {
+  margin-top: var(--space-3);
+}
+
+.legal__quote {
+  padding: var(--space-3) var(--space-5);
+  border-left: 4px solid var(--color-control-line);
+  border-radius: 0 var(--radius-field) var(--radius-field) 0;
+  background: var(--color-bg-alt);
+}
+
+.legal__code {
+  padding: 1px 5px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-bg-alt);
+  /* The device's own monospaced font: nothing is downloaded for it. */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  letter-spacing: 0;
+}
+
+/*
+ * "To be added by the shop: …" in a draft: plainly a note, never mistaken for the policy's words.
+ * Its padding and edge are only at its two ends (not repeated at each line break, where they'd
+ * stick out of the column on a narrow phone).
+ */
+.legal__placeholder {
+  padding: 1px 6px;
+  border: 1px dashed var(--color-warning-line);
+  border-radius: 6px;
+  background: var(--color-warning-bg);
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+@media (forced-colors: active) {
+  .legal__placeholder {
+    forced-color-adjust: none;
+    border-color: MarkText;
+    background: Mark;
+    color: MarkText;
+  }
+}
+
+/* Tables: two columns that wrap their words, so they fit a phone without scrolling sideways. */
+.legal__table-wrap {
+  margin-top: var(--space-5);
+}
+
+.legal__table {
+  width: 100%;
+  border-collapse: collapse;
+  line-height: 1.47;
+}
+
+.legal__table th,
+.legal__table td {
+  padding: var(--space-3) var(--space-5) var(--space-3) 0;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.legal__table th:last-child,
+.legal__table td:last-child {
+  padding-right: 0;
+}
+
+.legal__table thead th {
+  padding-top: 0;
+  border-bottom: 2px solid var(--color-control-line);
+  font-weight: 600;
+}
+
+.legal__table tbody th {
+  font-weight: 400;
+}
+
+@media (max-width: 599px) {
+  .legal {
+    padding-top: var(--space-8);
+  }
+
+  .legal__table th,
+  .legal__table td {
+    padding-right: var(--space-3);
+  }
+}
+
+/* "On this page": open on a computer, a tap away on a phone. */
+.legal-toc {
+  border: 1px solid transparent;
+  border-radius: var(--radius-card);
+  background: var(--color-bg-alt);
+}
+
+.legal__article > .legal-toc {
+  margin-top: var(--space-8);
+}
+
+.legal-toc__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  min-height: var(--tap);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-card);
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.legal-toc__summary::-webkit-details-marker {
+  display: none;
+}
+
+.legal-toc__chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-secondary);
+  transform: rotate(90deg);
+}
+
+details[open] > .legal-toc__summary .legal-toc__chevron {
+  transform: rotate(-90deg);
+}
+
+.legal-toc__list {
+  margin: 0;
+  padding: 0 var(--space-5) var(--space-3);
+  list-style: none;
+  line-height: 1.35;
+}
+
+.legal-toc__list li {
+  break-inside: avoid;
+}
+
+/* Each a whole 44px to tap on a phone. */
+.legal-toc__link {
+  display: block;
+  padding: 11px 0;
+}
+
+@media (min-width: 1024px) {
+  .legal-toc__list {
+    columns: 2;
+    column-gap: var(--space-8);
+  }
+
+  .legal-toc__link {
+    padding: 6px 0;
+  }
+}
+
+@media print {
+  .legal {
+    padding: 0;
+  }
+
+  .legal__article {
+    max-width: none;
+  }
+
+  .legal-toc {
+    display: none;
+  }
+
+  .legal__h2,
+  .legal__h3 {
+    break-after: avoid;
+  }
+
+  .legal__table tr,
+  .legal__quote {
+    break-inside: avoid;
+  }
+}

@@ -202,8 +202,9 @@ extension IzzyAPI.Appointment {
     /// (`PATCH /api/owner/appointments/:id`), or `nil` when it can: a booking with a card on file
     /// only once it has ended (409 `not_started`), and never once it's completed (409
     /// `already_completed`; the server also remembers a completed booking that was reopened since,
-    /// which the Kit can't see). One without a card can always be marked. Ignores the checkout rule
-    /// (a checked-out appointment needs its sale voided first).
+    /// which the shop's view now says in `completedAt`, and this rule doesn't read yet). One without
+    /// a card can always be marked. Ignores the checkout rule (a checked-out appointment needs its
+    /// sale voided first).
     public func noShowMarkRefusal(at now: Date) -> String? {
         IzzyAPI.NoShowRule.noShowMarkRefusal(status: status, hasCard: card != nil, end: end, now: now)
     }

@@ -284,7 +284,7 @@ This applies only once the owner has turned no-show protection on and Stripe is 
 - **Owner key:**
   - It's a server setting (`OWNER_KEY`, at least 32 characters).
   - On the Business iPhone, it's kept in the Keychain, readable only while the iPhone is unlocked and on that iPhone only (`IzzyClipzBusiness/Support/SecretStore.swift`).
-  - On a computer, it can be typed in to make a sign-in code, and it's never kept there (`server/web/src/business/pages/SignInPage.tsx` (web)).
+  - On a computer, it can be typed in to make a sign-in code, and it's never kept there; its field isn't a password field, so browsers don't offer to save it (`server/web/src/business/pages/SignInPage.tsx` (web)).
   - **There are no per-barber accounts.** Anyone using the Business app or a signed-in computer sees every client's details.
   - Computers can't take card payments, make sign-in codes or disconnect Stripe (`requireOwner` in `server/src/auth.ts`).
 - **Signing in on a computer** (`server/src/computers.ts`):
@@ -391,8 +391,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 - **Security headers:**
   - The demo sends a strict Content-Security-Policy (its own address only) and `Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()` (`server/web/vercel.json`). Its tests check that it never calls `/api` (`server/web/e2e/demo.spec.ts`).
   - The live site sends only `X-Content-Type-Options`, `Referrer-Policy: strict-origin-when-cross-origin` and `X-Frame-Options: DENY` (`server/vercel.json` (web)). See G8.
-- **What the page tells clients:** "Your name and number are sent only to Izzy Clipz Barbershop, to book and manage this appointment." (`DetailsStep.tsx`). In the demo: "Demo version: your name and number stay on this [device]. Nothing is sent to Izzy Clipz Barbershop or anywhere else."
-- **No legal links yet:** the footer (`server/web/src/components/Layout.tsx` (web)) has no Privacy, Terms, Cancellation Policy or Accessibility links, and the booking steps don't link the full policy or the Terms.
+- **What the page tells clients:** "Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains." with the Privacy Policy linked (`DetailsStep.tsx`). In the demo: "Demo version: your name and number stay on this phone/computer. Nothing is sent to Izzy Clipz Barbershop or anywhere else."
+- **Legal links:** every page's footer links the Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility Statement (`server/web/src/components/Layout.tsx` (web)), and so does every page of Izzy Clipz Business; Review and book says "By booking, you agree to our Terms of Service and Cancellation & No-Show Policy." right above "Book appointment"; the fee notice links the Cancellation & No-Show Policy. A booking made without "Remember me" sends `keepCard: false`, and the server marks the saved card for deletion in the booking's own transaction (`server/src/booking.ts`); "Forget me" and "Not you?" ask the server to delete a saved card (`DELETE /api/cards`).
 
 ## 6. The client iPhone app (Izzy Clipz)
 

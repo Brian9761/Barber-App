@@ -52,9 +52,104 @@ final class CatalogExportTests: XCTestCase {
 
     func testServicesAndBarbersInMenuAndTeamOrder() {
         XCTAssertEqual(document.services.map(\.id), Catalog.izzyClipz.services.map(\.id))
-        XCTAssertEqual(document.services.first, CatalogExport.Document.Service(id: "haircut", name: "Haircut"))
+        XCTAssertEqual(document.services.first, CatalogExport.Document.Service(
+            id: "haircut",
+            name: "Haircut",
+            description: "A custom cut tailored to you, starting with a consultation and finished with clipper and shear work.",
+            category: "Haircuts",
+            popular: true
+        ))
         XCTAssertEqual(document.barbers.map(\.id), ["israel-flores", "carlos-rafael", "flowxbori", "cristian-ceja", "julian-ramos"])
         XCTAssertEqual(document.barbers.map(\.name), ["Izzy", "Carlos", "Flowxbori", "Cristian", "Julian"])
+    }
+
+    /// The website's Services page: each service's description, category and whether it's a favorite.
+    func testServicesCarryTheirDescriptionsCategoriesAndFavorites() {
+        for (exported, service) in zip(document.services, Catalog.izzyClipz.services) {
+            XCTAssertEqual(exported.description, service.summary, service.id)
+            XCTAssertEqual(exported.category, service.category.title, service.id)
+            XCTAssertEqual(exported.popular, service.isPopular, service.id)
+        }
+        XCTAssertEqual(document.services.filter(\.popular).map(\.id), Catalog.izzyClipz.popularServices.map(\.id))
+        XCTAssertEqual(document.services.filter(\.popular).map(\.id), ["haircut", "haircut-and-beard", "vip", "hot-towel-shave"])
+        // Menu order keeps each category together, in the menu's category order.
+        var seen: [String] = []
+        for category in document.services.map(\.category) where seen.last != category {
+            XCTAssertFalse(seen.contains(category), "\(category) comes back after another category")
+            seen.append(category)
+        }
+        XCTAssertEqual(seen, Catalog.izzyClipz.categories.map(\.title))
+        XCTAssertEqual(seen, ["Haircuts", "Packages", "Shaves", "Color & Texture", "Add-ons"])
+    }
+
+    func testAServiceWithoutASummaryHasNoDescription() throws {
+        let plain = Service(id: "plain", name: "Plain", category: .addOns, summary: "  ", symbol: "scissors")
+        let catalog = Catalog(
+            services: [plain],
+            barbers: Catalog.izzyClipz.barbers,
+            offerings: [Offering(squireServiceID: UUID().uuidString, serviceID: "plain", barberID: "israel-flores", price: .dollars(5), durationMinutes: 15)]
+        )
+        let exported = CatalogExport.document(catalog: catalog)
+        XCTAssertNil(exported.services.first?.description)
+        let text = String(decoding: try CatalogExport.jsonData(catalog: catalog), as: UTF8.self)
+        XCTAssertFalse(text.contains("\"description\""), "left out, not null")
+    }
+
+    /// The website's Barbers page: the same title, bio, specialties and tile letters as the app.
+    func testBarbersCarryTheirProfiles() throws {
+        for (exported, barber) in zip(document.barbers, Catalog.izzyClipz.barbers) {
+            XCTAssertEqual(exported.title, barber.title, barber.id)
+            XCTAssertEqual(exported.bio, barber.bio, barber.id)
+            XCTAssertEqual(exported.specialties, barber.specialties, barber.id)
+            XCTAssertEqual(exported.monogram, barber.monogram, barber.id)
+        }
+        XCTAssertEqual(document.barbers.map(\.monogram), ["IZ", "CA", "FL", "CR", "JU"])
+        XCTAssertEqual(document.barbers.first?.title, "Owner · Barber")
+        XCTAssertEqual(
+            document.barbers.first?.instagram,
+            CatalogExport.Document.Instagram(handle: "izzy_clipz_", url: "https://www.instagram.com/izzy_clipz_/")
+        )
+        XCTAssertEqual(document.barbers.dropFirst().compactMap(\.instagram), [], "only Izzy has an account of his own")
+        let text = String(decoding: try CatalogExport.jsonData(), as: UTF8.self)
+        XCTAssertFalse(text.contains("\"instagram\" : null"), "left out, not null")
+    }
+
+    /// The website's Home, Visit and footer: the shop's own details, from `ShopInfo`.
+    func testShopDetails() {
+        let shop = ShopInfo.izzyClipz
+        let exported = document.shop
+        XCTAssertEqual(exported.name, "Izzy Clipz")
+        XCTAssertEqual(exported.fullName, "Izzy Clipz Barbershop")
+        XCTAssertEqual(exported.tagline, shop.tagline)
+        XCTAssertEqual(exported.phone, CatalogExport.Document.Shop.Phone(e164: "+14423413053", display: "(442) 341-3053"))
+        XCTAssertEqual(exported.address.lines, ["1919 Mission Ave, Ste 105", "Oceanside, CA 92058"])
+        XCTAssertEqual(exported.address.street, "1919 Mission Ave")
+        XCTAssertEqual(exported.address.unit, "Ste 105")
+        XCTAssertEqual(exported.address.city, "Oceanside")
+        XCTAssertEqual(exported.address.state, "CA")
+        XCTAssertEqual(exported.address.postalCode, "92058")
+        XCTAssertEqual(exported.coordinate.latitude, shop.coordinate.latitude)
+        XCTAssertEqual(exported.coordinate.longitude, shop.coordinate.longitude)
+        XCTAssertEqual(exported.instagram, CatalogExport.Document.Instagram(
+            handle: "izzy_clipz_barbershop_",
+            url: "https://www.instagram.com/izzy_clipz_barbershop_/"
+        ))
+        XCTAssertEqual(exported.appleMapsUrl, shop.appleMapsURL.absoluteString)
+        XCTAssertEqual(exported.appleMapsDirectionsUrl, shop.appleMapsDirectionsURL.absoluteString)
+        XCTAssertEqual(exported.googleMapsUrl, shop.googleMapsURL.absoluteString)
+        XCTAssertEqual(exported.googleMapsDirectionsUrl, shop.googleMapsDirectionsURL.absoluteString)
+        XCTAssertEqual(exported.googleReviewUrl, shop.googleReviewURL.absoluteString)
+        // The shop's new website, never the older Squarespace one; the website itself uses its own address.
+        XCTAssertEqual(exported.websiteUrl, "https://izzy-clipz.vercel.app")
+        XCTAssertEqual(exported.websiteUrl, shop.websiteURL.absoluteString)
+        for url in [exported.appleMapsUrl, exported.appleMapsDirectionsUrl, exported.googleMapsUrl, exported.googleMapsDirectionsUrl, exported.googleReviewUrl] {
+            XCTAssertTrue(url.hasPrefix("https://"), url)
+        }
+        XCTAssertTrue(exported.googleMapsUrl.contains("query_place_id=ChIJGz5HChRv3IARYJJy_6jyRm8"))
+        XCTAssertEqual(exported.about, shop.about)
+        XCTAssertEqual(exported.highlights, ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"])
+        XCTAssertEqual(exported.paymentMethods, ["Credit card", "Gift card"])
+        XCTAssertEqual(exported.accessibility, shop.accessibility)
     }
 
     func testOfferingsMatchTheKit() {
@@ -69,7 +164,11 @@ final class CatalogExportTests: XCTestCase {
             XCTAssertEqual(exported.priceCents, offering.price.cents)
             XCTAssertEqual(exported.priceLabel, offering.price.label)
             XCTAssertNil(exported.name)
+            XCTAssertEqual(exported.note, offering.note)
         }
+        let carlosCut = document.offerings.first { $0.barberId == "carlos-rafael" && $0.serviceId == "haircut" }
+        XCTAssertEqual(carlosCut?.note, "Includes mustache & eyebrows, plus straight-razor detail and styling.")
+        XCTAssertEqual(document.offerings.compactMap(\.note).count, 2, "only Carlos's two cuts have a note")
         let lightener = document.offerings.first { $0.serviceId == "lightener" }
         XCTAssertEqual(lightener?.priceKind, "startingAt")
         XCTAssertEqual(lightener?.priceLabel, "From $80")
@@ -117,12 +216,28 @@ final class CatalogExportTests: XCTestCase {
         XCTAssertFalse(text.contains("\"name\" : null"))
         XCTAssertEqual(try JSONDecoder().decode(CatalogExport.Document.self, from: data), document)
         let json = try JSONValue(data: data)
-        XCTAssertEqual(json.keys, ["timeZone", "slotIntervalMinutes", "leadTimeMinutes", "windowDays", "hours", "services", "barbers", "offerings", "firstAvailable"])
+        XCTAssertEqual(json.keys, ["timeZone", "slotIntervalMinutes", "leadTimeMinutes", "windowDays", "hours", "services", "barbers", "offerings", "firstAvailable", "shop"])
         if case .array(let offerings) = json["offerings"], let first = offerings.first {
             XCTAssertEqual(first.keys, ["id", "serviceId", "barberId", "durationMinutes", "priceCents", "priceKind", "priceLabel"])
         } else {
             XCTFail("offerings isn't an array")
         }
+        if case .array(let services) = json["services"], let first = services.first {
+            XCTAssertEqual(first.keys, ["id", "name", "description", "category", "popular"])
+        } else {
+            XCTFail("services isn't an array")
+        }
+        if case .array(let barbers) = json["barbers"], let izzy = barbers.first, let carlos = barbers.dropFirst().first {
+            XCTAssertEqual(izzy.keys, ["id", "name", "title", "bio", "specialties", "monogram", "instagram"])
+            XCTAssertEqual(carlos.keys, ["id", "name", "title", "bio", "specialties", "monogram"])
+        } else {
+            XCTFail("barbers isn't an array")
+        }
+        XCTAssertEqual(json["shop"]?.keys, [
+            "name", "fullName", "tagline", "phone", "address", "coordinate", "instagram", "appleMapsUrl", "appleMapsDirectionsUrl",
+            "googleMapsUrl", "googleMapsDirectionsUrl", "googleReviewUrl", "websiteUrl", "about", "highlights", "paymentMethods", "accessibility",
+        ])
+        XCTAssertEqual(json["shop"]?["phone"], .object(["e164": .string("+14423413053"), "display": .string("(442) 341-3053")]))
         // The same bytes every time, so the committed file only changes when the data does.
         XCTAssertEqual(try CatalogExport.jsonData(), data)
     }

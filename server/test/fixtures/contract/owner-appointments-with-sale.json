@@ -31,7 +31,8 @@
         "id": "00000000-0000-4000-8000-000000000004",
         "totalCents": 9600,
         "method": "cash"
-      }
+      },
+      "completedAt": "2026-11-02T19:05:00Z"
     },
     {
       "id": "00000000-0000-4000-8000-000000000003",
@@ -60,7 +61,8 @@
       "createdAt": "2026-11-02T18:20:00Z",
       "card": null,
       "noShowFee": null,
-      "sale": null
+      "sale": null,
+      "completedAt": null
     }
   ]
 }

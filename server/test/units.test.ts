@@ -195,7 +195,7 @@ describe('catalog.json (exported from IzzyClipzKit)', () => {
 
   it('has the shape the server expects', () => {
     expect(Object.keys(raw).sort()).toEqual(
-      ['barbers', 'firstAvailable', 'hours', 'leadTimeMinutes', 'offerings', 'services', 'slotIntervalMinutes', 'timeZone', 'windowDays'].sort(),
+      ['barbers', 'firstAvailable', 'hours', 'leadTimeMinutes', 'offerings', 'services', 'shop', 'slotIntervalMinutes', 'timeZone', 'windowDays'].sort(),
     );
     expect(raw).toMatchObject({ timeZone: 'America/Los_Angeles', slotIntervalMinutes: 30, leadTimeMinutes: 30, windowDays: 60 });
     expect(raw.hours['1']).toEqual({ opens: '10:00', closes: '18:00' }); // Sunday

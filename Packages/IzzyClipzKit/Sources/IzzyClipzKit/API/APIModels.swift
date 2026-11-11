@@ -117,6 +117,13 @@ extension IzzyAPI {
         /// Whether the server's answer had `sale` at all (the shop's view does, the client's doesn't),
         /// so it's written back exactly as it was read. Not part of the value.
         var saleField = FieldPresence(false)
+        /// When the shop first marked it completed or checked it out (owner calls only), or `nil`. The
+        /// server never clears it: a booking with a card on file that was completed can't become a
+        /// no-show, even after it's reopened. Always `nil` in the client's own view, which doesn't have it.
+        public var completedAt: Date?
+        /// Whether the server's answer had `completedAt` at all (the shop's view from a server that
+        /// sends it), so it's written back exactly as it was read. Not part of the value.
+        var completedAtField = FieldPresence(false)
 
         public init(
             id: String,
@@ -137,7 +144,8 @@ extension IzzyAPI {
             createdAt: Date,
             card: CardOnFile? = nil,
             noShowFee: NoShowFee? = nil,
-            sale: AppointmentSale? = nil
+            sale: AppointmentSale? = nil,
+            completedAt: Date? = nil
         ) {
             self.id = id
             self.offeringId = offeringId
@@ -158,6 +166,7 @@ extension IzzyAPI {
             self.card = card
             self.noShowFee = noShowFee
             self.sale = sale
+            self.completedAt = completedAt
         }
 
         /// Hasn't finished yet: it's later, or happening right now.
@@ -179,7 +188,7 @@ extension IzzyAPI {
             case id, offeringId, serviceId, serviceName, barberId, barberName, start, end, durationMinutes, priceLabel
             case status, cancelledBy, payment, customer, note, createdAt
             case card, noShowFee
-            case sale
+            case sale, completedAt
         }
 
         public init(from decoder: Decoder) throws {
@@ -210,9 +219,12 @@ extension IzzyAPI {
                 card: try container.decodeIfPresent(CardOnFile.self, forKey: .card),
                 noShowFee: try container.decodeIfPresent(NoShowFee.self, forKey: .noShowFee),
                 // Only in the shop's view, from a server with sales.
-                sale: try container.decodeIfPresent(AppointmentSale.self, forKey: .sale)
+                sale: try container.decodeIfPresent(AppointmentSale.self, forKey: .sale),
+                // Only in the shop's view, from a server that says when it was first completed.
+                completedAt: try container.decodeIfPresent(Date.self, forKey: .completedAt)
             )
             saleField = FieldPresence(container.contains(.sale))
+            completedAtField = FieldPresence(container.contains(.completedAt))
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -238,6 +250,9 @@ extension IzzyAPI {
             // `null` only where the server writes it: the shop's view.
             if sale != nil || saleField.isPresent {
                 try container.encode(sale, forKey: .sale)
+            }
+            if completedAt != nil || completedAtField.isPresent {
+                try container.encode(completedAt, forKey: .completedAt)
             }
         }
     }
