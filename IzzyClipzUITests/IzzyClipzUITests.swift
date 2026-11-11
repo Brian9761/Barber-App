@@ -1047,6 +1047,24 @@ final class IzzyClipzUITests: XCTestCase {
         screenshot("27-Reviews-Unavailable")
     }
 
+    // MARK: Age
+
+    /// iOS says the person is under 13 (`-fakeUnder13` stands for its answer): a calm screen asks a
+    /// parent or guardian to book, with the shop's number, and there's nothing to book with or fill in.
+    func testSomeoneUnder13IsAskedToHaveAParentBook() {
+        app.launchArguments = ["-ui-testing", "-fakeUnder13"]
+        app.launch()
+        let title = element("parentScreenTitle")
+        XCTAssertTrue(title.waitForExistence(timeout: 30), "No screen for a parent or guardian")
+        XCTAssertEqual(title.label, "Please ask a parent or guardian to book")
+        XCTAssertTrue(element("parentScreenMessage").label.contains("parent or guardian"))
+        XCTAssertTrue(element("parentScreenCall").exists, "No way to call the shop")
+        XCTAssertFalse(app.tabBars.firstMatch.exists, "The app's tabs shouldn't show")
+        XCTAssertFalse(element("homeBookButton").exists)
+        XCTAssertFalse(app.textFields.firstMatch.exists, "Nothing to fill in")
+        screenshot("59-Parent-Or-Guardian")
+    }
+
     // MARK: Visit, reminders
 
     func testVisit() {

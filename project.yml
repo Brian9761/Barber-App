@@ -70,11 +70,18 @@ targets:
           - arm64
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
+    entitlements:
+      path: IzzyClipz/IzzyClipz.entitlements
+      properties:
+        # Apple's Declared Age Range (IzzyClipz/App/AgeCheck.swift), which California law asks of
+        # every app from January 1, 2027.
+        com.apple.developer.declared-age-range: true
     settings:
       base:
         PRODUCT_NAME: IzzyClipz
         PRODUCT_BUNDLE_IDENTIFIER: com.izzyclipz.app
         TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_ENTITLEMENTS: IzzyClipz/IzzyClipz.entitlements
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         GENERATE_INFOPLIST_FILE: NO
