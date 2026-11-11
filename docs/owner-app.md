@@ -323,13 +323,15 @@ tests are in `IzzyClipzBusinessUITests/AnalyticsUITests.swift`
   own domain replaces it there, in that one place.
 - **Apple's Declared Age Range** (California's Digital Age Assurance Act,
   from January 1, 2027; docs/legal/research.md §4.2): on iOS 26 and later
-  the app asks iOS, when it opens, whether age rules apply to the person
-  (iOS 26.2 and later can tell; nothing is asked where no law requires
-  it), and only then for their age range against one gate, 13. iOS shows
-  its own sheet the first time. Someone under 13 sees "Izzy Clipz Business
-  is for the shop's team" with the shop's number, and no details are
-  taken. Nothing is stored; any other answer, an error or an older iOS
-  just carries on.
+  the app asks iOS, when it opens, for the person's age range against one
+  gate, 13: from iOS 26.2 only where iOS says a law requires it
+  (`isEligibleForAgeFeatures`), and always on 26.0 and 26.1, which can't
+  say. iOS shows its own sheet the first time. The rule is the customer
+  app's: only a range entirely under 13 (its highest age is 12 or less)
+  shows "Izzy Clipz Business is for the shop's team" with the shop's
+  number, and no details are taken. The answer is kept only in memory;
+  any other answer (13 or older, declined, a range on both sides of 13),
+  an error or an older iOS just carries on.
 
 ## Test mode
 

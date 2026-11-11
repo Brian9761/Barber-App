@@ -40,13 +40,25 @@ final class LegalTests: XCTestCase {
 
     // MARK: Apple's age range
 
-    func testOnlyUnder13ShowsTheScreenForChildren() async {
+    /// The customer app's rule (IzzyClipzTests/AgeCheckTests.swift): one gate, 13. Under it, the
+    /// range's highest age is 12 or less (its lowest is open); at or over it, the lowest age is 13
+    /// or more. Anything else isn't known to be under 13, so the app carries on.
+    func testWhatIOSsAnswerMeans() async {
         XCTAssertEqual(AgeCheck.ageGate, 13)
-        XCTAssertEqual(AgeCheck.outcome(sharingLowerBound: nil), .under13, "Below the lowest gate")
-        XCTAssertEqual(AgeCheck.outcome(sharingLowerBound: 13), .thirteenOrOlder)
-        XCTAssertEqual(AgeCheck.outcome(sharingLowerBound: 18), .thirteenOrOlder)
+        XCTAssertEqual(AgeCheck.outcome(lowerBound: nil, upperBound: 12), .under13)
+        XCTAssertEqual(AgeCheck.outcome(lowerBound: 13, upperBound: nil), .thirteenOrOlder)
+        XCTAssertEqual(AgeCheck.outcome(lowerBound: 18, upperBound: nil), .thirteenOrOlder)
+        XCTAssertEqual(AgeCheck.outcome(lowerBound: 13, upperBound: 15), .thirteenOrOlder)
+        // A region's own gates: under 12 is under 13 too.
+        XCTAssertEqual(AgeCheck.outcome(lowerBound: nil, upperBound: 11), .under13)
+        // A range on both sides of 13 (a region's lowest gate at 16), or none: not known to be under 13.
+        XCTAssertEqual(AgeCheck.outcome(lowerBound: nil, upperBound: 15), .unclear)
+        XCTAssertEqual(AgeCheck.outcome(lowerBound: nil, upperBound: nil), .unclear)
+    }
+
+    func testOnlyUnder13ShowsTheScreenForChildren() async {
         XCTAssertTrue(AgeCheck.showsUnderAgeScreen(.under13))
-        for outcome: AgeCheck.Outcome in [.notAsked, .declined, .thirteenOrOlder, .failed] {
+        for outcome: AgeCheck.Outcome in [.notAsked, .declined, .thirteenOrOlder, .unclear, .failed] {
             XCTAssertFalse(AgeCheck.showsUnderAgeScreen(outcome), "\(outcome) carries on")
         }
         XCTAssertTrue(AgeCheck.message.contains("parent or guardian"))

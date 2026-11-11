@@ -10,10 +10,11 @@ import Foundation
 /// requires it, so outside those places nothing is asked. iOS shows its own sheet the first time,
 /// and remembers the answer.
 ///
-/// Only "under 13" changes anything: the app shows `UnderAgeView` (the app is for the shop's team;
-/// a parent or guardian books for a child) and takes no details. Nothing is stored: the answer lives
-/// in memory for this launch, and every other answer (shared and 13 or older, declined, an error,
-/// an older iOS) just carries on.
+/// Only an answer that puts the person under 13 changes anything, by the same rule as the customer
+/// app (`IzzyClipz/App/AgeCheck.swift`): the app shows `UnderAgeView` (the app is for the shop's
+/// team; a parent or guardian books for a child) and takes no details. Nothing is stored: the answer
+/// lives in memory for this launch, and every other answer (13 or older, declined, unclear, an
+/// error, an older iOS) just carries on.
 enum AgeCheck {
     enum Outcome: Equatable, Sendable {
         /// Not asked: an older iOS, a build without the check, or no law requires it here.
@@ -22,6 +23,9 @@ enum AgeCheck {
         case declined
         case thirteenOrOlder
         case under13
+        /// A range that reaches both sides of 13 (a region's own age gates can differ from the
+        /// app's), or none: the app carries on, since it doesn't know the person is under 13.
+        case unclear
         /// iOS couldn't answer (the app isn't entitled, say): the app carries on.
         case failed
     }
@@ -29,10 +33,13 @@ enum AgeCheck {
     /// The one age gate: 13, under which a parent or guardian books.
     static let ageGate = 13
 
-    /// What iOS's answer means, from the shared range's lower bound: `nil` is below the lowest gate.
-    static func outcome(sharingLowerBound lowerBound: Int?) -> Outcome {
-        guard let lowerBound else { return .under13 }
-        return lowerBound >= ageGate ? .thirteenOrOlder : .under13
+    /// What iOS's shared range means, from its bounds, as in the customer app: under 13 when its
+    /// highest age is below 13, 13 or older when its lowest age is at least 13 (`nil` bounds are
+    /// open: below the lowest gate, or at or above the highest), and otherwise unclear.
+    static func outcome(lowerBound: Int?, upperBound: Int?) -> Outcome {
+        if let upperBound, upperBound < ageGate { return .under13 }
+        if let lowerBound, lowerBound >= ageGate { return .thirteenOrOlder }
+        return .unclear
     }
 
     /// Only an under-13 answer shows the screen for children instead of the app.

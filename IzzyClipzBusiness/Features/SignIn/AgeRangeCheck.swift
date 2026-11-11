@@ -35,7 +35,8 @@ private struct AgeRangeCheck: ViewModifier {
 }
 
 #if canImport(DeclaredAgeRange)
-/// Asks once, when the app opens. iOS shows its own sheet the first time and remembers the answer.
+/// Asks once, when the app opens. iOS shows its own sheet the first time and remembers the answer;
+/// the app keeps it only in memory.
 @available(iOS 26.0, *)
 private struct AgeRangeAsker: View {
     @Binding var outcome: AgeCheck.Outcome
@@ -59,7 +60,7 @@ private struct AgeRangeAsker: View {
             case .declinedSharing:
                 return .declined
             case .sharing(let range):
-                return AgeCheck.outcome(sharingLowerBound: range.lowerBound)
+                return AgeCheck.outcome(lowerBound: range.lowerBound, upperBound: range.upperBound)
             @unknown default:
                 return .notAsked
             }
