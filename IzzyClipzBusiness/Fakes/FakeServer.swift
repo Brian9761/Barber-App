@@ -36,6 +36,10 @@ final class FakeServer {
         var completeStatusOverride: String?
         /// Start with nothing booked, no time off and no products.
         var empty = false
+        /// Also the 8 weeks before today (`FakeSampleHistory`): appointments and what happened to
+        /// them, checkouts with products, walk-ins and a few fees, so Analytics has history to show.
+        /// The UI tests and the demo have it (`AppEnvironment.sample`); unit tests start with today alone.
+        var sampleHistory = false
         /// Also start with a client who booked online with a card on file (Visa 4242, the fee the
         /// settings give a $35 haircut) and didn't come: a 10 AM haircut with Flowxbori, marked no-show.
         /// With any of these three, no-show protection starts on: those clients booked with it on.
@@ -139,6 +143,12 @@ final class FakeServer {
         self.now = now
         if !options.empty {
             seed()
+            if options.sampleHistory {
+                // The 8 weeks before today, after today's sample day (`FakeSampleHistory.swift`).
+                let history = FakeSampleHistory.make(catalog: catalog, shopTime: shopTime, now: now(), products: products)
+                appointments += history.appointments
+                sales += history.sales
+            }
         }
     }
 

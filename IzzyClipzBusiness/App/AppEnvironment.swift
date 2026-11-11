@@ -221,6 +221,8 @@ final class AppEnvironment {
         if arguments.contains(LaunchArgument.paymentProcessing) { options.completeStatusOverride = "processing" }
         if arguments.contains(LaunchArgument.paymentIncomplete) { options.completeStatusOverride = "requires_payment_method" }
         options.empty = arguments.contains(LaunchArgument.empty)
+        // The 8 weeks before today too, so Analytics has history (none with -fake-empty).
+        options.sampleHistory = true
         if arguments.contains(LaunchArgument.slow) { options.latency = .milliseconds(600) }
         if arguments.contains(LaunchArgument.cardsOnFile) {
             options.noShowWithCard = true

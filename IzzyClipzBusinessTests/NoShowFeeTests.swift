@@ -1284,12 +1284,15 @@ final class NoShowFeeTests: XCTestCase {
         XCTAssertNil(plain.options.nextFeeAnswer)
         XCTAssertFalse(plain.options.nextFeeChargeFails)
         XCTAssertFalse(plain.options.loseNextFeeAnswer)
-        XCTAssertTrue(plain.appointments.allSatisfy { $0.card == nil }, "the usual day has no cards on file")
+        XCTAssertTrue(plain.appointments(from: TestClock.today, to: TestClock.today).allSatisfy { $0.card == nil }, "the usual day has no cards on file")
         XCTAssertEqual(plain.noShowSettings, .default, "protection off, as the server starts")
 
         let cards = try server([LaunchArgument.cardsOnFile])
         XCTAssertTrue(cards.options.noShowWithCard && cards.options.lateCancelWithCard && cards.options.upcomingWithCard)
-        XCTAssertEqual(Set(cards.appointments.filter { $0.card != nil }.map(\.customer.name)), ["Kim Sample", "Lee Sample", "Nia Sample"])
+        XCTAssertEqual(
+            Set(cards.appointments(from: TestClock.today, to: TestClock.today).filter { $0.card != nil }.map(\.customer.name)),
+            ["Kim Sample", "Lee Sample", "Nia Sample"]
+        )
         XCTAssertEqual(cards.noShowSettings, IzzyAPI.NoShowSettings(enabled: true), "on: Settings reads the same as those bookings")
 
         XCTAssertEqual(try server([LaunchArgument.cardsOnFile, LaunchArgument.noShowDeclined]).options.nextFeeAnswer, .declined)

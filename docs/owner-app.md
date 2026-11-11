@@ -76,7 +76,9 @@ booking, Take payment, Analytics and Settings.
     again and Practice in test mode. While the shop's own Stripe account
     isn't connected, it says how to connect, with **Go to Settings**; cash
     and other sales work meanwhile.
-- **Analytics**: the shop's sales, top barbers, services and products.
+- **Analytics**: how the shop is doing, live, for the whole shop or one
+  barber: sales, the top barber and the leaderboard, services, products
+  and productivity (see [Analytics](#analytics)).
 - **Settings**: **Products** (add, edit with a photo from the library or
   the camera, hide or show in the customer app, delete), **Card payments
   (Stripe)** (see [The shop's own Stripe account](#the-shops-own-stripe-account-stripe-connect)),
@@ -289,6 +291,26 @@ a new code** replaces it. The computer stays signed in for 30 days;
 **Sign out**, and **Sign out all computers** asks first. The website's
 Sign out works too. Tap to Pay, new codes and disconnecting Stripe stay in
 the app on the iPhone. A new `OWNER_KEY` signs every computer out.
+
+## Analytics
+
+The **Analytics** tab shows how the shop is doing, live, for the whole
+shop or one barber: total sales and the change from the period before,
+the top sales barber, the leaderboard (by sales, services, products or
+clients served), top services, products sold, daily sales, and business
+productivity tiles, each with an ⓘ that says what it means. Pick Today,
+Week, Month, Year or your own dates (up to 366 days). It refreshes every
+30 seconds while it's on screen, and on pull. Every number is defined in
+[analytics.md](analytics.md).
+
+The store is `IzzyClipzBusiness/Stores/AnalyticsStore.swift` and the
+screen `IzzyClipzBusiness/Features/Analytics/AnalyticsView.swift`. With
+the sample server (UI tests and the demo version), the numbers come from
+its own appointments and sales plus the 8 weeks before today
+(`FakeSampleHistory`), the same on every run: this year Izzy sells the
+most, Carlos the most products, and Cristian does the most cuts. The UI
+tests are in `IzzyClipzBusinessUITests/AnalyticsUITests.swift`
+(screenshots `O70-…` to `O79-…`).
 
 ## The legal pages and the age check
 

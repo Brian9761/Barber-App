@@ -39,6 +39,8 @@ final class Workspace {
     let booking: NewBookingStore
     let checkout: CheckoutModel
     let products: ProductsStore
+    /// The Analytics tab: the shop's (or one barber's) numbers, live.
+    let analytics: AnalyticsStore
     /// Settings → No-show protection.
     let noShow: NoShowSettingsStore
     /// Settings → Card payments (Stripe): the shop's own Stripe account.
@@ -74,6 +76,7 @@ final class Workspace {
             defaults: environment.defaults
         )
         self.products = ProductsStore(api: api)
+        self.analytics = AnalyticsStore(api: api, shopTime: environment.shopTime, catalog: environment.catalog, clock: environment.clock)
         self.noShow = NoShowSettingsStore(api: api, catalog: environment.catalog)
         self.stripeConnection = StripeConnectionStore(api: api, connector: environment.makeStripeConnector())
         self.computers = ComputerAccessStore(

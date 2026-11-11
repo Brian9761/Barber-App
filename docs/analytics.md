@@ -7,6 +7,27 @@ year. It updates by itself every 30 seconds, so you can leave it open.
 This page explains every number in plain words. The names in parentheses
 (like `salesCents`) are what the app's code calls them.
 
+## Using Analytics in the app
+
+- **Whose numbers.** "Whole shop", or a barber's chip. On a barber's page
+  the leaderboard and the top barber stay the whole shop's.
+- **Which days.** Today, Week (Monday to today), Month (the 1st to today),
+  Year (January 1 to today), or **Custom…** for any days you pick, up to
+  366 of them. All on the shop's calendar.
+- **Live.** "Live · Updated 10:42 AM" with a green dot means the numbers
+  are fresh. They update every 30 seconds while Analytics is on screen
+  (not while the app is in the background), and when you pull down. If
+  the phone can't reach the server, the numbers you had stay on screen,
+  with **Try again**.
+- **What a number means.** Each tile's ⓘ says it in a sentence or two,
+  in the words of this page, and **What these numbers mean** sums this
+  page up.
+- **Daily sales.** Tap a bar to see that day's numbers. For one day, the
+  chart shows each barber's sales that day instead; for more than 62 days,
+  it goes by month.
+
+The website's Business area shows the same numbers on a computer.
+
 ## Where the numbers come from
 
 - **Checkouts.** When you check out a client, you ring up a **sale**: the
@@ -123,3 +144,7 @@ The leaderboard and the top barber stay the whole shop's.
 For developers: the definitions are in `server/src/analytics.ts`, and
 `server/test/analytics.test.ts` checks every one against a week of shop data
 worked out by hand.
+The owner app's in-memory sample server (the demo version and the UI tests)
+works them out the same way in `IzzyClipzBusiness/Fakes/FakeAnalytics.swift`,
+from its own appointments and sales plus 8 weeks of sample history
+(`FakeSampleHistory.swift`), and `FakeAnalyticsTests` checks each one.
