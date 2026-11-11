@@ -17,7 +17,8 @@ import Foundation
 ///   makes Checkout Sessions (`completeCardCheckout` stands for the client on Stripe's page), saves
 ///   cards under their tokens, and turns a booking down without a usable card (`card_required`) or
 ///   with another policy than today's (`policy_changed`), with the server's words. It deletes a
-///   card the client removes (`deleteCard`) now, or once no booking needs it, as the server does.
+///   card the client removes (`deleteCard`) now, or once no booking needs it, as the server does,
+///   and a booking made without Remember me (`keepCard: false`) marks its card for deletion too.
 ///
 /// Launch arguments make it misbehave on purpose, so the app's error states can be tested; see
 /// `Options`. Everything it returns that isn't the shop's real menu (sample reviews, sample
@@ -247,6 +248,12 @@ final class FakeShopAPI: ShopAPI {
             appointment: appointment, token: token, isSeeded: false, request: request,
             cardToken: card == nil ? nil : request.noShow?.cardToken.rawValue
         )
+        // "Remember me" off (`keepCard: false`): the card was for this booking only, so it's marked
+        // for deletion with the booking, as the server does. It books nothing else, and it's deleted
+        // once no booking needs it. A booking the card didn't go with ignores it.
+        if appointment.card != nil, request.keepCard == false, let cardToken = request.noShow?.cardToken.rawValue {
+            savedCards[cardToken]?.deleteRequested = true
+        }
         markBusy(offering.barberID, from: appointment.start, minutes: appointment.durationMinutes)
         if options.loseBookingResponseOnce {
             // Booked, but the answer never reaches the phone.

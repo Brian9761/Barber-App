@@ -822,7 +822,11 @@ final class NoShowBookingTests: XCTestCase {
     /// shop is asked to delete it (it keeps it only while this booking can be charged). On, it's
     /// kept for next time, and nothing is deleted.
     func testRememberMeOffForgetsTheCardOnceBookedAndTheShopDeletesIt() async throws {
-        api.bookHandler = { _ in TestData.confirmation() }
+        var sent: [IzzyAPI.NewAppointment] = []
+        api.bookHandler = { request in
+            sent.append(request)
+            return TestData.confirmation()
+        }
         api.deleteCardHandler = { _ in IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage) }
         let card = NoShowTestData.stored()
         cards.save(card, remember: false)
@@ -830,6 +834,9 @@ final class NoShowBookingTests: XCTestCase {
         let submitter = makeSubmitter()
         let saved = await submitter.book(try draft(remember: false), noShow: agreement)
         XCTAssertNotNil(saved)
+        // The booking itself says not to keep the card, as the website does; the request to delete
+        // it right after is the second safeguard.
+        XCTAssertEqual(sent.map(\.keepCard), [false])
         XCTAssertNil(cards.saved)
         XCTAssertNil(keychain.secrets[SavedCardStore.account])
         let deletion = await submitter.cardDeletion?.value
@@ -837,13 +844,30 @@ final class NoShowBookingTests: XCTestCase {
         XCTAssertEqual(deletion, .answered(IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage)))
 
         cards.save(card, remember: true)
-        api.bookHandler = { _ in TestData.confirmation(id: "6c9f3d2f-4e5b-4f70-9bac-1d2e3f4a5b6c", token: "token-2") }
+        api.bookHandler = { request in
+            sent.append(request)
+            return TestData.confirmation(id: "6c9f3d2f-4e5b-4f70-9bac-1d2e3f4a5b6c", token: "token-2")
+        }
         let remembering = makeSubmitter()
         _ = await remembering.book(try draft(start: TestData.friday.addingTimeInterval(3600), remember: true), noShow: agreement)
         XCTAssertEqual(cards.saved, card)
         XCTAssertTrue(cards.isRemembered)
         XCTAssertNil(remembering.cardDeletion, "A remembered card stays at the shop")
         XCTAssertEqual(api.cardDeletions, [card.token])
+        XCTAssertNil(sent.last?.keepCard, "Remember me on: nothing said, so the shop keeps the card")
+    }
+
+    /// What a booking says about the card: `keepCard: false` only when it goes with a card and
+    /// Remember me is off. Without a card there's nothing to say, and the retry key never changes.
+    func testOnlyABookingWithACardAndWithoutRememberMeSaysNotToKeepIt() throws {
+        let agreement = IzzyAPI.NoShowAgreement(cardToken: NoShowTestData.stored().token, policyText: NoShowTestData.carlosPolicyText)
+        let forNow = try draft(remember: false)
+        let remembered = try draft(remember: true)
+        XCTAssertEqual(forNow.request(noShow: agreement).keepCard, false)
+        XCTAssertNil(remembered.request(noShow: agreement).keepCard)
+        XCTAssertNil(forNow.request(noShow: nil).keepCard)
+        XCTAssertNil(forNow.request.keepCard)
+        XCTAssertEqual(forNow.request(noShow: agreement).retryKey, forNow.request.retryKey)
     }
 
     /// The shop can't be reached to delete it: the card is still forgotten on this iPhone, and the
@@ -924,6 +948,41 @@ final class NoShowBookingTests: XCTestCase {
         let againResult = await submitter.book(try draft(start: later), noShow: next.agreement)
         let again = try XCTUnwrap(againResult)
         XCTAssertEqual(again.snapshot.card?.last4, "4242")
+        XCTAssertEqual(fake.bookingsMade, 2)
+        XCTAssertEqual(fake.cardRemoval(for: added.token)?.requested, false, "Remember me on: the shop keeps the card")
+    }
+
+    /// Without Remember me, the in-memory server marks the card for deletion with the booking
+    /// itself (`keepCard: false`), as the server does, before the app asks to delete it: the card
+    /// books nothing else, and it's deleted once no booking needs it. With Remember me it's kept.
+    func testWithoutRememberMeTheInMemoryServerMarksTheCardWithTheBooking() async throws {
+        let fake = NoShowTestData.fake()
+        let tomorrow = TestData.calendarDay(2026, 10, 29)
+        let open = try await fake.availability(IzzyAPI.AvailabilityQuery(target: carlos, from: tomorrow, days: 1)).slots(on: tomorrow)
+        XCTAssertGreaterThanOrEqual(open.count, 5)
+        let (first, second, third) = (open[0].start, open[open.count / 2].start, open[open.count - 1].start)
+
+        let forNowResult = await CardSetup(api: fake, saver: FakeCardSaver(api: fake), cards: cards).addCard(for: carlos, remember: false)
+        let forNow = try XCTUnwrap(forNowResult)
+        let agreement = IzzyAPI.NoShowAgreement(cardToken: forNow.token, policyText: NoShowTestData.carlosPolicyText)
+        let booked = try await fake.book(try draft(start: first, remember: false).request(noShow: agreement), token: .generate())
+        XCTAssertEqual(booked.appointment.card?.last4, "4242")
+        XCTAssertEqual(fake.cardRemoval(for: forNow.token)?.requested, true, "Marked with the booking, no other request needed")
+        XCTAssertEqual(fake.cardRemoval(for: forNow.token)?.deleted, false, "Its booking can still be charged")
+        // It books nothing else, even with its key.
+        do {
+            _ = try await fake.book(try draft(start: second, remember: false).request(noShow: agreement), token: .generate())
+            XCTFail("A card given up with its booking shouldn't book again")
+        } catch {
+            XCTAssertEqual(error as? APIError, .cardRequired(message: "We couldn't find your saved card. Add it again."))
+        }
+
+        // Remember me on: nothing is said, and the card stays for next time.
+        let keptResult = await CardSetup(api: fake, saver: FakeCardSaver(api: fake), cards: cards).addCard(for: carlos, remember: true)
+        let kept = try XCTUnwrap(keptResult)
+        let keptAgreement = IzzyAPI.NoShowAgreement(cardToken: kept.token, policyText: NoShowTestData.carlosPolicyText)
+        _ = try await fake.book(try draft(start: third, remember: true).request(noShow: keptAgreement), token: .generate())
+        XCTAssertEqual(fake.cardRemoval(for: kept.token)?.requested, false)
         XCTAssertEqual(fake.bookingsMade, 2)
     }
 }

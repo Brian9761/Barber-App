@@ -1090,6 +1090,38 @@ final class NoShowClientTests: XCTestCase {
         var withoutCard = booking
         withoutCard.noShow = nil
         XCTAssertEqual(booking.retryKey, withoutCard.retryKey)
+        // Remember me isn't asked about here, so the card is kept, as before: nothing is sent.
+        XCTAssertNil(sent.json?["keepCard"])
+    }
+
+    /// "Remember me" off: the booking says not to keep the card (`keepCard: false`), so the server
+    /// marks it for deletion with the booking. Sent only as false, and only with a card.
+    func testABookingWithoutRememberMeSaysNotToKeepTheCard() async throws {
+        StubURLProtocol.reply { _ in .fixture("booking-confirmation.json", status: 201) }
+        let card = IzzyAPI.CardToken.generate()
+        var booking = IzzyAPI.NewAppointment(
+            target: .anyBarber(serviceId: "haircut-and-beard"),
+            start: utc(2026, 11, 2, 18),
+            customer: IzzyAPI.NewCustomer(name: "Test Customer", phone: "(442) 555-0123"),
+            noShow: IzzyAPI.NoShowAgreement(cardToken: card, policyText: "No payment now."),
+            keepCard: false
+        )
+        _ = try await client.book(booking, token: .generate())
+        XCTAssertEqual(try only().json?["keepCard"], .bool(false))
+        XCTAssertEqual(try encodeAPI(booking)["keepCard"], .bool(false))
+        // Kept (true) or not asked (nil): left out, so the server keeps the card as before.
+        booking.keepCard = true
+        XCTAssertNil(try encodeAPI(booking)["keepCard"])
+        booking.keepCard = nil
+        XCTAssertNil(try encodeAPI(booking)["keepCard"])
+        // Without a card there's nothing to keep or not: left out too.
+        booking.keepCard = false
+        booking.noShow = nil
+        XCTAssertNil(try encodeAPI(booking)["keepCard"])
+        // Not part of "the same booking" either.
+        var kept = booking
+        kept.keepCard = nil
+        XCTAssertEqual(booking.retryKey, kept.retryKey)
     }
 
     func testABookingWithoutProtectionSendsNoCard() async throws {

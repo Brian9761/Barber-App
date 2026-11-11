@@ -163,9 +163,15 @@ extension BookingDraft {
     }
 
     /// What the server is sent to book it, with the card and the policy the client agreed to when
-    /// no-show protection applies. The card isn't part of "the same booking" for a retry.
+    /// no-show protection applies. The card isn't part of "the same booking" for a retry. Without
+    /// "Remember me", a booking with a card says not to keep it (`keepCard: false`), as the website
+    /// does: the server marks it for deletion with the booking itself, so a connection lost right
+    /// after booking can't leave it saved (the app still asks to delete it too, `BookingSubmitter`).
     func request(noShow: IzzyAPI.NoShowAgreement?) -> IzzyAPI.NewAppointment {
-        IzzyAPI.NewAppointment(target: plan.choice.target, start: plan.start, customer: customer.newCustomer, note: note, noShow: noShow)
+        IzzyAPI.NewAppointment(
+            target: plan.choice.target, start: plan.start, customer: customer.newCustomer, note: note, noShow: noShow,
+            keepCard: noShow != nil && !remember ? false : nil
+        )
     }
 }
 
@@ -329,8 +335,9 @@ final class BookingSubmitter {
     /// Booked: with "Remember me" on, the card is kept for next time. Off, it's forgotten, like the
     /// name and number, and the shop is asked to delete it: its key leaves this iPhone, so nobody
     /// could use or remove the card again, and the shop keeps it only while this booking can still
-    /// be charged (it answers "scheduled"). That's how a card saved without Remember me is used for
-    /// that booking only: the server can't see the box.
+    /// be charged (it answers "scheduled"). The booking itself already said so (`keepCard: false`,
+    /// which marks the card in the same step as the booking); this request is the second safeguard,
+    /// for a card the booking didn't go with too.
     private func keepOrForgetCard(after draft: BookingDraft) {
         guard let cards else { return }
         if draft.remember {

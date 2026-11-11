@@ -75,7 +75,7 @@ extension IzzyAPI {
     }
 
     /// `POST /api/appointments` and `POST /api/owner/appointments`:
-    /// `{ offeringId? | (serviceId + barberId: "any"), start, customer, note?, noShowPolicy? }`.
+    /// `{ offeringId? | (serviceId + barberId: "any"), start, customer, note?, noShowPolicy?, keepCard? }`.
     public struct NewAppointment: Encodable, Hashable, Sendable {
         public var target: BookingTarget
         /// A slot's `start`, exactly as the server listed it.
@@ -86,13 +86,23 @@ extension IzzyAPI {
         /// `X-Card-Token`) and the policy text shown (sent as `noShowPolicy`). Customer bookings
         /// only; the shop's own bookings never send it. Not part of `retryKey`.
         public var noShow: NoShowAgreement?
+        /// The client's "Remember me" for the card on file: `false` when they didn't ask to keep it,
+        /// so the server marks the card for deletion in the booking's own transaction (it's used for
+        /// this booking only, and deleted once no booking needs it, as `DELETE /api/cards` would).
+        /// Sent only as `false`, and only with a card (`noShow`): `nil` or `true` leaves it out, and
+        /// the card is kept, as before. Customer bookings only. Not part of `retryKey`.
+        public var keepCard: Bool?
 
-        public init(target: BookingTarget, start: Date, customer: NewCustomer, note: String? = nil, noShow: NoShowAgreement? = nil) {
+        public init(
+            target: BookingTarget, start: Date, customer: NewCustomer, note: String? = nil, noShow: NoShowAgreement? = nil,
+            keepCard: Bool? = nil
+        ) {
             self.target = target
             self.start = start
             self.customer = customer
             self.note = note
             self.noShow = noShow
+            self.keepCard = keepCard
         }
 
         private struct Key: CodingKey {
@@ -113,6 +123,10 @@ extension IzzyAPI {
             try container.encodeIfPresent(note?.trimmed.nonEmpty, forKey: Key("note"))
             // Exactly as the server gave it: the server compares it with the current policy.
             try container.encodeIfPresent(noShow?.policyText, forKey: Key("noShowPolicy"))
+            // Only to say "don't keep it", and only about a card the booking goes with.
+            if noShow != nil, keepCard == false {
+                try container.encode(false, forKey: Key("keepCard"))
+            }
         }
 
         /// What the server compares when the same manage token comes back
