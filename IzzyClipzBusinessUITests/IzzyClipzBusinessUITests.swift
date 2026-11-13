@@ -429,7 +429,9 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         tap("saveAmount")
         XCTAssertTrue(element("ticketItem-Sample beard oil").waitForExistence(timeout: 10))
         XCTAssertTrue(waitUntil(element("paymentAmount"), toMatch: NSPredicate(format: "value == %@", "48 dollars")))
-        typeInto("walkInName", "Walk-in Sample")
+        // The name's return key ("done") puts the keyboard away, so the screenshot shows the ticket:
+        // a text keyboard has no Done above it for closeKeyboard to tap.
+        typeInto("walkInName", "Walk-in Sample\n")
         closeKeyboard()
         screenshot("O48-Walk-In-Ticket")
 
@@ -670,10 +672,12 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             ("legal-cancellation-policy", "Cancellation & No-Show Policy", "/cancellation-policy"),
             ("legal-accessibility", "Accessibility", "/accessibility"),
         ]
+        // All four rows in the screenshot, clear of the tab bar.
+        revealAboveTabBar("legal-accessibility")
+        screenshot("O40-Settings-Legal")
         for (identifier, title, path) in pages {
             let row = reveal(identifier)
             XCTAssertTrue(row.label.contains(title), "Got: \(row.label)")
-            if identifier == "legal-privacy" { screenshot("O40-Settings-Legal") }
             row.tap()
             let address = element("webURL")
             XCTAssertTrue(address.waitForExistence(timeout: 10), "\(title) didn't open")
@@ -1123,14 +1127,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let doneButtons = [element("flatAmountDone"), app.toolbars.buttons["Done"]]
         guard let done = firstToShow(doneButtons, timeout: 10) else {
             drag(.up)
-            _ = waitForDisappearance(of: keyboard)
+            _ = waitForDisappearance(of: keyboard, timeout: 20)
             return
         }
         done.tap()
         if !waitForDisappearance(of: keyboard, timeout: 10), let again = firstToShow(doneButtons, timeout: 2) {
             again.tap()
         }
-        _ = waitForDisappearance(of: keyboard)
+        _ = waitForDisappearance(of: keyboard, timeout: 20)
     }
 
     /// The first text on screen that contains `fragment`: a dialog's title or message, a footer.
@@ -1192,6 +1196,21 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             }
         }
         XCTAssertTrue(isOnScreen(target), "Couldn't find \(identifier) on the screen", file: file, line: line)
+        return target
+    }
+
+    /// Reveals an element, then scrolls on until it's clear of the tab bar. iOS 26 floats the tab bar
+    /// over the page, and a row behind it is still on the screen to XCUITest, but hidden in a
+    /// screenshot (Settings' Legal rows were).
+    @discardableResult
+    private func revealAboveTabBar(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let target = reveal(identifier, file: file, line: line)
+        let bar = app.tabBars.firstMatch
+        for _ in 0..<4 where bar.exists && target.frame.maxY > bar.frame.minY {
+            drag(.down)
+            settle(target)
+        }
+        XCTAssertTrue(!bar.exists || target.frame.maxY <= bar.frame.minY, "\(identifier) is behind the tab bar", file: file, line: line)
         return target
     }
 
