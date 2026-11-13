@@ -11,30 +11,41 @@ struct PaymentProgressView: View {
     let workspace: Workspace
     /// The receipt's email field has the keyboard: its Send receipt is the action then, so the
     /// bar's Done (which closes this screen without sending) steps aside until the keyboard goes,
-    /// instead of sitting over Send receipt just above the keyboard. Return sends too, and a swipe
-    /// down closes the keyboard.
+    /// instead of sitting over Send receipt just above the keyboard, and the page scrolls Send
+    /// receipt into view above the keyboard (bringing the field into view alone left it behind the
+    /// keyboard). Return sends too, and a swipe down closes the keyboard.
     @FocusState private var typingReceiptEmail: Bool
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    // About the card reader: a cash or other sale is saved the same way in test mode.
-                    if checkout.mode.isTestMode, !isSale {
-                        TestModeBanner()
+            ScrollViewReader { page in
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // About the card reader: a cash or other sale is saved the same way in test mode.
+                        if checkout.mode.isTestMode, !isSale {
+                            TestModeBanner()
+                        }
+                        content
                     }
-                    content
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 32)
-                .frame(maxWidth: .infinity)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .scrollDismissesKeyboard(.interactively)
-            .safeAreaInset(edge: .bottom) {
-                buttons
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.top, 32)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom) {
+                    buttons
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                }
+                .onChange(of: typingReceiptEmail) { _, typing in
+                    guard typing else { return }
+                    Task {
+                        // Once the keyboard is up: iOS brings only the field itself into view.
+                        try? await Task.sleep(for: .milliseconds(500))
+                        withAnimation { page.scrollTo(ReceiptEmailOffer.endID, anchor: .bottom) }
+                    }
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -390,6 +401,9 @@ struct ReceiptEmailOffer: View {
     let checkout: CheckoutModel
     /// Whether the email field has the keyboard (the screen's Done steps aside meanwhile).
     var focus: FocusState<Bool>.Binding
+    /// The line under Send receipt: the page scrolls to it once the field has the keyboard, so the
+    /// field, Send receipt and the line are all in view above the keyboard.
+    static let endID = "receiptEmailEnd"
     @State private var showsField = false
     @State private var email = ""
 
@@ -432,6 +446,7 @@ struct ReceiptEmailOffer: View {
                     Text("Stripe emails the receipt. The app doesn't keep the address.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
+                        .id(Self.endID)
                 } else {
                     Button {
                         showsField = true
