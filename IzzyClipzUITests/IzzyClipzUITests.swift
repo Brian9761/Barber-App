@@ -1314,7 +1314,7 @@ final class IzzyClipzUITests: XCTestCase {
             // The tap was lost: tap the switch's end of the row.
             trailingEnd.tap()
         }
-        XCTAssertTrue(waitUntil(control, toMatch: flipped, timeout: 10), "The switch didn't move", file: file, line: line)
+        XCTAssertTrue(waitUntil(control, toMatch: flipped), "The switch didn't move", file: file, line: line)
     }
 
     /// Waits for the day-and-time step to show a picked day with times, scrolling down to them.
@@ -1370,7 +1370,7 @@ final class IzzyClipzUITests: XCTestCase {
                 XCTAssertTrue(cell.waitForExistence(timeout: 10), "Next month didn't show \(identifier)", file: file, line: line)
             }
             // Days show as "checking" until their times load; then only a day with times is enabled.
-            let checked = waitUntil(cell, toMatch: NSPredicate(format: "NOT (label CONTAINS[c] %@)", "checking"), timeout: 20)
+            let checked = waitUntil(cell, toMatch: NSPredicate(format: "NOT (label CONTAINS[c] %@)", "checking"))
             XCTAssertTrue(checked, "The times for \(identifier) didn't load", file: file, line: line)
             guard cell.isEnabled else { continue }
             scroll(toReveal: cell, file: file, line: line)
@@ -1423,7 +1423,7 @@ final class IzzyClipzUITests: XCTestCase {
             field.tap()
         }
         // While a keyboard comes up, one look at a busy simulator's screen can take over 4 seconds,
-        // so this allows 20 like the other waits; the keyboard showing ends it at once.
+        // so this allows 20 (and waitForExistence takes a last look); the keyboard showing ends it at once.
         XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 20), "No keyboard for \(identifier)", file: file, line: line)
         dismissKeyboardTip()
         field.typeText(text)
@@ -1664,11 +1664,17 @@ final class IzzyClipzUITests: XCTestCase {
         NSPredicate(format: "isHittable == true")
     }
 
-    /// Waits for what's on screen to match. The default is long because a busy simulator can take
-    /// seconds to answer each look at the screen; a match ends the wait straight away.
-    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 20) -> Bool {
+    /// Waits for what's on screen to match; a match ends the wait straight away. The default is long
+    /// because a busy simulator can take seconds to answer each look at the screen, and a struggling
+    /// Mac close to 20: on CI, both apps' simulators once did for minutes at a time, on two Macs at
+    /// once, and a 20-second wait fit only one look. A look can also end after the time is up, too
+    /// late to count, so a wait that runs out takes one last look, as `waitForExistence` does. Only an
+    /// element that's there is asked anything else: asking one that isn't fails the test instead of
+    /// answering no.
+    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 60) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+        if XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed { return true }
+        return element.exists && predicate.evaluate(with: element)
     }
 
     /// Taps a button that closes a sheet, page or alert, and waits for it to go. Taps once more if
@@ -1688,8 +1694,10 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: gone), message, file: file, line: line)
     }
 
-    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 20) -> Bool {
-        waitUntil(element, toMatch: NSPredicate(format: "exists == false"), timeout: timeout)
+    /// Waits for an element to go, with `waitUntil`'s patience and its last look.
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 60) -> Bool {
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed || !element.exists
     }
 
     // MARK: Screenshots

@@ -308,19 +308,22 @@ final class AnalyticsUITests: XCTestCase {
         }
     }
 
-    /// Waits for what's on screen to match. The default is long because a busy simulator can take
-    /// seconds to answer each look at the screen; a match ends the wait straight away.
-    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 20) -> Bool {
+    /// Waits for what's on screen to match; a match ends the wait straight away. As in
+    /// IzzyClipzBusinessUITests: a minute, since a struggling Mac can take close to 20 seconds a look,
+    /// and one last look when the time runs out, as `waitForExistence` takes.
+    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 60) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+        if XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed { return true }
+        return element.exists && predicate.evaluate(with: element)
     }
 
-    private func waitForLabel(_ element: XCUIElement, containing text: String, timeout: TimeInterval = 20) -> Bool {
+    private func waitForLabel(_ element: XCUIElement, containing text: String, timeout: TimeInterval = 60) -> Bool {
         waitUntil(element, toMatch: NSPredicate(format: "label CONTAINS %@", text), timeout: timeout)
     }
 
-    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 20) -> Bool {
-        waitUntil(element, toMatch: NSPredicate(format: "exists == false"), timeout: timeout)
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 60) -> Bool {
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed || !element.exists
     }
 
     private func screenshot(_ name: String) {

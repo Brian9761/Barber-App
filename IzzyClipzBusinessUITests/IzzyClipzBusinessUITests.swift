@@ -1089,8 +1089,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     /// While a keyboard comes up, one look at a busy simulator's screen can take over 4 seconds:
     /// the product editor's Name field had the keyboard (the screen recording shows its cursor and
     /// the keyboard), but each 5-second wait fit in only one look, which ended too late, twice. The
-    /// wait allows 20 seconds like the others; the field having the keyboard ends it at once.
-    private func waitForKeyboardFocus(on field: XCUIElement, timeout: TimeInterval = 20) -> Bool {
+    /// wait allows a minute like the others; the field having the keyboard ends it at once.
+    private func waitForKeyboardFocus(on field: XCUIElement, timeout: TimeInterval = 60) -> Bool {
         guard field.responds(to: NSSelectorFromString("hasKeyboardFocus")) else {
             return app.keyboards.firstMatch.waitForExistence(timeout: timeout)
         }
@@ -1259,7 +1259,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             // The tap was lost: tap the switch's end of the row.
             trailingEnd.tap()
         }
-        XCTAssertTrue(waitUntil(control, toMatch: flipped, timeout: 10), "The switch didn't move", file: file, line: line)
+        XCTAssertTrue(waitUntil(control, toMatch: flipped), "The switch didn't move", file: file, line: line)
     }
 
     /// The appointment's status, at the top of its details.
@@ -1332,9 +1332,9 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// The first of `elements` that's on the screen, looking at each in turn until one is or
-    /// `timeout` runs out. One look at a busy simulator's screen can take seconds, so a single
-    /// look at each isn't enough to say none of them is coming.
-    private func firstToShow(_ elements: [XCUIElement], timeout: TimeInterval = 20) -> XCUIElement? {
+    /// `timeout` runs out. One look at a busy simulator's screen can take seconds (close to 20 on a
+    /// struggling Mac), so a single look at each isn't enough to say none of them is coming.
+    private func firstToShow(_ elements: [XCUIElement], timeout: TimeInterval = 60) -> XCUIElement? {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
             if let shown = elements.first(where: { $0.exists }) {
@@ -1345,19 +1345,27 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         }
     }
 
-    /// Waits for what's on screen to match. The default is long because a busy simulator can take
-    /// seconds to answer each look at the screen; a match ends the wait straight away.
-    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 20) -> Bool {
+    /// Waits for what's on screen to match; a match ends the wait straight away. The default is long
+    /// because a busy simulator can take seconds to answer each look at the screen, and a struggling
+    /// Mac close to 20: on CI, both apps' simulators once did for minutes at a time, on two Macs at
+    /// once, and a 20-second wait fit only one look. A look can also end after the time is up, too
+    /// late to count, so a wait that runs out takes one last look, as `waitForExistence` does. Only an
+    /// element that's there is asked anything else: asking one that isn't fails the test instead of
+    /// answering no.
+    private func waitUntil(_ element: XCUIElement, toMatch predicate: NSPredicate, timeout: TimeInterval = 60) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: predicate, object: element)
-        return XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed
+        if XCTWaiter().wait(for: [expectation], timeout: timeout) == .completed { return true }
+        return element.exists && predicate.evaluate(with: element)
     }
 
-    private func waitForLabel(_ element: XCUIElement, containing text: String, timeout: TimeInterval = 20) -> Bool {
+    private func waitForLabel(_ element: XCUIElement, containing text: String, timeout: TimeInterval = 60) -> Bool {
         waitUntil(element, toMatch: NSPredicate(format: "label CONTAINS %@", text), timeout: timeout)
     }
 
-    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 20) -> Bool {
-        waitUntil(element, toMatch: NSPredicate(format: "exists == false"), timeout: timeout)
+    /// Waits for an element to go, with `waitUntil`'s patience and its last look.
+    private func waitForDisappearance(of element: XCUIElement, timeout: TimeInterval = 60) -> Bool {
+        let gone = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter().wait(for: [gone], timeout: timeout) == .completed || !element.exists
     }
 
     private func screenshot(_ name: String) {
