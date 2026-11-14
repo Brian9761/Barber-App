@@ -11,7 +11,7 @@ This policy explains what information Izzy Clipz Barbershop ("Izzy Clipz", "we",
 - **Your card number never reaches us.** If a booking needs a card on file, you enter it on Stripe's secure page. We keep only the card's type, last 4 digits and expiry date.
 - **We don't sell your information or share it for advertising.** There are no ads, analytics or tracking tools on our website or in our client app.
 - **We don't send marketing texts or emails.** We may call or text you about your appointment.
-- **We don't keep your details forever.** We remove your name, number, email and note from an appointment 12 months after it.
+- **We don't keep your booking details forever.** We remove your name, number, email and note from an appointment 12 months after it. A few records last longer, such as the shop's payment records at Stripe: see "How long we keep it".
 - **You can ask us for a copy of your information, or to correct or delete it.** Call us at (442) 341-3053, email us at [TO FILL IN: the shop's email address], or visit the shop.
 - **The demo versions send nothing to the shop.** What you type there stays on your device.
 
@@ -73,7 +73,7 @@ Our staff use Izzy Clipz Business to:
 - **book walk-ins and phone bookings**, with your name and, if you give them, your mobile number and a note;
 - **check you out**, which records what you had and how you paid. The record can include your name.
 - **take card payments with Tap to Pay on iPhone.** Your card is read by Apple's Tap to Pay technology and processed by Stripe, so our apps and server never see your card number. Stripe receives the amount and a short description of your visit, such as the service and the barber, or a note our staff type.
-- **send a receipt by email, if you'd like one.** Our staff offer it only after your card payment has gone through, and you never need to give an email address to pay by card. We pass the address to Stripe, which emails you the receipt, and we don't keep it.
+- **send a receipt by email, if you'd like one.** Our staff offer it only after your card payment has gone through, and you never need to give an email address to pay by card. We pass the address to Stripe, which emails you the receipt. Our own systems don't keep it, but it stays with that payment's record in the shop's Stripe account (see "How long we keep it").
 
 ### Technical information
 
@@ -110,7 +110,7 @@ We don't use your information for advertising or marketing, and we don't sell it
 
 - **We may call or text you** at the number you give us about your appointment, for example if we need to change it or if we charged a fee. These calls and texts come from our staff, one at a time; we don't send automated messages.
 - **We don't send marketing texts or emails.** If that ever changes, we'll ask for your permission first and update this policy.
-- **Receipts.** If you ask for a receipt by email when you pay by card at the shop, Stripe emails it. Stripe may also email you a receipt for a fee charged to your card on file, if the shop has turned on Stripe's email receipts.
+- **Receipts.** If you ask for a receipt by email when you pay by card at the shop, Stripe emails it. If we charge a fee to your card on file, Stripe emails you a receipt at the email address you gave on its card page.
 - **Reminders** in the Izzy Clipz app are notifications set on your iPhone. They don't come from our server.
 
 ## Who we share your information with
@@ -124,7 +124,7 @@ We share your information only as described here.
 - **Neon**, a Databricks company, hosts our database in the United States. [Databricks Privacy Notice, which covers Neon](https://www.databricks.com/legal/privacynotice)
 - **Apple** provides the App Store, Tap to Pay on iPhone and the maps in our app, and Apple Pay if you use it on Stripe's page. [Apple's Privacy Policy](https://www.apple.com/legal/privacy/)
 
-We share with each provider only what it needs. Vercel and Neon process your information for us under data protection terms that require them to keep it secure and to use it only to provide their services to us. Stripe and Apple also use some information for their own purposes, such as preventing fraud and meeting legal requirements, as their privacy policies explain.
+We share with each provider only what it needs, and each one protects it with security at least as strong as ours. Vercel and Neon process your information for us under data protection terms that require them to keep it secure and to use it only to provide their services to us. (Vercel also keeps some traffic information, such as IP addresses, under its own Privacy Notice, as explained above.) Stripe and Apple also use some information for their own purposes, such as preventing fraud and meeting legal requirements, as their privacy policies explain.
 
 **The developer who builds and runs our website, apps and server for us** can reach the information they hold, including the database and the shop's Stripe account. The developer may use that access only to keep our website and apps working, to fix problems and to carry out requests you make to us.
 
@@ -176,7 +176,7 @@ To work offline, our website also saves copies of its own pages, pictures and th
 ## How we respond to Do Not Track and Global Privacy Control signals
 
 - **We don't track you across other websites or apps**, and we don't build profiles of you. Two other companies can receive information from your device through our booking and review features, and we don't control how they use it:
-  - when you add a card, Stripe's page may collect details about your device and browser, including across other websites that use Stripe, to prevent fraud (see [Stripe's Privacy Policy](https://stripe.com/privacy));
+  - when you add a card, Stripe's page may collect details about your device and browser, including across other websites and apps that use Stripe, to prevent fraud (see [Stripe's Privacy Policy](https://stripe.com/privacy));
   - when reviewers' photos load, Google receives your IP address and browser details.
 - **Do Not Track.** We treat every visitor the same way, whether or not their browser sends a Do Not Track signal.
 - **Global Privacy Control (GPC).** We treat a GPC signal as a request not to sell or share your personal information. We don't sell or share it in any case.
@@ -187,12 +187,14 @@ To work offline, our website also saves copies of its own pages, pictures and th
 |---|---|
 | Your name, mobile number, email and note on an appointment | 12 months after the appointment, then we remove them. If a fee for that appointment is still being processed, we wait until it's settled. |
 | Your name on a checkout record, and the description of a card payment taken at the shop | 12 months |
-| The rest of the appointment and checkout records: what was booked, when, the price, what happened, any fee and, for a booking with a card on file, the agreed terms and the card's type and last 4 digits | Kept for the shop's records, but no longer linked to your name, number, email or note after 12 months |
+| The rest of the appointment and checkout records: what was booked, when, the price, what happened, any fee and, for a booking with a card on file, the agreed terms and the card's type and last 4 digits | Kept for the shop's records, but no longer linked to your name, number, email or note after 12 months. The shop's Stripe account keeps its own payment records (see below). |
 | Your saved card | See "Saved cards" below |
-| Payment records in the shop's Stripe account, including each payment's description and any receipt email address | As long as Stripe's policies and the law require |
+| Payment records in the shop's Stripe account: card payments and fees, their descriptions, any receipt email address, and the card page you filled in, with the email address you typed there | In the shop's Stripe account, with no set end date. Stripe also keeps its own records, as its policies and the law require. |
 | The scrambled IP address used to stop abuse | About 2 days |
 | The hosting logs we can see | Up to 30 days. Vercel may keep some traffic information longer, under its own Privacy Notice. |
 | Reviews from Google | Not stored |
+| Calls, texts and emails between you and the shop, including what you tell us when you report a problem | On the shop's phones and in its email until we delete them, which we do within 12 months |
+| A note of a privacy request you made: the date, what you asked and what we did | 2 years, to show how we handled it |
 | Database backups | Up to 30 more days after we delete or remove something |
 
 ### Saved cards
@@ -229,12 +231,13 @@ If a security breach affects your personal information, we'll notify you as Cali
 
 Our website and apps are for a general audience and aren't directed to children under 13. We don't knowingly collect personal information from children under 13. A parent or guardian should book for a child. If you think a child under 13 has given us personal information, contact us and we'll delete it.
 
-**Your age range in our iPhone apps.** Laws such as California's Digital Age Assurance Act require apps to ask the phone for its user's age range. So on iOS 26 or later, our iPhone apps may ask your iPhone for it when you open them, through Apple's Declared Age Range feature. Your iPhone asks whether to share it, or follows the choice already set in its settings.
+**Your age range in our iPhone apps.** Some laws, such as California's Digital Age Assurance Act from January 1, 2027, require apps to ask the phone for the age range of the person using it. So on iOS 26 or later, our iPhone apps may ask your iPhone for it when you open them, through Apple's Declared Age Range feature. On iOS 26.2 or later, they ask only where your iPhone says a law requires it. On earlier versions of iOS 26, which can't tell, they may ask anywhere. Depending on where you are, your iPhone asks whether to share your age range, follows the choice already set in its settings, or shares it automatically.
 
-- The app learns only whether you're under 13 or 13 or older.
+- Your iPhone tells the app an age range (for example, under 13, 13 to 15, or 18 or older). It may also tell the app how the age was set (for example, by you, by a parent, or checked with a card or ID) and whether parental controls are on.
+- The app uses only one thing from it: whether you're under 13.
 - It keeps the answer only while it's open. It never saves it, and never sends it to us or anyone else.
-- If you're under 13, the Izzy Clipz app takes no details: it asks a parent or guardian to book and shows the shop's phone number. Izzy Clipz Business, which is for the shop's team, says the same.
-- If you don't share your age range, the apps work as usual.
+- If you're under 13, the Izzy Clipz app shows only a screen asking a parent or guardian to book, with the shop's phone number, and takes no details. Izzy Clipz Business, which is for the shop's team, shows a similar screen.
+- Where you can choose not to share your age range and you don't, the apps work as usual.
 
 ## Your choices and rights
 
@@ -242,7 +245,7 @@ California law gives California residents rights over their personal information
 
 - **Know and get a copy.** You can ask what personal information we have about you, and get a copy, including the cancellation and no-show terms you agreed to.
 - **Correct it.** You can ask us to correct information that's wrong. For an upcoming appointment, we can also cancel it and book it again with the right details, with no fee.
-- **Delete it.** You can ask us to delete your personal information. We'll remove your name, number, email and note from our records and delete your saved card, except for what we still need: for example, an appointment that's coming up or can still be charged a fee, or records the law requires us to keep.
+- **Delete it.** You can ask us to delete your personal information. We'll remove your name, number, email and note from our records and delete your saved card, except for what we still need: for example, an appointment that's coming up or can still be charged a fee, or records the law requires us to keep. The shop's Stripe account keeps its own records of your card payments and of the card page you filled in, including any email address you gave there, as "How long we keep it" explains. We'll tell you what stays there.
 - **No selling or sharing.** We don't sell your personal information or share it for advertising, so there's nothing you need to opt out of.
 - **Fair treatment.** We won't treat you differently for using any of these rights.
 

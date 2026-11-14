@@ -10,7 +10,7 @@ Izzy Clipz Barbershop ("Izzy Clipz", "we", "us") wants everyone to be able to bo
 
 - **Our goal** is for our website and apps to meet the Web Content Accessibility Guidelines (WCAG) 2.2 at Level AA.
 - **We've worked toward it, but we haven't confirmed that everything meets it yet.** No outside expert has audited our website or apps.
-- **If anything gets in your way, contact us the way that works best for you:** call (442) 341-3053, call through a relay service by dialing 711, or email us (see "Other ways to book and get help"). We'll book your appointment for you and help with anything else you need.
+- **If anything gets in your way, contact us the way that works best for you:** call (442) 341-3053, call through a relay service (such as 711), or email us (see "Other ways to book and get help"). We'll book your appointment for you and help with anything else about your visit.
 - **Tell us about problems** and we'll get back to you within 5 business days.
 
 ## Our goal
@@ -29,7 +29,7 @@ We aim for our website and apps to meet the [Web Content Accessibility Guideline
 
 ### In our iPhone apps
 
-- **Text size.** The apps' text follows your iPhone's text size setting (Dynamic Type), apart from a few icons and large numbers.
+- **Text size.** The apps' text follows your iPhone's text size setting (Dynamic Type), apart from a few icons, large numbers and short labels, such as "Reviews from Google Maps".
 - **VoiceOver.** We've written labels for VoiceOver on buttons, cards and other controls.
 - **Reduce Motion.** The Izzy Clipz app follows the iPhone's Reduce Motion setting.
 
@@ -41,23 +41,23 @@ We aim for our website and apps to meet the [Web Content Accessibility Guideline
   - **Stripe's card page**, where you add a card when a booking needs one, is run by Stripe. It expires after 60 minutes; if that happens, you can start again, or contact us to book.
   - **Reviews from Google** are shown as Google provides them. Reviewers' words and photos come from their authors.
   - **Maps, and the Google, Yelp and Instagram pages** we link to, are run by those companies.
-- **Signing in to the shop's own tools on a computer** uses a code that expires after 10 minutes.
+- **Signing in to the shop's own tools on a computer** uses a code that expires after 10 minutes. If it runs out, make a new one in the Izzy Clipz Business app.
 
 ## Other ways to book and get help
 
 You never have to use our website or apps to book.
 
 - **Call us at (442) 341-3053** during opening hours. We'll book, change or cancel your appointment for you, tell you about our services and prices, and read you the cancellation terms.
-- **Call through a relay service.** If you're deaf, hard of hearing or have a speech disability, dial 711 to call us through a relay service. We welcome relay calls.
+- **Call through a relay service.** If you're deaf, hard of hearing or have a speech disability, call us through any relay service: dial 711, or use video relay, IP relay or a captioned phone as you usually do. We welcome relay calls.
 - **Email us at [TO FILL IN: the shop's email address].**
 - **Walk in.** Walk-ins are welcome, depending on which barbers are free.
-- **At the shop.** If you need help getting in, or any other accommodation during your visit, contact us before you come or tell us when you arrive. Service animals are welcome.
+- **At the shop.** If you need help getting in, or any other accommodation during your visit, contact us before you come or tell us when you arrive. Our Visit page lists what we've checked about getting in and around the shop. Service animals are welcome.
 
 ## Tell us about a problem
 
 If something on our website or in our apps is hard to use, please tell us:
 
-- **Call:** (442) 341-3053, or dial 711 to call through a relay service
+- **Call:** (442) 341-3053, or call through any relay service, such as 711
 - **Email:** [TO FILL IN: the shop's email address]
 - **Visit or write:** Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058
 
