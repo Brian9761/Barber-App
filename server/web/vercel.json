@@ -1,0 +1,58 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "rewrites": [
+    { "source": "/business", "destination": "/business/index.html" },
+    { "source": "/business/(.*)", "destination": "/business/index.html" },
+    { "source": "/privacy", "destination": "/privacy/index.html" },
+    { "source": "/privacy/", "destination": "/privacy/index.html" },
+    { "source": "/terms", "destination": "/terms/index.html" },
+    { "source": "/terms/", "destination": "/terms/index.html" },
+    { "source": "/cancellation-policy", "destination": "/cancellation-policy/index.html" },
+    { "source": "/cancellation-policy/", "destination": "/cancellation-policy/index.html" },
+    { "source": "/accessibility", "destination": "/accessibility/index.html" },
+    { "source": "/accessibility/", "destination": "/accessibility/index.html" },
+    { "source": "/((?!api/|assets/).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "cache-control", "value": "no-cache" },
+        { "key": "content-type", "value": "text/javascript; charset=utf-8" }
+      ]
+    },
+    {
+      "source": "/manifest.webmanifest",
+      "headers": [
+        { "key": "content-type", "value": "application/manifest+json" },
+        { "key": "cache-control", "value": "no-cache" }
+      ]
+    },
+    {
+      "source": "/business/manifest.webmanifest",
+      "headers": [
+        { "key": "content-type", "value": "application/manifest+json" },
+        { "key": "cache-control", "value": "no-cache" }
+      ]
+    },
+    {
+      "source": "/assets/(.*)",
+      "headers": [{ "key": "cache-control", "value": "public, max-age=31536000, immutable" }]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "x-content-type-options", "value": "nosniff" },
+        { "key": "referrer-policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "x-frame-options", "value": "DENY" },
+        { "key": "x-robots-tag", "value": "noindex" },
+        {
+          "key": "content-security-policy",
+          "value": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+        },
+        { "key": "permissions-policy", "value": "camera=(), microphone=(), geolocation=(), payment=()" }
+      ]
+    }
+  ]
+}

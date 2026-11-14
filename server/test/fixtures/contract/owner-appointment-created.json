@@ -1,6 +1,6 @@
 {
   "appointment": {
-    "id": "00000000-0000-4000-8000-000000000006",
+    "id": "00000000-0000-4000-8000-000000000007",
     "offeringId": "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a",
     "serviceId": "haircut",
     "serviceName": "Haircut",
@@ -23,6 +23,10 @@
       "email": null
     },
     "note": null,
-    "createdAt": "2026-11-02T18:20:00Z"
+    "createdAt": "2026-11-02T18:20:00Z",
+    "card": null,
+    "noShowFee": null,
+    "sale": null,
+    "completedAt": null
   }
 }

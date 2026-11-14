@@ -13,7 +13,7 @@ export const MAX_TIME_OFF_DAYS = 366;
 // (up to a year at a time, so the owner can see every upcoming block in one call).
 
 export async function listTimeOff(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const { from, to } = dayRange(ctx, MAX_TIME_OFF_DAYS);
   const zone = ctx.deps.catalog.timeZone;
   const { rows } = await ctx.deps.db.query<TimeOffRow>(
@@ -42,7 +42,7 @@ const timeOffBody = z.object({
 });
 
 export async function postTimeOff(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const body = parse(timeOffBody, await readJsonObject(ctx.request));
   const barberId = body.barberId ?? null;
   if (barberId !== null && !ctx.deps.catalog.barber(barberId)) {
@@ -81,7 +81,7 @@ export async function postTimeOff(ctx: Context): Promise<Response> {
 // DELETE /api/owner/time-off/:id → 204
 
 export async function deleteTimeOff(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const id = ctx.params.id ?? '';
   const notFound = () => new ApiError('not_found', "We couldn't find that time off. It may already be removed.");
   if (!UUID_RE.test(id)) throw notFound();

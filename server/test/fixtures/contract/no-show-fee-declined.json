@@ -1,0 +1,44 @@
+{
+  "appointment": {
+    "id": "00000000-0000-4000-8000-000000000011",
+    "offeringId": "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a",
+    "serviceId": "haircut",
+    "serviceName": "Haircut",
+    "barberId": "julian-ramos",
+    "barberName": "Julian",
+    "start": "2026-11-03T19:00:00Z",
+    "end": "2026-11-03T19:45:00Z",
+    "durationMinutes": 45,
+    "priceLabel": "$35",
+    "status": "noShow",
+    "cancelledBy": null,
+    "payment": {
+      "status": "unpaid",
+      "amountCents": null,
+      "paidAt": null
+    },
+    "customer": {
+      "name": "Third Client",
+      "phone": "+14425550125",
+      "email": null
+    },
+    "note": null,
+    "createdAt": "2026-11-03T17:30:00Z",
+    "card": {
+      "brand": "visa",
+      "last4": "4242"
+    },
+    "noShowFee": {
+      "amountCents": 2500,
+      "fullPrice": false,
+      "status": "declined",
+      "chargedAt": null,
+      "message": "The card was declined: there isn't enough money on it.",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "reason": "noShow"
+    },
+    "sale": null,
+    "completedAt": null
+  }
+}

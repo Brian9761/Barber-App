@@ -1,13 +1,15 @@
 import IzzyClipzKit
 import SwiftUI
 
-/// Server and Stripe status, Tap to Pay setup and "How to Tap", the owner
-/// key, sign out, and the app's version.
+/// The shop's products, server and Stripe status, no-show protection, Tap to Pay setup and "How
+/// to Tap", the owner key, the legal pages, sign out, and the app's version.
 struct SettingsView: View {
     let workspace: Workspace
     let model: AppModel
     @State private var showsReplaceKey = false
     @State private var confirmsSignOut = false
+    /// The legal page open in the in-app browser, if any.
+    @State private var legalPage: Website.LegalPage?
 
     var body: some View {
         NavigationStack {
@@ -18,10 +20,14 @@ struct SettingsView: View {
                             .accessibilityIdentifier("demoNotice")
                     }
                 }
-                serverSection
-                stripeSection
+                shopSection
+                StripeConnectionSection(workspace: workspace)
+                computerSection
+                noShowSection
                 tapToPaySection
+                serverSection
                 keySection
+                legalSection
                 Section {
                     Button("Sign out", role: .destructive) { confirmsSignOut = true }
                         .frame(minHeight: BusinessTheme.minimumTapSize)
@@ -38,10 +44,21 @@ struct SettingsView: View {
             .refreshable {
                 await workspace.refreshStatus()
                 await workspace.refreshHealth()
+                await workspace.noShow.refresh()
+                await workspace.stripeConnection.refresh()
             }
-            .task { await workspace.refreshHealth() }
+            .task {
+                async let health: Void = workspace.refreshHealth()
+                async let noShow: Void = workspace.noShow.refresh()
+                async let stripe: Void = workspace.stripeConnection.refresh()
+                async let computers: Void = workspace.computers.refreshSessions()
+                _ = await (health, noShow, stripe, computers)
+            }
             .sheet(isPresented: $showsReplaceKey) {
                 ReplaceKeyView(model: model)
+            }
+            .sheet(item: $legalPage) { page in
+                WebPageSheet(url: page.url(on: workspace.environment.websiteURL))
             }
             .confirmationDialog("Sign out of Izzy Clipz Business?", isPresented: $confirmsSignOut, titleVisibility: .visible) {
                 Button("Sign out", role: .destructive) {
@@ -56,6 +73,87 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    /// The shop's own products (they used to have a tab of their own).
+    private var shopSection: some View {
+        Section {
+            NavigationLink {
+                ProductsView(store: workspace.products, allowsTestPhoto: workspace.environment.usesSampleServer)
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Products")
+                        Text("What clients see in the Izzy Clipz app, with photos and prices.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } icon: {
+                    Image(systemName: "bag")
+                }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+                .accessibilityElement(children: .combine)
+            }
+            .accessibilityIdentifier("productsLink")
+        } header: {
+            Text("Shop")
+        }
+    }
+
+    /// The website's Business area on a computer: a code from here, and the computers signed in.
+    private var computerSection: some View {
+        Section {
+            NavigationLink {
+                ComputerAccessView(store: workspace.computers)
+            } label: {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Use on a computer")
+                        if let summary = workspace.computers.summary {
+                            Text(summary)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } icon: {
+                    Image(systemName: "desktopcomputer")
+                }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+                .accessibilityElement(children: .combine)
+            }
+            .accessibilityIdentifier("computerAccessLink")
+        } footer: {
+            Text("See your schedule, sales and analytics on a computer.")
+        }
+    }
+
+    /// The website's Privacy Policy, Terms of Service, Cancellation & No-Show Policy and
+    /// Accessibility pages, in the in-app browser.
+    private var legalSection: some View {
+        Section {
+            ForEach(Website.LegalPage.allCases) { page in
+                Button {
+                    legalPage = page
+                } label: {
+                    HStack {
+                        Text(page.title)
+                            .foregroundStyle(.primary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "arrow.up.forward.square")
+                            .foregroundStyle(.secondary)
+                            .accessibilityHidden(true)
+                    }
+                    .frame(minHeight: BusinessTheme.minimumTapSize)
+                    .contentShape(Rectangle())
+                }
+                .accessibilityHint("Opens the page on the shop's website.")
+                .accessibilityIdentifier(page.identifier)
+            }
+        } header: {
+            Text("Legal")
+        } footer: {
+            Text("The shop's policies, on its website: what clients agree to when they book, and how their details are used.")
+        }
+    }
 
     private var serverSection: some View {
         Section {
@@ -93,41 +191,26 @@ struct SettingsView: View {
         }
     }
 
-    private var stripeSection: some View {
+    private var noShowSection: some View {
         Section {
-            if let stripe = workspace.ownerStatus?.stripe {
-                LabeledContent("Card payments", value: stripe.configured ? "Set up" : "Not set up")
-                    .accessibilityIdentifier("stripeConfigured")
-                if stripe.configured {
-                    LabeledContent("Mode", value: stripe.mode == .live ? "Live: real money" : stripe.mode == .test ? "Test mode: no real money" : "Unknown")
-                        .accessibilityIdentifier("stripeMode")
-                    LabeledContent("Terminal location", value: stripe.locationId ?? "Missing")
-                        .accessibilityIdentifier("stripeLocation")
+            NavigationLink {
+                NoShowSettingsView(store: workspace.noShow, stripe: workspace.ownerStatus?.stripe)
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("No-show protection")
+                    Text(workspace.noShow.summary)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-            } else if let error = workspace.statusError {
-                InlineMessage(text: error)
-            } else {
-                LabeledContent("Card payments") { ProgressView() }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+                .accessibilityElement(children: .combine)
             }
+            .accessibilityIdentifier("noShowSettingsLink")
         } header: {
-            Text("Stripe")
+            Text("Bookings")
         } footer: {
-            Text(stripeFooter)
+            Text("A card on file for online bookings, and the fee for no-shows and late cancellations.")
         }
-    }
-
-    private var stripeFooter: String {
-        guard let stripe = workspace.ownerStatus?.stripe else { return "" }
-        if !stripe.configured {
-            return "To take cards, add the shop's Stripe secret key (STRIPE_SECRET_KEY) and Terminal location (STRIPE_TERMINAL_LOCATION_ID) to the server's settings."
-        }
-        if stripe.locationId == nil {
-            return "Create a Terminal location with the shop's address in the Stripe Dashboard and add its ID (tml_…) to the server as STRIPE_TERMINAL_LOCATION_ID."
-        }
-        if stripe.mode == .test {
-            return "Stripe test keys: only Stripe test cards work and no money moves. Switch the server to the live key to take real payments."
-        }
-        return "Payments go to the shop's Stripe account."
     }
 
     private var tapToPaySection: some View {

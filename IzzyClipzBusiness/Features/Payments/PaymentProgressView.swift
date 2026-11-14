@@ -1,32 +1,51 @@
 import IzzyClipzKit
 import SwiftUI
 
-/// The payment once it's started: getting Tap to Pay ready, waiting for the
-/// card (Apple's Tap to Pay screen is on top of this one), processing, and a
-/// clear result with what to do next. It can't be swiped away: every state
-/// has its own buttons, so a payment is never left half done by accident.
+/// The checkout once it's paid: for a card, getting Tap to Pay ready, waiting for the card (Apple's
+/// Tap to Pay screen is on top of this one), processing, and a clear result with what to do next,
+/// with "Email a receipt (optional)" once it went through; for cash or another way, saving the sale
+/// and its receipt ("Sold $60 · Cash · Izzy"). It can't be swiped away: every state has its own
+/// buttons, so a payment is never left half done by accident.
 struct PaymentProgressView: View {
     let checkout: CheckoutModel
     let workspace: Workspace
+    /// The receipt's email field has the keyboard: its Send receipt is the action then, so the
+    /// bar's Done (which closes this screen without sending) steps aside until the keyboard goes,
+    /// instead of sitting over Send receipt just above the keyboard, and the page scrolls Send
+    /// receipt into view above the keyboard (bringing the field into view alone left it behind the
+    /// keyboard). Return sends too, and a swipe down closes the keyboard.
+    @FocusState private var typingReceiptEmail: Bool
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    if checkout.mode.isTestMode {
-                        TestModeBanner()
+            ScrollViewReader { page in
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // About the card reader: a cash or other sale is saved the same way in test mode.
+                        if checkout.mode.isTestMode, !isSale {
+                            TestModeBanner()
+                        }
+                        content
                     }
-                    content
-                }
-                .padding(.horizontal, 24)
-                .padding(.top, 32)
-                .frame(maxWidth: .infinity)
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .safeAreaInset(edge: .bottom) {
-                buttons
                     .padding(.horizontal, 24)
-                    .padding(.vertical, 12)
+                    .padding(.top, 32)
+                    .frame(maxWidth: .infinity)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollDismissesKeyboard(.interactively)
+                .safeAreaInset(edge: .bottom) {
+                    buttons
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                }
+                .onChange(of: typingReceiptEmail) { _, typing in
+                    guard typing else { return }
+                    Task {
+                        // Once the keyboard is up: iOS brings only the field itself into view.
+                        try? await Task.sleep(for: .milliseconds(500))
+                        withAnimation { page.scrollTo(ReceiptEmailOffer.endID, anchor: .bottom) }
+                    }
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
         }
@@ -39,7 +58,15 @@ struct PaymentProgressView: View {
         return (simulated, tap)
     }
 
-    private var amountCents: Int { checkout.active?.request.amountCents ?? checkout.entry.cents }
+    private var amountCents: Int { checkout.active?.request.amountCents ?? checkout.ticket.totalCents }
+
+    /// A cash or other sale (not a card payment).
+    private var isSale: Bool {
+        switch checkout.phase {
+        case .recording, .recorded, .recordFailed, .recordUnknown: return true
+        default: return false
+        }
+    }
 
     @ViewBuilder
     private var content: some View {
@@ -99,6 +126,23 @@ struct PaymentProgressView: View {
                 detail: successDetail(receipt),
                 id: "statusPaid"
             )
+            if let sale = receipt.sale {
+                SaleReceiptCard(receipt: sale)
+            }
+            if receipt.offersReceiptEmail {
+                ReceiptEmailOffer(checkout: checkout, focus: $typingReceiptEmail)
+            }
+        case .recording(let method):
+            StatusBlock(symbol: method == .cash ? "banknote" : "ellipsis.circle", title: "Saving the sale", detail: Money.amount(amountCents), id: "statusRecording") {
+                ProgressView()
+            }
+        case .recorded(let receipt):
+            StatusBlock(symbol: "checkmark.circle.fill", tint: .green, title: receipt.summary, detail: recordedDetail(receipt), id: "statusSold")
+            SaleReceiptCard(receipt: receipt)
+        case .recordFailed(let message):
+            StatusBlock(symbol: "exclamationmark.triangle.fill", tint: .orange, title: "The sale wasn't saved", detail: message, id: "statusRecordFailed")
+        case .recordUnknown(let message):
+            StatusBlock(symbol: "questionmark.circle.fill", tint: .orange, title: "Check the sale", detail: message, id: "statusRecordUnknown")
         case .declined(let message):
             StatusBlock(symbol: "xmark.octagon.fill", tint: .red, title: "Declined", detail: message, id: "statusDeclined")
         case .cancelled:
@@ -127,12 +171,14 @@ struct PaymentProgressView: View {
         if let title = receipt.title { lines.append(title) }
         if receipt.stripeTestMode {
             lines.append("Stripe test mode: no real money moved, and Stripe doesn't email receipts in test mode.")
-        } else if let email = receipt.receiptEmail {
-            lines.append("Stripe is emailing the receipt to \(email).")
-        } else {
-            lines.append("No receipt email was given.")
         }
         return lines.joined(separator: "\n")
+    }
+
+    private func recordedDetail(_ receipt: SaleReceipt) -> String {
+        receipt.method == .cash
+            ? "The cash sale is saved in Today's sales."
+            : "The sale is saved in Today's sales. The app only records it: the money comes in the way the client paid."
     }
 
     @ViewBuilder
@@ -148,13 +194,16 @@ struct PaymentProgressView: View {
                     secondary("Cancel", id: "cancelPayment") { checkout.cancel() }
                 }
             case .succeeded:
-                primary("Done", id: "paymentDone") {
-                    checkout.reset()
-                    if workspace.owesHowToTap {
-                        // After this screen has gone, so Apple's sheet has something to show over.
-                        Task {
-                            try? await Task.sleep(for: .milliseconds(700))
-                            await workspace.showHowToTap()
+                // Not while the receipt's email is being typed: Send receipt is the action then.
+                if !typingReceiptEmail {
+                    primary("Done", id: "paymentDone") {
+                        checkout.reset()
+                        if workspace.owesHowToTap {
+                            // After this screen has gone, so Apple's sheet has something to show over.
+                            Task {
+                                try? await Task.sleep(for: .milliseconds(700))
+                                await workspace.showHowToTap()
+                            }
                         }
                     }
                 }
@@ -170,6 +219,17 @@ struct PaymentProgressView: View {
             case .notPaid:
                 primary("Try the card again", id: "retryPayment") { checkout.tryAgain() }
                 secondary("Back", id: "backToAmount") { checkout.backToEditing() }
+            case .recording:
+                EmptyView()
+            case .recorded:
+                primary("Done", id: "saleDone") { checkout.reset() }
+            case .recordFailed:
+                // The server said why (it's in the message): usually the ticket needs a change.
+                primary("Back to the ticket", id: "backToAmount") { checkout.backToEditing() }
+                secondary("Try again", id: "retrySale") { checkout.recordAgain() }
+            case .recordUnknown:
+                primary("Record again", id: "recordAgain") { checkout.recordAgain() }
+                secondary("Back to the ticket", id: "backToAmount") { checkout.backToEditing() }
             }
         }
     }
@@ -268,7 +328,8 @@ struct SimulatedTapPanel: View {
     }
 }
 
-/// Today's card payments that went through, newest first, with the total.
+/// Today's card payments that went through, newest first, with the total: the ones taken in the
+/// shop, and no-show and late cancellation fees charged to cards on file (labelled as such).
 struct PaymentsTodayView: View {
     let checkout: CheckoutModel
 
@@ -278,6 +339,11 @@ struct PaymentsTodayView: View {
                 LabeledContent("Total", value: Money.amount(checkout.todaysTotalCents))
                     .font(.headline)
                     .accessibilityIdentifier("paymentsTotal")
+                if checkout.todaysFeesCents > 0 {
+                    LabeledContent("No-show and late cancellation fees", value: Money.amount(checkout.todaysFeesCents))
+                        .font(.subheadline)
+                        .accessibilityIdentifier("paymentsFees")
+                }
             } footer: {
                 Text("Only payments that went through. Refunds and disputes are in the Stripe Dashboard.")
             }
@@ -297,7 +363,7 @@ struct PaymentsTodayView: View {
                 }
             }
         }
-        .navigationTitle("Payments today")
+        .navigationTitle("Card payments today")
         .refreshable { await checkout.loadPayments() }
     }
 }
@@ -308,8 +374,11 @@ private struct PaymentRow: View {
 
     var body: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(payment.description ?? "Card payment")
+            VStack(alignment: .leading, spacing: 4) {
+                if let fee = payment.feeLabel {
+                    Badge(text: fee, color: .purple)
+                }
+                Text(payment.listTitle)
                     .font(.body)
                 Text(checkout.shopTime.time(payment.createdAt))
                     .font(.caption)
@@ -321,5 +390,80 @@ private struct PaymentRow: View {
         }
         .frame(minHeight: BusinessTheme.minimumTapSize)
         .accessibilityElement(children: .combine)
+        .accessibilityIdentifier(payment.kind.isFee ? "feePayment" : "cardPayment")
+    }
+}
+
+/// "Email a receipt (optional)", once a card payment went through: Stripe emails the client a
+/// receipt. The address is typed here only when the client asks for one, goes to Stripe, and isn't
+/// kept in the app (it lives only on this screen).
+struct ReceiptEmailOffer: View {
+    let checkout: CheckoutModel
+    /// Whether the email field has the keyboard (the screen's Done steps aside meanwhile).
+    var focus: FocusState<Bool>.Binding
+    /// The line under Send receipt: the page scrolls to it once the field has the keyboard, so the
+    /// field, Send receipt and the line are all in view above the keyboard.
+    static let endID = "receiptEmailEnd"
+    @State private var showsField = false
+    @State private var email = ""
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            switch checkout.receiptEmailState {
+            case .sent:
+                Label("Receipt sent. Stripe is emailing it to the client.", systemImage: "envelope.badge.fill")
+                    .foregroundStyle(.green)
+                    .accessibilityIdentifier("receiptSent")
+            default:
+                if showsField {
+                    Text("Client's email")
+                        .font(.headline)
+                    TextField("name@example.com", text: $email)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.emailAddress)
+                        .textContentType(.emailAddress)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .frame(minHeight: BusinessTheme.minimumTapSize)
+                        .focused(focus)
+                        .submitLabel(.send)
+                        .onSubmit(send)
+                        .accessibilityIdentifier("receiptEmailField")
+                    if case .failed(let message) = checkout.receiptEmailState {
+                        InlineMessage(text: message, systemImage: "exclamationmark.octagon.fill", color: .red)
+                            .accessibilityIdentifier("receiptError")
+                    }
+                    Button(action: send) {
+                        HStack {
+                            Text("Send receipt")
+                            if checkout.receiptEmailState == .sending { ProgressView() }
+                        }
+                        .frame(maxWidth: .infinity, minHeight: BusinessTheme.minimumTapSize)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(checkout.receiptEmailState == .sending)
+                    .accessibilityIdentifier("sendReceipt")
+                    Text("Stripe emails the receipt. The app doesn't keep the address.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .id(Self.endID)
+                } else {
+                    Button {
+                        showsField = true
+                    } label: {
+                        Label("Email a receipt (optional)", systemImage: "envelope")
+                            .frame(maxWidth: .infinity, minHeight: BusinessTheme.minimumTapSize)
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("emailReceipt")
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func send() {
+        let address = email
+        Task { await checkout.emailReceipt(to: address) }
     }
 }

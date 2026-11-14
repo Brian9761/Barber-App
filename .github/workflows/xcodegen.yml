@@ -20,8 +20,9 @@ concurrency:
 jobs:
   generate:
     name: Regenerate the Xcode project
-    # Intel: Apple silicon runners are short on capacity, and this job needs no speed.
-    runs-on: macos-15-intel
+    # Intel with macOS 26: Apple silicon and macOS 15 Intel runners are short on capacity, and this
+    # job needs no speed (XcodeGen writes the same project on any Mac).
+    runs-on: macos-26-intel
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7

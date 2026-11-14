@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "late_cancel_fee",
+    "message": "Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price."
+  }
+}

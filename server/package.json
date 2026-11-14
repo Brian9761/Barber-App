@@ -9,10 +9,14 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "build:web": "npm --prefix web ci && npm --prefix web run build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "migrate": "tsx scripts/migrate.ts",
+    "privacy:find": "tsx scripts/privacy.ts find",
+    "privacy:correct": "tsx scripts/privacy.ts correct",
+    "privacy:forget": "tsx scripts/privacy.ts forget",
     "dev": "tsx scripts/dev.ts",
     "smoke": "tsx scripts/smoke.ts"
   },

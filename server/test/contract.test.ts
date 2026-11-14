@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { createApp } from '../src/app.js';
 import { ErrorBody, RESPONSES, type ResponseName } from './helpers/contract.js';
-import { useHarness, type CallResult } from './helpers/harness.js';
+import { protectionOn, useHarness, type CallResult } from './helpers/harness.js';
 
 // Writes one example per §5 response type to test/fixtures/contract/, produced
 // by the real handlers, after checking it against strict schemas. The Swift Kit
@@ -37,11 +37,19 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 
 const FLOW45 = 'flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a';
 const JULIAN45 = 'julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a';
+/** Included with a cut: no fee, so no card needed. */
+const CARLOS_LINEUP = 'carlos-rafael/0b5b851e-ab05-44a1-8d42-dc9dbc5f02eb';
+/** A card token the app made (32 bytes of 0x01, base64url). */
+const CARD_TOKEN = Buffer.alloc(32, 1).toString('base64url');
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0xff, 0xd9]);
 
 const h = useHarness({ now: '2026-11-02T17:00:00Z' });
 
 describe('contract fixtures (API v1)', () => {
+  it('the website’s catalog (GET /api/catalog)', async () => {
+    check('catalog', await h.call('GET', '/api/catalog'));
+  });
+
   it('every response type, from the real handlers', async () => {
     const owner = { owner: true } as const;
     h.config.stripeSecretKey = 'sk_test_fixture';
@@ -61,6 +69,9 @@ describe('contract fixtures (API v1)', () => {
     check('reviews-unavailable', await h.call('GET', '/api/reviews'));
 
     check('owner-me', await h.call('GET', '/api/owner/me', owner));
+    check('no-show-settings', await h.call('GET', '/api/owner/no-show-settings', owner));
+    // Off until the owner turns it on.
+    await protectionOn(h);
 
     // Products
     const pomade = check(
@@ -78,15 +89,31 @@ describe('contract fixtures (API v1)', () => {
     check('products', await h.call('GET', '/api/products'));
     check('owner-products', await h.call('GET', '/api/owner/products', owner));
 
-    // Customer bookings
+    // No-show protection: the policy, then a card saved with Stripe Checkout (setup mode).
+    check('no-show-policy', await h.call('GET', '/api/no-show-policy?serviceId=haircut-and-beard&barberId=any'));
+    check('no-show-policy-not-required', await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(CARLOS_LINEUP)}`));
+    const flowPolicy = (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText;
+    const anyPolicy = (await h.call('GET', '/api/no-show-policy?serviceId=haircut&barberId=any')).body.policyText;
+    const cardHeaders = { 'x-card-token': CARD_TOKEN };
+    const checkout = check(
+      'card-checkout',
+      await h.call('POST', '/api/cards/checkout', { headers: cardHeaders, body: { offeringId: FLOW45 } }),
+      201,
+    );
+    h.stripe.completeSession(checkout.sessionId);
+    check('card-saved', await h.call('POST', '/api/cards', { headers: cardHeaders, body: { sessionId: checkout.sessionId } }), 201);
+
+    // Customer bookings (with the card on file)
     const created = check(
       'appointment-created',
       await h.call('POST', '/api/appointments', {
+        headers: cardHeaders,
         body: {
           offeringId: FLOW45,
           start: '2026-11-03T18:00:00Z',
           customer: { name: 'Fixture Client', phone: '(442) 555-0123', email: 'client@example.com' },
           note: 'Low skin fade, please.',
+          noShowPolicy: flowPolicy,
         },
       }),
       201,
@@ -95,7 +122,14 @@ describe('contract fixtures (API v1)', () => {
     check('appointment', await h.call('GET', `/api/appointments/${created.appointment.id}`, token));
 
     const anyBooking = await h.call('POST', '/api/appointments', {
-      body: { serviceId: 'haircut', barberId: 'any', start: '2026-11-03T18:00:00Z', customer: { name: 'Second Client', phone: '4425550124' } },
+      headers: cardHeaders,
+      body: {
+        serviceId: 'haircut',
+        barberId: 'any',
+        start: '2026-11-03T18:00:00Z',
+        customer: { name: 'Second Client', phone: '4425550124' },
+        noShowPolicy: anyPolicy,
+      },
     });
     check(
       'appointment-cancelled',
@@ -120,6 +154,10 @@ describe('contract fixtures (API v1)', () => {
     h.stripe.succeed(intent.paymentIntentId);
     h.advance(1);
     check('payment-completed', await h.call('POST', `/api/owner/payments/${intent.paymentIntentId}/complete`, owner));
+    check(
+      'payment-receipt-sent',
+      await h.call('POST', `/api/owner/payments/${intent.paymentIntentId}/receipt`, { ...owner, body: { email: 'client@example.com' } }),
+    );
     await h.call('POST', '/api/owner/payments', { ...owner, body: { amountCents: 500 } });
     check('payments', await h.call('GET', '/api/owner/payments?date=2026-11-02', owner));
 
@@ -148,6 +186,104 @@ describe('contract fixtures (API v1)', () => {
 
     // Availability last, so it shows a mix of free barbers.
     check('availability', await h.call('GET', '/api/availability?serviceId=haircut&barberId=any&from=2026-11-03&days=2'));
+
+    // The shop changes the fee; a client books Julian's 11 AM with the card.
+    check('no-show-settings-updated', await h.call('PATCH', '/api/owner/no-show-settings', { ...owner, body: { feeMode: 'flat', flatCents: 2500 } }));
+    h.setNow('2026-11-03T17:30:00Z');
+    const later = await h.call('POST', '/api/appointments', {
+      headers: cardHeaders,
+      body: {
+        offeringId: JULIAN45,
+        start: '2026-11-03T19:00:00Z',
+        customer: { name: 'Third Client', phone: '4425550125' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(JULIAN45)}`)).body.policyText,
+      },
+    });
+    expect(later.status, later.text).toBe(201);
+    // The client of the 10 AM didn't come (marked at 10:50 AM, after the end).
+    h.setNow('2026-11-03T18:50:00Z');
+    await h.call('PATCH', `/api/owner/appointments/${created.appointment.id}`, { ...owner, body: { status: 'noShow' } });
+    check('no-show-fee-charged', await h.call('POST', `/api/owner/appointments/${created.appointment.id}/no-show-fee`, owner));
+    // Nor the 11 AM's, whose card is declined.
+    h.setNow('2026-11-03T19:55:00Z');
+    await h.call('PATCH', `/api/owner/appointments/${later.body.appointment.id}`, { ...owner, body: { status: 'noShow' } });
+    h.stripe.nextCharge = 'insufficient_funds';
+    check('no-show-fee-declined', await h.call('POST', `/api/owner/appointments/${later.body.appointment.id}/no-show-fee`, owner));
+    // And one who cancels in the app 30 minutes before their 1 PM: a late cancellation the owner charges.
+    const lateBooking = await h.call('POST', '/api/appointments', {
+      headers: cardHeaders,
+      body: {
+        offeringId: FLOW45,
+        start: '2026-11-03T21:00:00Z',
+        customer: { name: 'Fourth Client', phone: '4425550127' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText,
+      },
+    });
+    expect(lateBooking.status, lateBooking.text).toBe(201);
+    h.setNow('2026-11-03T20:30:00Z');
+    // Inside the window: the client confirmed the warning (the server asks first: errors/late_cancel_fee.json).
+    check(
+      'appointment-cancelled-late',
+      await h.call('POST', `/api/appointments/${lateBooking.body.appointment.id}/cancel`, {
+        headers: { 'x-manage-token': lateBooking.body.manageToken },
+        body: { acceptLateCancelFee: true },
+      }),
+    );
+    h.advance(2);
+    check('late-cancel-fee-charged', await h.call('POST', `/api/owner/appointments/${lateBooking.body.appointment.id}/no-show-fee`, owner));
+    check('payments-with-fees', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
+    // The client removes the card: the 11 AM's declined fee may still be tried again this week, so it waits.
+    check('card-deletion-scheduled', await h.call('DELETE', '/api/cards', { headers: cardHeaders }));
+    // A card no booking uses is deleted at once.
+    const spareToken = Buffer.alloc(32, 2).toString('base64url');
+    const spare = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': spareToken }, body: { offeringId: FLOW45 } });
+    h.stripe.completeSession(spare.body.sessionId);
+    expect((await h.call('POST', '/api/cards', { headers: { 'x-card-token': spareToken }, body: { sessionId: spare.body.sessionId } })).status).toBe(201);
+    check('card-deletion', await h.call('DELETE', '/api/cards', { headers: { 'x-card-token': spareToken } }));
+  });
+
+  it('the shop’s own Stripe account (connect mode) and signing in on a computer', async () => {
+    const owner = { owner: true } as const;
+    // Settings before Stripe is set up, and with the server's own key.
+    check('stripe-connection-off', await h.call('GET', '/api/owner/stripe', owner));
+    h.config.stripeSecretKey = 'sk_test_fixture';
+    check('stripe-connection-direct', await h.call('GET', '/api/owner/stripe', owner));
+
+    // The app developer's platform key: the owner connects the shop's own account.
+    h.config.stripeConnect = true;
+    h.config.publicBaseUrl = 'https://izzy-clipz-api.test';
+    check('stripe-connection-not-connected', await h.call('GET', '/api/owner/stripe', owner));
+    const link = check('stripe-connect-link', await h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'app' } }), 201);
+    const account = [...h.stripe.connectedAccounts.keys()][0]!;
+    expect(link.url).toContain(account);
+    h.advance(2);
+    check('stripe-connection-needs-info', await h.call('GET', '/api/owner/stripe', owner));
+    h.stripe.setAccount(account, { details_submitted: true, currently_due: [], disabled_reason: 'requirements.pending_verification', name: 'Izzy Clipz Barbershop' });
+    h.advance(3);
+    check('stripe-connection-pending', await h.call('GET', '/api/owner/stripe', owner));
+    h.stripe.activateAccount(account);
+    h.advance(5);
+    check('stripe-connection-active', await h.call('GET', '/api/owner/stripe', owner));
+    check('owner-me-connected', await h.call('GET', '/api/owner/me', owner));
+    h.stripe.setAccount(account, { charges_enabled: false, payouts_enabled: false, disabled_reason: 'under_review' });
+    h.advance(60);
+    check('stripe-connection-restricted', await h.call('GET', '/api/owner/stripe', owner));
+    check('stripe-connection-disconnected', await h.call('DELETE', '/api/owner/stripe/connect', owner));
+
+    // A code from the Business app, typed on two computers in turn.
+    h.setNow('2026-11-02T18:00:00Z');
+    const code = check('computer-code', await h.call('POST', '/api/owner/computer-codes', owner), 201);
+    const mac = check(
+      'computer-session-created',
+      await h.call('POST', '/api/computer-sessions', { body: { code: code.code, name: 'Chrome on Mac' } }),
+      201,
+    );
+    h.advance(30);
+    const second = (await h.call('POST', '/api/owner/computer-codes', owner)).body.code;
+    const pc = await h.call('POST', '/api/computer-sessions', { body: { code: second, name: 'Edge on Windows' }, ip: '198.51.100.20' });
+    expect(pc.status, pc.text).toBe(201);
+    h.advance(15);
+    check('computer-sessions', await h.call('GET', '/api/owner/computer-sessions', { headers: { authorization: `Bearer ${mac.token}` } }));
   });
 
   it('one example error for every error code', async () => {
@@ -173,6 +309,51 @@ describe('contract fixtures (API v1)', () => {
       await book({ offeringId: FLOW45, start: `2026-11-${day}T18:00:00Z` }, `203.0.113.${4 + i}`);
     }
     examples.rate_limited = await book({ offeringId: FLOW45, start: '2026-11-09T18:00:00Z' }, '203.0.113.7');
+    // No-show protection's own errors, with Stripe set up and protection on.
+    await protectionOn(h);
+    examples.card_required = await book({ offeringId: FLOW45, start: '2026-11-10T18:00:00Z' }, '203.0.113.8');
+    const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': CARD_TOKEN }, body: { offeringId: FLOW45 } });
+    h.stripe.completeSession(checkout.body.sessionId);
+    await h.call('POST', '/api/cards', { headers: { 'x-card-token': CARD_TOKEN }, body: { sessionId: checkout.body.sessionId } });
+    examples.policy_changed = await h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': CARD_TOKEN },
+      body: { offeringId: FLOW45, start: '2026-11-10T18:00:00Z', customer: { name: 'Fixture Client', phone: '4425550126' }, noShowPolicy: 'An old policy.' },
+      ip: '203.0.113.8',
+    });
+    examples.not_chargeable = await h.call('POST', `/api/owner/appointments/${first.body.appointment.id}/no-show-fee`, { owner: true });
+    const protectedBooking = await h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': CARD_TOKEN },
+      body: {
+        offeringId: FLOW45,
+        start: '2026-11-10T18:00:00Z',
+        customer: { name: 'Fixture Client', phone: '4425550126' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText,
+      },
+      ip: '203.0.113.9',
+    });
+    examples.not_started = await h.call('PATCH', `/api/owner/appointments/${protectedBooking.body.appointment.id}`, {
+      owner: true,
+      body: { status: 'noShow' },
+    });
+    // The client cancels that booking 30 minutes before, without having seen the warning yet.
+    h.setNow('2026-11-10T17:30:00Z');
+    examples.late_cancel_fee = await h.call('POST', `/api/appointments/${protectedBooking.body.appointment.id}/cancel`, {
+      headers: { 'x-manage-token': protectedBooking.body.manageToken },
+    });
+    // The client came after all: once completed, it can't become a no-show.
+    await h.call('PATCH', `/api/owner/appointments/${protectedBooking.body.appointment.id}`, { owner: true, body: { status: 'completed' } });
+    examples.already_completed = await h.call('PATCH', `/api/owner/appointments/${protectedBooking.body.appointment.id}`, {
+      owner: true,
+      body: { status: 'noShow' },
+    });
+    // The shop's own Stripe account and computer sign-in.
+    examples.stripe_connect_off = await h.call('POST', '/api/owner/stripe/connect', { owner: true, body: { returnTo: 'app' } });
+    await h.call('POST', '/api/owner/computer-codes', { owner: true });
+    examples.wrong_code = await h.call('POST', '/api/computer-sessions', { body: { code: '000000', name: 'Chrome on Mac' } });
+    const code = (await h.call('POST', '/api/owner/computer-codes', { owner: true })).body.code;
+    const computer = await h.call('POST', '/api/computer-sessions', { body: { code, name: 'Chrome on Mac' } });
+    examples.forbidden = await h.call('POST', '/api/owner/computer-codes', { headers: { authorization: `Bearer ${computer.body.token}` } });
+    h.config.stripeSecretKey = undefined;
     examples.stripe_not_configured = await h.call('POST', '/api/owner/terminal/connection-token', { owner: true });
     h.config.ownerKey = undefined;
     examples.owner_not_configured = await h.call('GET', '/api/owner/me', { owner: true });
@@ -201,8 +382,17 @@ describe('contract fixtures (API v1)', () => {
       too_soon: 422,
       too_far: 422,
       rate_limited: 429,
+      card_required: 400,
+      policy_changed: 409,
+      not_chargeable: 409,
+      not_started: 409,
+      already_completed: 409,
+      late_cancel_fee: 409,
       stripe_not_configured: 503,
       owner_not_configured: 503,
+      stripe_connect_off: 409,
+      wrong_code: 400,
+      forbidden: 403,
       server_error: 500,
     };
     expect(Object.keys(examples).sort()).toEqual(Object.keys(status).sort());

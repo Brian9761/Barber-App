@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "policy_changed",
+    "message": "The no-show policy for this booking just changed. Check it and book again."
+  }
+}

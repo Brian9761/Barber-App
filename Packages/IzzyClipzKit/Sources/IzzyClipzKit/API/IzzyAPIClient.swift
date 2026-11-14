@@ -104,8 +104,8 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.appointment(id: id, manageToken: manageToken)).appointment
     }
 
-    public func cancelAppointment(id: String, manageToken: String) async throws -> IzzyAPI.Appointment {
-        try await send(IzzyAPI.Endpoints.cancelAppointment(id: id, manageToken: manageToken)).appointment
+    public func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool) async throws -> IzzyAPI.Appointment {
+        try await send(IzzyAPI.Endpoints.cancelAppointment(id: id, manageToken: manageToken, acceptLateCancelFee: acceptLateCancelFee)).appointment
     }
 
     public func reviews() async throws -> IzzyAPI.ReviewsResponse {
@@ -114,6 +114,23 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
 
     public func products() async throws -> [IzzyAPI.Product] {
         try await send(IzzyAPI.Endpoints.products()).products
+    }
+
+    public func noShowPolicy(for target: IzzyAPI.BookingTarget) async throws -> IzzyAPI.NoShowPolicy {
+        try await send(IzzyAPI.Endpoints.noShowPolicy(for: target))
+    }
+
+    public func startCardCheckout(for target: IzzyAPI.BookingTarget, token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardCheckout {
+        try await send(try encoded { try IzzyAPI.Endpoints.startCardCheckout(for: target, token: token) })
+    }
+
+    /// Answers 201 for a newly saved card and 200 for one this token saved before; both decode the same way.
+    public func saveCard(sessionId: String, token: IzzyAPI.CardToken) async throws -> IzzyAPI.SavedCard {
+        try await send(try encoded { try IzzyAPI.Endpoints.saveCard(sessionId: sessionId, token: token) }).card
+    }
+
+    public func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion {
+        try await send(IzzyAPI.Endpoints.deleteCard(token: token)).cardDeletion
     }
 
     // MARK: OwnerAPI
@@ -141,6 +158,18 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
 
     public func setStatus(_ status: IzzyAPI.AppointmentStatus, ofAppointment id: String) async throws -> IzzyAPI.Appointment {
         try await send(try encoded { try IzzyAPI.Endpoints.setAppointmentStatus(id: id, to: status) }).appointment
+    }
+
+    public func chargeNoShowFee(appointmentId: String) async throws -> IzzyAPI.Appointment {
+        try await send(IzzyAPI.Endpoints.chargeNoShowFee(appointmentId: appointmentId)).appointment
+    }
+
+    public func noShowSettings() async throws -> IzzyAPI.NoShowSettings {
+        try await send(IzzyAPI.Endpoints.noShowSettings()).noShowSettings
+    }
+
+    public func updateNoShowSettings(_ update: IzzyAPI.NoShowSettingsUpdate) async throws -> IzzyAPI.NoShowSettings {
+        try await send(try encoded { try IzzyAPI.Endpoints.updateNoShowSettings(update) }).noShowSettings
     }
 
     public func timeOff(from: LocalDate, to: LocalDate) async throws -> [IzzyAPI.TimeOff] {
@@ -192,8 +221,57 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.completePayment(id: id)).payment
     }
 
+    public func sendReceipt(paymentId: String, email: String) async throws -> IzzyAPI.Payment {
+        try await send(try encoded { try IzzyAPI.Endpoints.sendReceipt(paymentId: paymentId, email: email) }).payment
+    }
+
     public func payments(on date: LocalDate) async throws -> [IzzyAPI.Payment] {
         try await send(IzzyAPI.Endpoints.payments(on: date)).payments
+    }
+
+    public func stripeConnection() async throws -> IzzyAPI.StripeConnection {
+        try await send(IzzyAPI.Endpoints.stripeConnection())
+    }
+
+    public func connectStripe() async throws -> IzzyAPI.StripeConnectLink {
+        try await send(try encoded { try IzzyAPI.Endpoints.connectStripe() })
+    }
+
+    public func disconnectStripe() async throws -> IzzyAPI.StripeConnection {
+        try await send(IzzyAPI.Endpoints.disconnectStripe())
+    }
+
+    public func createComputerCode() async throws -> IzzyAPI.ComputerCode {
+        try await send(IzzyAPI.Endpoints.createComputerCode())
+    }
+
+    public func computerSessions() async throws -> [IzzyAPI.ComputerSession] {
+        try await send(IzzyAPI.Endpoints.computerSessions()).sessions
+    }
+
+    public func signOutComputer(id: String) async throws {
+        _ = try await send(IzzyAPI.Endpoints.signOutComputer(id: id))
+    }
+
+    public func signOutAllComputers() async throws {
+        _ = try await send(IzzyAPI.Endpoints.signOutAllComputers())
+    }
+
+    /// Answers 201 for a new sale and 200 for one this key already recorded; both decode the same way.
+    public func recordSale(_ sale: IzzyAPI.NewSale, idempotencyKey: IzzyAPI.IdempotencyKey) async throws -> IzzyAPI.Sale {
+        try await send(try encoded { try IzzyAPI.Endpoints.recordSale(sale, idempotencyKey: idempotencyKey) }).sale
+    }
+
+    public func sales(on date: LocalDate) async throws -> IzzyAPI.SalesDay {
+        try await send(IzzyAPI.Endpoints.sales(on: date))
+    }
+
+    public func voidSale(id: String, reason: String?) async throws -> IzzyAPI.VoidedSale {
+        try await send(try encoded { try IzzyAPI.Endpoints.voidSale(id: id, reason: reason) })
+    }
+
+    public func analytics(_ query: IzzyAPI.AnalyticsQuery) async throws -> IzzyAPI.Analytics {
+        try await send(IzzyAPI.Endpoints.analytics(query))
     }
 
     /// Builds an endpoint whose body is encoded JSON; an encoding failure

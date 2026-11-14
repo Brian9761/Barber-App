@@ -26,6 +26,8 @@
 	<string>https://izzy-clipz-api.vercel.app</string>
 	<key>IzzyDemoMode</key>
 	<string>$(IZZY_DEMO_MODE)</string>
+	<key>IzzyWebsiteURL</key>
+	<string>$(IZZY_WEBSITE_URL)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSBluetoothAlwaysUsageDescription</key>
@@ -33,7 +35,7 @@
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos of the shop's products to show them in the Izzy Clipz app.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Card networks require the location of every card payment, so Stripe checks this iPhone's location while you take a payment with Tap to Pay on iPhone.</string>
+	<string>Stripe needs to know where card payments are taken, to reduce fraud and disputes, so it checks this iPhone's location while you take a payment with Tap to Pay on iPhone. Without it, Tap to Pay is turned off.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose photos of the shop's products to show them in the Izzy Clipz app.</string>
 	<key>UIApplicationSceneManifest</key>

@@ -1,7 +1,7 @@
 {
   "appointments": [
     {
-      "id": "00000000-0000-4000-8000-000000000006",
+      "id": "00000000-0000-4000-8000-000000000007",
       "offeringId": "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a",
       "serviceId": "haircut",
       "serviceName": "Haircut",
@@ -16,7 +16,7 @@
       "payment": {
         "status": "paid",
         "amountCents": 3500,
-        "paidAt": "2026-11-02T19:06:00Z"
+        "paidAt": "2026-11-02T19:05:00Z"
       },
       "customer": {
         "name": "Walk-in",
@@ -24,10 +24,14 @@
         "email": null
       },
       "note": null,
-      "createdAt": "2026-11-02T18:20:00Z"
+      "createdAt": "2026-11-02T18:20:00Z",
+      "card": null,
+      "noShowFee": null,
+      "sale": null,
+      "completedAt": "2026-11-02T19:05:00Z"
     },
     {
-      "id": "00000000-0000-4000-8000-000000000004",
+      "id": "00000000-0000-4000-8000-000000000005",
       "offeringId": "flowxbori/bbb0c294-87a6-465d-9f55-6f579dcb399a",
       "serviceId": "haircut",
       "serviceName": "Haircut",
@@ -50,10 +54,26 @@
         "email": "client@example.com"
       },
       "note": "Low skin fade, please.",
-      "createdAt": "2026-11-02T17:00:00Z"
+      "createdAt": "2026-11-02T17:00:00Z",
+      "card": {
+        "brand": "visa",
+        "last4": "4242"
+      },
+      "noShowFee": {
+        "amountCents": 3500,
+        "fullPrice": true,
+        "status": "none",
+        "chargedAt": null,
+        "message": null,
+        "customerCancelledAt": null,
+        "lateCancelWindowMinutes": 60,
+        "reason": null
+      },
+      "sale": null,
+      "completedAt": null
     },
     {
-      "id": "00000000-0000-4000-8000-000000000005",
+      "id": "00000000-0000-4000-8000-000000000006",
       "offeringId": "cristian-ceja/bbb0c294-87a6-465d-9f55-6f579dcb399a",
       "serviceId": "haircut",
       "serviceName": "Haircut",
@@ -76,10 +96,26 @@
         "email": null
       },
       "note": null,
-      "createdAt": "2026-11-02T17:00:00Z"
+      "createdAt": "2026-11-02T17:00:00Z",
+      "card": {
+        "brand": "visa",
+        "last4": "4242"
+      },
+      "noShowFee": {
+        "amountCents": 3500,
+        "fullPrice": true,
+        "status": "none",
+        "chargedAt": null,
+        "message": null,
+        "customerCancelledAt": "2026-11-02T17:00:00Z",
+        "lateCancelWindowMinutes": 60,
+        "reason": null
+      },
+      "sale": null,
+      "completedAt": null
     },
     {
-      "id": "00000000-0000-4000-8000-000000000007",
+      "id": "00000000-0000-4000-8000-000000000008",
       "offeringId": "julian-ramos/bbb0c294-87a6-465d-9f55-6f579dcb399a",
       "serviceId": "haircut",
       "serviceName": "Haircut",
@@ -102,7 +138,11 @@
         "email": null
       },
       "note": null,
-      "createdAt": "2026-11-02T19:06:00Z"
+      "createdAt": "2026-11-02T19:06:00Z",
+      "card": null,
+      "noShowFee": null,
+      "sale": null,
+      "completedAt": null
     }
   ]
 }

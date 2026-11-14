@@ -6,7 +6,9 @@
       "description": "VIP with Izzy",
       "appointmentId": "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d",
       "status": "succeeded",
-      "createdAt": "2026-11-02T19:19:58Z"
+      "createdAt": "2026-11-02T19:19:58Z",
+      "kind": "inPerson",
+      "saleId": "6e7f8a9b-0c1d-4e2f-9a3b-4c5d6e7f8a9b"
     },
     {
       "id": "pi_3SampleSampleSample02",
@@ -14,7 +16,19 @@
       "description": null,
       "appointmentId": null,
       "status": "requires_payment_method",
-      "createdAt": "2026-11-02T20:02:11Z"
+      "createdAt": "2026-11-02T20:02:11Z",
+      "kind": "noShowFee",
+      "saleId": null
+    },
+    {
+      "id": "pi_3SampleSampleSample03",
+      "amountCents": 3500,
+      "description": "Late cancellation fee: Haircut with Flowxbori, Mon, Nov 2 at 3:00 PM",
+      "appointmentId": "3d4e5f6a-7b8c-4d9e-8fa0-2b3c4d5e6f7a",
+      "status": "succeeded",
+      "createdAt": "2026-11-02T22:32:10Z",
+      "kind": "lateCancelFee",
+      "saleId": null
     }
   ]
 }

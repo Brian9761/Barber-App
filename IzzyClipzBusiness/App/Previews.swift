@@ -25,6 +25,13 @@ enum PreviewSupport {
         guard case .sample(let server) = workspace.environment.backend else { return "" }
         return server.appointments.first { $0.status == .booked }?.id ?? ""
     }
+
+    /// A workspace whose sample day has clients with a card on file, and one of them by name.
+    static func cardOnFile(_ name: String) -> (Workspace, String) {
+        let (_, workspace) = workspace([LaunchArgument.cardsOnFile])
+        guard case .sample(let server) = workspace.environment.backend else { return (workspace, "") }
+        return (workspace, server.appointments.first { $0.customer.name == name }?.id ?? "")
+    }
 }
 
 struct RootView_Previews: PreviewProvider {
@@ -61,6 +68,21 @@ struct AppointmentDetailView_Previews: PreviewProvider {
     }
 }
 
+struct NoShowFee_Previews: PreviewProvider {
+    static var previews: some View {
+        ForEach(["Kim Sample", "Lee Sample", "Nia Sample"], id: \.self) { name in
+            let (workspace, id) = PreviewSupport.cardOnFile(name)
+            NavigationStack {
+                AppointmentDetailView(appointmentID: id, store: workspace.schedule, workspace: workspace)
+            }
+            .task { await workspace.schedule.refresh() }
+            .preferredColorScheme(.dark)
+            .tint(BusinessTheme.red)
+            .previewDisplayName(name)
+        }
+    }
+}
+
 struct NewBookingView_Previews: PreviewProvider {
     static var previews: some View {
         let (_, workspace) = PreviewSupport.workspace()
@@ -88,9 +110,11 @@ struct TakePaymentView_Previews: PreviewProvider {
 struct ProductsView_Previews: PreviewProvider {
     static var previews: some View {
         let (_, workspace) = PreviewSupport.workspace()
-        ProductsView(store: workspace.products, allowsTestPhoto: true)
-            .preferredColorScheme(.dark)
-            .tint(BusinessTheme.red)
+        NavigationStack {
+            ProductsView(store: workspace.products, allowsTestPhoto: true)
+        }
+        .preferredColorScheme(.dark)
+        .tint(BusinessTheme.red)
         ProductEditorView(store: workspace.products, product: nil, allowsTestPhoto: true)
             .preferredColorScheme(.dark)
             .tint(BusinessTheme.red)
@@ -107,6 +131,12 @@ struct SettingsView_Previews: PreviewProvider {
         HowToTapView()
             .preferredColorScheme(.dark)
             .previewDisplayName("How to Tap")
+        NavigationStack {
+            NoShowSettingsView(store: workspace.noShow, stripe: IzzyAPI.StripeStatus(configured: true, mode: .live, locationId: "tml_sample_location"))
+        }
+        .preferredColorScheme(.dark)
+        .tint(BusinessTheme.red)
+        .previewDisplayName("No-show protection")
     }
 }
 #endif

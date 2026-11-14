@@ -1,10 +1,12 @@
 {
   "payment": {
-    "id": "pi_3TestFixture000001",
+    "id": "pi_3TestFixture000004",
     "amountCents": 3500,
     "description": "Haircut",
-    "appointmentId": "00000000-0000-4000-8000-000000000006",
+    "appointmentId": "00000000-0000-4000-8000-000000000007",
     "status": "succeeded",
-    "createdAt": "2026-11-02T19:05:00Z"
+    "createdAt": "2026-11-02T19:05:00Z",
+    "kind": "inPerson",
+    "saleId": null
   }
 }

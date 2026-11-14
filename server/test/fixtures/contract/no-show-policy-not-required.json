@@ -1,0 +1,8 @@
+{
+  "required": false,
+  "minFeeCents": null,
+  "maxFeeCents": null,
+  "policyText": null,
+  "lateCancelWindowMinutes": null,
+  "warning": null
+}

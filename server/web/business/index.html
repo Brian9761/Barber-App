@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Izzy Clipz Business</title>
+    <meta name="description" content="Izzy Clipz Business on your computer: the shop's schedule, checkout, sales and analytics, signed in with a code from the iPhone app." />
+    <!-- The shop's own area: not for search results. -->
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="format-detection" content="telephone=no" />
+    <!-- Its own app: added to a Home Screen or installed, it opens full screen as Izzy Clipz Business. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="IC Business" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="48x48" href="/favicon-48.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/business/apple-touch-icon.png" />
+    <link rel="manifest" href="/business/manifest.webmanifest" />
+  </head>
+  <body>
+    <!-- Without JavaScript: first on the page, in colours of its own (the page behind it is black). -->
+    <noscript>
+      <div
+        data-testid="noscript"
+        style="background: #fff; color: #1d1d1f; font: 17px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; padding: 20px 24px; border-bottom: 1px solid #d2d2d7"
+      >
+        <p style="margin: 0 0 8px">Izzy Clipz Business needs JavaScript. Use the Izzy Clipz Business app on the shop's iPhone, or turn JavaScript on.</p>
+        <p style="margin: 0">
+          The shop's policies open without it:
+          <a href="/privacy" style="color: #0066cc">Privacy Policy</a>,
+          <a href="/terms" style="color: #0066cc">Terms of Service</a>,
+          <a href="/cancellation-policy" style="color: #0066cc">Cancellation &amp; No-Show Policy</a> and
+          <a href="/accessibility" style="color: #0066cc">Accessibility</a>.
+        </p>
+      </div>
+    </noscript>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

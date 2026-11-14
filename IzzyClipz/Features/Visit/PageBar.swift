@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The native navigation bar over a page that carries its own big title in the content (Visit,
-/// Reviews, the gallery).
+/// The native navigation bar over a page that carries its own big title in the content (Visit, Cut
+/// reminders).
 ///
 /// The bar stays native, so the back button and swipe-back work as everywhere else in iOS. At rest
 /// it's transparent and empty; the page's Display title is in the content. Once the content

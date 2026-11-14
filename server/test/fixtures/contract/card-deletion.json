@@ -1,0 +1,6 @@
+{
+  "cardDeletion": {
+    "status": "deleted",
+    "message": "Your saved card is deleted. It can't be charged any more."
+  }
+}

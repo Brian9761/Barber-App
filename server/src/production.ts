@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { del, put } from '@vercel/blob';
 import { attachDatabasePool, ipAddress } from '@vercel/functions';
 import type pg from 'pg';
@@ -30,6 +30,15 @@ const lazyDb: Db = {
 
 const stripeClients = new Map<string, StripeClient>();
 
+/**
+ * One JSON log line. Our message always stays `message`; a `message` among the
+ * details (such as Stripe's own) becomes `detail`, instead of replacing it.
+ */
+export function logLine(level: 'error' | 'warn', message: string, details?: Record<string, unknown>): string {
+  const { message: detail, ...rest } = details ?? {};
+  return JSON.stringify({ level, message, ...rest, ...(detail === undefined ? {} : { detail }) });
+}
+
 export function productionDeps(env: NodeJS.ProcessEnv = process.env): Deps {
   return {
     db: lazyDb,
@@ -38,6 +47,7 @@ export function productionDeps(env: NodeJS.ProcessEnv = process.env): Deps {
     now: () => new Date(),
     uuid: randomUUID,
     manageToken: newManageToken,
+    computerCode: () => String(randomInt(0, 1_000_000)).padStart(6, '0'),
     stripe(secretKey) {
       let client = stripeClients.get(secretKey);
       if (!client) {
@@ -63,8 +73,8 @@ export function productionDeps(env: NodeJS.ProcessEnv = process.env): Deps {
     fetch: (input, init) => fetch(input, init),
     clientIp: (request) => ipAddress(request),
     log: {
-      error: (message, details) => console.error(JSON.stringify({ level: 'error', message, ...details })),
-      warn: (message, details) => console.warn(JSON.stringify({ level: 'warn', message, ...details })),
+      error: (message, details) => console.error(logLine('error', message, details)),
+      warn: (message, details) => console.warn(logLine('warn', message, details)),
     },
   };
 }

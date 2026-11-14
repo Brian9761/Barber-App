@@ -1,4 +1,5 @@
 {
   "ok": true,
-  "stripe": { "configured": false, "mode": null, "locationId": null }
+  "stripe": { "configured": false, "mode": null, "locationId": null },
+  "connection": { "mode": "off", "status": "off", "businessName": null }
 }

@@ -1,13 +1,15 @@
 import { z } from 'zod';
-import { hashManageToken, isNewManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
+import { appMadeKey, hashManageToken, isWellFormedManageToken, manageTokenMatches, requireOwner } from './auth.js';
 import { availability } from './availability.js';
 import { checkStart, createAppointment, resolveTarget, targetOfferings, type Target } from './booking.js';
+import { cardTokenFrom, noShowTermsForBooking } from './cards.js';
 import { isOverlapConflict, pgConstraint, pgErrorCode, UNIQUE_VIOLATION, type Queryable } from './db.js';
-import { ApiError, json, readJsonObject } from './http.js';
+import { cancellingIsLate, isFullPrice, lateCancelWarning } from './feecase.js';
+import { ApiError, json, readJsonObject, readOptionalJsonObject } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
 import type { Context } from './router.js';
-import { appointmentJSON, STATUS_IN, type AppointmentRow, type AppointmentStatus } from './serialize.js';
-import { dayBounds, daysBetween, floorToMinute, localDate } from './time.js';
+import { appointmentJSON, customerAppointmentJSON, STATUS_IN, type AppointmentRow, type AppointmentStatus } from './serialize.js';
+import { dayBounds, daysBetween, floorToMinute, localDate, wholeSecond } from './time.js';
 import { calendarDate, email, instant, normalizeUSPhone, note, parse, personName, shortId, usPhone, UUID_RE } from './validation.js';
 
 export const BOOKINGS_PER_IP_PER_HOUR = 5;
@@ -41,7 +43,7 @@ export async function getAvailability(ctx: Context): Promise<Response> {
 // for the next slot that hasn't started yet.
 
 export async function getOwnerAvailability(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   return availabilityResponse(ctx, { leadTimeMinutes: 0 });
 }
 
@@ -71,6 +73,14 @@ const customerBooking = z.object({
     { error: 'Add your name and mobile number.' },
   ),
   note: note.optional(),
+  /** No-show protection: the policy text the client was shown and agreed to (from GET /api/no-show-policy). */
+  noShowPolicy: z.string({ error: 'noShowPolicy must be text.' }).max(1200, { error: 'noShowPolicy is too long.' }).optional(),
+  /**
+   * The client's "Remember me" for the card on file (X-Card-Token): false when they didn't ask to
+   * keep it, so it's used for this booking only and deleted once no booking needs it. Left out,
+   * the card is kept, as before.
+   */
+  keepCard: z.boolean({ error: 'keepCard must be true or false.' }).optional(),
 });
 
 function preflight(ctx: Context, target: Target, start: Date, mode: 'customer' | 'shop'): void {
@@ -85,21 +95,6 @@ const tokenUsed = () => new ApiError('invalid_request', 'That booking token was 
 
 /** The unique index on `appointments.manage_token_hash` (migrations/002). */
 const MANAGE_TOKEN_INDEX = 'appointments_manage_token_hash_key';
-
-/**
- * A key the app made itself and sent in `header`, if it sent one. It must be
- * exactly what the server makes for a manage token (32 random bytes,
- * base64url); anything else, an empty header included, is a 400.
- */
-function appMadeKey(request: Request, header: 'X-Manage-Token' | 'Idempotency-Key'): string | undefined {
-  const value = request.headers.get(header);
-  if (value === null) return undefined;
-  const key = value.trim();
-  if (!isNewManageToken(key)) {
-    throw new ApiError('invalid_request', `${header} must be 32 random bytes in base64url (43 characters).`);
-  }
-  return key;
-}
 
 /** The app's own manage token from `X-Manage-Token`, if it sent one. */
 function clientManageToken(request: Request): string | undefined {
@@ -151,12 +146,13 @@ async function replay(db: Queryable, token: string, body: CustomerBooking): Prom
   const row = rows[0];
   if (!row) return null;
   if (!sameBooking(row, body)) throw tokenUsed();
-  return json({ appointment: appointmentJSON(row), manageToken: token });
+  return json({ appointment: customerAppointmentJSON(row), manageToken: token });
 }
 
 export async function postAppointment(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
   const token = clientManageToken(request);
+  const cardToken = cardTokenFrom(request);
   const body = parse(customerBooking, await readJsonObject(request));
 
   // A retry is answered before the time rules and the rate limit: it books
@@ -170,6 +166,9 @@ export async function postAppointment(ctx: Context): Promise<Response> {
   try {
     const target = resolveTarget(deps.catalog, body);
     preflight(ctx, target, body.start, 'customer');
+    // No-show protection: a card on file and the policy the client agreed to, when this booking needs them.
+    // Checked before the rate limit, like the other things a booking must have.
+    const noShow = await noShowTermsForBooking(deps, target, body.start, cardToken, body.noShowPolicy);
 
     const hits = await hit(deps.db, ipKey('book', deps.clientIp(request)), deps.now(), {
       max: BOOKINGS_PER_IP_PER_HOUR,
@@ -188,8 +187,10 @@ export async function postAppointment(ctx: Context): Promise<Response> {
       note: body.note ?? null,
       mode: 'customer',
       manageToken: token,
+      noShow,
+      keepCard: body.keepCard,
     });
-    return json({ appointment: appointmentJSON(row), manageToken }, 201);
+    return json({ appointment: customerAppointmentJSON(row), manageToken }, 201);
   } catch (error) {
     // Another copy of this request with the same token may have booked it
     // meanwhile (its own slot then looks taken, or the token's unique index
@@ -218,23 +219,70 @@ async function loadWithToken(ctx: Context): Promise<AppointmentRow> {
 }
 
 export async function getAppointment(ctx: Context): Promise<Response> {
-  return json({ appointment: appointmentJSON(await loadWithToken(ctx)) });
+  return json({ appointment: customerAppointmentJSON(await loadWithToken(ctx)) });
 }
 
+const cancelRequest = z.object({
+  /** The client saw the late-cancellation warning (the 409 `late_cancel_fee`) and cancels anyway. */
+  acceptLateCancelFee: z.boolean({ error: 'acceptLateCancelFee must be true or false.' }).optional(),
+});
+
+/**
+ * The client cancels in the app. Cancelling before the start is free, so the
+ * time is kept in `customer_cancelled_at` and never cleared: even if the shop
+ * reopens the booking later, it can't be charged a no-show fee. A request the
+ * status turns down (the shop already marked it) still counts when it came
+ * before the start, because the client asked in time.
+ *
+ * Inside the late-cancellation window the booking agreed to (it has a card on
+ * file), cancelling may be charged the fee, so the server makes sure the client
+ * was told, by its own clock: without `acceptLateCancelFee: true` it answers 409
+ * `late_cancel_fee` with the warning to show and changes nothing. The first time
+ * the client cancelled is the one that counts, so a booking they cancelled early
+ * (which the shop then reopened) stays free and asks nothing.
+ *
+ * The time is taken to the whole second, as the JSON writes it: the apps decide
+ * from `customerCancelledAt` whether to offer the late-cancellation fee, so a
+ * cancel that lands 400 ms inside the window (which they read as exactly 1 hour
+ * before) is free for the server too.
+ */
 export async function cancelAppointment(ctx: Context): Promise<Response> {
   const row = await loadWithToken(ctx);
-  const now = ctx.deps.now();
-  const { rows } = await ctx.deps.db.query<AppointmentRow>(
-    `UPDATE appointments SET status = 'cancelled', cancelled_by = 'customer', updated_at = $2
-      WHERE id = $1 AND status = 'booked' AND start_at > $2
-      RETURNING *`,
-    [row.id, now],
-  );
-  const updated = rows[0];
-  if (updated) return json({ appointment: appointmentJSON(updated) });
+  const body = parse(cancelRequest, await readOptionalJsonObject(ctx.request));
+  const now = wholeSecond(ctx.deps.now());
+  // Locked while deciding, so the answer matches what happened even if the shop changes it at the same moment.
+  const outcome = await ctx.deps.db.transaction(async (tx): Promise<{ result: 'cancelled' | 'refused' | 'confirm'; row: AppointmentRow }> => {
+    const { rows } = await tx.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1 FOR UPDATE', [row.id]);
+    const current = rows[0] ?? row;
+    if (current.start_at <= now) return { result: 'refused', row: current };
+    if (current.status === 'booked') {
+      if (body.acceptLateCancelFee !== true && cancellingIsLate(current, now)) return { result: 'confirm', row: current };
+      const { rows: done } = await tx.query<AppointmentRow>(
+        `UPDATE appointments
+            SET status = 'cancelled', cancelled_by = 'customer', customer_cancelled_at = COALESCE(customer_cancelled_at, $2), updated_at = $2
+          WHERE id = $1
+          RETURNING *`,
+        [row.id, now],
+      );
+      return { result: 'cancelled', row: done[0] ?? current };
+    }
+    // Asked in time, but the shop already marked it: the request still counts against a no-show fee.
+    if (current.customer_cancelled_at === null) {
+      await tx.query('UPDATE appointments SET customer_cancelled_at = $2, updated_at = $2 WHERE id = $1', [row.id, now]);
+    }
+    return { result: 'refused', row: current };
+  });
+  if (outcome.result === 'cancelled') return json({ appointment: customerAppointmentJSON(outcome.row) });
+  if (outcome.result === 'confirm') {
+    // A late cancellation needs a card and a fee, which `cancellingIsLate` checked.
+    const terms = outcome.row;
+    throw new ApiError(
+      'late_cancel_fee',
+      lateCancelWarning(terms.late_cancel_window_minutes ?? 0, terms.no_show_fee_cents ?? 0, isFullPrice(terms)),
+    );
+  }
 
-  const { rows: current } = await ctx.deps.db.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1', [row.id]);
-  const latest = current[0] ?? row;
+  const latest = outcome.row;
   if (latest.status === 'cancelled') {
     throw new ApiError('not_cancellable', 'This appointment is already cancelled.');
   }
@@ -276,7 +324,7 @@ export function dayRange(ctx: Context, maxDays = MAX_OWNER_RANGE_DAYS): { from: 
 }
 
 export async function listOwnerAppointments(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const { from, to } = dayRange(ctx);
   const zone = ctx.deps.catalog.timeZone;
   const { rows } = await ctx.deps.db.query<AppointmentRow>(
@@ -345,7 +393,7 @@ async function ownerReplay(db: Queryable, key: string, body: OwnerBooking, start
 }
 
 export async function postOwnerAppointment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   // The owner app's key for this booking, so Book again after a lost answer can't book twice.
   const key = appMadeKey(ctx.request, 'Idempotency-Key');
   const body = parse(ownerBooking, await readJsonObject(ctx.request));
@@ -387,24 +435,49 @@ const statusPatch = z.object({
   }),
 });
 
+export const NO_SHOW_BEFORE_END_MESSAGE = 'You can mark a no-show once the appointment has ended.';
+export const COMPLETED_NO_SHOW_MESSAGE = "This appointment was marked completed, so it can't become a no-show.";
+
 export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
-  requireOwner(ctx.request, ctx.deps.config);
+  await requireOwner(ctx);
   const id = ctx.params.id ?? '';
   if (!UUID_RE.test(id)) throw notFound();
   const { status } = parse(statusPatch, await readJsonObject(ctx.request));
   const dbStatus = STATUS_IN[status as AppointmentStatus];
+  const now = ctx.deps.now();
   try {
+    // A booking with a card on file can be marked a no-show only once it has ended: a client who
+    // comes before the end isn't a no-show (and a no-show is what can be charged). Once it was
+    // marked completed (or checked out), it never becomes one, even after it's reopened: the
+    // client came. A checked-out appointment stays completed until its sale is voided (sales.ts).
     const { rows } = await ctx.deps.db.query<AppointmentRow>(
       `UPDATE appointments
           SET status = $2,
               cancelled_by = CASE WHEN $2 = 'cancelled' THEN COALESCE(cancelled_by, 'shop') ELSE NULL END,
+              completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, $3) ELSE completed_at END,
               updated_at = CASE WHEN status = $2 THEN updated_at ELSE $3 END
         WHERE id = $1
+          AND NOT ($2 = 'no_show' AND saved_card_id IS NOT NULL AND status <> 'no_show'
+                   AND (end_at > $3 OR status = 'completed' OR completed_at IS NOT NULL))
+          AND (sale_id IS NULL OR $2 = 'completed')
         RETURNING *`,
-      [id, dbStatus, ctx.deps.now()],
+      [id, dbStatus, now],
     );
     const row = rows[0];
-    if (!row) throw notFound();
+    if (!row) {
+      const { rows: found } = await ctx.deps.db.query<Pick<AppointmentRow, 'sale_id' | 'status' | 'completed_at'>>(
+        'SELECT sale_id, status, completed_at FROM appointments WHERE id = $1',
+        [id],
+      );
+      const current = found[0];
+      if (!current) throw notFound();
+      if (current.sale_id !== null) {
+        throw new ApiError('already_checked_out', 'This appointment was checked out. Void its sale first, then change it.');
+      }
+      if (current.status === 'completed' || current.completed_at !== null) throw new ApiError('already_completed', COMPLETED_NO_SHOW_MESSAGE);
+      // The code keeps the name it had when the rule was the start, so the apps' handling stays the same.
+      throw new ApiError('not_started', NO_SHOW_BEFORE_END_MESSAGE);
+    }
     return json({ appointment: appointmentJSON(row) });
   } catch (error) {
     if (isOverlapConflict(error)) {

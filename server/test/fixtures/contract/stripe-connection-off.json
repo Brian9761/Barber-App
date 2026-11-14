@@ -1,0 +1,14 @@
+{
+  "mode": "off",
+  "status": "off",
+  "accountId": null,
+  "businessName": null,
+  "livemode": null,
+  "chargesEnabled": false,
+  "payoutsEnabled": false,
+  "detailsSubmitted": false,
+  "requirementsDue": 0,
+  "message": "Stripe isn't set up on the server.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": null
+}

@@ -13,7 +13,6 @@ enum AppTab: Hashable {
 
 /// Screens pushed from Home that aren't a service or a barber.
 enum HomeRoute: Hashable {
-    case gallery
     case team
     case reviews
 }
@@ -127,6 +126,10 @@ struct BookingDraft: Hashable {
     let plan: BookingPlan
     let customer: CustomerDetails
     let note: String
+    /// "Remember me on this iPhone" on the details step: a card added for this booking is kept
+    /// for next time, or (off, as it starts unless this iPhone already remembers the client)
+    /// deleted once it's booked.
+    var remember = false
 }
 
 /// What the client has typed on the details step, kept while they're booking: going back to the
@@ -138,16 +141,46 @@ struct BookingDetailsInProgress: Hashable {
     var remember: Bool
 
     /// What the details step starts with: what was typed earlier in this booking, or else the
-    /// name and number remembered from last time, with no note and "Remember me" on.
+    /// name and number remembered from last time, with no note. "Remember me" starts off unless
+    /// this iPhone already remembers the client: keeping their details, and a card they add, for
+    /// next time is their choice to make (docs/legal/research.md §8.3 item 9).
     static func start(kept: BookingDetailsInProgress?, saved: CustomerDetails?) -> BookingDetailsInProgress {
-        kept ?? BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: "", remember: true)
+        kept ?? BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: "", remember: saved != nil)
     }
 
     /// The same booking after the client changed the remembered name and number in "Your
-    /// details" (`saved`), or forgot them (`nil`): those are the ones it fills in now, with
-    /// "Remember me" on, and the note stays. Otherwise Continue would remember the old ones again.
+    /// details" (`saved`), or forgot them (`nil`): those are the ones it fills in now, and the note
+    /// stays. "Remember me" is on for details this iPhone now remembers, and off once they're
+    /// forgotten. Otherwise Continue would remember the old ones again.
     func remembering(_ saved: CustomerDetails?) -> BookingDetailsInProgress {
-        BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: note, remember: true)
+        BookingDetailsInProgress(customer: saved ?? CustomerDetails(name: "", phone: ""), note: note, remember: saved != nil)
+    }
+}
+
+/// Where "Book again" starts a booking like an earlier appointment (on a past or cancelled
+/// appointment's card, and on "You're booked"): the same service with the same barber, straight to
+/// the day and time, or a step back when that isn't on the menu any more.
+enum BookAgain: Equatable {
+    /// The same barber's version of the service: the day-and-time step.
+    case times(BookingChoice)
+    /// The barber doesn't offer it any more (or the booking had no barber): pick one for the service.
+    case barbers(serviceID: String)
+    /// The service isn't on the menu any more: pick a service.
+    case services
+
+    /// Where a booking like `appointment` starts.
+    static func restart(for appointment: IzzyAPI.Appointment, catalog: Catalog = AppData.catalog) -> BookAgain {
+        guard catalog.service(withID: appointment.serviceId) != nil else { return .services }
+        // The exact item booked, so Flowxbori's hour-long haircut stays the hour-long one.
+        if let offering = catalog.offering(withID: appointment.offeringId), offering.serviceID == appointment.serviceId {
+            return .times(.offering(offering))
+        }
+        // Otherwise the barber's version of the service, when they have just the one.
+        let theirs = catalog.offerings(forService: appointment.serviceId).filter { $0.barberID == appointment.barberId }
+        if theirs.count == 1, let offering = theirs.first {
+            return .times(.offering(offering))
+        }
+        return .barbers(serviceID: appointment.serviceId)
     }
 }
 
@@ -245,6 +278,16 @@ final class AppRouter {
         detailsInProgress = nil
         bookingPath = [.chooseService(barberID: barberID)]
         selectedTab = .book
+    }
+
+    /// "Book again": a booking like `appointment`, the same service with the same barber, at the
+    /// day and time (`BookAgain`). Going back shows "Pick a barber", to choose someone else.
+    func bookAgain(_ appointment: IzzyAPI.Appointment) {
+        switch BookAgain.restart(for: appointment) {
+        case .times(let choice): startBooking(choice: choice)
+        case .barbers(let serviceID): startBooking(serviceID: serviceID)
+        case .services: startBooking()
+        }
     }
 
     /// Switches to the Book tab at the calendar for a service on a barber's own menu. Going back

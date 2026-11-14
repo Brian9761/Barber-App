@@ -1,0 +1,14 @@
+{
+  "mode": "connect",
+  "status": "needsInfo",
+  "accountId": "acct_1SampleShopAccount",
+  "businessName": "Izzy Clipz Barbershop",
+  "livemode": false,
+  "chargesEnabled": false,
+  "payoutsEnabled": false,
+  "detailsSubmitted": false,
+  "requirementsDue": 3,
+  "message": "Finish setting up Stripe to take card payments.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": "2026-11-02T17:10:00Z"
+}

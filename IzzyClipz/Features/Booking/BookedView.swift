@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 /// After booking: "You're booked", the appointment as the shop booked it (with the barber it
-/// assigned for "Any barber"), the reminders switch, Add to Calendar and Done. It replaces the
-/// booking steps, so going back can't book the same time twice.
+/// assigned for "Any barber"), the reminders switch, Add to Calendar, Book again (the same service
+/// and barber, at another day and time) and Done. It replaces the booking steps, so going back
+/// can't book the same time twice.
 struct BookedView: View {
     let appointmentID: String
 
@@ -71,6 +72,20 @@ struct BookedView: View {
                 SummaryRow(label: "Barber", value: saved.barberName)
                 SummaryDivider()
                 SummaryRow(label: "Where", value: AppData.shop.address.streetLine, detail: AppData.shop.address.cityLine)
+                if let card = saved.snapshot.card {
+                    SummaryDivider()
+                    SummaryRow(
+                        label: NoShowCopy.cardOnFileLabel(saved.snapshot.noShowFee),
+                        value: card.label,
+                        detail: NoShowCopy.bookedCardDetail(saved.snapshot)
+                    )
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(
+                        [NoShowCopy.spokenCardOnFileLine(saved.snapshot), NoShowCopy.bookedCardDetail(saved.snapshot)]
+                            .compactMap { $0 }
+                            .joined(separator: ", ")
+                    )
+                }
             }
             .card(padding: Theme.Space.xl)
             .accessibilityElement(children: .combine)
@@ -91,11 +106,23 @@ struct BookedView: View {
             }
             .buttonStyle(.tertiary)
             .accessibilityIdentifier("addToCalendarButton")
+
+            // Another appointment like this one (the next cut, or one for someone else).
+            Button {
+                router.bookAgain(saved.snapshot)
+            } label: {
+                Label("Book again", systemImage: Symbol.calendar)
+            }
+            .buttonStyle(.tertiary)
+            .accessibilityHint("\(saved.title), on another day and time")
+            .accessibilityIdentifier("bookedBookAgainButton")
         }
     }
 }
 
 /// "Remind me the day before and an hour before", and what happens when notifications are off.
+/// For a booking whose late cancellations may be charged, the reminders also say until when
+/// cancelling is free (`AppointmentPlanner.reminders`), and the toggle says so.
 struct AppointmentRemindersToggle: View {
     let appointment: SavedAppointment
 
@@ -107,10 +134,18 @@ struct AppointmentRemindersToggle: View {
                 get: { appointment.remind },
                 set: { appointments.setReminders($0, for: appointment.id) }
             )) {
-                Text("Remind me the day before and an hour before")
-                    .textRole(.body)
-                    .foregroundStyle(Theme.bone)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Remind me the day before and an hour before")
+                        .textRole(.body)
+                        .foregroundStyle(Theme.bone)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if appointment.snapshot.lateCancelTerms != nil {
+                        Text(NoShowCopy.remindersNote)
+                            .textRole(.caption)
+                            .foregroundStyle(Theme.smoke)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             }
             .tint(Theme.electric)
             .accessibilityIdentifier("appointmentRemindersToggle")

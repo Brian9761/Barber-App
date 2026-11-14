@@ -44,10 +44,12 @@ extension ShopInfo {
             .sunday: OpeningHours(opens: TimeOfDay(hour: 10), closes: TimeOfDay(hour: 18)),
         ]),
         instagramHandle: "izzy_clipz_barbershop_",
-        websiteURL: URL(string: "https://www.izzyclipzbarbershop.net")!,
+        websiteURL: URL(string: "https://izzy-clipz.vercel.app")!,
         paymentMethods: ["Credit card", "Gift card"],
         highlights: ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"],
-        accessibility: ["Wheelchair accessible", "ADA-compliant entrance", "Accessible parking near the entrance"],
+        // The two the owner checked and confirmed (docs/legal/OWNER-CHECKLIST.md). Not a step-free
+        // entrance: he didn't confirm one, so the apps and the website also ask clients to call.
+        accessibility: ["Room for a wheelchair inside, at the chairs and the counter", "Accessible parking near the entrance"],
         googlePlaceID: IzzyClipzListing.googlePlaceID
     )
 }

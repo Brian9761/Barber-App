@@ -2,8 +2,15 @@ import Foundation
 import IzzyClipzKit
 import Observation
 
-/// Take payment: the amount, the optional note and receipt email, and the
-/// whole card flow.
+/// Take payment, a checkout: the ticket (who it's for, who sold it, the services, products and
+/// amounts, the total), how the client pays, and what happens then.
+///
+/// Cash and other ways (Squire, Zelle, Cash App…) are recorded as a sale right away
+/// (`OwnerAPI.recordSale`), with an `Idempotency-Key` kept for the same sale, so Record again after
+/// a lost answer never records it twice.
+///
+/// A card goes through Tap to Pay, with the ticket sent along so the server records the sale once
+/// the payment goes through:
 ///
 /// 1. The server creates the PaymentIntent (`OwnerAPI.createPayment`), so the
 ///    amount can't change afterwards.
@@ -75,13 +82,30 @@ final class CheckoutModel {
         case outcomeUnknown(String)
         /// The server says the payment isn't complete: no money was taken.
         case notPaid(String)
+        /// Saving a cash or other sale.
+        case recording(IzzyAPI.SaleMethod)
+        /// The cash or other sale is saved.
+        case recorded(SaleReceipt)
+        /// The server turned the sale down (it says why): nothing was saved.
+        case recordFailed(String)
+        /// No answer came back: the sale may be saved. Record again (with the same key) finds out.
+        case recordUnknown(String)
 
         var isInFlight: Bool {
             switch self {
-            case .preparing, .creating, .collecting, .confirming: return true
+            case .preparing, .creating, .collecting, .confirming, .recording: return true
             default: return false
             }
         }
+    }
+
+    /// Emailing the receipt of a card payment that went through (Song-Beverly: offered after the
+    /// payment, optional, and the address is never kept).
+    enum ReceiptEmailState: Equatable {
+        case idle
+        case sending
+        case sent
+        case failed(String)
     }
 
     struct Receipt: Equatable {
@@ -92,20 +116,13 @@ final class CheckoutModel {
         /// A real reader with Stripe's test keys: no real money moved, and
         /// Stripe doesn't email receipts.
         var stripeTestMode = false
-        let receiptEmail: String?
+        /// What Stripe shows as the payment's description.
         let title: String?
-    }
+        /// The sale the server records with it (not for practice payments, which go nowhere).
+        var sale: SaleReceipt?
 
-    /// The appointment a payment is for.
-    struct AppointmentContext: Equatable {
-        let id: String
-        /// "Haircut with Izzy for Marcus Sample".
-        let title: String
-        /// The catalog's fixed price, when there is one.
-        let suggestedCents: Int?
-        /// "$35", "From $80".
-        let priceLabel: String
-        let alreadyPaidCents: Int?
+        /// "Email a receipt (optional)" is offered: a real payment Stripe can email a receipt for.
+        var offersReceiptEmail: Bool { paymentIntentId != nil && !stripeTestMode }
     }
 
     /// The PaymentIntent this checkout charges, kept across retries.
@@ -116,19 +133,27 @@ final class CheckoutModel {
         let isPractice: Bool
         /// Set when nobody knows whether the card went through.
         var needsCheck = false
+        /// The ticket as it was charged, for the receipt (the one on screen may have changed since,
+        /// while a payment waits to be checked).
+        var ticket: CheckoutTicket?
     }
 
     // MARK: State
 
-    var entry = AmountEntry()
+    /// The ticket on screen.
+    var ticket: CheckoutTicket
+    /// A note for a card payment: its description at Stripe, sent as typed instead of what was sold.
     var note = ""
-    var receiptEmail = ""
-    private(set) var appointment: AppointmentContext?
     private(set) var phase: Phase = .editing
+    /// "Email a receipt (optional)" after a card payment. The address itself is never kept.
+    private(set) var receiptEmailState: ReceiptEmailState = .idle
     /// A problem with what was entered, shown above the button.
     var validationMessage: String?
 
     private(set) var stripe: IzzyAPI.StripeStatus?
+    /// How the server takes card payments (`GET /api/owner/me`'s `connection`): with Stripe Connect,
+    /// cards wait for the shop's own Stripe account.
+    private(set) var connection: IzzyAPI.StripeConnectionSummary?
     private(set) var practiceRequested = false
 
     /// Today's successful payments, newest first.
@@ -152,6 +177,10 @@ final class CheckoutModel {
     /// never while the reader is busy with a payment (it does one thing at a time).
     @ObservationIgnored private var abandoning: Task<Void, Never>?
     @ObservationIgnored private var isSyncingPending = false
+    /// The cash or other sale last sent and its `Idempotency-Key`: recording the same sale again
+    /// (after an answer that never came) sends the same key, so it's never saved twice. A changed
+    /// ticket gets a new key, and so does the next sale once this one is saved.
+    @ObservationIgnored private var saleAttempt: (retryKey: String, key: IzzyAPI.IdempotencyKey)?
 
     let terminal: any PaymentTerminal
     let practiceTerminal: SimulatedPaymentTerminal
@@ -161,8 +190,15 @@ final class CheckoutModel {
     @ObservationIgnored private let pending: PendingPayments
     @ObservationIgnored private let usesSampleServer: Bool
     @ObservationIgnored private let deviceSupportsTapToPay: Bool
+    /// The menu: the barbers, their services and prices.
+    let catalog: Catalog
+    /// Where the last barber chosen on this iPhone is kept (Sold by's default).
+    @ObservationIgnored private let defaults: UserDefaults?
     /// Called after a payment for an appointment succeeded, with its ID.
     @ObservationIgnored var onPaid: ((String) -> Void)?
+    /// Called after a sale was saved: cash or other, or a card payment that went through with its
+    /// ticket (Today's sales and the schedule changed).
+    @ObservationIgnored var onSaleRecorded: (() -> Void)?
     /// Called when a payment connected real Tap to Pay (the first time on
     /// this iPhone, that's its setup).
     @ObservationIgnored var onReaderConnected: (() -> Void)?
@@ -178,7 +214,9 @@ final class CheckoutModel {
         practiceTerminal: SimulatedPaymentTerminal,
         pending: PendingPayments,
         usesSampleServer: Bool,
-        deviceSupportsTapToPay: Bool
+        deviceSupportsTapToPay: Bool,
+        catalog: Catalog = .izzyClipz,
+        defaults: UserDefaults? = nil
     ) {
         self.api = api
         self.shopTime = shopTime
@@ -188,12 +226,22 @@ final class CheckoutModel {
         self.pending = pending
         self.usesSampleServer = usesSampleServer
         self.deviceSupportsTapToPay = deviceSupportsTapToPay
+        self.catalog = catalog
+        self.defaults = defaults
+        let last = defaults?.string(forKey: Self.lastBarberKey)
+        ticket = CheckoutTicket(barberId: last.flatMap { catalog.barber(withID: $0) != nil ? $0 : nil })
     }
 
     var mode: Mode {
         if practiceRequested { return .practice(.chosen) }
         guard let stripe else { return .checking }
-        guard stripe.configured else { return .unavailable(.stripeNotConfigured) }
+        guard stripe.configured else {
+            // Stripe Connect: the shop's own account isn't taking card payments yet.
+            if let connection, connection.mode == .connect, connection.status != .active {
+                return .unavailable(.stripeNotConnected(connection.status))
+            }
+            return .unavailable(.stripeNotConfigured)
+        }
         guard let location = stripe.locationId, !location.isEmpty else { return .unavailable(.locationMissing) }
         if usesSampleServer { return .sampleServer(locationId: location) }
         guard deviceSupportsTapToPay else { return .practice(.deviceUnsupported) }
@@ -214,9 +262,10 @@ final class CheckoutModel {
         }
     }
 
-    /// Stripe's status from `GET /api/owner/me`.
-    func update(stripe: IzzyAPI.StripeStatus?) {
+    /// Stripe's status from `GET /api/owner/me`, and how the server takes card payments.
+    func update(stripe: IzzyAPI.StripeStatus?, connection: IzzyAPI.StripeConnectionSummary? = nil) {
         self.stripe = stripe
+        self.connection = connection
     }
 
     static let stillCheckingMessage = "Still checking whether card payments are set up. Try again in a moment."
@@ -253,29 +302,134 @@ final class CheckoutModel {
         try? await currentTerminal.prepare(locationId: locationId)
     }
 
-    // MARK: Prefilling
+    // MARK: The ticket
 
-    /// Starts a payment for an appointment: its fixed price is filled in (the
-    /// owner can change it). Ignored while a payment is running.
+    /// Checking out an appointment (Schedule → appointment → Check out): its client, sold by its
+    /// barber, with its service at its price. Ignored while a payment is running.
     @discardableResult
-    func prefill(_ context: AppointmentContext) -> Bool {
+    func start(for appointment: IzzyAPI.Appointment) -> Bool {
         guard phase == .editing || isFinished else { return false }
         if isFinished { reset() }
-        appointment = context
-        entry = AmountEntry(cents: context.suggestedCents ?? 0)
+        ticket = CheckoutTicket(appointment: appointment, catalog: catalog, shopTime: shopTime, now: clock())
+        note = ""
         validationMessage = nil
         return true
     }
 
-    func clearAppointment() {
-        guard phase == .editing else { return }
-        appointment = nil
+    /// Something extra for a client whose appointment is already paid (a product, a tip): a walk-in
+    /// ticket with their name, sold by their barber, not tied to the appointment.
+    @discardableResult
+    func startExtra(for appointment: IzzyAPI.Appointment) -> Bool {
+        guard phase == .editing || isFinished else { return false }
+        if isFinished { reset() }
+        ticket = CheckoutTicket(barberId: appointment.barberId)
+        ticket.walkInName = appointment.customer.name
+        note = ""
+        validationMessage = nil
+        return true
     }
 
-    private var isFinished: Bool {
-        if case .succeeded = phase { return true }
-        return false
+    /// "Not for this appointment": the ticket stays, for a walk-in with the same name.
+    func forgetAppointment() {
+        guard phase == .editing else { return }
+        ticket.forgetAppointment()
     }
+
+    /// Sold by: the barber who gets credit, kept as the default for the next walk-in on this iPhone.
+    func chooseBarber(_ id: String) {
+        guard phase == .editing, catalog.barber(withID: id) != nil else { return }
+        ticket.barberId = id
+        defaults?.set(id, forKey: Self.lastBarberKey)
+        if validationMessage == CheckoutTicket.noBarberMessage { validationMessage = nil }
+    }
+
+    static let lastBarberKey = "lastSoldByBarberId"
+
+    /// The barber who gets credit, by name: "Izzy".
+    var barberName: String? {
+        ticket.barberId.flatMap { catalog.barber(withID: $0)?.name }
+    }
+
+    /// The total on screen: the ticket's.
+    var amountCents: Int { ticket.totalCents }
+
+    private var isFinished: Bool {
+        switch phase {
+        case .succeeded, .recorded: return true
+        default: return false
+        }
+    }
+
+    // MARK: Cash and other
+
+    /// Records the ticket as a sale paid in cash or another way, after the owner confirmed it.
+    func record(_ method: IzzyAPI.SaleMethod) {
+        guard phase == .editing, method != .card else { return }
+        validationMessage = nil
+        if let problem = ticket.problem(for: method) {
+            validationMessage = problem
+            return
+        }
+        let sale = ticket.newSale(method: method)
+        guard flowTask == nil else { return }
+        phase = .recording(method)
+        start { await self.save(sale) }
+    }
+
+    /// Record again after an error: the same sale with the same key.
+    func recordAgain() {
+        switch phase {
+        case .recordFailed, .recordUnknown:
+            guard flowTask == nil else { return }
+            let sale = ticket.newSale(method: lastRecordedMethod ?? .cash)
+            phase = .recording(sale.method)
+            start { await self.save(sale) }
+        default:
+            break
+        }
+    }
+
+    /// The method of the sale being recorded, for Record again.
+    @ObservationIgnored private var lastRecordedMethod: IzzyAPI.SaleMethod?
+
+    /// The key to send `sale` with: the last one if this is the same sale again.
+    func saleKey(for sale: IzzyAPI.NewSale) -> IzzyAPI.IdempotencyKey {
+        if let saleAttempt, saleAttempt.retryKey == sale.retryKey { return saleAttempt.key }
+        let key = IzzyAPI.IdempotencyKey.generate()
+        saleAttempt = (sale.retryKey, key)
+        return key
+    }
+
+    private func save(_ sale: IzzyAPI.NewSale) async {
+        lastRecordedMethod = sale.method
+        phase = .recording(sale.method)
+        let key = saleKey(for: sale)
+        do {
+            let saved = try await api.recordSale(sale, idempotencyKey: key)
+            saleAttempt = nil
+            if let barberId = sale.barberId { defaults?.set(barberId, forKey: Self.lastBarberKey) }
+            phase = .recorded(SaleReceipt(sale: saved))
+            onSaleRecorded?()
+        } catch is CancellationError {
+            phase = .recordUnknown(Self.saleUnknownMessage)
+        } catch {
+            if ScheduleStore.chargeOutcomeIsUnknown(error) {
+                let reason: String
+                if case .offline? = error as? APIError {
+                    reason = "We couldn't reach the server."
+                } else {
+                    reason = ErrorText.message(for: error)
+                }
+                phase = .recordUnknown("\(reason) \(Self.saleUnknownMessage)")
+            } else {
+                // The server's own answer (a 400 or 409): nothing was saved, and a fixed ticket is a new sale.
+                saleAttempt = nil
+                phase = .recordFailed(ErrorText.message(for: error))
+            }
+        }
+    }
+
+    static let saleUnknownMessage = "We don't know yet if the sale was saved. Record again: the same sale is never saved twice. If you change the ticket first, check Today's sales so it isn't recorded twice."
 
     // MARK: Charging
 
@@ -288,13 +442,8 @@ final class CheckoutModel {
             phase = .outcomeUnknown("We still don't know if the last card was charged. Check it before taking another payment.")
             return
         }
-        guard entry.isChargeable else {
-            validationMessage = Money.allowedRangeText
-            return
-        }
-        let email = receiptEmail.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !email.isEmpty, !Self.looksLikeEmail(email) {
-            validationMessage = "Check the receipt email address, or leave it empty."
+        if let problem = ticket.problem(for: .card) {
+            validationMessage = problem
             return
         }
         if case .unavailable(let issue) = mode {
@@ -312,13 +461,16 @@ final class CheckoutModel {
             validationMessage = "Keep the note to 200 characters or fewer."
             return
         }
+        // Never the client's name in the description (it's kept at Stripe): what was sold and who
+        // sold it, or the owner's own note, as typed.
         let request = IzzyAPI.NewPayment(
-            amountCents: entry.cents,
-            description: trimmedNote.isEmpty ? appointment?.title : trimmedNote,
-            appointmentId: appointment?.id,
-            receiptEmail: email.isEmpty ? nil : email
+            amountCents: ticket.totalCents,
+            description: trimmedNote.isEmpty ? ticket.paymentDescription(barberName: barberName) : trimmedNote,
+            appointmentId: ticket.appointmentId,
+            sale: ticket.newSale(method: .card)
         )
-        start { await self.run(request) }
+        let charged = ticket
+        start { await self.run(request, ticket: charged) }
     }
 
     /// Tries the same PaymentIntent again (after a decline, a cancellation or
@@ -327,7 +479,7 @@ final class CheckoutModel {
         guard let active, !active.needsCheck else { return }
         switch phase {
         case .declined, .cancelled, .failed, .notPaid:
-            start { await self.run(active.request) }
+            start { await self.run(active.request, ticket: active.ticket) }
         default:
             break
         }
@@ -336,6 +488,10 @@ final class CheckoutModel {
     /// "Try again" on an error screen: the same PaymentIntent when there is
     /// one, otherwise a fresh start with what's entered.
     func tryAgain() {
+        if case .recordFailed = phase {
+            recordAgain()
+            return
+        }
         if let active, !active.needsCheck {
             retry()
         } else if active == nil {
@@ -397,16 +553,18 @@ final class CheckoutModel {
         }
     }
 
-    /// After a successful payment: a clean slate for the next customer.
+    /// After a sale or payment (Done): a clean slate for the next client, sold by the last barber
+    /// chosen on this iPhone.
     func reset() {
         guard !phase.isInFlight else { return }
         if let active, !active.needsCheck {
             discard(active)
         }
-        entry = AmountEntry()
+        let last = defaults?.string(forKey: Self.lastBarberKey)
+        ticket = CheckoutTicket(barberId: last.flatMap { catalog.barber(withID: $0) != nil ? $0 : nil } ?? ticket.barberId)
         note = ""
-        receiptEmail = ""
-        appointment = nil
+        saleAttempt = nil
+        receiptEmailState = .idle
         validationMessage = nil
         phase = .editing
     }
@@ -425,7 +583,7 @@ final class CheckoutModel {
         await paymentsTask?.value
     }
 
-    private func run(_ request: IzzyAPI.NewPayment) async {
+    private func run(_ request: IzzyAPI.NewPayment, ticket charged: CheckoutTicket?) async {
         let mode = self.mode
         let terminal = currentTerminal
         let isPractice: Bool
@@ -462,12 +620,14 @@ final class CheckoutModel {
                 await abandoning?.value
             }
             if isPractice {
-                payment = ActivePayment(paymentIntentId: nil, clientSecret: "practice_\(UUID().uuidString)", request: request, isPractice: true)
+                payment = ActivePayment(paymentIntentId: nil, clientSecret: "practice_\(UUID().uuidString)", request: request, isPractice: true, ticket: charged)
             } else {
                 do {
                     let created = try await api.createPayment(request)
                     pending.add(created.paymentIntentId, at: clock())
-                    payment = ActivePayment(paymentIntentId: created.paymentIntentId, clientSecret: created.clientSecret, request: request, isPractice: false)
+                    payment = ActivePayment(
+                        paymentIntentId: created.paymentIntentId, clientSecret: created.clientSecret, request: request, isPractice: false, ticket: charged
+                    )
                 } catch {
                     phase = .failed(Self.message(for: error))
                     return
@@ -511,7 +671,7 @@ final class CheckoutModel {
             active = nil
             phase = .succeeded(Receipt(
                 amountCents: payment.request.amountCents, paymentIntentId: nil, isTestMode: true,
-                receiptEmail: nil, title: payment.request.description
+                title: payment.request.description
             ))
             return
         }
@@ -524,14 +684,19 @@ final class CheckoutModel {
                 active = nil
                 var stripeTestMode = false
                 if case .live(_, let testKeys) = mode { stripeTestMode = testKeys }
+                let barberName = payment.request.sale?.barberId.flatMap { catalog.barber(withID: $0)?.name }
+                receiptEmailState = .idle
                 phase = .succeeded(Receipt(
                     amountCents: recorded.amountCents, paymentIntentId: recorded.id, isTestMode: mode.isTestMode,
                     stripeTestMode: stripeTestMode,
-                    receiptEmail: payment.request.receiptEmail, title: payment.request.description
+                    title: payment.request.description,
+                    sale: payment.request.sale != nil ? payment.ticket.map { SaleReceipt(ticket: $0, method: .card, barberName: barberName ?? "") } : nil
                 ))
+                if let barberId = payment.request.sale?.barberId { defaults?.set(barberId, forKey: Self.lastBarberKey) }
                 if let appointmentId = recorded.appointmentId ?? payment.request.appointmentId {
                     onPaid?(appointmentId)
                 }
+                if payment.request.sale != nil { onSaleRecorded?() }
                 // Not awaited: the payment is done, and Tap to Pay must work
                 // for the next customer even while the list is slow to load.
                 paymentsTask = Task { await self.loadPayments() }
@@ -600,6 +765,11 @@ final class CheckoutModel {
         todaysPayments.reduce(0) { $0 + $1.amountCents }
     }
 
+    /// The part of today's total that's no-show and late cancellation fees charged to cards on file.
+    var todaysFeesCents: Int {
+        todaysPayments.filter(\.kind.isFee).reduce(0) { $0 + $1.amountCents }
+    }
+
     /// Asks the server about payments left unconfirmed by an earlier run (the
     /// app closed mid-payment, the network dropped).
     func syncPendingPayments() async {
@@ -638,6 +808,30 @@ final class CheckoutModel {
         if changed { await loadPayments() }
     }
 
+    // MARK: Email a receipt
+
+    /// "Email a receipt (optional)" after a card payment went through: Stripe emails the client a
+    /// receipt (`POST /api/owner/payments/:id/receipt`). The address goes to the server and on to
+    /// Stripe only: it isn't kept here, or on the server.
+    func emailReceipt(to email: String) async {
+        guard case .succeeded(let receipt) = phase, receipt.offersReceiptEmail, let id = receipt.paymentIntentId else { return }
+        guard receiptEmailState != .sending else { return }
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.looksLikeEmail(address) else {
+            receiptEmailState = .failed("Check the email address: it should look like name@example.com.")
+            return
+        }
+        receiptEmailState = .sending
+        do {
+            _ = try await api.sendReceipt(paymentId: id, email: address)
+            receiptEmailState = .sent
+        } catch is CancellationError {
+            receiptEmailState = .idle
+        } catch {
+            receiptEmailState = .failed(Self.message(for: error))
+        }
+    }
+
     // MARK: Helpers
 
     static func message(for error: Error) -> String {
@@ -652,27 +846,5 @@ final class CheckoutModel {
               !text.contains(where: \.isWhitespace)
         else { return false }
         return true
-    }
-}
-
-extension CheckoutModel.AppointmentContext {
-    /// The context for an appointment: its fixed catalog price is suggested;
-    /// "from" prices and included services aren't, since the final amount
-    /// depends on the work.
-    init(appointment: IzzyAPI.Appointment, catalog: Catalog) {
-        let offering = catalog.offering(withID: appointment.offeringId)
-        let suggested: Int?
-        if let price = offering?.price, price.kind == .fixed, price.cents > 0 {
-            suggested = price.cents
-        } else {
-            suggested = nil
-        }
-        self.init(
-            id: appointment.id,
-            title: "\(appointment.serviceName) with \(appointment.barberName) for \(appointment.customer.name)",
-            suggestedCents: suggested,
-            priceLabel: offering?.price.label ?? appointment.priceLabel,
-            alreadyPaidCents: appointment.payment.status == .paid ? appointment.payment.amountCents : nil
-        )
     }
 }

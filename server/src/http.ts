@@ -9,8 +9,38 @@ export const ERROR_STATUS = {
   too_soon: 422,
   too_far: 422,
   rate_limited: 429,
+  // No-show protection
+  card_required: 400,
+  policy_changed: 409,
+  not_chargeable: 409,
+  /**
+   * A no-show can only be marked once a booking with a card on file has ended (the code keeps the
+   * name it had when the rule was the start).
+   */
+  not_started: 409,
+  /** A booking with a card on file that was marked completed (or checked out) can't become a no-show. */
+  already_completed: 409,
+  /**
+   * Cancelling now, inside the agreed late-cancellation window, may be charged: the message is the
+   * warning to show the client, and they cancel again with `acceptLateCancelFee: true`.
+   */
+  late_cancel_fee: 409,
+  // Sales
+  /** Only a booked or completed appointment can be checked out. */
+  not_checkoutable: 409,
+  /** The appointment already has a live (not voided) sale. */
+  already_checked_out: 409,
+  /** A card payment's amount isn't its ticket's total. */
+  amount_mismatch: 400,
   stripe_not_configured: 503,
   owner_not_configured: 503,
+  // The shop's own Stripe account (Stripe Connect) and computer sign-in
+  /** Connecting a Stripe account, on a server that uses its own Stripe key (or none). */
+  stripe_connect_off: 409,
+  /** A computer sign-in code that isn't right, was used, ran out or was burned. */
+  wrong_code: 400,
+  /** Signed in on a computer, asking for something only the Business app on the iPhone may do. */
+  forbidden: 403,
   server_error: 500,
 } as const;
 
@@ -41,6 +71,61 @@ const BASE_HEADERS = {
 
 export function json(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...BASE_HEADERS, ...headers } });
+}
+
+/** Text made safe to put in HTML, inside an element or a double-quoted attribute (the only kind used here). */
+export function escapeHtml(text: string): string {
+  const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+  return text.replace(/[&<>"]/g, (c) => entities[c] ?? c);
+}
+
+const PAGE_HEADERS = {
+  'content-type': 'text/html; charset=utf-8',
+  'cache-control': 'no-store',
+  'x-content-type-options': 'nosniff',
+  // These pages carry one-time states and session ids in their address: never pass them on.
+  'referrer-policy': 'no-referrer',
+};
+
+/**
+ * A 302 to `location` (the apps' own `izzyclipz://` links after Stripe Checkout,
+ * a page of the website, or Stripe's own onboarding), with a tiny page linking to
+ * it for a browser that doesn't follow it by itself.
+ */
+export function redirect(location: string): Response {
+  const page = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Izzy Clipz</title><p><a href="${escapeHtml(location)}">Back to Izzy Clipz</a></p>`;
+  return new Response(page, { status: 302, headers: { location, ...PAGE_HEADERS } });
+}
+
+/**
+ * A small, friendly page for a browser that landed on one of the API's own
+ * addresses (Stripe's way back after onboarding) when something isn't right:
+ * one sentence saying what to do. Nothing on it can be cached.
+ */
+export function htmlPage(message: string, status: number, headers: Record<string, string> = {}): Response {
+  const page =
+    '<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<title>Izzy Clipz</title>' +
+    '<style>body{margin:0;padding:48px 24px;font:17px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif;color:#1d1d1f;background:#fff}' +
+    'main{max-width:34em;margin:0 auto}h1{font-size:28px;line-height:1.2;margin:0 0 16px}</style>' +
+    `<main><h1>Izzy Clipz</h1><p>${escapeHtml(message)}</p></main></html>`;
+  return new Response(page, { status, headers: { ...PAGE_HEADERS, ...headers } });
+}
+
+/** `raw` as an http(s) address, or null when it isn't one. */
+export function httpUrl(raw: string | undefined): URL | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/** An address without its trailing slash, as a base to add paths to ("https://example.com/izzy"). */
+export function baseOf(url: URL): string {
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
 }
 
 export function noContent(): Response {
@@ -114,14 +199,33 @@ export async function readJsonObject(request: Request, maxBytes = MAX_JSON_BYTES
   if (mediaType(request) !== 'application/json') {
     throw new ApiError('invalid_request', 'Send the request body as JSON (Content-Type: application/json).', { status: 415 });
   }
-  const bytes = await readLimited(request, maxBytes);
-  let text: string;
+  const text = utf8(await readLimited(request, maxBytes));
+  if (text.trim() === '') throw new ApiError('invalid_request', 'The request needs a JSON body.');
+  return jsonObject(text);
+}
+
+/**
+ * Like `readJsonObject` for a request whose body is optional (it used to have none): no body,
+ * or an empty one, is `{}`. Anything else must be a JSON object sent as `application/json`.
+ */
+export async function readOptionalJsonObject(request: Request, maxBytes = MAX_JSON_BYTES): Promise<Record<string, unknown>> {
+  const text = utf8(await readLimited(request, maxBytes));
+  if (text.trim() === '') return {};
+  if (mediaType(request) !== 'application/json') {
+    throw new ApiError('invalid_request', 'Send the request body as JSON (Content-Type: application/json).', { status: 415 });
+  }
+  return jsonObject(text);
+}
+
+function utf8(bytes: Uint8Array): string {
   try {
-    text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   } catch {
     throw new ApiError('invalid_request', 'The request body must be UTF-8 JSON.');
   }
-  if (text.trim() === '') throw new ApiError('invalid_request', 'The request needs a JSON body.');
+}
+
+function jsonObject(text: string): Record<string, unknown> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);

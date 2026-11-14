@@ -9,9 +9,23 @@ enum AppData {
     static let bookingCalendar = BookingCalendar(clock: clock)
 }
 
-/// Where the shop's reviews live on Google and Yelp.
+/// What the Visit tab says about getting in and around the shop: only the lines the owner checked
+/// and confirmed (the shop's data, one each), then always an invitation to call, since the entrance
+/// isn't confirmed step-free. Never "ADA" (docs/legal/research.md §10). The website's Visit page
+/// says the same.
+enum VisitAccessibility {
+    /// "Room for a wheelchair inside, at the chairs and the counter" and "Accessible parking near the entrance".
+    static var lines: [String] { AppData.shop.accessibility }
+
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    static var callLine: String {
+        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) and we'll help."
+    }
+}
+
+/// Where the shop's reviews live on Yelp.
 enum ReviewLinks {
-    /// The shop's Yelp page, for "Read our reviews on Yelp" when the server has no Yelp data.
+    /// The shop's Yelp page, for "Read our reviews on Yelp": Yelp's reviews are linked, never shown.
     static let yelpPage = URL(string: "https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside")!
 }
 
@@ -34,44 +48,18 @@ enum LaunchOptions {
     }()
 }
 
-/// Photos of the shop's work, bundled from izzyclipzbarbershop.net.
-enum GalleryPhoto: Int, CaseIterable, Identifiable, Hashable {
-    case curls = 1
-    case blueColor
-    case fullBeard
-    case fadeAndBeard
-    case classicBeard
-    case texturedCrop
-
-    var id: Int { rawValue }
-
-    var assetName: String { "Gallery\(rawValue)" }
-
-    /// Describes the cut for VoiceOver.
-    var caption: String {
-        switch self {
-        case .curls: return "Curly top with a taper fade"
-        case .blueColor: return "Blue color with a fade"
-        case .fullBeard: return "Fade with a full, shaped beard"
-        case .fadeAndBeard: return "Short fade with a lined-up beard"
-        case .classicBeard: return "Classic cut with a groomed beard"
-        case .texturedCrop: return "Textured crop with a fade"
-        }
-    }
-}
-
+/// The bundled images. No photo of a person is bundled: one goes in only with that person's written
+/// permission (a parent's or guardian's for anyone under 18), so the photos of clients' cuts the app
+/// used to show are gone (docs/legal/research.md §16).
 enum Asset {
+    /// The shop from the street, at 1919 Mission Ave: Home's photo and the Visit tab's.
     static let storefront = "Storefront"
-    static let hero = GalleryPhoto.texturedCrop.assetName
     static let launchLogo = "LaunchLogo"
     /// The shop's official logo: white art on a transparent background.
     static let logo = "Logo"
 
     /// Every bundled image the app refers to, for a test to check.
-    static var all: [String] {
-        [storefront, hero, launchLogo, logo]
-            + GalleryPhoto.allCases.map(\.assetName)
-    }
+    static let all = [storefront, launchLogo, logo]
 }
 
 /// What `-ui-testing` launches start with, set by launch arguments so each UI test gets the state
@@ -85,6 +73,9 @@ enum UITestSetup {
     static let bookedAppointment = "-fakeBookedAppointment"
     /// `-fakeSavedDetails`: the client's name and number are already remembered.
     static let savedDetails = "-fakeSavedDetails"
+    /// `-fakeBookedSoonWithCard`: an appointment booked in the app with a card on file, starting in
+    /// 45 minutes, so cancelling it now may be charged (no-show protection's late cancellation).
+    static let bookedSoonWithCard = "-fakeBookedSoonWithCard"
 
     private static var arguments: [String] { ProcessInfo.processInfo.arguments }
 
@@ -111,6 +102,9 @@ enum UITestSetup {
 
     static func seed(_ store: AppointmentStore, api: any ShopAPI, customerDetails: CustomerDetailsStore) {
         if arguments.contains(bookedAppointment), let fake = api as? FakeShopAPI, let confirmation = fake.seedBooking() {
+            store.add(confirmation, remind: true)
+        }
+        if arguments.contains(bookedSoonWithCard), let fake = api as? FakeShopAPI, let confirmation = fake.seedBookingStartingSoonWithCard() {
             store.add(confirmation, remind: true)
         }
         if arguments.contains(savedDetails) {

@@ -87,13 +87,48 @@ public enum AppointmentReminderKind: String, CaseIterable, Sendable {
     case dayBefore
     /// An hour before it starts.
     case hourBefore
+    /// An hour before free cancelling ends, for an appointment whose late cancellations may be
+    /// charged (`LateCancelTerms`), when neither of the others comes while cancelling is still free.
+    case freeCancelEnds
 
-    /// How long before the start the reminder fires.
+    /// How long before the start the reminder fires; for `freeCancelEnds`, how long before free
+    /// cancelling ends.
     public var leadTime: TimeInterval {
         switch self {
         case .dayBefore: return 24 * 60 * 60
-        case .hourBefore: return 60 * 60
+        case .hourBefore, .freeCancelEnds: return 60 * 60
         }
+    }
+}
+
+/// What cancelling an appointment late may cost, for its reminders: it was booked with a card on
+/// file under a policy that charges late cancellations (`IzzyAPI.Appointment.lateCancelTerms`).
+public struct LateCancelTerms: Hashable, Sendable {
+    /// Cancelling less than this many minutes before the start may be charged.
+    public var windowMinutes: Int
+    /// The fee: "$45".
+    public var feeLabel: String
+    /// When it was booked: cancelling within 15 minutes of booking is free whatever the window
+    /// (`IzzyAPI.NoShowRule.lateCancelGraceMinutes`). `nil` counts no grace period.
+    public var bookedAt: Date?
+
+    public init(windowMinutes: Int, feeLabel: String, bookedAt: Date? = nil) {
+        self.windowMinutes = windowMinutes
+        self.feeLabel = feeLabel
+        self.bookedAt = bookedAt
+    }
+
+    /// The last moment cancelling an appointment that starts at `start` is free: exactly the
+    /// window before it (less than that is late, as the server counts it), or, when that's later,
+    /// the end of the 15 minutes after booking, to the minute (a time booked inside the window is
+    /// free to cancel only for those 15 minutes).
+    public func freeUntil(start: Date) -> Date {
+        let window = start.addingTimeInterval(-TimeInterval(windowMinutes) * 60)
+        guard let bookedAt else { return window }
+        let grace = bookedAt.addingTimeInterval(TimeInterval(IzzyAPI.NoShowRule.lateCancelGraceMinutes) * 60)
+        // Down to the minute, so "by 12:07 PM" is still free all through 12:07.
+        let graceMinute = Date(timeIntervalSinceReferenceDate: (grace.timeIntervalSinceReferenceDate / 60).rounded(.down) * 60)
+        return max(window, graceMinute)
     }
 }
 
@@ -128,16 +163,27 @@ public enum AppointmentPlanner {
         appointments.filter { !$0.isUpcoming(at: now) }.map(\.start).max()
     }
 
-    /// The day-before and hour-before reminders that are still in the future.
+    /// The reminders that are still in the future, soonest first: the day before and an hour before.
     ///
     /// Titles read "Haircut tomorrow at 2:30 PM" and "Haircut at 2:30 PM";
     /// bodies "With Carlos at Izzy Clipz, 1919 Mission Ave." Times are shop time.
+    ///
+    /// With `lateCancel` (a card on file, under a policy that charges late cancellations), each
+    /// body also says where the client stands then: "Can't make it? Cancel in the app by 1:30 PM
+    /// tomorrow so it's free." while cancelling is still free, and "Cancelling now may be charged
+    /// $45." once it isn't (with a 1-hour window, the hour-before reminder comes exactly when free
+    /// cancelling ends). When neither comes while cancelling is still free, a `freeCancelEnds`
+    /// reminder comes an hour before it ends, so the client always hears in time: "Can't make it?
+    /// Cancel in the app by 1:30 PM so it's free. After that, cancelling may be charged $45." It
+    /// never comes at night: an hour that falls before 8 AM or from 9 PM moves to 8 PM the evening
+    /// before (and there's none once that's past).
     public static func reminders(
         for appointment: Appointment,
         shopName: String,
         address: String,
         calendar: BookingCalendar,
-        now: Date
+        now: Date,
+        lateCancel: LateCancelTerms? = nil
     ) -> [AppointmentReminder] {
         let barber = appointment.barberID == nil ? "the first available barber" : appointment.barberName
         let place = address.isEmpty ? shopName : "\(shopName), \(address)"
@@ -145,20 +191,70 @@ public enum AppointmentPlanner {
         let startDay = calendar.day(containing: appointment.start)
         let time = calendar.timeLabel(for: appointment.start)
 
-        return AppointmentReminderKind.allCases.compactMap { kind in
+        /// "Haircut at 2:30 PM", "Haircut tomorrow at 2:30 PM" or "Haircut on Fri, Oct 30 at 2:30 PM",
+        /// for a reminder that comes at `date`.
+        func title(at date: Date) -> String {
+            let day = dayWords(for: startDay, seenOn: calendar.day(containing: date), calendar: calendar)
+            return "\(appointment.serviceName) \(day.map { "\($0) at" } ?? "at") \(time)"
+        }
+
+        let regular: [AppointmentReminder] = [AppointmentReminderKind.dayBefore, .hourBefore].compactMap { kind in
             let date = appointment.start.addingTimeInterval(-kind.leadTime)
             guard date > now else { return nil }
-            let fireDay = calendar.day(containing: date)
-            let when: String
-            if startDay == fireDay {
-                when = "at \(time)"
-            } else if startDay == fireDay.adding(days: 1) {
-                when = "tomorrow at \(time)"
-            } else {
-                when = "on \(calendar.shortLabel(for: startDay)) at \(time)"
-            }
-            return AppointmentReminder(kind: kind, date: date, title: "\(appointment.serviceName) \(when)", body: body)
+            return AppointmentReminder(kind: kind, date: date, title: title(at: date), body: body)
         }
+        guard let lateCancel else { return regular }
+
+        let freeUntil = lateCancel.freeUntil(start: appointment.start)
+        /// "by 1:30 PM", "by 1:30 PM tomorrow" or "by 1:30 PM on Fri, Oct 30", for a reminder at `date`.
+        func cancelBy(seenAt date: Date) -> String {
+            let day = dayWords(for: calendar.day(containing: freeUntil), seenOn: calendar.day(containing: date), calendar: calendar)
+            return "by \(calendar.timeLabel(for: freeUntil))" + (day.map { " \($0)" } ?? "")
+        }
+        var reminders = regular.map { reminder in
+            // Exactly when free cancelling ends counts as too late: the client can't cancel in no time.
+            let standing = reminder.date < freeUntil
+                ? "Can't make it? Cancel in the app \(cancelBy(seenAt: reminder.date)) so it's free."
+                : "Cancelling now may be charged \(lateCancel.feeLabel)."
+            return AppointmentReminder(kind: reminder.kind, date: reminder.date, title: reminder.title, body: "\(reminder.body) \(standing)")
+        }
+        if !reminders.contains(where: { $0.date < freeUntil }),
+           let date = freeCancelReminderDate(freeUntil: freeUntil, calendar: calendar, now: now) {
+            reminders.append(AppointmentReminder(
+                kind: .freeCancelEnds,
+                date: date,
+                title: title(at: date),
+                body: "Can't make it? Cancel in the app \(cancelBy(seenAt: date)) so it's free. "
+                    + "After that, cancelling may be charged \(lateCancel.feeLabel)."
+            ))
+        }
+        return reminders.sorted { $0.date < $1.date }
+    }
+
+    /// The reminder before free cancelling ends comes between 8 AM and 9 PM, shop time; one that
+    /// would come at night comes at 8 PM the evening before.
+    static let firstReminderHour = 8
+    static let nightStartsHour = 21
+    static let eveningReminderHour = 20
+
+    /// When the `freeCancelEnds` reminder comes: an hour before `freeUntil`, or 8 PM the evening
+    /// before when that hour is at night. `nil` once it's past.
+    static func freeCancelReminderDate(freeUntil: Date, calendar: BookingCalendar, now: Date) -> Date? {
+        var date = freeUntil.addingTimeInterval(-AppointmentReminderKind.freeCancelEnds.leadTime)
+        let hour = calendar.clock.calendar.component(.hour, from: date)
+        if hour < firstReminderHour || hour >= nightStartsHour {
+            let day = calendar.day(containing: date).adding(days: hour < firstReminderHour ? -1 : 0)
+            guard let evening = calendar.date(on: day, at: TimeOfDay(hour: eveningReminderHour)) else { return nil }
+            date = evening
+        }
+        return date > now ? date : nil
+    }
+
+    /// How `day` is said on `seenOn`: `nil` for the same day, "tomorrow", or "on Fri, Oct 30".
+    private static func dayWords(for day: CalendarDay, seenOn: CalendarDay, calendar: BookingCalendar) -> String? {
+        if day == seenOn { return nil }
+        if day == seenOn.adding(days: 1) { return "tomorrow" }
+        return "on \(calendar.shortLabel(for: day))"
     }
 
     /// Stored form of saved appointments: a JSON array.

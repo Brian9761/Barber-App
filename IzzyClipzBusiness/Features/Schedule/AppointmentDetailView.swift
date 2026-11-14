@@ -1,8 +1,9 @@
 import IzzyClipzKit
 import SwiftUI
 
-/// One appointment: the client (call or text), what and when, payment, and
-/// what the owner can do with it.
+/// One appointment: the client (call or text), what and when, Check out (the main action until
+/// it's checked out, then "Paid $60 · Cash"), the card on file and its fee, payment, and what the
+/// owner can do with it.
 struct AppointmentDetailView: View {
     let appointmentID: String
     let store: ScheduleStore
@@ -10,12 +11,18 @@ struct AppointmentDetailView: View {
     @State private var confirmsCancel = false
     @State private var confirmsAnotherPayment = false
     @State private var paymentBusyMessage: String?
+    /// What Reopen says first about the fee, while it asks.
+    @State private var reopenWarning: String?
     @Environment(\.openURL) private var openURL
 
     var body: some View {
         Group {
             if let appointment = store.appointment(withID: appointmentID) {
-                details(appointment)
+                // Every minute the clock is read again, so a booking with a card on file offers
+                // "Mark no-show" (and its fee) once it has ended.
+                TimelineView(.everyMinute) { _ in
+                    details(appointment, now: store.now)
+                }
             } else {
                 ContentUnavailableView(
                     "Appointment not found",
@@ -29,8 +36,10 @@ struct AppointmentDetailView: View {
     }
 
     @ViewBuilder
-    private func details(_ appointment: IzzyAPI.Appointment) -> some View {
+    private func details(_ appointment: IzzyAPI.Appointment, now: Date) -> some View {
         let isUpdating = store.updating.contains(appointment.id)
+        // No status change while the fee is being charged: the server decides the fee by the status.
+        let isBusy = isUpdating || store.chargingFee.contains(appointment.id)
         List {
             Section {
                 VStack(alignment: .leading, spacing: 6) {
@@ -42,20 +51,19 @@ struct AppointmentDetailView: View {
                         .font(.headline)
                     Text("\(store.shopTime.shortDay(store.shopTime.day(containing: appointment.start))), \(store.shopTime.timeRange(appointment.start, appointment.end))")
                         .foregroundStyle(.secondary)
-                    HStack(spacing: 6) {
-                        StatusBadge(status: appointment.status)
-                            .accessibilityIdentifier("detailStatus")
-                        if appointment.payment.status == .paid {
-                            Badge(text: appointment.payment.amountCents.map { "Paid \(Money.amount($0))" } ?? "Paid", color: BusinessTheme.paid)
-                        }
-                    }
-                    .padding(.top, 2)
+                    AppointmentBadgeRow(badges: AppointmentBadges(appointment: appointment), statusIdentifier: "detailStatus")
+                        .padding(.top, 2)
                 }
                 .padding(.vertical, 4)
                 LabeledContent("Length", value: appointment.durationLabel)
                 LabeledContent("Price", value: appointment.priceLabel)
                 if appointment.status == .cancelled {
                     LabeledContent("Cancelled by", value: appointment.cancelledBy == .customer ? "The client" : "The shop")
+                }
+                if let cancelledAt = appointment.noShowFee?.customerCancelledAt {
+                    // Kept even after the shop reopens it: a client who cancelled is never charged a no-show fee.
+                    LabeledContent("Client cancelled in the app", value: store.shopTime.dayAndTime(cancelledAt))
+                        .accessibilityIdentifier("detailCustomerCancelled")
                 }
                 if let note = appointment.note {
                     LabeledContent("Note") {
@@ -65,9 +73,11 @@ struct AppointmentDetailView: View {
                 }
             }
 
+            checkOutSection(appointment)
             contactSection(appointment)
+            NoShowFeeSection(appointment: appointment, now: now, store: store)
             paymentSection(appointment)
-            actionsSection(appointment, isUpdating: isUpdating)
+            actionsSection(appointment, now: now, isUpdating: isUpdating, isBusy: isBusy)
         }
         .confirmationDialog(
             "Cancel \(appointment.customer.name)'s appointment?",
@@ -79,18 +89,33 @@ struct AppointmentDetailView: View {
             }
             .accessibilityIdentifier("confirmCancelAppointment")
             Button("Keep it", role: .cancel) {}
+                .accessibilityIdentifier("keepAppointment")
         } message: {
-            Text("\(store.shopTime.time(appointment.start)) with \(appointment.barberName). The time opens up for other clients. The app doesn't message the client, so let them know.")
+            Text(cancelMessage(appointment))
+        }
+        .confirmationDialog(
+            "Reopen \(appointment.customer.name)'s appointment?",
+            isPresented: Binding(get: { reopenWarning != nil }, set: { if !$0 { reopenWarning = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Reopen") {
+                Task { await store.setStatus(.booked, for: appointment) }
+            }
+            .accessibilityIdentifier("confirmReopen")
+            Button("Keep it as it is", role: .cancel) {}
+        } message: {
+            Text(reopenWarning ?? "")
         }
         .confirmationDialog(
             "This appointment is already paid",
             isPresented: $confirmsAnotherPayment,
             titleVisibility: .visible
         ) {
-            Button("Take another payment") { startPayment(appointment) }
+            Button("Check out something extra") { startExtra(appointment) }
+                .accessibilityIdentifier("confirmCheckOutExtra")
             Button("Not now", role: .cancel) {}
         } message: {
-            Text("\(appointment.payment.amountCents.map(Money.amount) ?? "A payment") was already paid for this appointment. Take another payment only for something extra, like a product or a tip.")
+            Text("\(appointment.payment.amountCents.map(Money.amount) ?? "A payment") was already paid for this appointment by card. Check out again only for something extra, like a product or a tip.")
         }
         .alert(
             "Finish the current payment first",
@@ -138,52 +163,90 @@ struct AppointmentDetailView: View {
         }
     }
 
+    /// Check out: the main action for a booked or completed appointment that isn't checked out yet.
+    /// Once it is, the Payment section says "Paid $60 · Cash".
     @ViewBuilder
-    private func paymentSection(_ appointment: IzzyAPI.Appointment) -> some View {
-        Section("Payment") {
-            if appointment.payment.status == .paid {
-                LabeledContent("Paid", value: appointment.payment.amountCents.map(Money.amount) ?? "Yes")
-                    .accessibilityIdentifier("detailPayment")
-                if let paidAt = appointment.payment.paidAt {
-                    LabeledContent("When", value: store.shopTime.dayAndTime(paidAt))
-                }
-            } else {
-                LabeledContent("Not paid yet", value: appointment.priceLabel)
-                    .accessibilityIdentifier("detailPayment")
-            }
-            if appointment.status != .cancelled {
+    private func checkOutSection(_ appointment: IzzyAPI.Appointment) -> some View {
+        if appointment.canCheckOut {
+            Section {
                 Button {
                     if appointment.payment.status == .paid {
                         confirmsAnotherPayment = true
                     } else {
-                        startPayment(appointment)
+                        startCheckout(appointment)
                     }
                 } label: {
-                    Label(appointment.payment.status == .paid ? "Take another payment" : "Take payment", systemImage: "wave.3.right.circle")
-                        .frame(minHeight: BusinessTheme.minimumTapSize)
+                    Label("Check out", systemImage: "cart")
                 }
-                .accessibilityIdentifier("takePaymentForAppointment")
+                .buttonStyle(PrimaryButtonStyle())
+                .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
+                .accessibilityHint("Opens Take payment with \(appointment.serviceName) on the ticket.")
+                .accessibilityIdentifier("checkOutAppointment")
+            } footer: {
+                Text("Ring up the service, any products, and how the client paid: card, cash or another way.")
             }
         }
     }
 
     @ViewBuilder
-    private func actionsSection(_ appointment: IzzyAPI.Appointment, isUpdating: Bool) -> some View {
+    private func paymentSection(_ appointment: IzzyAPI.Appointment) -> some View {
+        let summary = PaymentSummary(appointment: appointment)
+        Section("Payment") {
+            LabeledContent(summary.title, value: summary.value)
+                .accessibilityIdentifier("detailPayment")
+            if appointment.payment.status == .paid, let paidAt = appointment.payment.paidAt {
+                LabeledContent("When", value: store.shopTime.dayAndTime(paidAt))
+            }
+            if appointment.sale != nil {
+                Text("Checked out. To change the sale, void it in Take payment → Today's sales.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("detailSaleNote")
+            }
+            if let feeNote = summary.feeNote {
+                // A charged fee isn't the service's payment: said here, so it isn't taken again.
+                Text(feeNote)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("detailPaymentFeeNote")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func actionsSection(_ appointment: IzzyAPI.Appointment, now: Date, isUpdating: Bool, isBusy: Bool) -> some View {
         Section {
             switch appointment.status {
             case .booked:
-                actionButton("Mark completed", systemImage: "checkmark.circle", id: "markCompleted", disabled: isUpdating) {
+                // Done without checking out (the service still counts at its booked price).
+                actionButton("Mark done", systemImage: "checkmark.circle", id: "markCompleted", disabled: isBusy) {
                     Task { await store.setStatus(.completed, for: appointment) }
                 }
-                actionButton("Mark no-show", systemImage: "person.fill.questionmark", id: "markNoShow", disabled: isUpdating) {
-                    Task { await store.setStatus(.noShow, for: appointment) }
+                // A booking with a card on file is a no-show only once it has ended (the client may still come until then).
+                if appointment.canMarkNoShow(at: now) {
+                    actionButton("Mark no-show", systemImage: "person.fill.questionmark", id: "markNoShow", disabled: isBusy) {
+                        Task { await store.setStatus(.noShow, for: appointment) }
+                    }
                 }
-                actionButton("Cancel appointment", systemImage: "xmark.circle", id: "cancelAppointment", role: .destructive, disabled: isUpdating) {
+                actionButton("Cancel appointment", systemImage: "xmark.circle", id: "cancelAppointment", role: .destructive, disabled: isBusy) {
                     confirmsCancel = true
                 }
             case .completed, .noShow, .cancelled:
-                actionButton("Reopen", systemImage: "arrow.uturn.backward.circle", id: "reopenAppointment", disabled: isUpdating) {
-                    Task { await store.setStatus(.booked, for: appointment) }
+                // A checked-out appointment stays completed until its sale is voided (the server's rule).
+                if appointment.sale == nil {
+                    actionButton("Reopen", systemImage: "arrow.uturn.backward.circle", id: "reopenAppointment", disabled: isBusy) {
+                        if let warning = FeePanel.reopenWarning(for: appointment, now: now) {
+                            reopenWarning = warning
+                        } else {
+                            Task { await store.setStatus(.booked, for: appointment) }
+                        }
+                    }
+                } else {
+                    Text("Checked out")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("checkedOutStatus")
                 }
             }
         } header: {
@@ -194,9 +257,16 @@ struct AppointmentDetailView: View {
         } footer: {
             switch appointment.status {
             case .booked:
-                Text("Cancelling frees the time for other clients.")
+                if let hint = FeePanel.noShowHint(for: appointment, now: now, shopTime: store.shopTime) {
+                    Text("Cancelling frees the time for other clients.\n\(hint)")
+                        .accessibilityIdentifier("noShowHint")
+                } else {
+                    Text("Cancelling frees the time for other clients.")
+                }
             case .cancelled:
                 Text("Reopening books the time again, if nobody else has taken it.")
+            case .completed where appointment.sale != nil:
+                Text("To reopen it, void its sale first, in Take payment → Today's sales.")
             case .completed, .noShow:
                 Text("Reopening sets it back to booked.")
             }
@@ -219,8 +289,20 @@ struct AppointmentDetailView: View {
         .accessibilityIdentifier(id)
     }
 
-    private func startPayment(_ appointment: IzzyAPI.Appointment) {
-        if !workspace.takePayment(for: appointment) {
+    private func cancelMessage(_ appointment: IzzyAPI.Appointment) -> String {
+        var message = "\(store.shopTime.time(appointment.start)) with \(appointment.barberName). The time opens up for other clients. The app doesn't message the client, so let them know."
+        if let note = FeePanel.shopCancelNote(for: appointment) { message += " \(note)" }
+        return message
+    }
+
+    private func startCheckout(_ appointment: IzzyAPI.Appointment) {
+        if !workspace.checkOut(appointment) {
+            paymentBusyMessage = "A payment is in progress on the Take payment tab. Finish or cancel it, then try again."
+        }
+    }
+
+    private func startExtra(_ appointment: IzzyAPI.Appointment) {
+        if !workspace.checkOutExtra(for: appointment) {
             paymentBusyMessage = "A payment is in progress on the Take payment tab. Finish or cancel it, then try again."
         }
     }

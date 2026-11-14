@@ -26,6 +26,8 @@
 	<string>https://izzy-clipz-api.vercel.app</string>
 	<key>IzzyDemoMode</key>
 	<string>$(IZZY_DEMO_MODE)</string>
+	<key>IzzyWebsiteURL</key>
+	<string>$(IZZY_WEBSITE_URL)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

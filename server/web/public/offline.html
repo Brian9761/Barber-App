@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!--
+      What the app shows for a page it doesn't have when there's no connection. The service
+      worker keeps it, with the icon it shows. Everything it needs is in this file.
+    -->
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="robots" content="noindex" />
+    <title>You're offline · Izzy Clipz Barbershop</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+      }
+      body {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        font: 17px/1.47059 -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", "Inter", "Segoe UI", Arial, sans-serif;
+        letter-spacing: -0.022em;
+        color: #1d1d1f;
+        background: #000;
+        -webkit-font-smoothing: antialiased;
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+      header {
+        display: flex;
+        justify-content: center;
+        padding: calc(24px + env(safe-area-inset-top, 0px)) 24px 24px;
+        background: #000;
+      }
+      header img {
+        display: block;
+        width: 112px;
+        height: 112px;
+      }
+      main {
+        flex: 1 0 auto;
+        padding: 56px max(24px, env(safe-area-inset-right, 0px)) calc(56px + env(safe-area-inset-bottom, 0px)) max(24px, env(safe-area-inset-left, 0px));
+        background: #fff;
+        text-align: center;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Inter", "Segoe UI", Arial, sans-serif;
+        font-size: 40px;
+        line-height: 1.1;
+        font-weight: 600;
+        letter-spacing: -0.005em;
+      }
+      .lead {
+        max-width: 26em;
+        margin: 0 auto 32px;
+        font-size: 21px;
+        line-height: 1.38;
+        color: #1d1d1f;
+      }
+      .lead a {
+        color: #1f4fd8;
+        font-weight: 600;
+        white-space: nowrap;
+        text-decoration: underline;
+        text-underline-offset: 0.18em;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px 16px;
+      }
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 50px;
+        padding: 12px 28px;
+        border: 1px solid #1f4fd8;
+        border-radius: 980px;
+        font-size: 19px;
+        line-height: 1.2;
+        text-decoration: none;
+      }
+      .button--primary {
+        background: #1f4fd8;
+        color: #fff;
+        font-weight: 600;
+      }
+      .button--secondary {
+        background: #fff;
+        color: #1f4fd8;
+      }
+      .more {
+        margin: 32px 0 0;
+        color: #6e6e73;
+      }
+      .more a {
+        color: #1f4fd8;
+      }
+      .legal {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0 20px;
+        margin: 40px 0 0;
+        font-size: 14px;
+      }
+      .legal a {
+        display: inline-block;
+        padding: 4px 0;
+        color: #6e6e73;
+        text-decoration: underline;
+        text-underline-offset: 0.18em;
+      }
+      a:focus-visible {
+        outline: 3px solid #1f4fd8;
+        outline-offset: 3px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <img src="/icon-192.png" width="112" height="112" alt="Izzy Clipz" />
+    </header>
+    <main>
+      <h1>You're offline.</h1>
+      <p class="lead">To book, call the shop: <a href="tel:+14423413053">(442) 341-3053</a></p>
+      <div class="actions">
+        <a class="button button--primary" href="tel:+14423413053">Call the shop</a>
+        <a class="button button--secondary" href="">Try again</a>
+      </div>
+      <p class="more">Or <a href="/">open the home page</a>, which works without a connection.</p>
+      <nav class="legal" aria-label="Legal">
+        <a href="/privacy">Privacy Policy</a>
+        <a href="/terms">Terms of Service</a>
+        <a href="/cancellation-policy">Cancellation &amp; No-Show Policy</a>
+        <a href="/accessibility">Accessibility</a>
+      </nav>
+    </main>
+  </body>
+</html>

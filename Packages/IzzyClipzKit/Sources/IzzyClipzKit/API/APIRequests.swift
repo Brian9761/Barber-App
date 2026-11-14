@@ -75,19 +75,34 @@ extension IzzyAPI {
     }
 
     /// `POST /api/appointments` and `POST /api/owner/appointments`:
-    /// `{ offeringId? | (serviceId + barberId: "any"), start, customer, note? }`.
+    /// `{ offeringId? | (serviceId + barberId: "any"), start, customer, note?, noShowPolicy?, keepCard? }`.
     public struct NewAppointment: Encodable, Hashable, Sendable {
         public var target: BookingTarget
         /// A slot's `start`, exactly as the server listed it.
         public var start: Date
         public var customer: NewCustomer
         public var note: String?
+        /// No-show protection, when the policy says a card is required: the saved card (sent as
+        /// `X-Card-Token`) and the policy text shown (sent as `noShowPolicy`). Customer bookings
+        /// only; the shop's own bookings never send it. Not part of `retryKey`.
+        public var noShow: NoShowAgreement?
+        /// The client's "Remember me" for the card on file: `false` when they didn't ask to keep it,
+        /// so the server marks the card for deletion in the booking's own transaction (it's used for
+        /// this booking only, and deleted once no booking needs it, as `DELETE /api/cards` would).
+        /// Sent only as `false`, and only with a card (`noShow`): `nil` or `true` leaves it out, and
+        /// the card is kept, as before. Customer bookings only. Not part of `retryKey`.
+        public var keepCard: Bool?
 
-        public init(target: BookingTarget, start: Date, customer: NewCustomer, note: String? = nil) {
+        public init(
+            target: BookingTarget, start: Date, customer: NewCustomer, note: String? = nil, noShow: NoShowAgreement? = nil,
+            keepCard: Bool? = nil
+        ) {
             self.target = target
             self.start = start
             self.customer = customer
             self.note = note
+            self.noShow = noShow
+            self.keepCard = keepCard
         }
 
         private struct Key: CodingKey {
@@ -106,6 +121,12 @@ extension IzzyAPI {
             try container.encode(start, forKey: Key("start"))
             try container.encode(customer, forKey: Key("customer"))
             try container.encodeIfPresent(note?.trimmed.nonEmpty, forKey: Key("note"))
+            // Exactly as the server gave it: the server compares it with the current policy.
+            try container.encodeIfPresent(noShow?.policyText, forKey: Key("noShowPolicy"))
+            // Only to say "don't keep it", and only about a card the booking goes with.
+            if noShow != nil, keepCard == false {
+                try container.encode(false, forKey: Key("keepCard"))
+            }
         }
 
         /// What the server compares when the same manage token comes back
@@ -118,6 +139,37 @@ extension IzzyAPI {
             let phone = customer.phone?.trimmed.nonEmpty.map { PhoneNumber(parsing: $0)?.e164 ?? $0 } ?? ""
             return [target, Timestamp.string(from: start), phone].joined(separator: "|")
         }
+    }
+
+    /// A body of only a booking target: `{ offeringId }` or `{ serviceId, barberId: "any" }`
+    /// (`POST /api/cards/checkout`).
+    struct TargetBody: Encodable, Hashable, Sendable {
+        var target: BookingTarget
+
+        private struct Key: CodingKey {
+            let stringValue: String
+            var intValue: Int? { nil }
+            init(_ string: String) { stringValue = string }
+            init?(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { nil }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: Key.self)
+            for field in target.fields {
+                try container.encode(field.value, forKey: Key(field.name))
+            }
+        }
+    }
+
+    /// `POST /api/cards` body `{ sessionId }`.
+    struct SaveCardBody: Encodable, Hashable, Sendable {
+        var sessionId: String
+    }
+
+    /// `POST /api/owner/payments/:id/receipt` body `{ email }`.
+    struct ReceiptBody: Encodable, Hashable, Sendable {
+        var email: String
     }
 
     /// `PATCH /api/owner/appointments/:id` body `{ status }`.
@@ -260,27 +312,41 @@ extension IzzyAPI {
         }
     }
 
-    /// `POST /api/owner/payments` body `{ amountCents, description?, appointmentId?, receiptEmail? }`.
+    /// `POST /api/owner/payments` body `{ amountCents, description?, appointmentId?, receiptEmail?, sale? }`.
     public struct NewPayment: Encodable, Hashable, Sendable {
-        /// 50 to 100,000 (`IzzyAPI.paymentAmountRange`).
+        /// 50 to 100,000 (`IzzyAPI.paymentAmountRange`). With a `sale`, exactly its total.
         public var amountCents: Int
         public var description: String?
+        /// With a `sale`, the same as its own (or leave this out).
         public var appointmentId: String?
-        /// Stripe emails the receipt here.
+        /// Leave it `nil`: the server turns an email down here (a 400). California's Song-Beverly
+        /// Credit Card Act bars asking for one before a card payment, so the receipt is offered after
+        /// the payment went through, with `OwnerAPI.sendReceipt(paymentId:email:)`. Kept so older
+        /// code still builds.
         public var receiptEmail: String?
+        /// The checkout's ticket, recorded as a card sale once the payment goes through (sent without
+        /// its `method`). The server checks it like a cash sale first (400, 409 `not_checkoutable` or
+        /// `already_checked_out`), and `amountCents` must be its total (400 `amount_mismatch`).
+        public var sale: NewSale?
 
-        public init(amountCents: Int, description: String? = nil, appointmentId: String? = nil, receiptEmail: String? = nil) {
+        public init(amountCents: Int, description: String? = nil, appointmentId: String? = nil, receiptEmail: String? = nil, sale: NewSale? = nil) {
             self.amountCents = amountCents
             self.description = description
             self.appointmentId = appointmentId
             self.receiptEmail = receiptEmail
+            self.sale = sale
         }
 
-        /// Whether the server will take the amount.
-        public var isAmountAllowed: Bool { IzzyAPI.paymentAmountRange.contains(amountCents) }
+        /// Whether the server will take the amount (and, with a ticket, whether it's the ticket's total
+        /// when the Kit can tell).
+        public var isAmountAllowed: Bool {
+            guard IzzyAPI.paymentAmountRange.contains(amountCents) else { return false }
+            guard let total = sale?.totalCents else { return true }
+            return total == amountCents
+        }
 
         private enum CodingKeys: String, CodingKey {
-            case amountCents, description, appointmentId, receiptEmail
+            case amountCents, description, appointmentId, receiptEmail, sale
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -289,6 +355,7 @@ extension IzzyAPI {
             try container.encodeIfPresent(description?.trimmed.nonEmpty, forKey: .description)
             try container.encodeIfPresent(appointmentId?.trimmed.nonEmpty, forKey: .appointmentId)
             try container.encodeIfPresent(receiptEmail?.trimmed.nonEmpty, forKey: .receiptEmail)
+            try container.encodeIfPresent(sale?.ticket, forKey: .sale)
         }
     }
 }

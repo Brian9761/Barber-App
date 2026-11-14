@@ -40,9 +40,12 @@ final class DemoModeTests: XCTestCase {
         // The real clock, not the UI tests' Monday morning: today's sample bookings are today.
         XCTAssertEqual(environment.clock().timeIntervalSinceNow, 0, accuracy: 60)
         let today = environment.shopTime.day(containing: environment.clock())
-        XCTAssertFalse(server.appointments.isEmpty)
+        XCTAssertFalse(server.appointments(from: today, to: today).isEmpty)
+        // The rest is the 8 weeks before today, for Analytics (`FakeSampleHistory`).
+        XCTAssertTrue(server.options.sampleHistory)
         for appointment in server.appointments {
-            XCTAssertEqual(environment.shopTime.day(containing: appointment.start), today, appointment.customer.name)
+            let day = environment.shopTime.day(containing: appointment.start)
+            XCTAssertTrue(day <= today && day >= today.adding(days: -FakeSampleHistory.days), appointment.customer.name)
         }
 
         // The sample owner key opens the workspace straight away (here without the pauses).
@@ -52,6 +55,18 @@ final class DemoModeTests: XCTestCase {
         await model.start()
         let workspace = try XCTUnwrap(model.workspace, "The demo starts signed in")
         XCTAssertEqual(workspace.ownerKey, FakeServer.ownerKey)
-        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+
+        // The shop's Stripe account starts not connected, so Connect Stripe can be tried: a pretend
+        // step (a moment long) connects a sample account, and Tap to Pay works with the test reader.
+        XCTAssertEqual(server.options.stripeAccount, FakeServer.StripeAccount.none)
+        XCTAssertEqual(environment.stripeWindowDelay, DemoMode.stripeWindowDelay)
+        XCTAssertEqual(workspace.checkout.mode, .unavailable(.stripeNotConnected(.notConnected)))
+        environment.stripeWindowDelay = .zero
+        let connecting = StripeConnectionStore(api: workspace.api, connector: environment.makeStripeConnector())
+        connecting.onChange = { Task { await workspace.refreshStatus() } }
+        await connecting.connect()
+        XCTAssertEqual(connecting.connection?.status, .active)
+        let on = await eventually { workspace.checkout.mode == .sampleServer(locationId: "tml_sample_location") }
+        XCTAssertTrue(on, "Got \(workspace.checkout.mode)")
     }
 }

@@ -1,0 +1,10 @@
+{
+  "noShowSettings": {
+    "enabled": false,
+    "feeMode": "percent",
+    "percent": 100,
+    "flatCents": 2000,
+    "lateCancelEnabled": true,
+    "lateCancelWindowMinutes": 60
+  }
+}

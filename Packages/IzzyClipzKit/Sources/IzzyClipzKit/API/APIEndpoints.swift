@@ -42,6 +42,8 @@ extension IzzyAPI {
         public let credential: Credential
         /// Sent as `Idempotency-Key`, so the server can tell a retry from a new request.
         public let idempotencyKey: IdempotencyKey?
+        /// Sent as `X-Card-Token`: the saved card for no-show protection.
+        public let cardToken: CardToken?
         public let timeout: TimeInterval
 
         init(
@@ -52,6 +54,7 @@ extension IzzyAPI {
             contentType: String? = nil,
             credential: Credential = .none,
             idempotencyKey: IdempotencyKey? = nil,
+            cardToken: CardToken? = nil,
             timeout: TimeInterval = 30
         ) {
             // A POST always has a body, `{}` if nothing else, so servers that
@@ -64,6 +67,7 @@ extension IzzyAPI {
             self.contentType = contentType ?? (body == nil ? nil : "application/json")
             self.credential = credential
             self.idempotencyKey = idempotencyKey
+            self.cardToken = cardToken
             self.timeout = timeout
         }
 
@@ -112,6 +116,10 @@ extension IzzyAPI {
                 // Always 43 base64url characters, so always safe in a header.
                 request.setValue(idempotencyKey.rawValue, forHTTPHeaderField: "Idempotency-Key")
             }
+            if let cardToken {
+                // Always 43 base64url characters too.
+                request.setValue(cardToken.rawValue, forHTTPHeaderField: "X-Card-Token")
+            }
             return request
         }
     }
@@ -137,8 +145,12 @@ extension IzzyAPI {
         /// `POST /api/appointments` with the app's own `X-Manage-Token` → 201 `{ appointment,
         /// manageToken }`, or 200 with the same when this token already booked this appointment
         /// (a retry after a lost answer).
+        /// With `appointment.noShow`, also `X-Card-Token` and the agreed policy (no-show protection).
         public static func book(_ appointment: NewAppointment, token: ManageToken) throws -> Endpoint<BookingConfirmation> {
-            Endpoint(.post, "/api/appointments", body: try json(appointment), credential: .manageToken(token.rawValue))
+            Endpoint(
+                .post, "/api/appointments", body: try json(appointment), credential: .manageToken(token.rawValue),
+                cardToken: appointment.noShow?.cardToken
+            )
         }
 
         /// `GET /api/appointments/:id` with `X-Manage-Token` → `{ appointment }`.
@@ -146,9 +158,15 @@ extension IzzyAPI {
             Endpoint(.get, "/api/appointments/" + segment(id), credential: .manageToken(manageToken))
         }
 
-        /// `POST /api/appointments/:id/cancel` with `X-Manage-Token` → `{ appointment }`.
-        public static func cancelAppointment(id: String, manageToken: String) -> Endpoint<AppointmentResponse> {
-            Endpoint(.post, "/api/appointments/" + segment(id) + "/cancel", credential: .manageToken(manageToken))
+        /// `POST /api/appointments/:id/cancel` with `X-Manage-Token` → `{ appointment }`. The body is
+        /// `{ "acceptLateCancelFee": true }` once the client agreed to the late-cancellation warning
+        /// (409 `late_cancel_fee` otherwise, inside the window), and `{}` before.
+        public static func cancelAppointment(id: String, manageToken: String, acceptLateCancelFee: Bool = false) -> Endpoint<AppointmentResponse> {
+            Endpoint(
+                .post, "/api/appointments/" + segment(id) + "/cancel",
+                body: acceptLateCancelFee ? Data(#"{"acceptLateCancelFee":true}"#.utf8) : nil,
+                credential: .manageToken(manageToken)
+            )
         }
 
         /// `GET /api/reviews` → `{ google, yelp }`.
@@ -161,9 +179,33 @@ extension IzzyAPI {
             Endpoint(.get, "/api/products")
         }
 
+        // MARK: No-show protection
+
+        /// `GET /api/no-show-policy?offeringId=…|serviceId=…&barberId=any` → `{ required,
+        /// minFeeCents, maxFeeCents, policyText, lateCancelWindowMinutes, warning }`.
+        public static func noShowPolicy(for target: BookingTarget) -> Endpoint<NoShowPolicy> {
+            Endpoint(.get, "/api/no-show-policy", query: target.fields.map { QueryItem($0.name, $0.value) })
+        }
+
+        /// `POST /api/cards/checkout` with `X-Card-Token` → 201 `{ url, sessionId }`.
+        public static func startCardCheckout(for target: BookingTarget, token: CardToken) throws -> Endpoint<CardCheckout> {
+            Endpoint(.post, "/api/cards/checkout", body: try json(TargetBody(target: target)), cardToken: token)
+        }
+
+        /// `POST /api/cards` `{ sessionId }` with `X-Card-Token` → 201 `{ card }` (200 when saved before).
+        public static func saveCard(sessionId: String, token: CardToken) throws -> Endpoint<SavedCardResponse> {
+            Endpoint(.post, "/api/cards", body: try json(SaveCardBody(sessionId: sessionId)), cardToken: token)
+        }
+
+        /// `DELETE /api/cards` with `X-Card-Token` → `{ cardDeletion: { status, message } }`; 404 for a
+        /// token with no card.
+        public static func deleteCard(token: CardToken) -> Endpoint<CardDeletionResponse> {
+            Endpoint(.delete, "/api/cards", cardToken: token)
+        }
+
         // MARK: Owner
 
-        /// `GET /api/owner/me` → `{ ok, stripe }`.
+        /// `GET /api/owner/me` → `{ ok, stripe, connection }`.
         public static func ownerStatus() -> Endpoint<OwnerStatus> {
             Endpoint(.get, "/api/owner/me", credential: .ownerKey)
         }
@@ -202,6 +244,22 @@ extension IzzyAPI {
         /// `PATCH /api/owner/appointments/:id` `{ status }` → `{ appointment }`.
         public static func setAppointmentStatus(id: String, to status: AppointmentStatus) throws -> Endpoint<AppointmentResponse> {
             Endpoint(.patch, "/api/owner/appointments/" + segment(id), body: try json(StatusChange(status: status)), credential: .ownerKey)
+        }
+
+        /// `POST /api/owner/appointments/:id/no-show-fee` (a no-show or a late cancellation) →
+        /// `{ appointment }`: see its `noShowFee`.
+        public static func chargeNoShowFee(appointmentId: String) -> Endpoint<AppointmentResponse> {
+            Endpoint(.post, "/api/owner/appointments/" + segment(appointmentId) + "/no-show-fee", credential: .ownerKey)
+        }
+
+        /// `GET /api/owner/no-show-settings` → `{ noShowSettings }`.
+        public static func noShowSettings() -> Endpoint<NoShowSettingsResponse> {
+            Endpoint(.get, "/api/owner/no-show-settings", credential: .ownerKey)
+        }
+
+        /// `PATCH /api/owner/no-show-settings` (partial) → `{ noShowSettings }`.
+        public static func updateNoShowSettings(_ update: NoShowSettingsUpdate) throws -> Endpoint<NoShowSettingsResponse> {
+            Endpoint(.patch, "/api/owner/no-show-settings", body: try json(update), credential: .ownerKey)
         }
 
         /// `GET /api/owner/time-off?from=YYYY-MM-DD&to=YYYY-MM-DD` → `{ timeOff: [TimeOff] }`.
@@ -257,7 +315,8 @@ extension IzzyAPI {
             Endpoint(.post, "/api/owner/terminal/connection-token", credential: .ownerKey)
         }
 
-        /// `POST /api/owner/payments` → 201 `{ paymentIntentId, clientSecret }`.
+        /// `POST /api/owner/payments` (with a checkout's ticket as `sale`, if any) → 201 `{ paymentIntentId,
+        /// clientSecret }`. The owner key only: Tap to Pay is iPhone-only.
         public static func createPayment(_ payment: NewPayment) throws -> Endpoint<PaymentIntentCreated> {
             Endpoint(.post, "/api/owner/payments", body: try json(payment), credential: .ownerKey)
         }
@@ -267,9 +326,89 @@ extension IzzyAPI {
             Endpoint(.post, "/api/owner/payments/" + segment(id) + "/complete", credential: .ownerKey)
         }
 
+        /// `POST /api/owner/payments/:id/receipt` `{ email }` → `{ payment }`: Stripe emails the receipt
+        /// (the owner key only, like taking the payment).
+        public static func sendReceipt(paymentId: String, email: String) throws -> Endpoint<PaymentResponse> {
+            Endpoint(
+                .post, "/api/owner/payments/" + segment(paymentId) + "/receipt",
+                body: try json(ReceiptBody(email: email.trimmed)), credential: .ownerKey
+            )
+        }
+
         /// `GET /api/owner/payments?date=YYYY-MM-DD` → `{ payments }`.
         public static func payments(on date: LocalDate) -> Endpoint<PaymentsResponse> {
             Endpoint(.get, "/api/owner/payments", query: [QueryItem("date", date.description)], credential: .ownerKey)
+        }
+
+        // MARK: The shop's Stripe account
+
+        /// `GET /api/owner/stripe` → the connection, read live from Stripe.
+        public static func stripeConnection() -> Endpoint<StripeConnection> {
+            Endpoint(.get, "/api/owner/stripe", credential: .ownerKey)
+        }
+
+        /// `POST /api/owner/stripe/connect` `{ returnTo: "app" }` → 201 `{ url, expiresAt }`; 409
+        /// `stripe_connect_off` when the server uses its own key.
+        public static func connectStripe() throws -> Endpoint<StripeConnectLink> {
+            Endpoint(.post, "/api/owner/stripe/connect", body: try json(StripeConnectBody()), credential: .ownerKey)
+        }
+
+        /// `DELETE /api/owner/stripe/connect` → the connection, `notConnected` (the owner key only).
+        public static func disconnectStripe() -> Endpoint<StripeConnection> {
+            Endpoint(.delete, "/api/owner/stripe/connect", credential: .ownerKey)
+        }
+
+        // MARK: Computers
+
+        /// `POST /api/owner/computer-codes` → 201 `{ code, expiresAt, expiresInSeconds }` (the owner key only).
+        public static func createComputerCode() -> Endpoint<ComputerCode> {
+            Endpoint(.post, "/api/owner/computer-codes", credential: .ownerKey)
+        }
+
+        /// `GET /api/owner/computer-sessions` → `{ sessions }`.
+        public static func computerSessions() -> Endpoint<ComputerSessionsResponse> {
+            Endpoint(.get, "/api/owner/computer-sessions", credential: .ownerKey)
+        }
+
+        /// `DELETE /api/owner/computer-sessions/:id` → 204.
+        public static func signOutComputer(id: String) -> Endpoint<NoContent> {
+            Endpoint(.delete, "/api/owner/computer-sessions/" + segment(id), credential: .ownerKey)
+        }
+
+        /// `DELETE /api/owner/computer-sessions` → 204: every computer.
+        public static func signOutAllComputers() -> Endpoint<NoContent> {
+            Endpoint(.delete, "/api/owner/computer-sessions", credential: .ownerKey)
+        }
+
+        /// `POST /api/computer-sessions` `{ code, name }` → 201 `{ token, session }`: the website's
+        /// sign-in with a code (public). 400 `wrong_code`; 429 after 10 tries from one network.
+        public static func signInComputer(code: String, name: String?) throws -> Endpoint<ComputerSessionCreated> {
+            Endpoint(.post, "/api/computer-sessions", body: try json(ComputerSignInBody(code: code, name: name)))
+        }
+
+        // MARK: Sales and analytics
+
+        /// `POST /api/owner/sales` with `Idempotency-Key` → 201 `{ sale }`, or 200 with the same when
+        /// this key already recorded this sale (Save again after a lost answer).
+        public static func recordSale(_ sale: NewSale, idempotencyKey: IdempotencyKey) throws -> Endpoint<SaleResponse> {
+            Endpoint(.post, "/api/owner/sales", body: try json(sale), credential: .ownerKey, idempotencyKey: idempotencyKey)
+        }
+
+        /// `GET /api/owner/sales?date=YYYY-MM-DD` → `{ date, sales, totals }`.
+        public static func sales(on date: LocalDate) -> Endpoint<SalesDay> {
+            Endpoint(.get, "/api/owner/sales", query: [QueryItem("date", date.description)], credential: .ownerKey)
+        }
+
+        /// `POST /api/owner/sales/:id/void` `{ reason? }` → `{ sale, message }`.
+        public static func voidSale(id: String, reason: String?) throws -> Endpoint<VoidedSale> {
+            Endpoint(.post, "/api/owner/sales/" + segment(id) + "/void", body: try json(VoidSaleBody(reason: reason)), credential: .ownerKey)
+        }
+
+        /// `GET /api/owner/analytics?from=YYYY-MM-DD&to=YYYY-MM-DD[&barberId=…]` → the analytics.
+        public static func analytics(_ query: AnalyticsQuery) -> Endpoint<Analytics> {
+            var items = [QueryItem("from", query.from.description), QueryItem("to", query.to.description)]
+            if let barberId = query.barberId?.trimmed.nonEmpty { items.append(QueryItem("barberId", barberId)) }
+            return Endpoint(.get, "/api/owner/analytics", query: items, credential: .ownerKey)
         }
 
         // MARK: Encoding

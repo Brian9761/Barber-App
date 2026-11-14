@@ -494,6 +494,8 @@ final class BookingDetailsInProgressTests: XCTestCase {
         XCTAssertEqual(BookingDetailsInProgress.start(kept: typed, saved: saved), typed)
     }
 
+    /// "Remember me" starts on only when this iPhone already remembers the client; a new client
+    /// chooses to be remembered (it starts off).
     func testANewBookingStartsFromWhatsRemembered() {
         let saved = CustomerDetails(name: "Sample Client", phone: "(442) 555-0123")
         XCTAssertEqual(
@@ -502,18 +504,31 @@ final class BookingDetailsInProgressTests: XCTestCase {
         )
         XCTAssertEqual(
             BookingDetailsInProgress.start(kept: nil, saved: nil),
-            BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "", remember: true)
+            BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "", remember: false),
+            "Nothing remembered: Remember me starts off"
         )
+    }
+
+    /// A booking draft doesn't keep a card for next time unless the client said so.
+    func testADraftStartsWithoutRememberMe() throws {
+        let offering = try XCTUnwrap(AppData.catalog.offering(withID: TestData.carlosHaircutID))
+        let draft = BookingDraft(
+            plan: BookingPlan(choice: .offering(offering), start: TestData.friday),
+            customer: CustomerDetails(name: "Alex", phone: "(442) 555-0123"),
+            note: ""
+        )
+        XCTAssertFalse(draft.remember)
     }
 
     /// The remembered name and number were changed or forgotten in "Your details" mid-booking:
     /// the booking fills in the new ones (or none), so Continue can't remember the old ones again.
-    /// The note stays, and "Remember me" is on as for a new booking.
+    /// The note stays. "Remember me" is on for details this iPhone now remembers, and off once
+    /// they're forgotten.
     func testChangedOrForgottenDetailsReplaceTheTypedOnes() {
         let kept = BookingDetailsInProgress(customer: CustomerDetails(name: "Alex", phone: "(442) 555-0123"), note: "Low fade", remember: true)
         let changed = CustomerDetails(name: "Alex Smith", phone: "(442) 555-0199")
         XCTAssertEqual(kept.remembering(changed), BookingDetailsInProgress(customer: changed, note: "Low fade", remember: true))
-        XCTAssertEqual(kept.remembering(nil), BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: true))
+        XCTAssertEqual(kept.remembering(nil), BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: false))
 
         // "Remember me" was off for someone else's details: saving new ones remembers those.
         let forSomeoneElse = BookingDetailsInProgress(customer: CustomerDetails(name: "Sam", phone: "4425550124"), note: "", remember: false)
@@ -535,6 +550,122 @@ final class FakeShopAPITests: XCTestCase {
 
     private func customer() -> IzzyAPI.NewCustomer {
         IzzyAPI.NewCustomer(name: "Test", phone: "4425550123")
+    }
+
+    func testNoShowProtectionIsOffSoBookingNeedsNoCard() async throws {
+        let fake = makeFake()
+        let policy = try await fake.noShowPolicy(for: .offering(id: TestData.carlosHaircutID))
+        XCTAssertEqual(policy, .notRequired)
+        let anyBarberPolicy = try await fake.noShowPolicy(for: .anyBarber(serviceId: "haircut"))
+        XCTAssertEqual(anyBarberPolicy, .notRequired)
+        do {
+            _ = try await fake.noShowPolicy(for: .offering(id: "not-on-the-menu"))
+            XCTFail("An unknown offering is a 400, as on the server")
+        } catch {
+            XCTAssertEqual((error as? APIError)?.code, IzzyAPI.ErrorCode.invalidRequest)
+        }
+        do {
+            _ = try await fake.startCardCheckout(for: .offering(id: TestData.carlosHaircutID), token: .generate())
+            XCTFail("No card page when no card is needed")
+        } catch {
+            XCTAssertEqual(error as? APIError, .server(code: IzzyAPI.ErrorCode.invalidRequest, message: "This booking doesn't need a card. Go ahead and book.", status: 400))
+        }
+        do {
+            _ = try await fake.saveCard(sessionId: "cs_test_sample", token: .generate())
+            XCTFail("No session to save")
+        } catch {
+            XCTAssertEqual((error as? APIError)?.code, IzzyAPI.ErrorCode.notFound)
+        }
+        // A card sent anyway is ignored, as on the server: the booking has no card on file.
+        let query = IzzyAPI.AvailabilityQuery(target: .offering(id: TestData.carlosHaircutID), from: tomorrow, days: 1)
+        let slots = try await fake.availability(query).slots(on: tomorrow)
+        let slot = try XCTUnwrap(slots.first)
+        let agreement = IzzyAPI.NoShowAgreement(cardToken: .generate(), policyText: "An old policy.")
+        let confirmation = try await fake.book(
+            IzzyAPI.NewAppointment(target: .offering(id: TestData.carlosHaircutID), start: slot.start, customer: customer(), noShow: agreement),
+            token: .generate()
+        )
+        XCTAssertNil(confirmation.appointment.card)
+        XCTAssertNil(confirmation.appointment.noShowFee)
+    }
+
+    /// The fake never makes a booking with a card on file, but one it holds is cancelled the
+    /// server's way: inside the agreed window it asks first and changes nothing, the client's first
+    /// cancel time counts, and a request the shop's status turned down still counts.
+    func testABookingWithACardOnFileIsCancelledLikeOnTheServer() async throws {
+        let fake = makeFake()
+        /// Booked a day before unless `bookedMinutesAgo` says otherwise.
+        func held(
+            _ n: Int, startsIn minutes: Double, status: IzzyAPI.AppointmentStatus = .booked, cancelledAt: Date? = nil,
+            bookedMinutesAgo: Double = 24 * 60
+        ) -> (id: String, token: String) {
+            let id = "00000000-0000-4000-8000-00000000000\(n)"
+            var appointment = TestData.appointment(id: id, start: TestData.now.addingTimeInterval(minutes * 60), status: status)
+            appointment.createdAt = TestData.now.addingTimeInterval(-bookedMinutesAgo * 60)
+            appointment.card = IzzyAPI.CardOnFile(brand: "visa", last4: "4242")
+            appointment.noShowFee = IzzyAPI.NoShowFee(amountCents: 4_500, fullPrice: true, customerCancelledAt: cancelledAt, lateCancelWindowMinutes: 60)
+            fake.hold(appointment, token: "token-\(n)")
+            return (id, "token-\(n)")
+        }
+        // 30 minutes ahead: inside the hour.
+        let soon = held(1, startsIn: 30)
+        do {
+            _ = try await fake.cancelAppointment(id: soon.id, manageToken: soon.token)
+            XCTFail("Inside the window the server asks first")
+        } catch {
+            XCTAssertEqual(error as? APIError, .lateCancelFee(
+                message: "Cancelling now, less than 1 hour before your appointment, may be charged $45, the full service price."
+            ))
+        }
+        let unchanged = try await fake.appointment(id: soon.id, manageToken: soon.token)
+        XCTAssertEqual(unchanged.status, .booked)
+        XCTAssertNil(unchanged.noShowFee?.customerCancelledAt)
+        let late = try await fake.cancelAppointment(id: soon.id, manageToken: soon.token, acceptLateCancelFee: true)
+        XCTAssertEqual(late.status, .cancelled)
+        XCTAssertEqual(late.cancelledBy, .customer)
+        XCTAssertEqual(late.noShowFee?.customerCancelledAt, TestData.now)
+        XCTAssertEqual(late.noShowFee?.reason, .lateCancel)
+
+        // Two hours ahead: free, and nothing is asked.
+        let early = held(2, startsIn: 120)
+        let free = try await fake.cancelAppointment(id: early.id, manageToken: early.token)
+        XCTAssertEqual(free.noShowFee?.customerCancelledAt, TestData.now)
+        XCTAssertNil(free.noShowFee?.reason)
+
+        // 30 minutes ahead, but booked 15 minutes ago: within 15 minutes of booking it's always free,
+        // and nothing is asked. Booked 16 minutes ago, the server asks first.
+        let justBooked = held(5, startsIn: 30, bookedMinutesAgo: 15)
+        let graceFree = try await fake.cancelAppointment(id: justBooked.id, manageToken: justBooked.token)
+        XCTAssertEqual(graceFree.status, .cancelled)
+        XCTAssertEqual(graceFree.noShowFee?.customerCancelledAt, TestData.now)
+        XCTAssertNil(graceFree.noShowFee?.reason)
+        let bookedEarlier = held(6, startsIn: 30, bookedMinutesAgo: 16)
+        do {
+            _ = try await fake.cancelAppointment(id: bookedEarlier.id, manageToken: bookedEarlier.token)
+            XCTFail("16 minutes after booking, inside the window, the server asks first")
+        } catch {
+            XCTAssertEqual(error as? APIError, .lateCancelFee(
+                message: "Cancelling now, less than 1 hour before your appointment, may be charged $45, the full service price."
+            ))
+        }
+
+        // Cancelled the day before, then reopened by the shop: the first time counts, so it's still free.
+        let dayBefore = TestData.now.addingTimeInterval(-86_400)
+        let reopened = held(3, startsIn: 30, cancelledAt: dayBefore)
+        let stillFree = try await fake.cancelAppointment(id: reopened.id, manageToken: reopened.token)
+        XCTAssertEqual(stillFree.noShowFee?.customerCancelledAt, dayBefore)
+        XCTAssertNil(stillFree.noShowFee?.reason)
+
+        // Already marked by the shop: turned down, but asked before the start, so it still counts.
+        let marked = held(4, startsIn: 30, status: .completed)
+        do {
+            _ = try await fake.cancelAppointment(id: marked.id, manageToken: marked.token, acceptLateCancelFee: true)
+            XCTFail("Not booked any more")
+        } catch {
+            XCTAssertEqual(error as? APIError, .notCancellable)
+        }
+        let afterRefusal = try await fake.appointment(id: marked.id, manageToken: marked.token)
+        XCTAssertEqual(afterRefusal.noShowFee?.customerCancelledAt, TestData.now)
     }
 
     func testOffersTheShopsTimesMinusItsBookings() async throws {

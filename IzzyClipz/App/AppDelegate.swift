@@ -14,6 +14,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     private(set) lazy var appointments: AppointmentStore = makeAppointments()
     private(set) lazy var products = ProductsStore { [api] in try await api.products() }
     private(set) lazy var reviews = ReviewsStore { [api] in try await api.reviews() }
+    /// The card for no-show protection: in the Keychain (this iPhone only); in memory while UI testing.
+    let savedCard = SavedCardStore(secrets: AppDelegate.makeCardStore())
+    /// The no-show policy for each booking choice, shared by the booking steps.
+    private(set) lazy var noShowPolicies = NoShowPolicyStore(api: api)
+    /// Stripe's card page, or a stand-in while UI testing.
+    private(set) lazy var cardSaver: any CardSaver = APIConfiguration.makeCardSaver(api: api)
 
     /// UI tests never see a permission alert; everyone else gets the real thing.
     private static func makeScheduler() -> NotificationScheduling {
@@ -24,6 +30,12 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// every run starts empty and nothing is left in the simulator's Keychain.
     private static func makeTokenStore() -> SecretStore {
         (LaunchOptions.isUITesting || DemoMode.isOn) ? InMemorySecretStore() : KeychainSecretStore(service: "com.izzyclipz.app.manage-tokens")
+    }
+
+    /// The saved card's token, like the manage tokens: the Keychain, or memory while UI testing and
+    /// in the demo version (whose in-memory server forgets its cards when the app closes).
+    private static func makeCardStore() -> SecretStore {
+        (LaunchOptions.isUITesting || DemoMode.isOn) ? InMemorySecretStore() : KeychainSecretStore.savedCard()
     }
 
     private func makeAppointments() -> AppointmentStore {
@@ -59,6 +71,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     /// cancelled or completed one), and treats the latest appointment that's over as the client's
     /// last cut.
     func becameActive() {
+        // The Keychain may not have been readable when the app started (before the first unlock).
+        savedCard.readIfNeeded()
         appointments.refreshLocally()
         updateLastCut()
         Task {

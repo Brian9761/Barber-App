@@ -1,9 +1,11 @@
 import { hashManageToken } from './auth.js';
 import { busyIntervals, gridStarts, isFree } from './availability.js';
+import type { NoShowTerms } from './cards.js';
 import type { Catalog, Offering } from './catalog.js';
 import { isOverlapConflict, type Queryable } from './db.js';
 import type { Deps } from './deps.js';
 import { ApiError } from './http.js';
+import { markRequested } from './retention.js';
 import type { AppointmentRow } from './serialize.js';
 import { addDays, addMinutes, dayBounds, localDate, wallClock, weekday } from './time.js';
 
@@ -100,6 +102,14 @@ export interface NewAppointment {
   manageToken?: string | undefined;
   /** The owner app's `Idempotency-Key` for this booking; only its hash is stored. Shop bookings only. */
   idempotencyKey?: string | undefined;
+  /** No-show protection: the card on file and the agreed policy (with its late-cancellation window). Stored only if the barber who gets it has a fee. */
+  noShow?: NoShowTerms | null | undefined;
+  /**
+   * False when the client didn't ask to keep the card on file ("Remember me" off): it's marked for
+   * deletion with the booking, in the same transaction, so it books nothing else and the daily job
+   * deletes it once no booking needs it (like DELETE /api/cards). Customer bookings only.
+   */
+  keepCard?: boolean | undefined;
 }
 
 export const MAX_UPCOMING_PER_PHONE = 3;
@@ -248,12 +258,17 @@ async function insertAppointment(
   const service = deps.catalog.service(offering.serviceId);
   const barber = deps.catalog.barber(offering.barberId);
   if (!service || !barber) throw new Error(`Catalog is missing ${offering.serviceId} or ${offering.barberId}`);
+  // The fee agreed for this barber's item ("any barber" may land on any of them); none means no card is kept.
+  const fee = input.mode === 'customer' ? (input.noShow?.fees.get(offering.id) ?? null) : null;
+  const terms = fee !== null && input.noShow ? input.noShow : null;
   const { rows } = await tx.query<AppointmentRow>(
     `INSERT INTO appointments (
        id, offering_id, service_id, barber_id, service_name, barber_name, price_label, price_cents, price_kind,
        start_at, end_at, status, cancelled_by, booked_by, customer_name, customer_phone, customer_email, note,
-       manage_token_hash, any_barber, idempotency_key_hash, payment_status, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'booked', NULL, $12, $13, $14, $15, $16, $17, $19, $20, 'unpaid', $18, $18)
+       manage_token_hash, any_barber, idempotency_key_hash, payment_status, created_at, updated_at,
+       saved_card_id, card_brand, card_last4, no_show_fee_cents, no_show_policy, no_show_consent_at, late_cancel_window_minutes)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'booked', NULL, $12, $13, $14, $15, $16, $17, $19, $20, 'unpaid', $18, $18,
+             $21, $22, $23, $24, $25, CASE WHEN $21::uuid IS NULL THEN NULL ELSE $18::timestamptz END, $26)
      RETURNING *`,
     [
       id,
@@ -276,9 +291,18 @@ async function insertAppointment(
       now,
       input.target.kind === 'any',
       input.mode === 'shop' && input.idempotencyKey ? hashManageToken(input.idempotencyKey) : null,
+      terms?.card.id ?? null,
+      terms?.card.brand ?? null,
+      terms?.card.last4 ?? null,
+      terms ? fee : null,
+      terms?.policyText ?? null,
+      terms?.lateCancelWindowMinutes ?? null,
     ],
   );
   const row = rows[0];
   if (!row) throw new Error('Insert returned no row');
+  // "Remember me" off: the card was for this booking only. Marked here, inside the booking's own
+  // transaction (and savepoint), so it can't be left saved by a connection lost after booking.
+  if (input.mode === 'customer' && input.noShow && input.keepCard === false) await markRequested(tx, input.noShow.card.id, now);
   return row;
 }

@@ -6,13 +6,15 @@ reproduces them:
 
   AccentColor, BrandRed, BrandBlue, LaunchBackground      Street Drip colors (drip red,
                     royal blue, ink)
-  Gallery1...6, Storefront   shop photos                       (needs --photos)
+  Storefront        the shop from the street                    (needs --photos)
 
     python3 scripts/generate_assets.py
     python3 scripts/generate_assets.py --photos DIR
 
-DIR holds gallery_1 ... gallery_6 and storefront in any format Pillow reads.
-The script never uses the network.
+DIR holds storefront in any format Pillow reads. The script never uses the network.
+
+No photo of a person goes in the app without that person's written permission (a parent's or
+guardian's for anyone under 18), so the photos of clients' cuts it used to bundle are gone.
 
 The logo images aren't made here. Logo and LaunchLogo (and the owner app's Logo) are the
 shop's official logo, the white art on a transparent background at 1x, 2x and 3x, and both
@@ -82,7 +84,7 @@ def find(directory: Path, stem: str) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--photos", type=Path, help="folder with gallery_1..6 and storefront images")
+    parser.add_argument("--photos", type=Path, help="folder with the storefront image")
     args = parser.parse_args()
 
     write_json(CATALOG / "Contents.json", {"info": INFO})
@@ -92,8 +94,6 @@ def main() -> None:
     color_set("LaunchBackground", INK)
 
     if args.photos:
-        for index in range(1, 7):
-            photo_set(f"Gallery{index}", find(args.photos, f"gallery_{index}"), max_width=750)
         photo_set("Storefront", find(args.photos, "storefront"), max_width=1000)
     else:
         print("No --photos: wrote the color sets only")

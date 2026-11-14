@@ -36,6 +36,19 @@ public enum APIError: Error, Hashable, Sendable {
     case tooFar
     /// The response wasn't what the contract says; the text says where.
     case decoding(String)
+    /// 400 `card_required`: this booking needs a saved card (no-show protection), or the one
+    /// sent can't be used (unknown, or it expires before the appointment). The server's message
+    /// says which. Add a card and book again.
+    case cardRequired(message: String)
+    /// 409 `policy_changed`: the no-show policy sent with the booking isn't the current one
+    /// (the shop just changed the fee). Load the policy again, show it, and book again.
+    case policyChanged(message: String)
+    /// 409 `late_cancel_fee`: cancelling now, inside the late-cancellation window the booking
+    /// agreed to, may be charged the fee, and the client hasn't confirmed it. Nothing changed.
+    /// Show `message` ("Cancelling now, less than 1 hour before your appointment, may be charged
+    /// $35, the full service price.") with "Cancel appointment" and "Keep appointment", and cancel
+    /// again with `acceptLateCancelFee: true` if they go ahead.
+    case lateCancelFee(message: String)
 
     /// The features `notConfigured` names.
     public enum Feature {
@@ -56,6 +69,9 @@ public enum APIError: Error, Hashable, Sendable {
         case IzzyAPI.ErrorCode.outsideHours: self = .outsideHours
         case IzzyAPI.ErrorCode.tooSoon: self = .tooSoon
         case IzzyAPI.ErrorCode.tooFar: self = .tooFar
+        case IzzyAPI.ErrorCode.cardRequired: self = .cardRequired(message: message)
+        case IzzyAPI.ErrorCode.policyChanged: self = .policyChanged(message: message)
+        case IzzyAPI.ErrorCode.lateCancelFee: self = .lateCancelFee(message: message)
         default: self = .server(code: code, message: message, status: status)
         }
     }
@@ -78,6 +94,9 @@ public enum APIError: Error, Hashable, Sendable {
         case .outsideHours: return IzzyAPI.ErrorCode.outsideHours
         case .tooSoon: return IzzyAPI.ErrorCode.tooSoon
         case .tooFar: return IzzyAPI.ErrorCode.tooFar
+        case .cardRequired: return IzzyAPI.ErrorCode.cardRequired
+        case .policyChanged: return IzzyAPI.ErrorCode.policyChanged
+        case .lateCancelFee: return IzzyAPI.ErrorCode.lateCancelFee
         }
     }
 
@@ -135,6 +154,15 @@ public enum APIError: Error, Hashable, Sendable {
             return "That day is too far ahead to book. Pick an earlier day."
         case .decoding:
             return "Something went wrong reading the shop's reply. Try again in a moment."
+        case .cardRequired(let message):
+            let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "Add a card to book this time. You won't be charged now." : text
+        case .policyChanged(let message):
+            let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "The no-show policy for this booking just changed. Check it and book again." : text
+        case .lateCancelFee(let message):
+            let text = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? "Cancelling now, this close to your appointment, may be charged a fee." : text
         }
     }
 

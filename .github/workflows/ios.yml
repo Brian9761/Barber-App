@@ -35,8 +35,10 @@ jobs:
   app:
     name: App on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    # Intel Macs run the simulator much more slowly than Apple silicon.
-    timeout-minutes: ${{ inputs.macs == 'intel' && 120 || 60 }}
+    # With no-show protection's UI tests, a run takes 55 to 80 minutes on Apple silicon and two hours
+    # or more on Intel Macs, which run the simulator much more slowly (the owner app's UI tests go past
+    # three hours there). The limits leave room for a slow Mac, under GitHub's six hours for any job.
+    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 120 }}
     strategy:
       fail-fast: false
       matrix:
@@ -89,14 +91,27 @@ jobs:
         run: |
           mkdir -p build
           set +e
-          xcodebuild test \
-            -project IzzyClipz.xcodeproj \
-            -scheme IzzyClipz \
-            -destination "id=$SIMULATOR" \
-            -resultBundlePath build/TestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
-            > build/test.log 2>&1
+          run_tests() {
+            xcodebuild test \
+              -project IzzyClipz.xcodeproj \
+              -scheme IzzyClipz \
+              -destination "id=$SIMULATOR" \
+              -resultBundlePath build/TestResults.xcresult \
+              CODE_SIGNING_ALLOWED=NO \
+              > build/test.log 2>&1
+          }
+          run_tests
           status=$?
+          # A slow simulator can keep the UI test runner from starting at all ("failed to initialize for
+          # UI testing", before any UI test has run): that's the Mac, not the app, so the tests run once
+          # more. Any test that fails still fails the job.
+          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/test.log; then
+            echo "The UI test runner couldn't start on this simulator; running the tests once more"
+            mv build/test.log build/test-first-try.log
+            rm -rf build/TestResults.xcresult
+            run_tests
+            status=$?
+          fi
           # The full log is huge; show what matters.
           grep -E "error:|warning:|\*\* TEST|Executed [0-9]+ test" build/test.log | sort -u | head -200
           grep -iE "^Test case .*(passed|failed)" build/test.log | head -200
@@ -135,13 +150,19 @@ jobs:
           failures.mkdir(exist_ok=True)
           try:
               for test in json.loads((source / "manifest.json").read_text()):
+                  test_name = test.get("testIdentifier") or test.get("testName") or "test"
+                  test_name = re.sub(r"[^A-Za-z0-9._-]", "-", str(test_name))
                   for attachment in test.get("attachments", []):
                       # A failing UI test's view hierarchy: what XCUI could see when it failed.
                       if attachment["suggestedHumanReadableName"].startswith("App UI hierarchy"):
-                          test_name = test.get("testIdentifier") or test.get("testName") or "test"
-                          test_name = re.sub(r"[^A-Za-z0-9._-]", "-", str(test_name))
                           count = len(list(failures.glob(f"{test_name}-hierarchy*.txt")))
                           shutil.copy(source / attachment["exportedFileName"], failures / f"{test_name}-hierarchy-{count + 1}.txt")
+                          continue
+                      # A failing UI test's screen recording (Xcode keeps them only for failures):
+                      # what was on the screen at each step, a few MB instead of the whole result.
+                      if attachment["exportedFileName"].lower().endswith(".mp4"):
+                          count = len(list(failures.glob(f"{test_name}-recording*.mp4")))
+                          shutil.copy(source / attachment["exportedFileName"], failures / f"{test_name}-recording-{count + 1}.mp4")
                           continue
                       # Only the named screenshots; failed tests also attach recordings and logs.
                       if not attachment["exportedFileName"].lower().endswith(".png"):
@@ -189,7 +210,7 @@ jobs:
   owner-app:
     name: Owner app on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ inputs.macs == 'intel' && 120 || 60 }}
+    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 120 }}
     strategy:
       fail-fast: false
       matrix:
@@ -272,15 +293,27 @@ jobs:
         run: |
           mkdir -p build
           set +e
-          xcodebuild test \
-            -project IzzyClipz.xcodeproj \
-            -scheme IzzyClipzBusiness \
-            -destination "id=$SIMULATOR" \
-            -clonedSourcePackagesDirPath "$PACKAGES" \
-            -resultBundlePath build/OwnerTestResults.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
-            > build/owner-test.log 2>&1
+          run_tests() {
+            xcodebuild test \
+              -project IzzyClipz.xcodeproj \
+              -scheme IzzyClipzBusiness \
+              -destination "id=$SIMULATOR" \
+              -clonedSourcePackagesDirPath "$PACKAGES" \
+              -resultBundlePath build/OwnerTestResults.xcresult \
+              CODE_SIGNING_ALLOWED=NO \
+              > build/owner-test.log 2>&1
+          }
+          run_tests
           status=$?
+          # As for the customer app: a UI test runner that couldn't start on a slow simulator is the
+          # Mac's doing, so the tests run once more. Any test that fails still fails the job.
+          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/owner-test.log; then
+            echo "The UI test runner couldn't start on this simulator; running the tests once more"
+            mv build/owner-test.log build/owner-test-first-try.log
+            rm -rf build/OwnerTestResults.xcresult
+            run_tests
+            status=$?
+          fi
           grep -E "error:|warning:|\*\* TEST|Executed [0-9]+ test" build/owner-test.log | sort -u | head -200
           grep -iE "^Test case .*(passed|failed|skipped)" build/owner-test.log | head -300
           if [ $status -ne 0 ]; then tail -80 build/owner-test.log; fi
@@ -319,12 +352,17 @@ jobs:
           failures.mkdir(exist_ok=True)
           try:
               for test in json.loads((source / "manifest.json").read_text()):
+                  test_name = test.get("testIdentifier") or test.get("testName") or "test"
+                  test_name = re.sub(r"[^A-Za-z0-9._-]", "-", str(test_name))
                   for attachment in test.get("attachments", []):
                       if attachment["suggestedHumanReadableName"].startswith("App UI hierarchy"):
-                          test_name = test.get("testIdentifier") or test.get("testName") or "test"
-                          test_name = re.sub(r"[^A-Za-z0-9._-]", "-", str(test_name))
                           count = len(list(failures.glob(f"{test_name}-hierarchy*.txt")))
                           shutil.copy(source / attachment["exportedFileName"], failures / f"{test_name}-hierarchy-{count + 1}.txt")
+                          continue
+                      # A failing UI test's screen recording (Xcode keeps them only for failures).
+                      if attachment["exportedFileName"].lower().endswith(".mp4"):
+                          count = len(list(failures.glob(f"{test_name}-recording*.mp4")))
+                          shutil.copy(source / attachment["exportedFileName"], failures / f"{test_name}-recording-{count + 1}.mp4")
                           continue
                       if not attachment["exportedFileName"].lower().endswith(".png"):
                           continue

@@ -45,6 +45,30 @@ final class AppRouterTests: XCTestCase {
         XCTAssertEqual(router.bookingPath, [.chooseService(barberID: "carlos-rafael"), .chooseTime(.offering(offering))])
     }
 
+    /// "Book again" from an appointment: its service with its barber, at the times, with "Pick a
+    /// barber" behind them; a step back when that's not on the menu. It starts afresh.
+    func testBookAgainStartsWithTheSameServiceAndBarber() throws {
+        let router = AppRouter()
+        router.selectedTab = .home
+        router.detailsInProgress = BookingDetailsInProgress(customer: CustomerDetails(name: "Alex", phone: ""), note: "", remember: false)
+        router.bookAgain(TestData.appointment())
+        let carlos = try haircutWithCarlos()
+        XCTAssertEqual(router.bookingPath, [.chooseBarber(serviceID: "haircut"), .chooseTime(.offering(carlos))])
+        XCTAssertEqual(router.selectedTab, .book)
+        XCTAssertNil(router.detailsInProgress)
+
+        var gone = TestData.appointment()
+        gone.offeringId = "someone-who-left/x"
+        gone.barberId = "someone-who-left"
+        router.bookAgain(gone)
+        XCTAssertEqual(router.bookingPath, [.chooseBarber(serviceID: "haircut")])
+
+        gone.serviceId = "gone"
+        router.bookAgain(gone)
+        XCTAssertEqual(router.bookingPath, [])
+        XCTAssertEqual(router.selectedTab, .book)
+    }
+
     func testStartBookingWithABarberPicksTheirServiceFirst() {
         let router = AppRouter()
         router.startBooking(barberID: "julian-ramos")
@@ -180,7 +204,7 @@ final class AppRouterTests: XCTestCase {
         XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: changed, note: "Low fade", remember: true))
 
         router.rememberedDetailsChanged(to: nil)
-        XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: true))
+        XCTAssertEqual(router.detailsInProgress, BookingDetailsInProgress(customer: CustomerDetails(name: "", phone: ""), note: "Low fade", remember: false))
     }
 
     /// A booking's late answer only moves the flow while its review is the step on screen.

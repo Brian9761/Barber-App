@@ -1,0 +1,56 @@
+{
+  "from": "2026-11-02",
+  "to": "2026-11-02",
+  "barberId": null,
+  "timeZone": "America/Los_Angeles",
+  "generatedAt": "2026-11-02T23:00:00Z",
+  "granularity": "day",
+  "totals": {
+    "salesCents": 24600,
+    "servicesCents": 12500,
+    "productsCents": 3600,
+    "otherCents": 5000,
+    "feesCents": 3500,
+    "servicesCount": 2,
+    "productsCount": 2,
+    "clientsServed": 3,
+    "checkouts": 3,
+    "averageTicketCents": 7033
+  },
+  "previous": { "from": "2026-11-01", "to": "2026-11-01", "salesCents": 0 },
+  "productivity": {
+    "openMinutes": 2700,
+    "bookedMinutes": 120,
+    "chairTimeBooked": 0.044444444444444446,
+    "appointments": { "booked": 0, "completed": 2, "noShows": 1, "cancelled": 2, "lateCancellations": 1, "upcoming": 0 },
+    "completionRate": 0.6666666666666666,
+    "noShowRate": 0.3333333333333333,
+    "salesPerHourCents": 469,
+    "productAttachRate": 0.3333333333333333
+  },
+  "topBarber": { "barberId": "carlos-rafael", "name": "Carlos", "salesCents": 8100, "servicesCount": 1, "productsCount": 2 },
+  "leaderboard": [
+    { "rank": 1, "barberId": "carlos-rafael", "name": "Carlos", "salesCents": 8100, "servicesCents": 4500, "productsCents": 3600, "servicesCount": 1, "productsCount": 2, "clientsServed": 1, "averageTicketCents": 8100 },
+    { "rank": 2, "barberId": "israel-flores", "name": "Izzy", "salesCents": 8000, "servicesCents": 8000, "productsCents": 0, "servicesCount": 1, "productsCount": 0, "clientsServed": 1, "averageTicketCents": 8000 },
+    { "rank": 3, "barberId": "julian-ramos", "name": "Julian", "salesCents": 5000, "servicesCents": 0, "productsCents": 0, "servicesCount": 0, "productsCount": 0, "clientsServed": 1, "averageTicketCents": 5000 },
+    { "rank": 4, "barberId": "flowxbori", "name": "Flowxbori", "salesCents": 3500, "servicesCents": 0, "productsCents": 0, "servicesCount": 0, "productsCount": 0, "clientsServed": 0, "averageTicketCents": 0 },
+    { "rank": 5, "barberId": "cristian-ceja", "name": "Cristian", "salesCents": 0, "servicesCents": 0, "productsCents": 0, "servicesCount": 0, "productsCount": 0, "clientsServed": 0, "averageTicketCents": 0 }
+  ],
+  "services": [
+    { "serviceId": "vip", "name": "VIP", "count": 1, "salesCents": 8000 },
+    { "serviceId": "haircut", "name": "Haircut", "count": 1, "salesCents": 4500 }
+  ],
+  "products": [
+    { "productId": "6d7e8f9a-0b1c-4d2e-8f3a-4b5c6d7e8f9a", "name": "Sample pomade", "quantity": 2, "salesCents": 3600 }
+  ],
+  "series": [
+    { "date": "2026-11-02", "salesCents": 24600, "servicesCents": 12500, "productsCents": 3600, "otherCents": 5000, "feesCents": 3500, "servicesCount": 2, "productsCount": 2 }
+  ],
+  "barbers": [
+    { "barberId": "israel-flores", "name": "Izzy" },
+    { "barberId": "carlos-rafael", "name": "Carlos" },
+    { "barberId": "flowxbori", "name": "Flowxbori" },
+    { "barberId": "cristian-ceja", "name": "Cristian" },
+    { "barberId": "julian-ramos", "name": "Julian" }
+  ]
+}

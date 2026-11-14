@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
+import { Settings } from 'luxon';
 import { describe, expect, it } from 'vitest';
 import { bearerMatches, hashManageToken, manageTokenMatches, newManageToken } from '../src/auth.js';
 import { Catalog, loadCatalog } from '../src/catalog.js';
 import { configFromEnv } from '../src/config.js';
 import { createPool, normalizeConnectionString } from '../src/db.js';
-import { addDays, dayBounds, formatInstant, isDate, localDate, parseInstant, wallClock, weekday } from '../src/time.js';
+import { addDays, dayBounds, formatInstant, isDate, localDate, parseInstant, wallClock, weekday, wholeSecond } from '../src/time.js';
 import { charLength, normalizeUSPhone } from '../src/validation.js';
 
 describe('US phone numbers → E.164', () => {
@@ -39,6 +40,19 @@ describe('time helpers', () => {
   it('formats instants without fractional seconds', () => {
     expect(formatInstant(new Date('2026-11-02T18:00:00.000Z'))).toBe('2026-11-02T18:00:00Z');
     expect(formatInstant(new Date('2026-11-02T18:00:00.123Z'))).toBe('2026-11-02T18:00:00Z');
+  });
+
+  it('rounds an instant down to the whole second, as it is written', () => {
+    for (const [time, whole] of [
+      ['2026-11-02T18:00:00.000Z', '2026-11-02T18:00:00.000Z'],
+      ['2026-11-02T18:00:00.400Z', '2026-11-02T18:00:00.000Z'],
+      ['2026-11-02T18:00:00.999Z', '2026-11-02T18:00:00.000Z'],
+      ['2026-11-02T17:59:59.999Z', '2026-11-02T17:59:59.000Z'],
+    ] as const) {
+      const rounded = wholeSecond(new Date(time));
+      expect(rounded.toISOString(), time).toBe(whole);
+      expect(formatInstant(rounded)).toBe(formatInstant(new Date(time)));
+    }
   });
 
   it('parses only full date-times with a zone', () => {
@@ -76,6 +90,33 @@ describe('time helpers', () => {
     expect(wallClock('2026-11-01', 90, zone)?.toISOString()).toBe('2026-11-01T08:30:00.000Z');
     expect(localDate(new Date('2026-11-02T07:59:59Z'), zone)).toBe('2026-11-01');
     expect(localDate(new Date('2026-11-02T08:00:00Z'), zone)).toBe('2026-11-02');
+  });
+
+  it('a time that happens twice is the same instant whatever the date the server runs on', () => {
+    const zone = 'America/Los_Angeles';
+    const realNow = Settings.now;
+    try {
+      for (const today of ['2026-07-01T12:00:00Z', '2026-11-04T12:00:00Z', '2027-01-15T12:00:00Z']) {
+        Settings.now = () => Date.parse(today);
+        // 1:30 AM on Nov 1 is 1:30 PDT (08:30Z), then 1:30 PST (09:30Z): the first one.
+        expect(wallClock('2026-11-01', 90, zone)?.toISOString(), today).toBe('2026-11-01T08:30:00.000Z');
+        expect(wallClock('2026-11-01', 60, zone)?.toISOString(), today).toBe('2026-11-01T08:00:00.000Z');
+        expect(wallClock('2026-11-01', 120, zone)?.toISOString(), today).toBe('2026-11-01T10:00:00.000Z');
+        expect(wallClock('2026-03-08', 150, zone), today).toBeNull();
+        expect(wallClock('2026-03-08', 180, zone)?.toISOString(), today).toBe('2026-03-08T10:00:00.000Z');
+        expect(wallClock('2026-11-03', 600, zone)?.toISOString(), today).toBe('2026-11-03T18:00:00.000Z');
+        expect(wallClock('2026-07-04', 0, zone)?.toISOString(), today).toBe('2026-07-04T07:00:00.000Z');
+        expect(wallClock('2026-07-04', 1439, zone)?.toISOString(), today).toBe('2026-07-05T06:59:00.000Z');
+      }
+    } finally {
+      Settings.now = realNow;
+    }
+    expect(wallClock('2026-07-04', 24 * 60, zone)).toBeNull();
+    expect(wallClock('2026-07-04', 600, 'Not/AZone')).toBeNull();
+    expect(wallClock('2026-07-04', 600, 'UTC')?.toISOString()).toBe('2026-07-04T10:00:00.000Z');
+    // A zone that moves by 30 minutes (Lord Howe Island), and one that skipped a whole day (Samoa, 2011).
+    expect(wallClock('2026-04-05', 90, 'Australia/Lord_Howe')?.toISOString()).toBe('2026-04-04T14:30:00.000Z');
+    expect(wallClock('2011-12-30', 600, 'Pacific/Apia')).toBeNull();
   });
 
   it("doesn't depend on the server's own time zone", () => {
@@ -135,6 +176,8 @@ describe('config', () => {
     expect(c.yelpBusinessId).toBe('izzy-clipz-barbershop-oceanside');
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '100' }).googleDailyLimit).toBe(100);
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '0' }).googleDailyLimit).toBe(0);
+    expect(configFromEnv({}).publicBaseUrl).toBeUndefined();
+    expect(configFromEnv({ PUBLIC_BASE_URL: ' https://api.izzyclipz.example ' }).publicBaseUrl).toBe('https://api.izzyclipz.example');
   });
 
   it("silences pg's sslmode=require warning by saying verify-full", () => {
@@ -152,7 +195,7 @@ describe('catalog.json (exported from IzzyClipzKit)', () => {
 
   it('has the shape the server expects', () => {
     expect(Object.keys(raw).sort()).toEqual(
-      ['barbers', 'firstAvailable', 'hours', 'leadTimeMinutes', 'offerings', 'services', 'slotIntervalMinutes', 'timeZone', 'windowDays'].sort(),
+      ['barbers', 'firstAvailable', 'hours', 'leadTimeMinutes', 'offerings', 'services', 'shop', 'slotIntervalMinutes', 'timeZone', 'windowDays'].sort(),
     );
     expect(raw).toMatchObject({ timeZone: 'America/Los_Angeles', slotIntervalMinutes: 30, leadTimeMinutes: 30, windowDays: 60 });
     expect(raw.hours['1']).toEqual({ opens: '10:00', closes: '18:00' }); // Sunday
@@ -179,5 +222,18 @@ describe('catalog.json (exported from IzzyClipzKit)', () => {
   it('counts characters as people do', () => {
     expect(charLength('José')).toBe(4);
     expect(charLength('💈💈')).toBe(2);
+  });
+});
+
+describe('production log lines', () => {
+  it('keep our message, with a message from the details (Stripe’s) as detail', async () => {
+    const { logLine } = await import('../src/production.js');
+    expect(JSON.parse(logLine('error', 'Stripe create customer failed', { type: 'StripeAuthenticationError', message: 'Invalid API Key provided' }))).toEqual({
+      level: 'error',
+      message: 'Stripe create customer failed',
+      type: 'StripeAuthenticationError',
+      detail: 'Invalid API Key provided',
+    });
+    expect(JSON.parse(logLine('warn', 'Plain'))).toEqual({ level: 'warn', message: 'Plain' });
   });
 });

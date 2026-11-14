@@ -66,9 +66,13 @@ final class AppResourcesTests: XCTestCase {
         }
     }
 
-    func testGalleryCaptionsAreUnique() {
-        let captions = GalleryPhoto.allCases.map(\.caption)
-        XCTAssertEqual(Set(captions).count, captions.count)
+    /// No photo of a person is bundled: one goes in only with that person's written permission. The
+    /// six photos of clients' cuts are gone, and Home shows the storefront.
+    func testNoPhotosOfPeopleAreBundled() {
+        for number in 1...6 {
+            XCTAssertNil(UIImage(named: "Gallery\(number)"), "Gallery\(number) is back")
+        }
+        XCTAssertEqual(Asset.all, ["Storefront", "LaunchLogo", "Logo"])
     }
 
     func testInfoPlist() throws {
@@ -100,8 +104,9 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(TextRole.displayXL.textStyle, .largeTitle)
     }
 
-    /// The name, number and note sent with a booking are declared: used for the app's own
-    /// functionality, linked to the client, never for tracking.
+    /// The name, number and note sent with a booking, and the card saved for no-show protection
+    /// (its brand, last 4 digits and expiry; the number is typed on Stripe's page), are declared: used
+    /// for the app's own functionality, linked to the client, never for tracking.
     func testPrivacyManifestDeclaresWhatGoesToTheShop() throws {
         let url = try XCTUnwrap(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
         let manifest = try XCTUnwrap(try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
@@ -111,6 +116,7 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(Set(types), [
             "NSPrivacyCollectedDataTypeName",
             "NSPrivacyCollectedDataTypePhoneNumber",
+            "NSPrivacyCollectedDataTypePaymentInfo",
             "NSPrivacyCollectedDataTypeOtherUserContent",
         ])
         for entry in collected {
@@ -147,6 +153,16 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertFalse(DemoMode.isOn)
         XCTAssertTrue(APIConfiguration.makeAPI(demo: false, uiTesting: false) is IzzyAPIClient)
         XCTAssertTrue(APIConfiguration.makeAPI(demo: true, uiTesting: false) is FakeShopAPI, "The demo never uses the network")
+    }
+
+    /// The website the app links to (Visit's Website row and Share link, calendar events and the
+    /// legal pages) comes from the build setting IZZY_WEBSITE_URL: the current public site until
+    /// the shop's own domain replaces it there, never the older website.
+    func testTheWebsiteIsTheNewOne() throws {
+        let info = try XCTUnwrap(Bundle.main.infoDictionary)
+        XCTAssertNotNil(info[Website.infoKey], "Info.plist has no IzzyWebsiteURL")
+        XCTAssertEqual(Website.baseURL.absoluteString, "https://izzy-clipz.vercel.app")
+        XCTAssertEqual(Website.LegalPage.privacy.url().absoluteString, "https://izzy-clipz.vercel.app/privacy")
     }
 
     func testContactLinks() {
@@ -189,15 +205,5 @@ final class AppResourcesTests: XCTestCase {
         let old = Appointment(serviceID: "haircut", serviceName: "Haircut", barberID: nil, start: TestData.friday, durationMinutes: 45, priceLabel: "$35")
         let event = SavedAppointment(squire: old, remind: false).calendarEvent
         XCTAssertTrue(event.notes.contains("Haircut with the first available barber"), event.notes)
-    }
-
-    func testZoomFitsPhotosInsideTheScreen() {
-        let portrait = ZoomingImageScrollView.aspectFitSize(for: CGSize(width: 750, height: 1000), in: CGSize(width: 393, height: 852))
-        XCTAssertEqual(portrait.width, 393, accuracy: 0.001)
-        XCTAssertEqual(portrait.height, 524, accuracy: 0.001)
-        let landscape = ZoomingImageScrollView.aspectFitSize(for: CGSize(width: 1000, height: 750), in: CGSize(width: 393, height: 852))
-        XCTAssertEqual(landscape.width, 393, accuracy: 0.001)
-        XCTAssertEqual(landscape.height, 294.75, accuracy: 0.001)
-        XCTAssertEqual(ZoomingImageScrollView.aspectFitSize(for: .zero, in: CGSize(width: 10, height: 20)), CGSize(width: 10, height: 20))
     }
 }
