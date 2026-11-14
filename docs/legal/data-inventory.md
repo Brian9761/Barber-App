@@ -401,7 +401,7 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
   - "Add to Calendar" uses the system's event editor without calendar access, so the app can't read the calendar (`IzzyClipz/Components/CalendarEventEditor.swift`).
   - Notifications are requested right after the first booking, because each booking is saved with its reminders on (`appointments.add(confirmation, remind: true)` in `IzzyClipz/Features/Booking/BookingModels.swift`) and the next sync asks iOS while permission is undecided and a reminder is still ahead (`performSync` in `IzzyClipz/Stores/AppointmentStore.swift`). The client can turn an appointment's reminders off on "You're booked" (`BookedView.swift`). Turning on haircut reminders asks too. They're **local only**: the app doesn't register for push notifications and has no device token (`IzzyClipz/Features/Reminders/ReminderStore.swift`).
 - **Stored in UserDefaults:**
-  - `customer.name` and `customer.phone`, when "Remember me" is on. It's on by default in the app (`IzzyClipz/App/AppRouter.swift`, `IzzyClipz/Stores/CustomerDetailsStore.swift`).
+  - `customer.name` and `customer.phone`, when "Remember me" is on. It starts off, unless this iPhone already remembers the client (`IzzyClipz/App/AppRouter.swift`, `IzzyClipz/Stores/CustomerDetailsStore.swift`).
   - `appointments.v2`: each appointment as the server last described it, **including the client's own name, number, note, and card brand and last 4**, until 30 days after the appointment ends.
   - `favorites.barberID`.
   - `reminders.enabled`, `reminders.intervalWeeks` and `reminders.lastCut` (the date of the last haircut).
@@ -410,22 +410,26 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 - **Network:**
   - the shop's API;
   - Stripe's card page, in a private session;
-  - Google's and Yelp's image servers, for reviewers' photos;
+  - Google's image servers, for reviewers' photos (Yelp's reviews are only linked, never shown, so nothing loads from Yelp);
   - Vercel Blob, for product photos;
+  - the shop's website, for the four legal pages, in an in-app browser (Visit → Legal);
   - Apple's map tiles, for the map of the shop (MapKit, without the user's location; `IzzyClipz/Features/Visit/VisitView.swift`).
 - **Links out:**
   - calling the shop;
   - directions in Apple Maps or Google Maps (`IzzyClipz/Components/ContactButtons.swift`);
   - Instagram (`IzzyClipz/Components/InstagramCard.swift`);
   - Google and Yelp review pages, and Google's terms (`IzzyClipz/Features/Reviews/ReviewsView.swift`);
-  - the shop's existing website, https://www.izzyclipzbarbershop.net (the catalog's `websiteUrl`), shown in an in-app browser from the Visit tab's "Website" row (`IzzyClipz/Features/Visit/VisitView.swift`). The Share link on the Visit tab and every Add to Calendar event use the same address (`IzzyClipz/Components/CalendarEventEditor.swift`). That site isn't part of this codebase: it runs on Squarespace (it sets Squarespace's `crumb` cookie and loads Squarespace's scripts), and its booking button goes to the shop's old booking page on Squire, web.getsquire.com/book/izzy-clipz-oceanside (checked November 5, 2026). The documents say they don't cover either. See G15.
-- **What the client can clear:** "Forget my details" (the remembered name and number, and the card), "Remove card", and "Remove from this list" on a past or cancelled appointment (an upcoming booked one must be cancelled first: `remove` in `AppointmentStore.swift`), which also deletes its key. All of these act on this iPhone only. "Forget my details" leaves the stored appointments, with the client's name, number and note, until 30 days after each one. Keychain items (appointment keys, the card key, and unconfirmed bookings with the number) can stay after the app is deleted, and nothing removes them then.
+  - the new website (the build setting `IZZY_WEBSITE_URL`, Info.plist `IzzyWebsiteURL`, default https://izzy-clipz.vercel.app, read only if it's https), shown in an in-app browser from the Visit tab's "Website" row; the Share link and every Add to Calendar event use the same address, and so do the four legal pages under Visit → Legal (`IzzyClipz/App/Website.swift`). The app no longer links the shop's older website or its Squire page.
+- **What the client can clear:** "Forget my details" (the remembered name and number, and the card, which is also deleted at the shop with `DELETE /api/cards`), "Remove card" (the same deletion, after a confirmation), and "Remove from this list" on a past or cancelled appointment (an upcoming booked one must be cancelled first: `remove` in `AppointmentStore.swift`), which also deletes its key. All of these act on this iPhone only. "Forget my details" leaves the stored appointments, with the client's name, number and note, until 30 days after each one. Keychain items (appointment keys, the card key, and unconfirmed bookings with the number) can stay after the app is deleted, and nothing removes them then.
+- **A card saved without "Remember me":** the booking says so (`keepCard: false`), so the server marks the card for deletion in the booking's own transaction, and the app also calls `DELETE /api/cards` right after, as a second safeguard (`IzzyClipz/Stores/CardRemoval.swift`).
+- **Age range:** on iOS 26 or later the app asks iOS for the user's age range at launch (Apple's Declared Age Range; from iOS 26.2 only where iOS says a law requires it), with the `com.apple.developer.declared-age-range` entitlement. The answer is kept in memory only, never stored or sent; someone under 13 sees only a screen asking a parent or guardian to book (`IzzyClipz/App/AgeCheck.swift`, `IzzyClipz/Features/AgeCheck/AgeRangeCheck.swift`).
+- **Photos:** the six gallery photos of clients, the Gallery screen and the Instagram photo strip are gone; Home shows the storefront.
 - **Demo builds:** these use an in-memory sample server, and nothing is sent to the shop (`IzzyClipz/App/DemoMode.swift`, `IzzyClipz/Services/FakeShopAPI.swift`).
 - **What the app tells clients:**
-  - "Your name and number are sent only to Izzy Clipz…" (`BookingDetailsView.swift`)
+  - "Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains." (`BookingDetailsView.swift`), and "By booking, you agree to our Terms of Service and Cancellation & No-Show Policy." right above Book appointment, both with their policies linked
   - "Reminders are set on this iPhone only." (`ReminderSettingsView.swift`)
   - "Stripe keeps the card; this iPhone keeps only a key to it." (`NoShowBooking.swift`)
-- **No legal links yet:** the app has no Privacy Policy, Terms, Cancellation Policy or Accessibility links.
+- **Legal links:** Visit → Legal opens the Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility pages on the website. The Visit page lists only the accessibility features the owner confirmed, then a line to call about getting in.
 
 ## 7. The Business iPhone app (Izzy Clipz Business)
 
@@ -446,8 +450,12 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 - **Tap to Pay:** the app has the `com.apple.developer.proximity-reader.payment.acceptance` entitlement (`IzzyClipzBusiness/IzzyClipzBusiness.entitlements`). Apple's Tap to Pay reads the card.
 - **Client data that staff type in:**
   - a walk-in's name, and optionally a mobile number and note;
-  - a receipt email;
+  - a receipt email, offered only after a card payment has gone through, sent to Stripe and not kept by the server;
+  - what a client bought at checkout (services and products), with the client's name, kept with the sale (the name is removed after 12 months);
   - time-off reasons.
+- **Stripe connection and computers:** Settings connects the shop's own Stripe account (Stripe's page in `ASWebAuthenticationSession`), and "Use on a computer" makes one-time sign-in codes for Izzy Clipz Business on a computer.
+- **Age range:** the same check as the client app, kept in memory only; someone under 13 sees a screen saying the app is for the shop's team.
+- **Legal links:** Settings → Legal opens the four pages on the website.
 - **Call and Text buttons:** they open the iPhone's own Phone and Messages apps (see 2.2).
 
 ## 8. Third parties
