@@ -77,7 +77,18 @@ describe('the legal pages, as drafts', () => {
     renderApp(path);
     await screen.findByRole('heading', { level: 1, name: heading });
     expect(screen.getByTestId('legal-page').textContent).toContain(
-      "Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's exact registered name, a limited liability company.",
+      "Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's exact registered name, a limited liability company",
+    );
+  });
+
+  it.each([
+    ['/terms', 'Terms of Service'],
+    ['/cancellation-policy', 'Cancellation & No-Show Policy'],
+  ])('%s: gives the business\u2019s street address and offers it by email, as the law on online sales asks', async (path, heading) => {
+    renderApp(path);
+    await screen.findByRole('heading', { level: 1, name: heading });
+    expect(screen.getByTestId('legal-page').textContent).toContain(
+      "a limited liability company, at 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States. To get this information by email, email us at To be added by the shop: the shop's email address and we'll send it within 5 days.",
     );
   });
 
@@ -108,8 +119,9 @@ describe('the legal pages, as drafts', () => {
     expect(notes.filter((note) => note?.startsWith('To be confirmed by the shop'))).toEqual([]);
     expect(words).not.toMatch(/\btext us\b|\bText:|text you the details/i);
     expect(words).toContain(
-      'call (442) 341-3053, call through a relay service by dialing 711, or email us (see "Other ways to book and get help").',
+      'call (442) 341-3053, call through a relay service (such as 711), or email us (see "Other ways to book and get help").',
     );
+    expect(words).toContain('call us through any relay service: dial 711, or use video relay, IP relay or a captioned phone');
   });
 
   it('in the demo, says it’s the demo too', async () => {

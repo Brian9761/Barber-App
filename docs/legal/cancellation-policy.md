@@ -3,7 +3,7 @@
 **Effective date:** [TO FILL IN: the day this version goes live]\
 **Last updated:** [TO FILL IN: the same day]
 
-This policy explains how to cancel an appointment with Izzy Clipz Barbershop ("Izzy Clipz", "we", "us"), and when a fee may be charged if you cancel late or don't come. It's part of our [Terms of Service](terms.md). Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company.
+This policy explains how to cancel an appointment with Izzy Clipz Barbershop ("Izzy Clipz", "we", "us"), and when a fee may be charged if you cancel late or don't come. It's part of our [Terms of Service](terms.md). Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company, at 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States. To get this information by email, email us at [TO FILL IN: the shop's email address] and we'll send it within 5 days.
 
 ## The short version
 
@@ -11,7 +11,7 @@ This policy explains how to cancel an appointment with Izzy Clipz Barbershop ("I
 - **You can cancel online any time before your appointment starts**, on the phone or computer you booked it on: in the Izzy Clipz app, or on our website under My appointments. You can also call us.
 - **Some bookings need a card on file.** When one does, the booking screens tell you before you book, show the fee and how long before your appointment cancelling stops being free, and you agree to that by booking.
 - **With a card on file**, cancelling in time is free. If you cancel late or don't come, we may charge the fee you agreed to. It's never more than the price of the service you booked.
-- **We decide each time** whether to charge it, and we'll let you know if we do.
+- **We decide each time** whether to charge it. If we do, we'll let you know, and you'll get a receipt.
 - **If we cancel your appointment, there's never a fee.**
 
 ## Bookings without a card on file
@@ -22,7 +22,7 @@ If the booking screens didn't ask you for a card:
 - you can cancel online any time before your appointment starts;
 - if you can't make it, please cancel or call us, so someone else can have the time.
 
-Appointments we book for you, by phone or when you walk in, never have a card on file or a fee.
+Appointments we book for you, by phone, by email or when you walk in, never have a card on file or a fee.
 
 ## Bookings with a card on file
 
@@ -43,7 +43,7 @@ The terms shown when you book are the terms for that booking. We keep a copy of 
 - **It's charged at most once per appointment.**
 - It isn't part of the price of your service. You pay it only if you cancel late or don't come.
 
-Why we have it: when someone cancels at the last minute or doesn't come, their barber's time usually goes unused, because it's too late for someone else to book it. How much the shop loses each time is hard to know in advance, because it depends on the day and on whether someone walks in. So the fee is our agreed estimate of that loss, not a penalty.
+Why we have it: when someone cancels after the cutoff or doesn't come, their barber's time often goes unused, because there's little time left for someone else to take it, and walk-ins are hard to predict. How much the shop loses each time is hard to know in advance. Before turning the fee on, and whenever we change it, we look at the shop's own records of how often those times stay empty and what the shop loses when they do, and we set the fee from them. So the fee is our estimate of that loss, not a penalty.
 
 ### Cancelling in time, and cancelling late
 
@@ -53,7 +53,7 @@ Why we have it: when someone cancels at the last minute or doesn't come, their b
 - **Cancelling after the cutoff is a late cancellation**, unless it's within those 15 minutes. Before you cancel late, the app or website tells you the fee and asks you to confirm.
 - **Booking after the cutoff has passed.** If you book a time that's less than the cutoff away (for example, at 9:30 for a 10:00 appointment with a 1-hour cutoff), the booking screens tell you before you book. You can still cancel it free within 15 minutes of booking. After that, cancelling it counts as a late cancellation.
 - **Cancelling on our website, under My appointments, counts the same as cancelling in the app**, even though the terms say "in the app".
-- **Cancel on the phone or computer you booked on.** The key that lets you cancel online is kept on the phone or computer, and in the app or browser, you booked with. Anywhere else, call us.
+- **Cancel on the phone or computer you booked on.** The key that lets you cancel online is kept on the phone or computer, and in the app or browser, you booked with. Anywhere else, call or email us.
 - **What counts is when you first cancelled online.** Once you've cancelled online before your appointment started, it can't be charged as a no-show, even if we reopen the appointment later.
 - **If the notice is titled "No-Show Fee",** the shop isn't charging for late cancellations. Cancelling online is free any time before your appointment starts, and only a no-show can be charged.
 
@@ -67,19 +67,20 @@ A **no-show** means you didn't come to your appointment and didn't cancel it bef
 
 ### Cancelling or changing by phone, and when we cancel
 
-- **Before your appointment starts, you can also cancel by calling us** at (442) 341-3053.
+- **Before your appointment starts, you can also cancel by calling us** at (442) 341-3053 (relay calls welcome), **or by emailing us** at [TO FILL IN: the shop's email address]. For an email, what counts is the time you sent it.
 - **When the shop cancels an appointment, there's no fee.** That includes an appointment we cancel because you called us, and one we cancel for any other reason.
-- **To change your appointment after the cutoff**, call us rather than cancelling online and booking again, which would count as a late cancellation unless it's within 15 minutes of booking. We'll move it if we can, or cancel it for you, with no fee.
+- **To change your appointment after the cutoff**, call or email us rather than cancelling online and booking again, which would count as a late cancellation unless it's within 15 minutes of booking. We'll move it if we can, or cancel it for you, with no fee.
 - If we have to cancel or change your appointment, we'll try to let you know as soon as we can, at the number you gave us.
 
 ### When and how a fee is charged
 
 - **Only afterwards:** for a late cancellation, after you cancel; for a no-show, after your appointment's end time.
-- **We decide each time** whether to charge it. We may waive a fee, for example after an emergency, and we try to treat everyone the same way.
+- **We decide each time** whether to charge it. We may waive a fee, for example after an emergency, and we try to treat everyone the same way. If you missed your appointment or cancelled late for a reason related to a disability, tell us, and we'll waive the fee or work out another fair change with you.
+- **If someone else takes your time** after you cancel late (a new booking or a walk-in), we won't charge the late-cancellation fee.
 - **Within 7 days.** We charge a fee within 7 days after your appointment time, or not at all.
 - **To the card you saved for that booking**, through Stripe, our payment processor. It appears on your card statement as a charge from the shop.
-- **We'll let you know** by text or a call to the number on your booking.
-- **If your card can't be charged** (for example, it's declined, or your bank wants you to approve the charge), we may ask you to pay the fee at the shop.
+- **We'll let you know** by text or a call to the number on your booking, and Stripe emails you a receipt at the email address you gave on its card page.
+- **If your card is declined**, or your bank wants you to approve the charge, we'll tell you in writing, by text, or by email if you gave us one, and you'll have at least 7 days from then to pay the fee another way, for example at the shop.
 
 ### Your card
 
@@ -92,7 +93,7 @@ A **no-show** means you didn't come to your appointment and didn't cancel it bef
 
 ### How long the agreement for a booking lasts
 
-The agreement for a booking ends as soon as you come to your appointment, you cancel it in time, or we cancel it. In any case, it ends 7 days after the appointment time. After that, your card can't be charged anything for that booking.
+The agreement for a booking ends as soon as you come to your appointment, you cancel it in time, or we cancel it. In any case, it ends 7 days after the appointment time. After that, your card can't be charged anything for that booking. If your card was declined before then, you can still pay the fee another way, as explained above.
 
 ### If you disagree with a fee
 
