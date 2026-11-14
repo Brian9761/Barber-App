@@ -3,10 +3,16 @@ Demo versions of the two Izzy Clipz apps, to try on an iPhone or a Mac before th
 
 **This is a demo on sample data.** No booking is real, no real money moves, and nothing reaches the shop. Each app forgets everything when it's closed and starts over the next time.
 
+## What's new in this build
+
+- **Izzy Clipz Business:** connect the shop's own Stripe account from Settings (the demo uses a sample account); check out a client with services and products, by cash, another way or a practice tap; see today's sales and void one; the new **Analytics** tab, for the whole shop or one barber, by day, week, month or year (sales, top barber, leaderboard, top services, products sold and how busy the chairs are); signing in on a computer with a one-time code; and the shop's policies under Settings → Legal.
+- **Izzy Clipz:** **Book again** with the same service and barber; friendlier screens; the shop's policies under Visit → Legal; "By booking, you agree to…" right above Book appointment; Remove card and Forget my details delete a saved card; cancelling within 15 minutes of booking is always free; and, on iOS 26, the iPhone's age-range check, which asks a parent or guardian to book for anyone under 13.
+- **No photos of clients.** The gallery is gone, and Home shows the shop's storefront.
+
 ## Which file do I need?
 
 - **IzzyClipz-Demo.ipa**: Izzy Clipz, the app clients book with, for an iPhone with iOS 17 or later.
-- **IzzyClipzBusiness-Demo.ipa**: Izzy Clipz Business, the shop's app (schedule, walk-ins, products, payments), for an iPhone XS or newer with iOS 18 or later.
+- **IzzyClipzBusiness-Demo.ipa**: Izzy Clipz Business, the shop's app (schedule, walk-ins, checkout, products, analytics), for an iPhone XS or newer with iOS 18 or later.
 - **IzzyClipz-Demo-Simulator.zip**: the client app for the iPhone Simulator on a Mac.
 - **IzzyClipzBusiness-Demo-Simulator.zip**: the shop's app for the iPhone Simulator on a Mac.
 - **SHA256SUMS.txt**: fingerprints of the four files above, to check a download arrived whole (optional).
