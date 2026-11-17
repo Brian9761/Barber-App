@@ -87,10 +87,41 @@ describe('privacy:find', () => {
   });
 
   it('needs one way to find the person, written so it can be checked', async () => {
-    await expect(findPersonData(h.deps, {})).rejects.toThrow('Give the --phone or the --email the client booked with.');
+    await expect(findPersonData(h.deps, {})).rejects.toThrow('Give the --phone or the --email the client booked with, or the --name the shop knows them by.');
     await expect(findPersonData(h.deps, { phone: '555-01' })).rejects.toThrow('Enter a US mobile number, like (442) 341-3053.');
     await expect(findPersonData(h.deps, { email: 'nope' })).rejects.toThrow('Enter a valid email address.');
     await expect(findPersonData(h.deps, { phone: '4425550170', email: 'a@b.com' })).rejects.toThrow(PrivacyError);
+    await expect(findPersonData(h.deps, { phone: '4425550170', name: 'Andre Sample' })).rejects.toThrow(
+      'Look for one person at a time: give --phone, --email or --name, not more than one.',
+    );
+  });
+
+  it('finds someone the shop knows only by name: their appointments and walk-in checkouts, saying names aren’t unique', async () => {
+    const ids = await history();
+    // Wanda walked in: booked at the shop without a number, and later bought a pomade-free cash checkout by name.
+    const booked = await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: FLOW45, start: '2026-11-06T22:00:00Z', customer: { name: 'Wanda  Walkin' } } });
+    expect(booked.status, booked.text).toBe(201);
+    const walkIn = await h.call('POST', '/api/owner/sales', {
+      ...owner,
+      body: { method: 'cash', barberId: 'carlos-rafael', customerName: 'wanda walkin', items: [{ kind: 'service', serviceId: 'haircut', unitCents: 3500 }] },
+    });
+    expect(walkIn.status, walkIn.text).toBe(201);
+    const someoneElse = await h.call('POST', '/api/owner/sales', {
+      ...owner,
+      body: { method: 'cash', barberId: 'carlos-rafael', customerName: 'Wanda Walker', items: [{ kind: 'service', serviceId: 'haircut', unitCents: 3500 }] },
+    });
+    expect(someoneElse.status).toBe(201);
+    const found = await findPersonData(h.deps, { name: ' WANDA walkin ' });
+    expect(found.person).toEqual({ name: 'WANDA walkin' });
+    expect(found.note).toMatch(/^Found by name\. Names aren't unique/);
+    expect(found.appointments.map((a) => a.id)).toEqual([booked.body.appointment.id]);
+    expect(found.sales.map((sale) => [sale.id, sale.customerName])).toEqual([[walkIn.body.sale.id, 'wanda walkin']]);
+    // By name, Andre's appointments and checkout are found too, and nobody else's.
+    const andre = await findPersonData(h.deps, { name: 'andre sample' });
+    expect(andre.appointments.map((a) => a.id)).toEqual([ids.tuesday, ids.thursday, ids.nextWeek]);
+    expect(andre.sales.map((sale) => sale.id)).toEqual([ids.saleId]);
+    // A search by number never says that.
+    expect('note' in (await findPersonData(h.deps, { phone: '4425550170' }))).toBe(false);
   });
 });
 
@@ -187,6 +218,32 @@ describe('privacy:forget', () => {
   });
 });
 
+describe('privacy:forget by name', () => {
+  it('removes the name from their appointments and walk-in checkouts, and nobody else’s', async () => {
+    const booked = await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: FLOW45, start: '2026-11-02T22:00:00Z', customer: { name: 'Wanda Walkin' } } });
+    expect(booked.status, booked.text).toBe(201);
+    const walkIn = await h.call('POST', '/api/owner/sales', {
+      ...owner,
+      body: { method: 'cash', barberId: 'carlos-rafael', customerName: 'Wanda Walkin', items: [{ kind: 'service', serviceId: 'haircut', unitCents: 3500 }] },
+    });
+    const other = await h.call('POST', '/api/owner/sales', {
+      ...owner,
+      body: { method: 'cash', barberId: 'carlos-rafael', customerName: 'Wanda Walker', items: [{ kind: 'service', serviceId: 'haircut', unitCents: 3500 }] },
+    });
+    h.setNow('2026-11-03T17:00:00Z');
+    const dry = await forgetPerson(h.deps, { name: 'wanda walkin' }, { dryRun: true });
+    expect(dry).toMatchObject({ dryRun: true, appointments: { removed: 1, kept: [] }, sales: 1 });
+    expect(dry.note).toMatch(/^Found by name/);
+    const forgotten = await forgetPerson(h.deps, { name: 'wanda walkin' });
+    expect(forgotten).toMatchObject({ appointments: { removed: 1 }, sales: 1 });
+    const row = async (table: string, id: string) => (await h.database.pool.query(`SELECT * FROM ${table} WHERE id = $1`, [id])).rows[0];
+    expect((await row('appointments', booked.body.appointment.id)).customer_name).toBe(NAME_REMOVED);
+    expect((await row('sales', walkIn.body.sale.id)).customer_name).toBeNull();
+    expect((await row('sales', other.body.sale.id)).customer_name).toBe('Wanda Walker');
+    expect(await findPersonData(h.deps, { name: 'Wanda Walkin' })).toMatchObject({ appointments: [], sales: [] });
+  });
+});
+
 describe('the command line', () => {
   const run = (...argv: string[]) => privacyCommand(argv, h.deps);
 
@@ -203,7 +260,8 @@ describe('the command line', () => {
     expect(JSON.parse((await run('forget', '--phone', '4425550170', '--dry-run')).output).dryRun).toBe(true);
     expect(JSON.parse((await run('forget', '--phone', '4425550170')).output).appointments.removed).toBe(2);
 
-    expect(await run('find')).toEqual({ output: 'Give the --phone or the --email the client booked with.', exitCode: 1 });
+    expect(await run('find')).toEqual({ output: 'Give the --phone or the --email the client booked with, or the --name the shop knows them by.', exitCode: 1 });
+    expect(JSON.parse((await run('find', '--name', 'Ben Other')).output).appointments).toHaveLength(1);
     expect(await run('correct', '--name', 'X')).toEqual({ output: 'Give the --appointment id (privacy:find shows it).', exitCode: 1 });
     expect(await run('help')).toMatchObject({ exitCode: 2 });
     expect(await run('--help')).toEqual({ output: PRIVACY_USAGE, exitCode: 0 });
