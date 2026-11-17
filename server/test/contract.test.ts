@@ -59,6 +59,7 @@ describe('contract fixtures (API v1)', () => {
     // Reviews
     h.config.googlePlacesApiKey = 'AIzaFixtureKey';
     h.config.yelpApiKey = 'yelp-fixture-key';
+    h.config.yelpReviews = true;
     h.fetch.on('https://places.googleapis.com/v1/places/', () => json(fixture('google/place-details.json')));
     h.fetch.on('https://api.yelp.com/v3/businesses/', (url) =>
       json(fixture(url.pathname.endsWith('/reviews') ? 'yelp/reviews.json' : 'yelp/business.json')),
@@ -66,6 +67,7 @@ describe('contract fixtures (API v1)', () => {
     check('reviews', await h.call('GET', '/api/reviews'));
     h.config.googlePlacesApiKey = undefined;
     h.config.yelpApiKey = undefined;
+    h.config.yelpReviews = false;
     check('reviews-unavailable', await h.call('GET', '/api/reviews'));
 
     check('owner-me', await h.call('GET', '/api/owner/me', owner));

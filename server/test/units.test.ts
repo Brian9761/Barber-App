@@ -173,6 +173,10 @@ describe('config', () => {
     expect(c.googlePlaceId).toBe('ChIJGz5HChRv3IARYJJy_6jyRm8');
     expect(c.googleDailyLimit).toBe(30);
     expect(c.yelpApiKey).toBeUndefined();
+    // Yelp stays off with a key alone: YELP_REVIEWS=on too.
+    expect(c.yelpReviews).toBe(false);
+    expect(configFromEnv({ YELP_API_KEY: 'k' }).yelpReviews).toBe(false);
+    expect(configFromEnv({ YELP_API_KEY: 'k', YELP_REVIEWS: 'on' }).yelpReviews).toBe(true);
     expect(c.yelpBusinessId).toBe('izzy-clipz-barbershop-oceanside');
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '100' }).googleDailyLimit).toBe(100);
     expect(configFromEnv({ GOOGLE_DAILY_LIMIT: '0' }).googleDailyLimit).toBe(0);

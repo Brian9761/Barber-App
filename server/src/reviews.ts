@@ -11,8 +11,10 @@ import { formatInstant, localDate, parseInstant } from './time.js';
 // passed through. Nothing from Google is stored, per the Maps terms: only our
 // own call counter, to cap calls per day (GOOGLE_DAILY_LIMIT).
 //
-// Yelp (only with YELP_API_KEY): cached in yelp_cache, refreshed when older than
-// 12 hours, and never served or kept past 24 hours, per the Yelp API terms.
+// Yelp (only with YELP_REVIEWS=on and YELP_API_KEY, which needs Yelp's written consent:
+// docs/legal/research.md §12.2; a key alone never calls Yelp): cached in yelp_cache,
+// refreshed when older than 12 hours, and never served or kept past 24 hours, per the
+// Yelp API terms.
 
 export interface Review {
   author: string;
@@ -268,7 +270,8 @@ async function fetchYelp(deps: Deps, key: string, businessId: string, pageUrl: s
 export async function yelpReviewsSource(deps: Deps): Promise<ReviewSource> {
   const { yelpApiKey: key, yelpBusinessId: businessId } = deps.config;
   const pageUrl = yelpPageUrl(businessId);
-  if (!key) return unavailable(pageUrl);
+  // Off unless YELP_REVIEWS=on as well: the website and the apps only link to Yelp.
+  if (!key || !deps.config.yelpReviews) return unavailable(pageUrl);
   const now = deps.now();
   const expired = new Date(now.getTime() - YELP_MAX_AGE_MS);
   try {

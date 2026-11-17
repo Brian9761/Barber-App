@@ -27,6 +27,7 @@ function googleOn(body: unknown = GOOGLE, status = 200) {
 
 function yelpOn(business: unknown = YELP_BUSINESS, reviews: unknown = YELP_REVIEWS, status = { business: 200, reviews: 200 }) {
   h.config.yelpApiKey = 'yelp-fixture-key';
+  h.config.yelpReviews = true;
   h.fetch.on(YELP_API, (url) =>
     url.pathname.endsWith('/reviews') ? jsonResponse(reviews, status.reviews) : jsonResponse(business, status.business),
   );
@@ -254,6 +255,15 @@ describe('Yelp reviews', () => {
     const res = await h.call('GET', '/api/reviews');
     expect(res.body.yelp).toEqual({ available: false, rating: null, count: null, url: YELP_URL, reviews: [], fetchedAt: null });
     expect(h.fetch.calls).toHaveLength(0);
+  });
+
+  it('a key alone never calls Yelp: YELP_REVIEWS=on is needed too (Yelp’s written consent first)', async () => {
+    yelpOn();
+    h.config.yelpReviews = false;
+    const res = await h.call('GET', '/api/reviews');
+    expect(res.body.yelp).toEqual({ available: false, rating: null, count: null, url: YELP_URL, reviews: [], fetchedAt: null });
+    expect(h.fetch.calls.filter((call) => call.url.startsWith(YELP_API))).toHaveLength(0);
+    expect((await h.database.pool.query('SELECT count(*)::int AS n FROM yelp_cache')).rows[0].n).toBe(0);
   });
 
   it('normalizes Business Details + Reviews, keeping Yelp’s links (and tracking parameters) as they are', async () => {
