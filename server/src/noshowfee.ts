@@ -28,8 +28,9 @@ import { UUID_RE } from './validation.js';
 // ever makes the fee "charged". A try whose answer was lost keeps the same key,
 // and before sending it again the server asks Stripe for that attempt's
 // PaymentIntent (Stripe may forget a key after 24 hours, and then a reused key
-// would charge again); only a definite "no" from Stripe (declined, or the bank
-// wants the client to approve it) lets the next try make a new one. When Stripe
+// would charge again). A definite "no" from Stripe (declined, or the bank wants
+// the client to approve it) ends it: the card isn't charged again, and the client
+// pays another way (an older fee row may still be on a later attempt). When Stripe
 // has nothing for that try and the booking can't be charged any more (the shop
 // reopened it, say), the fee is settled as not charged instead of staying
 // pending for good; a later charge picks up that same try (same key) first.
@@ -86,6 +87,16 @@ export function feeStatusFor(status: string): NoShowFeeRowStatus {
 
 export const AUTHENTICATION_MESSAGE =
   "The client's bank wants them to approve this charge, so it can't go through from here. Ask them to pay at the shop.";
+/**
+ * Charging again after the bank said no. A saved card isn't charged again after a decline without
+ * the client's new say-so (card networks' rules for stored cards, research.md §9.2), and the
+ * Cancellation & No-Show Policy gives the client at least 7 days to pay the fee another way: a
+ * second charge could take it twice.
+ */
+export const DECLINED_AGAIN_MESSAGE =
+  "The card was declined, so it isn't charged again. Ask the client to pay the fee another way, for example at the shop.";
+export const NEEDS_CLIENT_AGAIN_MESSAGE =
+  "The client's bank wants them to approve this charge, so the card isn't charged again. Ask them to pay the fee another way, for example at the shop.";
 export const UNUSABLE_CARD_MESSAGE = "Stripe couldn't use the saved card. Ask the client to pay at the shop.";
 
 /** Why a card was turned down, in plain words for the owner (never "lost" or "stolen": just declined). */
@@ -106,10 +117,11 @@ export function declineMessage(error: { code?: string | null; decline_code?: str
     case 'invalid_expiry_year':
     case 'incorrect_zip':
       return "The card's details didn't work.";
+    // Never "try again": a card the bank turned down isn't charged a second time (DECLINED_AGAIN_MESSAGE).
     case 'processing_error':
-      return "The bank couldn't process the card. Try again in a while.";
+      return "The bank couldn't process the card.";
     case 'card_decline_rate_limit_exceeded':
-      return 'The card was declined too many times today. Try again tomorrow.';
+      return 'The card was declined too many times today.';
     default:
       return error?.code === 'authentication_required' ? AUTHENTICATION_MESSAGE : 'The bank declined the card.';
   }
@@ -422,6 +434,10 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (!row.saved_card_id || row.no_show_fee_cents === null) {
       throw notChargeable("This booking has no card on file, so there's no fee to charge.");
     }
+    // The bank said no (declined, or it wants the client to approve the charge): the card isn't
+    // charged again; the client pays another way.
+    if (row.no_show_fee_status === 'declined') throw notChargeable(DECLINED_AGAIN_MESSAGE);
+    if (row.no_show_fee_status === 'needs_action') throw notChargeable(NEEDS_CLIENT_AGAIN_MESSAGE);
     let chargeable = chargeCase(row, now);
     // A late cancellation whose time another client has now isn't charged (the policy's promise).
     if (chargeable.reason === 'late_cancel' && (await timeTakenSince(tx, row))) {
@@ -437,7 +453,7 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     const unusable = match === 'otherAccount' ? notChargeable(OLD_ACCOUNT_MESSAGE) : match === 'otherMode' ? notChargeable(otherModeMessage(savedLive)) : null;
     const refusal = chargeable.refusal ?? unusable;
     // A try whose answer never came keeps its attempt (Stripe key and reason) and is looked up
-    // first, whatever happened since; after a "no", a new attempt, only for a chargeable case.
+    // first, whatever happened since; otherwise a new attempt, only for a chargeable case.
     const pending = row.no_show_fee_status === 'pending';
     // A try settled as not charged (Stripe had nothing for it when the booking couldn't be charged
     // any more): charging again picks up that same attempt, looked up first, so a request of it that
