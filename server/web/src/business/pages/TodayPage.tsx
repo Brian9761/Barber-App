@@ -316,6 +316,7 @@ export function TodayPage() {
       <AppointmentDetails
         key={appointment.id}
         appointment={appointment}
+        others={view?.appointments ?? []}
         zone={zone}
         now={now}
         onChanged={replaceAppointment}

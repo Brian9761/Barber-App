@@ -1,10 +1,10 @@
 import SwiftUI
 
-// No-show protection on screen: the "Full Service Cancellation & No-Show Fee" notice (Pick a day
+// No-show protection on screen: the "Late Cancellation & No-Show Fee" notice (Pick a day
 // and time, Review) and Review's card section. What they say comes from the shop's server
 // (`NoShowPolicy`) and `NoShowCopy`.
 
-/// "Full Service Cancellation & No-Show Fee" and the server's message, on a card with a caution
+/// "Late Cancellation & No-Show Fee" and the server's message, on a card with a caution
 /// outline so it can't be missed, and the note about the picked time when cancelling it can't be
 /// free any more.
 struct NoShowWarningCard: View {

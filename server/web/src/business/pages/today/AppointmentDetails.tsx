@@ -59,6 +59,7 @@ export function canCheckOut(appointment: OwnerAppointment): boolean {
 
 export function AppointmentDetails({
   appointment,
+  others = [],
   zone,
   now,
   onChanged,
@@ -66,6 +67,8 @@ export function AppointmentDetails({
   onVoidSale,
 }: {
   appointment: OwnerAppointment;
+  /** The day's appointments: a late cancellation whose time another client took isn't charged. */
+  others?: readonly OwnerAppointment[];
   zone: string;
   now: Date;
   /** The server's answer after a change: shown right away, and the day loads again. */
@@ -145,7 +148,7 @@ export function AppointmentDetails({
   }, [focusNext, appointment, feeError, changed]);
 
   const start = new Date(appointment.start);
-  const panel = feePanel(appointment, now, zone);
+  const panel = feePanel(appointment, now, zone, others);
   const payment = paymentSummary(appointment);
   const paid = paidLabel(appointment);
   const phone = appointment.customer.phone;

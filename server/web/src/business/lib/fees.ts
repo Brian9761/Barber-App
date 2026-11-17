@@ -29,6 +29,12 @@ const FEE_DEADLINE_MS = FEE_DEADLINE_DAYS * 24 * 60 * 60_000;
 
 // The server's words (feecase.ts, noshowfee.ts and appointments.ts).
 export const NO_CARD_MESSAGE = "This booking has no card on file, so there's no fee to charge.";
+/** The server's 409 when a fee the bank declined is charged again: the card isn't charged a second time. */
+export const DECLINED_AGAIN_MESSAGE =
+  "The card was declined, so it isn't charged again. Ask the client to pay the fee another way, for example at the shop.";
+/** The same after the bank wanted the client to approve the charge. */
+export const NEEDS_CLIENT_AGAIN_MESSAGE =
+  "The client's bank wants them to approve this charge, so the card isn't charged again. Ask them to pay the fee another way, for example at the shop.";
 /** A no-show fee before the appointment's end: a client who comes before the end isn't a no-show. */
 export const NOT_ENDED_MESSAGE = "The appointment hasn't ended yet, so it can't be a no-show.";
 /** Once the 7 days after the start are over. */
@@ -146,16 +152,53 @@ export function feeCase(appointment: Booking, now: Date): FeeCase {
 
 /**
  * The fee the owner can act on now, or null (the Kit's `chargeableFee(at:)`): a chargeable case
- * with a fee that isn't charged yet (a declined one can be tried again), or a pending one, always,
- * as "Check again" (the server only asks Stripe how that try went, and never charges twice).
+ * with a fee that hasn't been tried yet, or a pending one, always, as "Check again" (the server only
+ * asks Stripe how that try went, and never charges twice). Once the bank turned it down (declined,
+ * or it wants the client to approve it), the card isn't charged again, as the server answers: the
+ * client pays another way.
  */
 export function chargeableFee(appointment: Booking, now: Date): FeeReason | null {
   const fee = appointment.noShowFee;
   if (!appointment.card || !fee || fee.status === 'charged') return null;
   const found = feeCase(appointment, now);
   if (fee.status === 'pending') return fee.reason ?? (found.kind === 'chargeable' ? found.reason : 'noShow');
+  if (fee.status === 'declined' || fee.status === 'needsAction') return null;
   return found.kind === 'chargeable' ? found.reason : null;
 }
+
+/**
+ * The server's answer when a late cancellation's time was booked by another client since: the
+ * Cancellation & No-Show Policy promises no late-cancellation fee then.
+ */
+export const TIME_TAKEN_MESSAGE = "Another client was booked into this time after the cancellation, so there's no late-cancellation fee.";
+
+/**
+ * Whether another client has this cancelled booking's time now: another booked or completed
+ * appointment of the same barber that overlaps it, among `others` (the day's appointments). Then the
+ * late-cancellation fee isn't charged (the server refuses it too).
+ */
+export function timeTaken(
+  appointment: Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end'>,
+  others: readonly Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end' | 'status'>[],
+): boolean {
+  const start = new Date(appointment.start).getTime();
+  const end = new Date(appointment.end).getTime();
+  return others.some(
+    (other) =>
+      other.id !== appointment.id &&
+      other.barberId === appointment.barberId &&
+      (other.status === 'booked' || other.status === 'completed') &&
+      new Date(other.start).getTime() < end &&
+      new Date(other.end).getTime() > start,
+  );
+}
+
+/**
+ * Under a fee the bank turned down: the card isn't charged again, and the policy promises the
+ * client written notice and at least 7 days to pay another way.
+ */
+export const TURNED_DOWN_FOOTER =
+  "The card isn't charged again. Tell the client in writing (a text, or an email if they gave one), and give them at least 7 days to pay the fee another way, for example at the shop.";
 
 /** An earlier try at the fee has no final answer from Stripe yet: the button reads "Check again". */
 export function isFeePending(appointment: Booking): boolean {
@@ -224,7 +267,7 @@ export interface FeeConfirmation {
 }
 
 export interface FeeAction {
-  /** "Charge no-show fee ($35)", "Charge late cancellation fee ($35)", "Charge again ($35)" or "Check again". */
+  /** "Charge no-show fee ($35)", "Charge late cancellation fee ($35)" or "Check again". */
   title: string;
   /** Asked before every new charge; null for Check again (it only finishes the try already confirmed). */
   confirmation: FeeConfirmation | null;
@@ -278,12 +321,6 @@ function deadlineLabel(appointment: OwnerAppointment, zone: string): string {
   return dateTimeLabel(feeDeadline(new Date(appointment.start)), zone);
 }
 
-function whyNotAgain(appointment: OwnerAppointment, now: Date): string | null {
-  const note = feeNote(appointment, now);
-  if (note) return note;
-  return appointment.status === 'completed' ? COMPLETED_MESSAGE : null;
-}
-
 function confirmationMessage(appointment: OwnerAppointment, fee: NoShowFee, reason: FeeReason, zone: string): string {
   const what = `${appointment.serviceName} with ${appointment.barberName}, ${dateTimeLabel(new Date(appointment.start), zone)}`;
   if (reason === 'noShow') return `No-show fee for ${what}. The client agreed to it when booking.`;
@@ -294,15 +331,27 @@ function confirmationMessage(appointment: OwnerAppointment, fee: NoShowFee, reas
     message += sameDay ? `: the client cancelled at ${timeLabel(cancelled, zone)}` : `: the client cancelled on ${dateTimeLabel(cancelled, zone)}`;
     if (fee.lateCancelWindowMinutes !== null) message += `, less than ${windowLabel(fee.lateCancelWindowMinutes)} before`;
   }
-  return `${message}. They agreed to it when booking.`;
+  // A walk-in rung up without an appointment can't be seen here: the policy promises no fee then too.
+  return `${message}. They agreed to it when booking. Don't charge it if another client, such as a walk-in, took this time.`;
 }
 
-/** The "Card on file" part of an appointment's details, or null without a card on file. */
-export function feePanel(appointment: OwnerAppointment, now: Date, zone: string): FeePanel | null {
+/**
+ * The "Card on file" part of an appointment's details, or null without a card on file. `others` are
+ * the day's appointments: a late cancellation whose time another client took isn't charged.
+ */
+export function feePanel(
+  appointment: OwnerAppointment,
+  now: Date,
+  zone: string,
+  others: readonly Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end' | 'status'>[] = [],
+): FeePanel | null {
   const fee = appointment.noShowFee;
   if (!fee) return null;
   const card = appointment.card ? cardLabel(appointment.card) : 'the card on file';
-  const chargeable = chargeableFee(appointment, now);
+  const found = chargeableFee(appointment, now);
+  // Another client has the time now: no late-cancellation fee (the policy's promise, and the server's rule).
+  const taken = found === 'lateCancel' && timeTaken(appointment, others);
+  const chargeable = taken ? null : found;
   const agreement =
     fee.lateCancelWindowMinutes !== null
       ? `For not showing up, or cancelling less than ${windowLabel(fee.lateCancelWindowMinutes)} before.`
@@ -319,20 +368,18 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
     }
     case 'declined':
       status = { kind: 'declined', detail: text(fee.message, 'The bank declined the card.') };
-      footer = chargeable
-        ? `You can try the card again until ${deadlineLabel(appointment, zone)}, 7 days after the appointment, or ask the client to pay at the shop.`
-        : whyNotAgain(appointment, now);
+      footer = TURNED_DOWN_FOOTER;
       break;
     case 'needsAction':
       status = { kind: 'needsClient', detail: text(fee.message, "The client's bank wants them to approve this charge. Ask them to pay at the shop.") };
-      footer = chargeable ? null : whyNotAgain(appointment, now);
+      footer = TURNED_DOWN_FOOTER;
       break;
     case 'pending':
       status = { kind: 'pending', detail: feeCase(appointment, now).kind === 'chargeable' ? PENDING : PENDING_CHECK_ONLY };
       footer = null;
       break;
     default:
-      status = { kind: 'notCharged', note: feeNote(appointment, now) };
+      status = { kind: 'notCharged', note: taken ? TIME_TAKEN_MESSAGE : feeNote(appointment, now) };
       footer = chargeable
         ? `Nothing is charged until you confirm, and a fee is only ever charged once. It can be charged until ${deadlineLabel(appointment, zone)}, 7 days after the appointment.`
         : null;
@@ -343,8 +390,7 @@ export function feePanel(appointment: OwnerAppointment, now: Date, zone: string)
     action = { title: 'Check again', confirmation: null };
   } else if (chargeable) {
     const amount = moneyWithCommas(fee.amountCents);
-    const title =
-      fee.status === 'declined' || fee.status === 'needsAction' ? `Charge again (${amount})` : `Charge ${reasonTitle(chargeable).toLowerCase()} (${amount})`;
+    const title = `Charge ${reasonTitle(chargeable).toLowerCase()} (${amount})`;
     action = {
       title,
       confirmation: {

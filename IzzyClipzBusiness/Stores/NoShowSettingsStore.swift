@@ -277,7 +277,7 @@ final class NoShowSettingsStore {
     }
 
     /// The notice clients see on "Pick a day and time" and on Review, for the example haircut, as
-    /// the server words it ("Full Service Cancellation & No-Show Fee").
+    /// the server words it ("Late Cancellation & No-Show Fee").
     var clientWarning: IzzyAPI.NoShowWarning? {
         guard let settings = previewSettings, let fee = exampleFeeCents else { return nil }
         return IzzyAPI.NoShowRule.warning(minFeeCents: fee, maxFeeCents: fee, settings: settings)

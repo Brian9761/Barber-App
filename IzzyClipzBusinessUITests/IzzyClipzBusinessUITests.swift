@@ -788,7 +788,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("feePayment"), containing: "Late cancellation fee"))
     }
 
-    func testADeclinedFeeSaysWhyAndCanBeTriedAgain() {
+    func testADeclinedFeeSaysWhyAndIsntChargedAgain() {
         launch("-fake-cards-on-file", "-fake-no-show-declined")
         tap("appointment-Kim Sample")
         tap("chargeFee")
@@ -796,16 +796,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let status = reveal("feeStatus")
         XCTAssertTrue(waitForLabel(status, containing: "Declined"), "Got: \(status.label)")
         XCTAssertTrue(status.label.contains("there isn't enough money on it"), "Got: \(status.label)")
+        // The card isn't charged again: no second try, and what to do instead.
+        let footer = reveal("feeFooter")
+        XCTAssertTrue(waitForLabel(footer, containing: "The card isn't charged again"), "Got: \(footer.label)")
+        XCTAssertTrue(footer.label.contains("at least 7 days to pay the fee another way"), "Got: \(footer.label)")
+        XCTAssertFalse(element("chargeFee").exists, "A declined card isn't charged again")
         screenshot("O29-No-Show-Fee-Declined")
-
-        // Another try is a new charge, and it asks again.
-        let again = reveal("chargeFee")
-        XCTAssertTrue(waitForLabel(again, containing: "Charge again ($35)"), "Got: \(again.label)")
-        again.tap()
-        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
-        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "No-show fee charged"))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(waitForLabel(reveal("appointment-Kim Sample"), containing: "No-show fee $35 charged"))
+        XCTAssertTrue(waitForLabel(reveal("appointment-Kim Sample"), containing: "Fee declined"))
     }
 
     func testAFeeTheBankWantsTheClientToApproveSaysToAskThemToPayAtTheShop() {
@@ -855,7 +853,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(element("paymentsFees"), containing: "$35.00"))
     }
 
-    /// The same for a decline: it shows with the bank's reason and Charge again, and nothing else.
+    /// The same for a decline: it shows with the bank's reason and what to do, and nothing else.
     func testADeclineWhoseAnswerIsLostShowsTheDecline() {
         launch("-fake-cards-on-file", "-fake-no-show-declined", "-fake-no-show-answer-lost")
         tap("appointment-Kim Sample")
@@ -865,7 +863,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(status, containing: "Declined"), "Got: \(status.label)")
         XCTAssertTrue(status.label.contains("there isn't enough money on it"), "Got: \(status.label)")
         XCTAssertFalse(element("feeError").exists, "Stripe's answer is on screen")
-        XCTAssertTrue(waitForLabel(reveal("chargeFee"), containing: "Charge again ($35)"))
+        XCTAssertTrue(waitForLabel(reveal("feeFooter"), containing: "The card isn't charged again"))
+        XCTAssertFalse(element("chargeFee").exists, "A declined card isn't charged again")
     }
 
     /// Nia Sample booked online with a card for 2:30 PM. Until her haircut ends (3:15 PM) she may
@@ -908,7 +907,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         link.tap()
         flipSwitch(reveal("noShowEnabled"))
         XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $40"))
-        XCTAssertTrue(waitForLabel(reveal("noShowClientWarning"), containing: "Full Service Cancellation & No-Show Fee"))
+        XCTAssertTrue(waitForLabel(reveal("noShowClientWarning"), containing: "Late Cancellation & No-Show Fee"))
         screenshot("O31-No-Show-Settings")
 
         // A flat amount the server wouldn't take is explained, and Save says so too.

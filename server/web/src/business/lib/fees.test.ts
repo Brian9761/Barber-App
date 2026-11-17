@@ -29,6 +29,9 @@ import {
   ruleFeeCase,
   ruleFeeCaseAt,
   shopCancelNote,
+  TIME_TAKEN_MESSAGE,
+  timeTaken,
+  TURNED_DOWN_FOOTER,
 } from './fees';
 
 // The owner app's fee rules (FeePanel.swift), checked against the server's own examples
@@ -237,10 +240,10 @@ describe('the card on file in the details', () => {
     }
     const late = { ...lateCharged, noShowFee: { ...lateCharged.noShowFee!, status: 'none' as const, chargedAt: null } };
     expect(feePanel(late, new Date('2026-11-10T21:01:00Z'), ZONE)!.action).toBeNull();
-    // A declined card can't be tried again then either.
+    // A declined card isn't tried again then either.
     const again = feePanel(declined, new Date('2026-11-10T19:01:00Z'), ZONE)!;
     expect(again.action).toBeNull();
-    expect(again.footer).toBe(FEE_DEADLINE_MESSAGE);
+    expect(again.footer).toBe(TURNED_DOWN_FOOTER);
   });
 
   it('says a charged fee was charged, and that refunds are made in Stripe', () => {
@@ -250,13 +253,17 @@ describe('the card on file in the details', () => {
     expect(panel.footer).toBe("Refunds are made in the Stripe Dashboard. Reopening the appointment doesn't refund the fee.");
   });
 
-  it('offers to charge a declined fee again, until the 7 days are over', () => {
+  it('never charges a declined card again: it says to tell the client and give them 7 days to pay another way', () => {
     const panel = feePanel(declined, new Date('2026-11-03T20:00:00Z'), ZONE)!;
     expect(panel.status).toEqual({ kind: 'declined', detail: "The card was declined: there isn't enough money on it." });
-    expect(panel.action?.title).toBe('Charge again ($25)');
+    expect(panel.action).toBeNull();
     expect(panel.footer).toBe(
-      times('You can try the card again until Tue, Nov 10 at 11 AM, 7 days after the appointment, or ask the client to pay at the shop.'),
+      "The card isn't charged again. Tell the client in writing (a text, or an email if they gave one), and give them at least 7 days to pay the fee another way, for example at the shop.",
     );
+    expect(chargeableFee(declined, new Date('2026-11-03T20:00:00Z'))).toBeNull();
+    // The same when the bank wants the client to approve the charge.
+    const needsClient = { ...declined, noShowFee: { ...declined.noShowFee!, status: 'needsAction' as const } };
+    expect(feePanel(needsClient, new Date('2026-11-03T20:00:00Z'), ZONE)).toMatchObject({ action: null, footer: TURNED_DOWN_FOOTER });
   });
 
   it('checks a try whose answer never came even after the 7 days, without sending a new one', () => {
@@ -274,8 +281,24 @@ describe('the card on file in the details', () => {
     const panel = feePanel(late, new Date('2026-11-03T22:00:00Z'), ZONE)!;
     expect(panel.action?.title).toBe('Charge late cancellation fee ($25)');
     expect(panel.action?.confirmation?.message).toBe(
-      'Late cancellation fee for Haircut with Flowxbori, Tue, Nov 3 at 1 PM: the client cancelled at 12:30 PM, less than 1 hour before. They agreed to it when booking.',
+      'Late cancellation fee for Haircut with Flowxbori, Tue, Nov 3 at 1 PM: the client cancelled at 12:30 PM, less than 1 hour before. They agreed to it when booking. ' +
+        "Don't charge it if another client, such as a walk-in, took this time.",
     );
+  });
+
+  it('offers no late-cancellation fee once another client was booked into that time (the policy’s promise)', () => {
+    const late = { ...lateCharged, noShowFee: { ...lateCharged.noShowFee!, status: 'none' as const, chargedAt: null } };
+    const now = new Date('2026-11-03T22:00:00Z');
+    const walkIn = { ...late, id: 'walk-in', card: null, noShowFee: null, status: 'booked' as const };
+    const panel = feePanel(late, now, ZONE, [late, walkIn])!;
+    expect(panel.action).toBeNull();
+    expect(panel.status).toEqual({ kind: 'notCharged', note: TIME_TAKEN_MESSAGE });
+    expect(timeTaken(late, [walkIn])).toBe(true);
+    // Another barber at the same time, one right after, or a cancelled one doesn't take it.
+    expect(timeTaken(late, [{ ...walkIn, barberId: 'someone-else' }])).toBe(false);
+    expect(timeTaken(late, [{ ...walkIn, start: late.end, end: new Date(Date.parse(late.end) + 30 * 60_000).toISOString() }])).toBe(false);
+    expect(timeTaken(late, [{ ...walkIn, status: 'cancelled' as const }])).toBe(false);
+    expect(feePanel(late, now, ZONE, [late, { ...walkIn, status: 'cancelled' as const }])!.action?.title).toBe('Charge late cancellation fee ($25)');
   });
 
   it('has nothing to show without a card on file', () => {

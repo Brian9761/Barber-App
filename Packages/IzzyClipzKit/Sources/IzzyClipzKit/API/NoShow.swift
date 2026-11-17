@@ -224,9 +224,10 @@ extension IzzyAPI.Appointment {
 
     /// The fee the owner can act on now, or `nil`:
     /// - "Charge no-show fee" or "Charge late cancellation fee": a no-show whose end has passed,
-    ///   or a late cancellation by the client, with a card on file and a fee that isn't charged yet
-    ///   (a declined one, or one that needs the client, can be tried again), up to 7 days after the
-    ///   start;
+    ///   or a late cancellation by the client, with a card on file and a fee that hasn't been tried
+    ///   yet, up to 7 days after the start. Once the bank turned it down (declined, or it needs the
+    ///   client to approve it), the card isn't charged again, as the server answers: the client
+    ///   pays another way (`NoShowRule.declinedAgainMessage`);
     /// - a `pending` fee (an earlier try's answer never came), always, whatever happened since, as
     ///   "Check again" (`isFeePending`): the server only asks Stripe how that try went, never
     ///   charges twice, and settles it as not charged ("Nothing was charged. …", a 409) when Stripe
@@ -237,6 +238,8 @@ extension IzzyAPI.Appointment {
             if case .chargeable(let reason) = feeCase(at: now) { return noShowFee.reason ?? reason }
             return noShowFee.reason ?? .noShow
         }
+        // Turned down by the bank: never charged again (the server answers 409 not_chargeable).
+        if noShowFee.status == .declined || noShowFee.status == .needsAction { return nil }
         guard case .chargeable(let reason) = feeCase(at: now) else { return nil }
         return reason
     }
@@ -289,9 +292,9 @@ extension IzzyAPI.Appointment {
 
 extension IzzyAPI {
     /// The notice clients see while booking (on Pick a day and time, and on Review): `{ title, message }`,
-    /// e.g. "Full Service Cancellation & No-Show Fee" and "Cancelling less than 1 hour before your
-    /// appointment, or not showing up, may be charged the full service price ($40). Cancelling in the
-    /// app more than 1 hour before is free."
+    /// e.g. "Late Cancellation & No-Show Fee" and "Cancelling less than 1 hour before your
+    /// appointment, or not showing up, may be charged the full service price ($40). Cancelling online
+    /// more than 1 hour before, or within 15 minutes of booking, is free."
     public struct NoShowWarning: Codable, Hashable, Sendable {
         public var title: String
         public var message: String
@@ -792,22 +795,25 @@ extension IzzyAPI {
                 : Price.currencyString(cents: minCents) + "–" + Price.currencyString(cents: maxCents)
         }
 
-        /// The policy clients agree to, as the server words it.
+        /// The policy clients agree to, as the server words it: when the card may be charged (within
+        /// 7 days after the appointment time) and when cancelling online is free (in time, or within
+        /// 15 minutes of booking).
         public static func policyText(minFeeCents: Int, maxFeeCents: Int, settings: NoShowSettings) -> String {
             let share = settings.feeMode == .percent ? " (\(settings.percent)% of the service)" : ""
             let fee = feeLabel(minCents: minFeeCents, maxCents: maxFeeCents) + share
+            let when = " to this card within \(feeDeadlineDays) days after your appointment time."
             if settings.lateCancelEnabled {
                 let window = windowLabel(minutes: settings.lateCancelWindowMinutes)
                 return "No payment now. If you cancel less than \(window) before your appointment, or don't come, Izzy Clipz may charge "
-                    + fee + " to this card. Cancelling in the app more than \(window) before is free."
+                    + fee + when + " Cancelling online is free more than \(window) before, or within \(lateCancelGraceMinutes) minutes of booking."
             }
             return "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge "
-                + fee + " to this card. Cancelling in the app before your appointment is free."
+                + fee + when + " Cancelling online before your appointment is free."
         }
 
-        /// The warning clients see while booking, as the server words it: "Full Service
-        /// Cancellation & No-Show Fee" only when the fee is 100% of the service. It "may be
-        /// charged", like the agreed policy's "may charge": the shop decides each time.
+        /// The warning clients see while booking, as the server words it: "Late Cancellation &
+        /// No-Show Fee" whenever late cancellations can be charged, whatever the fee, or "No-Show
+        /// Fee". It "may be charged", like the agreed policy's "may charge": the shop decides each time.
         public static func warning(minFeeCents: Int, maxFeeCents: Int, settings: NoShowSettings) -> NoShowWarning {
             let fee = feeLabel(minCents: minFeeCents, maxCents: maxFeeCents)
             let fullPrice = settings.feeMode == .percent && settings.percent == 100
@@ -817,14 +823,14 @@ extension IzzyAPI {
             if settings.lateCancelEnabled {
                 let window = windowLabel(minutes: settings.lateCancelWindowMinutes)
                 return NoShowWarning(
-                    title: fullPrice ? "Full Service Cancellation & No-Show Fee" : "Late Cancellation & No-Show Fee",
+                    title: "Late Cancellation & No-Show Fee",
                     message: "Cancelling less than \(window) before your appointment, or not showing up, may be charged \(amount). "
-                        + "Cancelling in the app more than \(window) before is free."
+                        + "Cancelling online more than \(window) before, or within \(lateCancelGraceMinutes) minutes of booking, is free."
                 )
             }
             return NoShowWarning(
                 title: "No-Show Fee",
-                message: "Not showing up may be charged \(amount). Cancelling in the app before your appointment is free."
+                message: "Not showing up may be charged \(amount). Cancelling online before your appointment is free."
             )
         }
 
@@ -847,6 +853,16 @@ extension IzzyAPI {
         public static let completedNoShowMessage = "This appointment was marked completed, so it can't become a no-show."
         /// Why a completed booking can't be charged: the client came.
         public static let completedMessage = "The appointment is marked completed, so there's no fee to charge."
+        /// The server's 409 when a fee the bank declined is charged again: the card isn't charged a
+        /// second time (card networks' rules for saved cards), the client pays another way.
+        public static let declinedAgainMessage =
+            "The card was declined, so it isn't charged again. Ask the client to pay the fee another way, for example at the shop."
+        /// The same after the bank wanted the client to approve the charge.
+        public static let needsClientAgainMessage =
+            "The client's bank wants them to approve this charge, so the card isn't charged again. Ask them to pay the fee another way, for example at the shop."
+        /// The server's 409 when a late cancellation's time was booked by another client since (the
+        /// policy promises no fee then).
+        public static let timeTakenMessage = "Another client was booked into this time after the cancellation, so there's no late-cancellation fee."
         /// A client who cancelled within 15 minutes of booking a time inside the window.
         public static let withinGraceMessage = "The client cancelled within 15 minutes of booking, so there's no fee."
 

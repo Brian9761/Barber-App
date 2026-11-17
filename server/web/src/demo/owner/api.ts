@@ -29,11 +29,15 @@ import type { Catalog } from '../../api/types';
 import type { OwnerApi } from '../../business/api/http';
 import {
   COMPLETED_NO_SHOW_MESSAGE,
+  DECLINED_AGAIN_MESSAGE,
   feeTerms,
+  NEEDS_CLIENT_AGAIN_MESSAGE,
   NO_CARD_MESSAGE,
   NO_SHOW_BEFORE_END_MESSAGE,
   ruleFeeCase,
   ruleFeeCaseAt,
+  TIME_TAKEN_MESSAGE,
+  timeTaken,
   type FeeReason,
 } from '../../business/lib/fees';
 import { session } from '../../business/session';
@@ -502,10 +506,17 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       if (fee?.status === 'charged') return answered(found.appointment);
       if (store.stripe.connectedAt === null) throw fail('stripe_not_configured', 'Connect Stripe in Settings to take card payments.', 503);
       if (!found.appointment.card || !fee) throw fail('not_chargeable', NO_CARD_MESSAGE, 409);
+      // Turned down by the bank: the card isn't charged again; the client pays another way (the server's answer).
+      if (fee.status === 'declined') throw fail('not_chargeable', DECLINED_AGAIN_MESSAGE, 409);
+      if (fee.status === 'needsAction') throw fail('not_chargeable', NEEDS_CLIENT_AGAIN_MESSAGE, 409);
       // The server's rule at this moment: a no-show once it has ended, a late cancellation more than
       // 15 minutes after booking, never a completed visit, and nothing after the 7 days.
       const rule = ruleFeeCaseAt(feeTerms(found.appointment, fee), clock());
       if (rule.kind === 'refused') throw fail('not_chargeable', rule.message, 409);
+      // A late cancellation whose time another client was booked into isn't charged (the policy's promise).
+      if (rule.reason === 'lateCancel' && timeTaken(found.appointment, day(store, found.date).appointments)) {
+        throw fail('not_chargeable', TIME_TAKEN_MESSAGE, 409);
+      }
       const now = clock();
       const kept = keep(store, found.date);
       const appointment = kept.appointments.find((a) => a.id === id)!;

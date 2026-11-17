@@ -5,7 +5,7 @@ import SwiftUI
 /// Service and Cancellation & No-Show Policy." (both linked) right above it.
 ///
 /// With no-show protection (the shop's server says this booking needs a card), Review also shows
-/// the "Full Service Cancellation & No-Show Fee" notice and a "Card on file" section: the card on
+/// the "Late Cancellation & No-Show Fee" notice and a "Card on file" section: the card on
 /// this iPhone with Change, or Add a card (Stripe's own page), and the policy the client agrees to
 /// by booking. Book appointment waits until there's a card that can hold this appointment.
 ///

@@ -754,7 +754,7 @@ final class IzzyClipzUITests: XCTestCase {
 
         let warning = element("noShowWarning")
         XCTAssertTrue(warning.waitForExistence(timeout: 10), "No fee notice on Review")
-        XCTAssertTrue(warning.label.contains("Full Service Cancellation & No-Show Fee"), warning.label)
+        XCTAssertTrue(warning.label.contains("Late Cancellation & No-Show Fee"), warning.label)
         if let lessThanAnHourAway {
             // The same note on Review, for the same time.
             XCTAssertEqual(warning.label.contains("This time is less than 1 hour away"), lessThanAnHourAway, warning.label)
@@ -1125,7 +1125,7 @@ final class IzzyClipzUITests: XCTestCase {
         // invitation to call, since the entrance isn't confirmed step-free.
         let lines = element("visitAccessibilityLines")
         scroll(toReveal: lines)
-        XCTAssertEqual(lines.label, "Accessibility: Room for a wheelchair inside, at the chairs and the counter. Accessible parking near the entrance")
+        XCTAssertEqual(lines.label, "Accessibility: Room for a wheelchair inside, at the chairs and the counter. Disabled parking space near the entrance")
         let access = element("visitAccessibilityCall")
         scroll(toReveal: access)
         XCTAssertTrue(access.label.contains("Questions about getting in or around the shop?"), access.label)
@@ -1201,7 +1201,7 @@ final class IzzyClipzUITests: XCTestCase {
         if checkingTheTimeStepWarning {
             let warning = element("noShowWarning")
             XCTAssertTrue(warning.waitForExistence(timeout: 15), "No fee notice on Pick a day and time", file: file, line: line)
-            XCTAssertTrue(warning.label.contains("Full Service Cancellation & No-Show Fee"), warning.label, file: file, line: line)
+            XCTAssertTrue(warning.label.contains("Late Cancellation & No-Show Fee"), warning.label, file: file, line: line)
             XCTAssertTrue(warning.label.contains("the full service price ($45)"), warning.label, file: file, line: line)
             screenshot("50-Book-Time-Fee-Warning")
         }

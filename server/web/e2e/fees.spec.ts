@@ -307,7 +307,7 @@ test.describe('on the real site', () => {
       const notice = page.getByTestId('fee-warning');
       await expect(notice.locator('.notice__title')).toHaveText('Late Cancellation & No-Show Fee');
       await expect(notice).toContainText(
-        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling in the app more than 1 hour before is free.',
+        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
       );
       await (await firstTime(page)).click();
       await expect(notice).not.toContainText('$25');
@@ -320,7 +320,7 @@ test.describe('on the real site', () => {
       await expect(page.getByTestId('fee-warning')).not.toContainText('$25');
       // What they agree to by booking: the same $5.
       await expect(page.getByTestId('card-section')).toContainText(
-        "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card. Cancelling in the app more than 1 hour before is free.",
+        "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
       );
       await expectAccessible(page, 'Review, with a flat fee capped at the price');
       await page.getByTestId('fee-warning').scrollIntoViewIfNeeded();

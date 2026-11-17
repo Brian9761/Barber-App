@@ -57,7 +57,8 @@ final class FakeServer {
         var nextFeeChargeFails = false
         /// What Stripe answers the next fee charge instead of approving it, like the server records it:
         /// declined (not enough money on the card), or the client's bank wants them to approve it. The
-        /// answer is 200 with the fee declined or needing the client; charging again is a new try.
+        /// answer is 200 with the fee declined or needing the client; charging again is turned down
+        /// (the card isn't charged again, so the client pays another way).
         var nextFeeAnswer: FeeAnswer?
         /// The next fee charge reaches the server and Stripe answers it (approved, or `nextFeeAnswer`'s
         /// "no"), and the server records that, but the answer never reaches the phone: the app sees it
@@ -451,11 +452,22 @@ final class FakeServer {
         }
         var appointment = appointments[index]
         if appointment.noShowFee?.status == .charged { return appointment }
+        // Turned down by the bank: the card isn't charged again, as the server answers.
+        if appointment.card != nil, appointment.noShowFee?.status == .declined {
+            throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: IzzyAPI.NoShowRule.declinedAgainMessage, status: 409)
+        }
+        if appointment.card != nil, appointment.noShowFee?.status == .needsAction {
+            throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: IzzyAPI.NoShowRule.needsClientAgainMessage, status: 409)
+        }
         let pending = appointment.card != nil && appointment.noShowFee?.status == .pending
         let reason: IzzyAPI.NoShowFeeReason
         switch appointment.feeCase(at: now()) {
         case .chargeable(let found):
-            // A pending try charges for what it was for.
+            // A late cancellation whose time another client was booked into isn't charged (the
+            // policy's promise, and the server's rule); a pending try still charges for what it was for.
+            if found == .lateCancel, !pending, appointment.timeTaken(among: appointments) {
+                throw APIError.server(code: IzzyAPI.ErrorCode.notChargeable, message: IzzyAPI.NoShowRule.timeTakenMessage, status: 409)
+            }
             reason = pending ? (appointment.noShowFee?.reason ?? found) : found
         case .refused(let message):
             guard pending, var fee = appointment.noShowFee else {
