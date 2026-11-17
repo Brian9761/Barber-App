@@ -12,8 +12,8 @@
 // cancels it straight away.
 //
 // No-show protection: when the usual item needs a card on file (Stripe set up,
-// protection on), it checks the warning clients see ("Full Service Cancellation
-// & No-Show Fee") and that booking it without a card is turned down
+// protection on), it checks the warning clients see ("Late Cancellation & No-Show
+// Fee", or "No-Show Fee") and that booking it without a card is turned down
 // (card_required), then books an item with no fee instead (an add-on that's
 // included with a cut), since a card can only be saved on Stripe's own page.
 // With SMOKE_OWNER_KEY it also prints the no-show settings.

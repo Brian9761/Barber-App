@@ -88,13 +88,13 @@ describe('the policy clients see', () => {
 
   it('the agreed policy: a late cancellation or a no-show may be charged; cancelling earlier is free', () => {
     expect(policyText(4000, 4000, percent(100))).toBe(
-      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $40 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $40 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
     );
     expect(policyText(1750, 2250, window(120, percent(50)))).toBe(
-      "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app more than 2 hours before is free.",
+      "No payment now. If you cancel less than 2 hours before your appointment, or don't come, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 2 hours before, or within 15 minutes of booking.",
     );
     expect(policyText(2500, 2500, window(30, flat(2500)))).toBe(
-      "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $25 to this card. Cancelling in the app more than 30 minutes before is free.",
+      "No payment now. If you cancel less than 30 minutes before your appointment, or don't come, Izzy Clipz may charge $25 to this card within 7 days after your appointment time. Cancelling online is free more than 30 minutes before, or within 15 minutes of booking.",
     );
     // Short enough for Stripe's custom text (1,200 characters).
     expect(policyText(1, 50_000, window(2880, percent(100))).length).toBeLessThan(300);
@@ -102,13 +102,13 @@ describe('the policy clients see', () => {
 
   it('with late cancellations off: only a no-show may be charged, and cancelling before the start is free', () => {
     expect(policyText(2000, 2000, noLate(percent(50)))).toBe(
-      "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $20 (50% of the service) to this card within 7 days after your appointment time. Cancelling online before your appointment is free.",
     );
     expect(policyText(1750, 2250, noLate(percent(50)))).toBe(
-      "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card. Cancelling in the app before your appointment is free.",
+      "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $17.50–$22.50 (50% of the service) to this card within 7 days after your appointment time. Cancelling online before your appointment is free.",
     );
     expect(policyText(2500, 2500, noLate(flat(2500)))).toBe(
-      "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $25 to this card. Cancelling in the app before your appointment is free.",
+      "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $25 to this card within 7 days after your appointment time. Cancelling online before your appointment is free.",
     );
   });
 
@@ -125,35 +125,35 @@ describe('the policy clients see', () => {
     ]);
   });
 
-  it('the warning clients see while booking: "Full Service Cancellation & No-Show Fee"', () => {
+  it('the warning clients see while booking: "Late Cancellation & No-Show Fee"', () => {
     expect(feeWarning(4000, 4000, percent(100))).toEqual({
-      title: 'Full Service Cancellation & No-Show Fee',
+      title: 'Late Cancellation & No-Show Fee',
       message:
-        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($40). Cancelling in the app more than 1 hour before is free.',
+        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($40). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
     });
     // Any barber: the range of their prices.
     expect(feeWarning(5500, 6000, percent(100)).message).toBe(
-      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free.',
+      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($55–$60). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
     );
-    // Less than the full price: the title doesn't say "Full Service".
+    // The same title whatever the fee (OWNER-CHECKLIST §3 item 22): never "Full Service".
     expect(feeWarning(2000, 2000, window(180, percent(50)))).toEqual({
       title: 'Late Cancellation & No-Show Fee',
       message:
-        'Cancelling less than 3 hours before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling in the app more than 3 hours before is free.',
+        'Cancelling less than 3 hours before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling online more than 3 hours before, or within 15 minutes of booking, is free.',
     });
     expect(feeWarning(2500, 2500, flat(2500))).toEqual({
       title: 'Late Cancellation & No-Show Fee',
       message:
-        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $25. Cancelling in the app more than 1 hour before is free.',
+        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $25. Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
     });
     // Late cancellations off: only the no-show part.
     expect(feeWarning(4000, 4000, noLate(percent(100)))).toEqual({
       title: 'No-Show Fee',
-      message: 'Not showing up may be charged the full service price ($40). Cancelling in the app before your appointment is free.',
+      message: 'Not showing up may be charged the full service price ($40). Cancelling online before your appointment is free.',
     });
     expect(feeWarning(2000, 2000, noLate(flat(2000)))).toEqual({
       title: 'No-Show Fee',
-      message: 'Not showing up may be charged $20. Cancelling in the app before your appointment is free.',
+      message: 'Not showing up may be charged $20. Cancelling online before your appointment is free.',
     });
   });
 
@@ -335,12 +335,12 @@ describe('GET /api/no-show-policy', () => {
       minFeeCents: 3500,
       maxFeeCents: 3500,
       policyText:
-        "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+        "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
       lateCancelWindowMinutes: 60,
       warning: {
-        title: 'Full Service Cancellation & No-Show Fee',
+        title: 'Late Cancellation & No-Show Fee',
         message:
-          'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($35). Cancelling in the app more than 1 hour before is free.',
+          'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($35). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
       },
     });
     const any = await h.call('GET', '/api/no-show-policy?serviceId=haircut-and-beard&barberId=any');
@@ -360,11 +360,11 @@ describe('GET /api/no-show-policy', () => {
       minFeeCents: 3500,
       maxFeeCents: 3500,
       policyText:
-        "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $35 (100% of the service) to this card. Cancelling in the app before your appointment is free.",
+        "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $35 (100% of the service) to this card within 7 days after your appointment time. Cancelling online before your appointment is free.",
       lateCancelWindowMinutes: null,
       warning: {
         title: 'No-Show Fee',
-        message: 'Not showing up may be charged the full service price ($35). Cancelling in the app before your appointment is free.',
+        message: 'Not showing up may be charged the full service price ($35). Cancelling online before your appointment is free.',
       },
     });
 
@@ -384,10 +384,10 @@ describe('GET /api/no-show-policy', () => {
     const shave = (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(SHAVE)}`)).body;
     expect(shave).toMatchObject({ required: true, minFeeCents: 500, maxFeeCents: 500 });
     expect(shave.policyText).toBe(
-      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card. Cancelling in the app more than 1 hour before is free.",
+      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
     );
     expect(shave.warning.message).toBe(
-      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling in the app more than 1 hour before is free.',
+      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
     );
     // A $35 service keeps the $20 flat fee.
     expect((await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.minFeeCents).toBe(2000);

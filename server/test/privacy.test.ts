@@ -72,7 +72,7 @@ describe('privacy:find', () => {
       noShowConsentAt: '2026-11-02T17:00:00Z',
     });
     expect(first.noShowPolicy).toBe(
-      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
     );
     expect(found.sales.map((s) => [s.id, s.appointmentId, s.customerName])).toEqual([[ids.saleId, ids.tuesday, 'Andre Sample']]);
     expect(found.payments.map((p) => [p.kind, p.appointmentId, p.amountCents])).toEqual([['noShowFee', ids.thursday, 3500]]);
