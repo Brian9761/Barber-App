@@ -232,7 +232,17 @@ describe('contract fixtures (API v1)', () => {
     h.advance(2);
     check('late-cancel-fee-charged', await h.call('POST', `/api/owner/appointments/${lateBooking.body.appointment.id}/no-show-fee`, owner));
     check('payments-with-fees', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
-    // The client removes the card: the 11 AM's declined fee may still be tried again this week, so it waits.
+    // The client books Wednesday's 11 AM with the card too, then removes the card: that booking still needs it, so it waits.
+    const wednesday = await h.call('POST', '/api/appointments', {
+      headers: cardHeaders,
+      body: {
+        offeringId: JULIAN45,
+        start: '2026-11-04T19:00:00Z',
+        customer: { name: 'Third Client', phone: '4425550125' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(JULIAN45)}`)).body.policyText,
+      },
+    });
+    expect(wednesday.status, wednesday.text).toBe(201);
     check('card-deletion-scheduled', await h.call('DELETE', '/api/cards', { headers: cardHeaders }));
     // A card no booking uses is deleted at once.
     const spareToken = Buffer.alloc(32, 2).toString('base64url');
