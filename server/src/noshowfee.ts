@@ -49,6 +49,11 @@ const notChargeable = (message: string) => new ApiError('not_chargeable', messag
 export const OLD_ACCOUNT_MESSAGE = "This card was saved with the shop's old Stripe account.";
 /** The card was deleted (the client removed it, or it went unused): nothing can be charged to it. */
 export const DELETED_CARD_MESSAGE = "The client's saved card was deleted, so it can't be charged.";
+/**
+ * A late cancellation whose time someone else took (a new booking, or a walk-in booked in the app):
+ * the Cancellation & No-Show Policy promises no late-cancellation fee then.
+ */
+export const TIME_TAKEN_MESSAGE = "Another client was booked into this time after the cancellation, so there's no late-cancellation fee.";
 /** A fee whose answer was lost, on a card Stripe can't be asked about from here (see `chargeNoShowFee`). */
 export const UNCHECKABLE_FEE_MESSAGE =
   "This card was saved with the shop's old Stripe account, so the app can't check whether its fee went through. Look for it in that Stripe account's Dashboard.";
@@ -373,6 +378,22 @@ function chargeCase(row: AppointmentRow, now: Date): { reason: FeeReason; refusa
   return { reason: found.reason, refusal: null };
 }
 
+/**
+ * Whether someone else has this cancelled booking's time now: another booked or completed
+ * appointment of the same barber that overlaps it. Then a late-cancellation fee isn't charged
+ * (the policy's promise). A walk-in rung up without an appointment can't be seen here, which is
+ * why the owner's confirmation reminds them of it.
+ */
+export async function timeTakenSince(db: Queryable, row: Pick<AppointmentRow, 'id' | 'barber_id' | 'start_at' | 'end_at'>): Promise<boolean> {
+  const { rows } = await db.query(
+    `SELECT 1 FROM appointments
+      WHERE barber_id = $1 AND id <> $2 AND status IN ('booked', 'completed') AND start_at < $4 AND end_at > $3
+      LIMIT 1`,
+    [row.barber_id, row.id, row.start_at, row.end_at],
+  );
+  return rows.length > 0;
+}
+
 export async function chargeNoShowFee(ctx: Context): Promise<Response> {
   await requireOwner(ctx);
   const { deps } = ctx;
@@ -401,7 +422,11 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (!row.saved_card_id || row.no_show_fee_cents === null) {
       throw notChargeable("This booking has no card on file, so there's no fee to charge.");
     }
-    const chargeable = chargeCase(row, now);
+    let chargeable = chargeCase(row, now);
+    // A late cancellation whose time another client has now isn't charged (the policy's promise).
+    if (chargeable.reason === 'late_cancel' && (await timeTakenSince(tx, row))) {
+      chargeable = { reason: null, refusal: notChargeable(TIME_TAKEN_MESSAGE) };
+    }
     // The card was deleted at Stripe (retention.ts) once no booking needed it: why there's no fee, if
     // there's another reason, or else that the card is gone.
     if (!row.stripe_customer_id || !row.stripe_payment_method_id) throw chargeable.refusal ?? notChargeable(DELETED_CARD_MESSAGE);

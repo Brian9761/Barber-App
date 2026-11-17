@@ -1,7 +1,15 @@
 import Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
-import { AUTHENTICATION_MESSAGE, declineMessage, feeStatusFor, needsTheClient, noShowFeeIdempotencyKey, outcomeOf } from '../src/noshowfee.js';
+import {
+  AUTHENTICATION_MESSAGE,
+  declineMessage,
+  feeStatusFor,
+  needsTheClient,
+  noShowFeeIdempotencyKey,
+  outcomeOf,
+  TIME_TAKEN_MESSAGE,
+} from '../src/noshowfee.js';
 import { RESPONSES } from './helpers/contract.js';
 import { protectionOn, stripeError, useHarness } from './helpers/harness.js';
 
@@ -463,6 +471,35 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect(creates()).toHaveLength(1);
     const mine = await h.call('GET', `/api/appointments/${late.id}`, { headers: { 'x-manage-token': late.manageToken } });
     expect(mine.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
+  it('not when another client took the time since: a walk-in or a new booking in that slot (the policy’s promise)', async () => {
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    // A walk-in booked into Flowxbori's 10 AM, at 9:40.
+    h.setNow('2026-11-03T17:40:00Z');
+    const walkIn = await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Walk In' } } });
+    expect(walkIn.status, walkIn.text).toBe(201);
+    const refused = await charge(late.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect(creates()).toHaveLength(0);
+    expect((await feeRow(late.id)).no_show_fee_status).toBe('none');
+    // Marked done, it still had the time; cancelled, the time is free again and the fee can be charged.
+    expect((await setStatus(walkIn.body.appointment.id, 'completed')).status).toBe(200);
+    expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect((await setStatus(walkIn.body.appointment.id, 'booked')).status).toBe(200);
+    expect((await setStatus(walkIn.body.appointment.id, 'cancelled')).status).toBe(200);
+    expect((await charge(late.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
+  it('another barber’s booking at the same time, or one right after, leaves the time untaken', async () => {
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    h.setNow('2026-11-03T17:40:00Z');
+    const CARLOS = 'carlos-rafael/ff42ccab-844e-4afd-9ee1-0f6c5e2cf930';
+    expect((await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: CARLOS, start: TUE10, customer: { name: 'Other Barber' } } })).status).toBe(201);
+    // Flowxbori's 10:45, after the 10:00–10:45 haircut.
+    expect((await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: FLOW45, start: '2026-11-03T18:45:00Z', customer: { name: 'Next One' } } })).status).toBe(201);
+    expect((await charge(late.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
   });
 
   it('the edge of the window: exactly 1 hour before is free, 59 minutes before is late', async () => {
