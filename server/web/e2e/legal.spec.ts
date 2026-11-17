@@ -334,10 +334,10 @@ test('Reviews shows Google’s reviews and only links to Yelp; Visit shows the c
   // confirmed step-free).
   await expect(page.getByTestId('visit-accessibility-lines').getByRole('listitem')).toHaveText([
     'Room for a wheelchair inside, at the chairs and the counter',
-    'Accessible parking near the entrance',
+    'Disabled parking space near the entrance',
   ]);
   const line = page.getByTestId('visit-accessibility-call');
-  await expect(line).toHaveText("Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.");
+  await expect(line).toHaveText("Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome: dial 711) and we'll help.");
   await expect(line.getByRole('link', { name: '(442) 341-3053' })).toHaveAttribute('href', 'tel:+14423413053');
   await expect(page.locator('main')).not.toContainText(/\bADA\b|Wheelchair accessible|step-free/i);
   await expectAccessible(page, '/visit');

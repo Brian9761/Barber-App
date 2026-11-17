@@ -151,7 +151,7 @@ final class CatalogExportTests: XCTestCase {
         XCTAssertEqual(exported.paymentMethods, ["Credit card", "Gift card"])
         XCTAssertEqual(exported.accessibility, shop.accessibility)
         // The two lines the owner confirmed, in order: the website's Visit page shows them, then asks people to call.
-        XCTAssertEqual(exported.accessibility, ["Room for a wheelchair inside, at the chairs and the counter", "Accessible parking near the entrance"])
+        XCTAssertEqual(exported.accessibility, ["Room for a wheelchair inside, at the chairs and the counter", "Disabled parking space near the entrance"])
     }
 
     func testOfferingsMatchTheKit() {

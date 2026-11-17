@@ -120,7 +120,7 @@ function VisitDetails({ catalog }: { catalog: Catalog }) {
                 <a className="inline-link nowrap" href={`tel:${shop.phone.e164}`}>
                   {shop.phone.display}
                 </a>{' '}
-                and we'll help.
+                (relay calls welcome: dial 711) and we'll help.
               </p>
             </dd>
           </div>

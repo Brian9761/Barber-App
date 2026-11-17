@@ -49,7 +49,9 @@ extension ShopInfo {
         highlights: ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"],
         // The two the owner checked and confirmed (docs/legal/OWNER-CHECKLIST.md). Not a step-free
         // entrance: he didn't confirm one, so the apps and the website also ask clients to call.
-        accessibility: ["Room for a wheelchair inside, at the chairs and the counter", "Accessible parking near the entrance"],
+        // "Disabled parking space", not "Accessible parking", which reads as a claim the space meets
+        // ADA parking standards that nobody has inspected (the November 14 legal check, item 21).
+        accessibility: ["Room for a wheelchair inside, at the chairs and the counter", "Disabled parking space near the entrance"],
         googlePlaceID: IzzyClipzListing.googlePlaceID
     )
 }

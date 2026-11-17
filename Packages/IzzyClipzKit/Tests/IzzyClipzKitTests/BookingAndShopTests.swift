@@ -104,7 +104,7 @@ final class ShopInfoTests: XCTestCase {
     func testOnlyTheAccessibilityLinesTheOwnerConfirmed() {
         XCTAssertEqual(shop.accessibility, [
             "Room for a wheelchair inside, at the chairs and the counter",
-            "Accessible parking near the entrance",
+            "Disabled parking space near the entrance",
         ])
         for line in shop.accessibility {
             XCTAssertNil(line.range(of: "ADA", options: .caseInsensitive), line)

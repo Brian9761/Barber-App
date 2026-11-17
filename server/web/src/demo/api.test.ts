@@ -59,7 +59,7 @@ describe('the catalog', () => {
   it('is the shop’s real catalog, exactly what the server’s GET /api/catalog answers', async () => {
     // data/catalog.json lists only the two accessibility lines the owner checked and confirmed
     // (docs/legal/OWNER-CHECKLIST.md), and so does the contract fixture.
-    expect(DEMO_CATALOG.shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Accessible parking near the entrance']);
+    expect(DEMO_CATALOG.shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Disabled parking space near the entrance']);
     expect(await demo().catalog()).toEqual(catalogFixture);
     expect(DEMO_CATALOG.timeZone).toBe(LA);
   });

@@ -166,7 +166,7 @@ describe('Visit', () => {
     expect(document.body.textContent).not.toContain('never online');
   });
 
-  const CALL_LINE = "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.";
+  const CALL_LINE = "Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome: dial 711) and we'll help.";
 
   /** Visit, with the catalog's accessibility lines as `lines`. */
   function renderVisitWith(lines: string[]) {
@@ -181,7 +181,7 @@ describe('Visit', () => {
 
   it('lists the two accessibility lines the owner confirmed, then always asks people to call about getting in', () => {
     // The server's catalog (data/catalog.json, from the Kit, and its contract fixture).
-    expect(catalog.shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Accessible parking near the entrance']);
+    expect(catalog.shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Disabled parking space near the entrance']);
     renderApp('/visit');
     const lines = within(screen.getByTestId('visit-accessibility-lines')).getAllByRole('listitem');
     expect(lines.map((li) => li.textContent)).toEqual(catalog.shop.accessibility);

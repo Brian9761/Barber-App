@@ -14,12 +14,13 @@ enum AppData {
 /// isn't confirmed step-free. Never "ADA" (docs/legal/research.md §10). The website's Visit page
 /// says the same.
 enum VisitAccessibility {
-    /// "Room for a wheelchair inside, at the chairs and the counter" and "Accessible parking near the entrance".
+    /// "Room for a wheelchair inside, at the chairs and the counter" and "Disabled parking space near the entrance".
     static var lines: [String] { AppData.shop.accessibility }
 
-    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome: dial
+    /// 711) and we'll help." Any relay service is welcome, as the Accessibility Statement says.
     static var callLine: String {
-        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) and we'll help."
+        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) (relay calls welcome: dial 711) and we'll help."
     }
 }
 

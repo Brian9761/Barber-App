@@ -537,7 +537,8 @@ private struct VisitInfoSection: View {
 private struct VisitAccessibilityRow: View {
     let lines: [String]
 
-    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome:
+    /// dial 711) and we'll help."
     static var text: String { VisitAccessibility.callLine }
 
     var body: some View {

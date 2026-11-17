@@ -105,7 +105,7 @@ describe('GET /api/catalog', () => {
     // Only the two lines the owner checked and confirmed (docs/legal/OWNER-CHECKLIST.md), in plain
     // words: no "ADA", and no step-free entrance, which he didn't confirm. The website's Visit page
     // shows them, then always asks clients to call about getting in.
-    expect(shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Accessible parking near the entrance']);
+    expect(shop.accessibility).toEqual(['Room for a wheelchair inside, at the chairs and the counter', 'Disabled parking space near the entrance']);
     for (const line of shop.accessibility as string[]) expect(line).not.toMatch(/ADA|step-free/i);
   });
 
