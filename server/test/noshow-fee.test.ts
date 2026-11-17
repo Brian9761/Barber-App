@@ -1526,3 +1526,110 @@ describe('a try Stripe never got, on a booking that can’t be charged any more,
     expect(lookups()).toBe(0);
   });
 });
+
+describe('a receipt for every fee', () => {
+  // The Cancellation & No-Show Policy promises one: Stripe emails it to the address the client gave
+  // on its card page, which the server reads from Stripe when the fee goes through and never keeps.
+  const receipts = () =>
+    h.stripe.calls.filter((c) => c.method === 'paymentIntents.update' && (c.params as { receipt_email?: string }).receipt_email !== undefined);
+  function event(type: string, intent: Record<string, unknown>) {
+    return JSON.stringify({
+      id: 'evt_fixture_fee_receipt',
+      object: 'event',
+      api_version: '2026-10-28.endive',
+      created: Math.floor(Date.now() / 1000),
+      type,
+      livemode: false,
+      pending_webhooks: 1,
+      request: { id: null, idempotency_key: null },
+      data: { object: { object: 'payment_intent', ...intent } },
+    });
+  }
+  const send = (payload: string) =>
+    h.call('POST', '/api/stripe/webhook', {
+      rawBody: payload,
+      headers: { 'content-type': 'application/json', 'stripe-signature': Stripe.webhooks.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET }) },
+    });
+
+  it('a fee that goes through asks Stripe to email the receipt to the card page’s address, once', async () => {
+    const id = await noShow();
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('charged');
+    const piId = (await feeRow(id)).no_show_fee_payment_intent_id;
+    expect(receipts()).toHaveLength(1);
+    expect(receipts()[0]).toMatchObject({
+      params: { id: piId, receipt_email: 'client@example.com' },
+      options: { idempotencyKey: `izzy-fee-receipt-${piId}` },
+    });
+    expect(h.stripe.intents.get(piId)?.receipt_email).toBe('client@example.com');
+    // Never kept here: not on the payment, not on the appointment.
+    expect((await h.database.pool.query('SELECT receipt_email FROM payments WHERE id = $1', [piId])).rows[0].receipt_email).toBeNull();
+    expect(JSON.stringify(await feeRow(id))).not.toContain('client@example.com');
+    // Charging again is the same answer, with no second receipt.
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('charged');
+    expect(receipts()).toHaveLength(1);
+  });
+
+  it('a fee Stripe finishes later gets its receipt when the webhook says so, once; a decline gets none', async () => {
+    const id = await noShow();
+    h.stripe.nextCharge = 'processing';
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('pending');
+    expect(receipts()).toHaveLength(0);
+    const piId = (await feeRow(id)).no_show_fee_payment_intent_id;
+    h.stripe.succeed(piId);
+    const metadata = { kind: 'no_show_fee', appointment_id: id, attempt: '1' };
+    expect((await send(event('payment_intent.succeeded', { id: piId, status: 'succeeded', metadata }))).status).toBe(200);
+    expect(receipts()).toHaveLength(1);
+    expect(receipts()[0]?.params).toMatchObject({ id: piId, receipt_email: 'client@example.com' });
+    // Stripe sends the event again, and Check again finds it charged: still one receipt.
+    await send(event('payment_intent.succeeded', { id: piId, status: 'succeeded', metadata }));
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('charged');
+    expect(receipts()).toHaveLength(1);
+
+    const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
+    h.setNow('2026-11-03T20:50:00Z');
+    await markNoShow(other);
+    h.stripe.nextCharge = 'insufficient_funds';
+    expect((await charge(other)).body.appointment.noShowFee.status).toBe('declined');
+    expect(receipts()).toHaveLength(1);
+  });
+
+  it('a late-cancellation fee gets one too, on the account the card was saved on', async () => {
+    const booking = await protectedBooking();
+    h.setNow('2026-11-03T17:40:00Z');
+    expect((await cancelInApp(booking, ACCEPT)).status).toBe(200);
+    expect((await charge(booking.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    expect(receipts()).toHaveLength(1);
+    const retrieve = h.stripe.calls.find((c) => c.method === 'checkout.sessions.retrieve' && receipts().length > 0);
+    expect(retrieve).toBeDefined();
+  });
+
+  it('when Stripe has no address, or can’t be asked, the fee stays charged and the log says to send it from the Dashboard', async () => {
+    await protectionOn(h);
+    h.config.stripeWebhookSecret = WEBHOOK_SECRET;
+    // A card page that didn't keep an email.
+    const token = newManageToken();
+    const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': token }, body: { offeringId: FLOW45 }, ip: '192.0.2.201' });
+    h.stripe.completeSession(checkout.body.sessionId, undefined, null);
+    await h.call('POST', '/api/cards', { headers: { 'x-card-token': token }, body: { sessionId: checkout.body.sessionId }, ip: '192.0.2.201' });
+    const id = await noShow({ cardToken: token });
+    const charged = await charge(id);
+    expect(charged.status).toBe(200);
+    expect(charged.body.appointment.noShowFee.status).toBe('charged');
+    expect(receipts()).toHaveLength(0);
+    expect(h.logs.some((l) => l.level === 'warn' && /no email for its receipt/.test(l.message))).toBe(true);
+
+    const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
+    h.setNow('2026-11-03T20:50:00Z');
+    await markNoShow(other);
+    // The charge goes through; then Stripe is unreachable for the receipt.
+    const realRetrieve = h.stripe.checkout.sessions.retrieve;
+    h.stripe.checkout.sessions.retrieve = async () => {
+      h.stripe.checkout.sessions.retrieve = realRetrieve;
+      throw stripeError('StripeConnectionError', {}, 'socket hang up');
+    };
+    const second = await charge(other);
+    expect(second.status).toBe(200);
+    expect(second.body.appointment.noShowFee.status).toBe('charged');
+    expect(h.logs.at(-1)).toMatchObject({ level: 'error', message: 'Stripe send fee receipt failed' });
+  });
+});

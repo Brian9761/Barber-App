@@ -469,16 +469,23 @@ export class FakeStripe implements StripeClient {
     },
   };
 
-  /** What happens when the client types a card on Stripe's page and taps Save. */
-  completeSession(id: string, card: FakeCard = { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 }): Stripe.Checkout.Session {
+  /**
+   * What happens when the client types a card on Stripe's page and taps Save. Stripe's page asks for
+   * an email too (`email`; null for a page that didn't), kept by Stripe with the session and the card.
+   */
+  completeSession(
+    id: string,
+    card: FakeCard = { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 },
+    email: string | null = 'client@example.com',
+  ): Stripe.Checkout.Session {
     const session = this.sessions.get(id);
     if (!session) throw new Error(`unknown ${id}`);
     this.counter += 1;
     const n = String(this.counter).padStart(6, '0');
     const customer = typeof session.customer === 'string' ? session.customer : null;
-    const paymentMethod = { id: `pm_TestFixture${n}`, object: 'payment_method', type: 'card', card, customer };
+    const paymentMethod = { id: `pm_TestFixture${n}`, object: 'payment_method', type: 'card', card, customer, billing_details: { email } };
     const setupIntent = { id: `seti_TestFixture${n}`, object: 'setup_intent', status: 'succeeded', customer, payment_method: paymentMethod };
-    Object.assign(session, { status: 'complete', setup_intent: setupIntent });
+    Object.assign(session, { status: 'complete', setup_intent: setupIntent, customer_details: { email } });
     return session;
   }
 

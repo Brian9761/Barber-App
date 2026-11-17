@@ -320,7 +320,8 @@ export type StripeCall =
   | 'create terminal location'
   | 'detach card'
   | 'delete customer'
-  | 'send receipt';
+  | 'send receipt'
+  | 'send fee receipt';
 
 /** The parts of a stripe-node error worth logging. */
 export interface StripeErrorLike {

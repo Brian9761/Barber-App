@@ -128,7 +128,8 @@ describe('every Stripe call for the shop goes to its connected account', () => {
       ['no-show fee', ['paymentIntents.create']],
       ['a fee Stripe is processing, checked again', ['paymentIntents.retrieve']],
       ['a fee whose answer was lost', ['paymentIntents.create']],
-      ['…looked up at Stripe before charging again', ['paymentIntents.list']],
+      // Found charged: its receipt goes to the card page's email, on the card's account.
+      ['…looked up at Stripe before charging again', ['paymentIntents.list', 'checkout.sessions.retrieve', 'paymentIntents.update']],
       ['another onboarding link', ['accountLinks.create']],
       ['a client removes a saved card', ['paymentMethods.detach', 'customers.del']],
     ]);

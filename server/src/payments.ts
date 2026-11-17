@@ -7,7 +7,7 @@ import type { Deps } from './deps.js';
 import { isFeeKind } from './feecase.js';
 import { ApiError, json, readJsonObject, readText } from './http.js';
 import type { Context } from './router.js';
-import { syncNoShowFeeFromStripe } from './noshowfee.js';
+import { emailFeeReceipt, syncNoShowFeeFromStripe } from './noshowfee.js';
 import { cardSaleBody, cardSaleDraft, recordCardSale } from './sales.js';
 import { PAYMENT_COLUMNS, paymentJSON, type PaymentRow } from './serialize.js';
 import {
@@ -238,15 +238,18 @@ export async function completePayment(ctx: Context): Promise<Response> {
   if (intent.id !== id) throw notFound();
   const now = ctx.deps.now();
   const succeeded = succeededAt(intent, now);
+  // A fee this check turned charged: its receipt goes out once the transaction is in.
+  let feeCharged: string | null = null;
   const row = await ctx.deps.db.transaction(async (tx) => {
     // A fee (no-show or late cancellation) checked this way keeps its appointment's fee right too (and never marks it paid).
     if (isFeeKind(payment.kind)) {
-      await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now, payment.kind, payment.stripe_account_id, succeeded);
+      feeCharged = await syncNoShowFeeFromStripe(tx, intent, payment.appointment_id, ctx.deps, now, payment.kind, payment.stripe_account_id, succeeded);
       const { rows } = await tx.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE id = $1`, [id]);
       return rows[0] ?? null;
     }
     return syncPayment(tx, intent, now, ctx.deps, succeeded);
   });
+  if (feeCharged) await emailFeeReceipt(ctx.deps, feeCharged, id);
   if (!row) throw notFound();
   // `status` is Stripe's: "succeeded" means the money is in. Anything else is not paid (yet).
   return json({ payment: paymentJSON(row) });
@@ -420,6 +423,8 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
       const now = ctx.deps.now();
       // When it happened at Stripe: the event's own time, which stays the same when Stripe sends it again later.
       const succeeded = succeededAt({}, now, event.created);
+      // A fee this event turned charged: its receipt goes out once the transaction is in.
+      let feeCharged: string | null = null;
       await ctx.deps.db.transaction(async (tx) => {
         const { rows } = await tx.query<PaymentRecord>('SELECT kind, appointment_id, stripe_account_id FROM payments WHERE id = $1', [
           intent.id,
@@ -428,7 +433,7 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
         if (account !== null && !(await shopsAccount(ctx.deps, tx, account, known, object.metadata))) return;
         // Fees charged to a card on file follow the appointment's fee; one this server never got to record is found by its metadata.
         if (isFeeKind(known?.kind) || (!known && isFeeKind(object.metadata?.kind))) {
-          await syncNoShowFeeFromStripe(
+          feeCharged = await syncNoShowFeeFromStripe(
             tx,
             {
               ...intent,
@@ -447,6 +452,7 @@ export async function stripeWebhook(ctx: Context): Promise<Response> {
         }
         await syncPayment(tx, intent, now, ctx.deps, succeeded);
       });
+      if (feeCharged) await emailFeeReceipt(ctx.deps, feeCharged, intent.id);
     }
   }
   return json({ received: true });
