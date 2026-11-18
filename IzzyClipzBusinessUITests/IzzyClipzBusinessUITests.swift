@@ -45,8 +45,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let address = element("webURL")
         XCTAssertTrue(address.waitForExistence(timeout: 10), "The Privacy Policy didn't open")
         XCTAssertEqual(address.label, "https://izzy-clipz.vercel.app/privacy")
-        tap("webDone")
-        XCTAssertTrue(waitForDisappearance(of: address))
+        closeWebPage(address)
         _ = reveal("ownerKeyField", searchingFirst: .up)
         signIn(with: ownerKey)
         XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 15), "Signing in didn't open the schedule")
@@ -719,8 +718,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             let address = element("webURL")
             XCTAssertTrue(address.waitForExistence(timeout: 10), "\(title) didn't open")
             XCTAssertEqual(address.label, "https://izzy-clipz.vercel.app" + path)
-            tap("webDone")
-            XCTAssertTrue(waitForDisappearance(of: address))
+            closeWebPage(address, "\(title) didn't close")
         }
     }
 
@@ -1112,6 +1110,27 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         field.tap()
         field.typeText(key)
         tap("signInButton")
+    }
+
+    /// Closes the in-app browser with Done and waits for the page (`address`) to go. A tap on Done
+    /// can light the button up and still not close the page: on a macos-15 run, Done dimmed and
+    /// brightened again under a tap at its middle, and then nothing on the screen moved for the
+    /// minute the test waited, while the same Done had closed the same page four times in Settings
+    /// in that run. So when the page and its Done are both still there 10 seconds after the tap,
+    /// Done is tapped once more, as the client app's UI tests close their sheets (tapToClose). A page
+    /// that two taps on Done can't close still fails the test.
+    private func closeWebPage(
+        _ address: XCUIElement,
+        _ message: String = "The web page didn't close",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        tap("webDone", file: file, line: line)
+        let done = element("webDone")
+        if !waitForDisappearance(of: address, timeout: 10), address.exists, done.exists {
+            done.tap()
+        }
+        XCTAssertTrue(waitForDisappearance(of: address), message, file: file, line: line)
     }
 
     private func chooseService(_ name: String) {
