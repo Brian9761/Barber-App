@@ -110,7 +110,7 @@ We don't use your information for advertising or marketing, and we don't sell it
 
 - **We may call or text you** at the number you give us about your appointment, for example if we need to change it or if we charged a fee. These calls and texts come from our staff, one at a time; we don't send automated messages.
 - **We don't send marketing texts or emails.** If that ever changes, we'll ask for your permission first and update this policy.
-- **Receipts.** If you ask for a receipt by email when you pay by card at the shop, Stripe emails it. If we charge a fee to your card on file, Stripe emails you a receipt at the email address you gave on its card page.
+- **Receipts.** If you ask for a receipt by email when you pay by card at the shop, Stripe emails it. If we charge a fee to your card on file, Stripe emails you a receipt at the email address you gave on its card page. If Stripe can't email it, for example because it has no email address for you, we'll ask you for one and have Stripe send it there. Our own systems don't keep that address.
 - **Reminders** in the Izzy Clipz app are notifications set on your iPhone. They don't come from our server.
 
 ## Who we share your information with
