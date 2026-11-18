@@ -35,10 +35,12 @@ jobs:
   app:
     name: App on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    # With no-show protection's UI tests, a run takes 55 to 80 minutes on Apple silicon and two hours
-    # or more on Intel Macs, which run the simulator much more slowly (the owner app's UI tests go past
-    # three hours there). The limits leave room for a slow Mac, under GitHub's six hours for any job.
-    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 120 }}
+    # On Apple silicon a run takes 55 to 95 minutes, and the owner app's 85 to more than 120: its 54 UI
+    # tests alone take 70 to 90 minutes on a Mac of usual speed, a slow one adds a quarter, and a new
+    # simulator can take 12 minutes to boot. Intel Macs run the simulator much more slowly: two hours
+    # or more, past three for the owner app. The limits leave room for a slow Mac, under GitHub's six
+    # hours for any job.
+    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 180 }}
     strategy:
       fail-fast: false
       matrix:
@@ -213,7 +215,8 @@ jobs:
   owner-app:
     name: Owner app on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 120 }}
+    # The longest job: see the app's limits above.
+    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 180 }}
     strategy:
       fail-fast: false
       matrix:
