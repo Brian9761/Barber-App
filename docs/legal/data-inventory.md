@@ -7,7 +7,7 @@ This file records what the Izzy Clipz website, web apps, iPhone apps and server 
   - `v5/int` at `9910eb4`, re-checked at `815b1e8` (the commits in between change only UI tests): both iPhone apps, IzzyClipzKit and the server.
   - `v5/webapp-business` at `83a4835`, re-checked at `f06ae57` (the commits in between change only wording in the Business area's Settings page and its tests): the website and web apps. The branch is now on GitHub.
 - **Branch notes:**
-  - Paths marked **(web)** exist only on `v5/webapp-business` today.
+  - Paths marked **(web)** existed only on `v5/webapp-business` then. That branch has since been merged into `v5/int`.
   - The server is the same on both branches, with four exceptions: `server/src/website.ts` (web only), the website's build and headers in `server/vercel.json` (web only), the website's extra catalog content (barbers' bios, titles and Instagram handles) in `server/data/catalog.json` (web only), and one rounding detail when cancelling (int only).
   - The database migrations are identical on both branches.
 - **Re-checked after two independent reviews,** the same day: the new facts are marked in sections 2, 6, 8 and 9, and the gaps they added are G12 to G18 in section 11.
@@ -721,8 +721,8 @@ See section 10:
 
 ### G18. The Visit page's accessibility lines
 
-- **Now:** "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`, `IzzyClipzData.swift`). "ADA-compliant" is a legal claim nobody has inspected.
-- **The change:** remove the unchecked lines now (an empty list, with the Visit page asking clients to call with questions about getting in), and add back only lines the owner has checked, for example "Step-free entrance". The Accessibility Statement doesn't depend on them: it asks clients to contact the shop for help getting in.
+- **On November 5:** "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`, `IzzyClipzData.swift`). "ADA-compliant" is a legal claim nobody has inspected.
+- **As built:** the unchecked lines are gone. The list has only the two lines the owner confirmed, "Room for a wheelchair inside, at the chairs and the counter" and "Disabled parking space near the entrance" (`IzzyClipzData.swift`, and `server/data/catalog.json` through the Kit's export), and the Visit page, on the website and in the app, always adds "Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome: dial 711) and we'll help." A line about the entrance goes on only once the owner has checked it (OWNER-CHECKLIST.md §1). The Accessibility Statement doesn't depend on these lines: it asks clients to contact the shop for help getting in.
 
 ### G19. Smaller points
 
