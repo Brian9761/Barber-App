@@ -28,10 +28,10 @@ Appointments we book for you, by phone, by email or when you walk in, never have
 
 The shop can turn on no-show protection. While it's on, booking a paid service online needs a card on file, and before you book you'll see:
 
-- a notice on "Pick a day and time" and on "Review and book", titled "Full Service Cancellation & No-Show Fee", "Late Cancellation & No-Show Fee" or "No-Show Fee";
+- a notice on "Pick a day and time" and on "Review and book", titled "Late Cancellation & No-Show Fee", or "No-Show Fee" if the shop charges only for no-shows;
 - on "Review and book", above the "Book appointment" button, the exact terms you agree to. For example:
 
-  > No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $40 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.
+  > No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $40 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.
 
 The terms shown when you book are the terms for that booking. We keep a copy of them, with the time you booked, as the record of your agreement. You can ask us for a copy.
 
@@ -47,12 +47,12 @@ Why we have it: when someone cancels after the cutoff or doesn't come, their bar
 
 ### Cancelling in time, and cancelling late
 
-- **Cancelling before the cutoff is free.** The cutoff is shown before you book, for example "Cancelling in the app more than 1 hour before is free." The shop can set it from 30 minutes to 48 hours before the appointment. It's 1 hour unless the booking screens say otherwise.
+- **Cancelling before the cutoff is free.** The cutoff is shown before you book, for example "Cancelling online is free more than 1 hour before". The shop can set it from 30 minutes to 48 hours before the appointment. It's 1 hour unless the booking screens say otherwise.
 - **Cancelling exactly at the cutoff is still free.** With a 1-hour cutoff, cancelling exactly 1 hour before your appointment costs nothing.
 - **Cancelling within 15 minutes of booking is always free**, even if the cutoff has passed by then.
 - **Cancelling after the cutoff is a late cancellation**, unless it's within those 15 minutes. Before you cancel late, the app or website tells you the fee and asks you to confirm.
 - **Booking after the cutoff has passed.** If you book a time that's less than the cutoff away (for example, at 9:30 for a 10:00 appointment with a 1-hour cutoff), the booking screens tell you before you book. You can still cancel it free within 15 minutes of booking. After that, cancelling it counts as a late cancellation.
-- **Cancelling on our website, under My appointments, counts the same as cancelling in the app**, even though the terms say "in the app".
+- **Cancelling online means cancelling in the Izzy Clipz app or on our website, under My appointments.** Both count the same, even if your booking's terms say "in the app".
 - **Cancel on the phone or computer you booked on.** The key that lets you cancel online is kept on the phone or computer, and in the app or browser, you booked with. Anywhere else, call or email us.
 - **What counts is when you first cancelled online.** Once you've cancelled online before your appointment started, it can't be charged as a no-show, even if we reopen the appointment later.
 - **If the notice is titled "No-Show Fee",** the shop isn't charging for late cancellations. Cancelling online is free any time before your appointment starts, and only a no-show can be charged.

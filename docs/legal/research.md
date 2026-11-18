@@ -999,3 +999,19 @@ Three independent reviewers checked the four documents against current Californi
 6. Age signals: whether a 13–17 signal should stop a minor from adding a card (the 18+ rule), and whether asking on iOS 26.0–26.1 is acceptable under AB 1856; whether AB 2246 (from January 1, 2027) reaches a shop this size.
 7. Stripe redaction for deletion requests and old records; the email Stripe's card page requires under Song-Beverly (*Apple Inc. v. Superior Court* (2013) 56 Cal.4th 128); the 12-month and 2-year retention periods; Apple's 5.1.1(i) wording.
 8. The entrance: what's readily achievable, who pays under the lease (28 C.F.R. §36.201(b)), staff help as an alternative meanwhile (§36.305); a CASp inspection now; whether to keep the statement's specific list of known gaps; insurance for access claims.
+
+## The code catches up (November 18, 2026)
+
+The November 14 legal check's code items are now in the code on `v5/int` (OWNER-CHECKLIST.md §3, items 19 to 22):
+
+- **19. A receipt for every fee.** When a fee goes through, the server takes the email the client gave on Stripe's card page and sets it as the fee's receipt email, so Stripe sends the receipt. The address isn't stored on our server. If there's none, the shop can send the receipt from its Stripe Dashboard.
+- **20. Who runs the shop** (Bus. & Prof. Code §17538(d)): the website's footer and "Review and book" (website and app) show the operator line and the line about getting it by email, with "[TO FILL IN]" notes until the owner gives the LLC's name and the shop's email.
+- **21. The Visit page:** "Disabled parking space near the entrance", and the line about getting in offers relay calls and email.
+- **22. The fee notice and the stored terms:** the title is "Late Cancellation & No-Show Fee" whenever late cancellations can be charged, and new bookings agree to "… may charge $40 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking." The Cancellation & No-Show Policy now lists that title and quotes these words.
+
+Two more promises are now kept by the server, not only by the staff:
+
+- **No late-cancellation fee once someone else has the time:** the server refuses it while another booked or completed appointment of the same barber overlaps the cancelled time. A walk-in rung up without an appointment can't be seen, so the fee panel tells staff not to charge then.
+- **No second charge after a decline** (Visa's rules, §9.2): after a decline, or when the bank wants the client to approve the charge, the server won't charge the card again; the client pays another way, with at least 7 days to do so.
+
+The two recommendations about wording ("may be charged" in the notice, "online" in the stored terms) are done, so they're off the recommended list.
