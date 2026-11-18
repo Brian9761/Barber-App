@@ -405,8 +405,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
   - `appointments.v2`: each appointment as the server last described it, **including the client's own name, number, note, and card brand and last 4**, until 30 days after the appointment ends.
   - `favorites.barberID`.
   - `reminders.enabled`, `reminders.intervalWeeks` and `reminders.lastCut` (the date of the last haircut).
-- **Stored in the Keychain:** manage tokens and the saved card (see 2.6 and 2.7). On iOS, Keychain items can remain after the app is deleted.
-- **No files, databases or caches of its own.** API calls use a temporary connection with no cache and no cookies (`Packages/IzzyClipzKit/Sources/IzzyClipzKit/API/IzzyAPIClient.swift`).
+- **Stored in the Keychain:** manage tokens, the saved card (see 2.6 and 2.7) and any booking still being sent, with the client's number, until the server confirms it or its time has passed (`AppointmentStore.swift`). On iOS, Keychain items can remain after the app is deleted.
+- **No files or databases of its own.** API calls use a temporary connection with no cache and no cookies (`Packages/IzzyClipzKit/Sources/IzzyClipzKit/API/IzzyAPIClient.swift`). Reviewers' photos and product photos load with `AsyncImage`, which uses the system's shared connection and its default cache, so iOS may keep copies of those public pictures in the app's Caches folder (`ReviewsView.swift`, `ShopView.swift`).
 - **Network:**
   - the shop's API;
   - Stripe's card page, in a private session;
@@ -419,8 +419,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
   - directions in Apple Maps or Google Maps (`IzzyClipz/Components/ContactButtons.swift`);
   - Instagram (`IzzyClipz/Components/InstagramCard.swift`);
   - Google and Yelp review pages, and Google's terms (`IzzyClipz/Features/Reviews/ReviewsView.swift`);
-  - the new website (the build setting `IZZY_WEBSITE_URL`, Info.plist `IzzyWebsiteURL`, default https://izzy-clipz.vercel.app, read only if it's https), shown in an in-app browser from the Visit tab's "Website" row; the Share link and every Add to Calendar event use the same address, and so do the four legal pages under Visit → Legal (`IzzyClipz/App/Website.swift`). The app no longer links the shop's older website or its Squire page.
-- **What the client can clear:** "Forget my details" (the remembered name and number, and the card, which is also deleted at the shop with `DELETE /api/cards`), "Remove card" (the same deletion, after a confirmation), and "Remove from this list" on a past or cancelled appointment (an upcoming booked one must be cancelled first: `remove` in `AppointmentStore.swift`), which also deletes its key. All of these act on this iPhone only. "Forget my details" leaves the stored appointments, with the client's name, number and note, until 30 days after each one. Keychain items (appointment keys, the card key, and unconfirmed bookings with the number) can stay after the app is deleted, and nothing removes them then.
+  - the new website (the build setting `IZZY_WEBSITE_URL`, Info.plist `IzzyWebsiteURL`, default https://izzy-clipz.vercel.app, read only if it's https), shown in an in-app browser from the Visit tab's "Website" row; the Share link and every Add to Calendar event use the same address, and so do the four legal pages under Visit → Legal, the consent line on Review and the privacy line on Your details (`IzzyClipz/App/Website.swift`, `LegalLinksText`). The Reviews screen also links Google's privacy policy (`ReviewsView.swift`). The app no longer links the shop's older website or its Squire page.
+- **What the client can clear:** "Forget my details" (the remembered name and number, and the card, which is also deleted at the shop with `DELETE /api/cards`), "Remove card" (the same deletion, after a confirmation), and "Remove from this list" on a past or cancelled appointment (an upcoming booked one must be cancelled first: `remove` in `AppointmentStore.swift`), which also deletes its key. Apart from the card deletion at the shop, all of these act on this iPhone only. "Forget my details" leaves the stored appointments, with the client's name, number and note, until 30 days after each one. Keychain items (appointment keys, the card key, and unconfirmed bookings with the number) can stay after the app is deleted, and nothing removes them then.
 - **A card saved without "Remember me":** the booking says so (`keepCard: false`), so the server marks the card for deletion in the booking's own transaction, and the app also calls `DELETE /api/cards` right after, as a second safeguard (`IzzyClipz/Stores/CardRemoval.swift`).
 - **Age range:** on iOS 26 or later the app asks iOS for the user's age range at launch (Apple's Declared Age Range; from iOS 26.2 only where iOS says a law requires it), with the `com.apple.developer.declared-age-range` entitlement. The answer is kept in memory only, never stored or sent; someone under 13 sees only a screen asking a parent or guardian to book (`IzzyClipz/App/AgeCheck.swift`, `IzzyClipz/Features/AgeCheck/AgeRangeCheck.swift`).
 - **Photos:** the six gallery photos of clients, the Gallery screen and the Instagram photo strip are gone; Home shows the storefront.
@@ -437,7 +437,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 - **UserDefaults:**
   - `pendingPaymentIntents`: payment ids and times, until each payment is settled (`IzzyClipzBusiness/Payments/PendingPayments.swift`);
   - `hasSetUpTapToPay`;
-  - `hasSeenHowToTap`.
+  - `hasSeenHowToTap`;
+  - `lastSoldByBarberId`: the barber last picked for "Sold by" at checkout, until sign-out (`CheckoutModel.swift`, cleared in `AppModel.swift`).
 
   The schedule is kept in memory only.
 - **Camera and photos:**
@@ -452,6 +453,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
   - a walk-in's name, and optionally a mobile number and note;
   - a receipt email, offered only after a card payment has gone through, sent to Stripe and not kept by the server;
   - what a client bought at checkout (services and products), with the client's name, kept with the sale (the name is removed after 12 months);
+  - a void reason, kept with the sale (removed with the sale's name after 12 months);
+  - an optional note on a card payment, which goes to Stripe as the payment's description in place of the item list (`TakePaymentView.swift`, `CheckoutModel.swift`). It can carry a client's name: Stripe keeps it with the payment, with no set end date; the shop's copy is removed after 12 months.
   - time-off reasons.
 - **Stripe connection and computers:** Settings connects the shop's own Stripe account (Stripe's page in `ASWebAuthenticationSession`), and "Use on a computer" makes one-time sign-in codes for Izzy Clipz Business on a computer.
 - **Age range:** the same check as the client app, kept in memory only; someone under 13 sees a screen saying the app is for the shop's team.
