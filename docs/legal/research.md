@@ -22,7 +22,7 @@ Labels used throughout:
 - **Recent:** changed in 2025–2026.
 - **Coming:** takes effect soon.
 
-**Facts about the shop** come from the code and the spec, not assumptions. The code was read on branches `v5/int` and `v5/webapp-business` as of November 5, 2026. Some facts are unknown: the legal entity name, the shop's revenue, its number of employees and its email address. Where one matters, this file says so instead of guessing.
+**Facts about the shop** come from the code and the spec, not assumptions. The code was read on branches `v5/int` and `v5/webapp-business` as of November 5, 2026, and sections 1 to 19 describe it as it was then. The dated sections at the end say what changed, and "The code catches up (November 18, 2026)" and the status lines at the top of §18 and §19 say what's built. Some facts are unknown: the legal entity name, the shop's revenue, its number of employees and its email address. Where one matters, this file says so instead of guessing.
 
 **How sources were checked:**
 
@@ -543,10 +543,10 @@ A term that "merely provides an option of alternative performance" escapes §167
    - Apply the waiver criteria **evenly**. Uneven waivers could look discriminatory under the Unruh Act (§10).
    - Only promise a waiver rule if it will always be kept.
 6. **An easy free-cancellation path:**
-   - "Cancelling in the app more than [window] before is free."
+   - "Cancelling in the app more than [window] before is free." (New bookings since November 18 say "Cancelling online is free more than [window] before, or within 15 minutes of booking.")
    - The Policy should also say what happens if a client *calls* the shop in time. Owner decision; recommended: also free. **In the code, a booking the shop cancels can never be charged**, whenever it's cancelled, so the documents say a cancellation made by the shop, including after a client calls, has no fee.
 7. **Tell the client when a fee is charged.**
-   - The server sends no receipt for fees.
+   - The server sent no receipt for fees. (Built since: Stripe emails one when a fee goes through; see "The code catches up (November 18, 2026)".)
    - Card networks require telling cardholders about changes, and Stripe recommends clear, recognizable charges (§9).
    - Have the barber text or call, or send a receipt when an email is on file. Set a recognizable **statement descriptor**, for example "IZZY CLIPZ".
 8. **Adults only:** require the card saver to be 18+ or have the cardholder's permission (§4.4).
@@ -721,12 +721,12 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 **Does it apply? Applies.** The shop is a public accommodation, and its website and apps book appointments there.
 
-**What the code shows** (website code on `v5/webapp-business`, apps on `v5/int`):
+**What the code shows** (November 5, 2026: website code on `v5/webapp-business`, since merged into `v5/int`; apps on `v5/int`):
 
 - **Website:** axe-core checks (`server/web/e2e/support.ts`, `expectAccessible`) run on every page, each booking step and the Business pages, at desktop (1440 px) and phone (390 px) sizes in Chromium, and fail on any **serious or critical** violation; a test books a whole appointment with the keyboard alone (`server/web/e2e/booking.spec.ts`); the nine main pages in `PAGES` (`server/web/e2e/pages.spec.ts`) are checked to fit 375 px without sideways scrolling, and the booking steps, the confirmation and the Business pages are checked at the phone size (390 px) through `screenshot()`; a skip link, focus moved to the main content on navigation, labelled form fields with announced errors; `prefers-reduced-motion` and Windows High Contrast (`forced-colors`) styles, with one test that checks the logos on three pages in High Contrast. The legal pages aren't in any test list, or in the service worker's page list (`server/web/src/sw/routes.ts`), until they're added with them.
 - **Apps:** Dynamic Type text styles throughout (`IzzyClipz/Theme/Typography.swift`), VoiceOver labels on controls in both apps, and Reduce Motion in the client app. A few fixed-size icons and large numbers don't scale.
 - **Not done:** no manual testing by assistive-technology users, no outside audit, no accessibility audits in the iOS UI tests, no tests at 320 px or at large text sizes. axe-core's WCAG 2.2 rule for target size ("target-size") is off by default, so the website's checks don't cover it.
-- **Shop listing:** the Visit page shows "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`, `IzzyClipzData.swift`). "ADA-compliant" is a legal conclusion that no inspection supports; advertising compliance that isn't there invites ADA and Unruh claims. Say what's there ("step-free entrance") instead, before launch, since the Accessibility Statement points to the Visit page.
+- **Shop listing:** the Visit page showed "Wheelchair accessible", "ADA-compliant entrance" and "Accessible parking near the entrance" (`server/data/catalog.json`, `IzzyClipzData.swift`). "ADA-compliant" is a legal conclusion that no inspection supports; advertising compliance that isn't there invites ADA and Unruh claims. Say what's there ("step-free entrance") instead, before launch, since the Accessibility Statement points to the Visit page. (Done: the code now shows only the two lines the owner confirmed, "Room for a wheelchair inside, at the chairs and the counter" and "Disabled parking space near the entrance", and always the call line.)
 
 **What a good accessibility statement contains** ([W3C, Developing an Accessibility Statement](https://www.w3.org/WAI/planning/statements/)): a commitment and the standard aimed for; what has been done; known limitations, including third-party content; other ways to get the service; how to report problems and when to expect a reply; and the date it was last reviewed. Don't claim conformance that hasn't been checked.
 
@@ -879,7 +879,7 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 ## 17. Retention: what the documents promise
 
-The AG's CalOPPA guide asks for a retention period for each category (§1), Apple asks the policy to explain retention and deletion (§11), and California's disposal law asks for real deletion (§5). Today nothing deletes clients' details or saved cards.
+The AG's CalOPPA guide asks for a retention period for each category (§1), Apple asks the policy to explain retention and deletion (§11), and California's disposal law asks for real deletion (§5). On November 5, nothing deleted clients' details or saved cards (built since: see the status line in §18).
 
 **The plan the documents use** (details and code changes in `data-inventory.md`, G1 and G2):
 
@@ -896,7 +896,9 @@ The periods are proposals for the owner to confirm (`OWNER-CHECKLIST.md`).
 
 ## 18. What the documents promise that the code must do first
 
-The documents are written for the live version, and they're not in effect until it ships: their dates say "[TO FILL IN]". These promises aren't kept by the code yet. **All of them ship in one release together with the documents**, with tests that fail if any piece is missing; publishing the documents first would make them untrue on the day they go up.
+**Status, November 18, 2026:** all 18 items below are built on `v5/int` (OWNER-CHECKLIST.md §3), and the gallery photos are gone from the website and the apps. Before the apps are built for release, the website they link to (`IZZY_WEBSITE_URL` in `project.yml`) must be the live site: it's now the public demo, whose policies are drafts, so either change it or put the live site at that address (items 1 and 12).
+
+The documents are written for the live version, and they're not in effect until it ships: their dates say "[TO FILL IN]". On November 5, these promises weren't kept by the code yet. **All of them ship in one release together with the documents**, with tests that fail if any piece is missing; publishing the documents first would make them untrue on the day they go up.
 
 1. **Publish the four policies and link them** on every page (live site and demo), in both apps and in the booking steps (CalOPPA §1, Apple §11, the fee notice §8.3). Add the four pages to the website's accessibility, phone-size and offline lists, and check that no "TO FILL IN" is left in them.
 2. **Show the Terms and the Cancellation & No-Show Policy at booking**, directly above "Book appointment" (§8.4).
@@ -921,9 +923,10 @@ The gallery photos are a separate, urgent step: they come off the public demo an
 
 ## 19. Recommended, but not promised by the documents
 
+**Status, November 18, 2026:** none of these is built on `v5/int`, except the age check (§18 item 18) and the apps' privacy manifests, which now list what each app collects (the App Store answers are entered in App Store Connect: OWNER-CHECKLIST.md §4). `sale_draft` now stays, because voiding a sale reads it; its client name is removed after 12 months.
+
 - Apple's age-assurance steps for Texas, Utah and Louisiana (§4.3).
 - Accurate App Store privacy answers for both apps (§11).
-- The fee notice says "is charged"; the agreed text says "may charge". Use "may be charged" in the notice too, and "online" rather than "in the app" in the stored text, for new bookings.
 - Clear `sale_draft` once a sale is recorded.
 - Use an HMAC with a server secret for the rate-limit IP hash; add a Content-Security-Policy and Permissions-Policy to the live site, as the demo has.
 - Publish `/.well-known/gpc.json` (§2).
@@ -953,7 +956,7 @@ The owner started answering the checklist page. What changed in the documents:
 
 - **Legal name and type of business.** The owner chose "LLC" and wrote "Izzy Clipz Barbershop" as the legal name. A California LLC's name must contain "limited liability company", "LLC" or "L.L.C." (Corporations Code §17701.08(a)), so "Izzy Clipz Barbershop" alone is probably the shop's trade name rather than the LLC's registered name. Each document's first paragraph now says "Izzy Clipz Barbershop is operated by [TO FILL IN: the LLC's exact registered name], a limited liability company." The registered name, not a guess, goes there. Naming the business behind the shop also helps with Business and Professions Code §17538(d), which asks online sellers to disclose "the legal name under which the business is conducted" and its street address.
 - **Texts.** The owner answered that (442) 341-3053 takes phone calls only. Every offer to text the shop is out of the Accessibility Statement, and so is "We can also text you the details", which could promise something the shop's line can't do. The statement still offers calls, relay calls (711), email and walking in. The other documents only say the shop *may* call or text a client about an appointment, which stays true.
-- **Getting into the shop.** The owner confirmed "Room for a wheelchair inside, at the chairs and the counter" and "Accessible parking near the entrance", and didn't tick a step-free entrance. Those two lines go back on the Visit page (website and app) with the next release, and the "call us" line about getting in stays, so that someone who uses a wheelchair asks about the entrance before coming. The Accessibility Statement doesn't list the shop's features, so it doesn't change.
+- **Getting into the shop.** The owner confirmed "Room for a wheelchair inside, at the chairs and the counter" and "Accessible parking near the entrance", and didn't tick a step-free entrance. Those two lines go back on the Visit page (website and app) with the next release (the November 14 check changed the second to "Disabled parking space near the entrance"), and the "call us" line about getting in stays, so that someone who uses a wheelchair asks about the entrance before coming. The Accessibility Statement doesn't list the shop's features, so it doesn't change.
 
 ## Legal check (November 14, 2026)
 
@@ -961,7 +964,7 @@ Three independent reviewers checked the four documents against current Californi
 
 **Fees (Cancellation & No-Show Policy, owner checklist).**
 - *Civil Code §1671(d).* A fee in a consumer services contract is void unless the shop's loss was impracticable or extremely difficult to fix and the amount was a reasonable effort to estimate it, made before the amount was set; percentage-of-price fees and reasons given afterwards are treated with suspicion (*Cellphone Termination Fee Cases* (2011) 193 Cal.App.4th 298; *Ridgley v. Topa Thrift & Loan* (1998) 17 Cal.4th 970; *Del Monte Properties v. Dolan* (2018) 26 Cal.App.5th Supp. 20; *Munguia-Brown v. Equity Residential*, N.D. Cal. No. 16-cv-01225, orders of Aug. 12, 2019 and Apr. 8, 2024; *Bayol v. Zipcar* (N.D. Cal. 2015) 78 F.Supp.3d 1252). The "Why we have it" recital now says the fee is set from the shop's own records before it's turned on, the policy promises no late-cancellation fee when someone else takes the time, and the checklist asks for a dated written record each time the fee or cutoff changes, kept 4 years, plus the attorney's approval before no-show protection is turned on. A lower cap for long cutoffs is a recommended code change.
-- *Visa Core Rules (October 24, 2026 edition).* A fee charged later to a saved card is an unscheduled credential-on-file transaction (Visa's "No-Show Transaction" type is only for lodging and rentals): it needs a receipt at the time of the charge, and after a decline the cardholder must be told in writing and given at least 7 days to pay another way. The policy now promises both; the receipt is a code change (owner checklist §3, item 19), because the server sends none today.
+- *Visa Core Rules (October 24, 2026 edition).* A fee charged later to a saved card is an unscheduled credential-on-file transaction (Visa's "No-Show Transaction" type is only for lodging and rentals): it needs a receipt at the time of the charge, and after a decline the cardholder must be told in writing and given at least 7 days to pay another way. The policy now promises both; the receipt is a code change (owner checklist §3, item 19), because the server sent none then (built since: see "The code catches up (November 18, 2026)").
 - *Disability.* 28 C.F.R. §36.302(a) and Civ. Code §51(f), §52(a): the policy now says a fee is waived, or another fair change made, when a missed or late-cancelled appointment was caused by a disability.
 - *Email.* Since the shop's number takes calls only, email is the only written channel: bookings and cancellations by email now count the same as by phone, from the time sent (28 C.F.R. §36.303).
 
@@ -1004,9 +1007,9 @@ Three independent reviewers checked the four documents against current Californi
 
 The November 14 legal check's code items are now in the code on `v5/int` (OWNER-CHECKLIST.md §3, items 19 to 22):
 
-- **19. A receipt for every fee.** When a fee goes through, the server takes the email the client gave on Stripe's card page and sets it as the fee's receipt email, so Stripe sends the receipt. The address isn't stored on our server. If there's none, the shop can send the receipt from its Stripe Dashboard.
-- **20. Who runs the shop** (Bus. & Prof. Code §17538(d)): the website's footer and "Review and book" (website and app) show the operator line and the line about getting it by email, with "[TO FILL IN]" notes until the owner gives the LLC's name and the shop's email.
-- **21. The Visit page:** "Disabled parking space near the entrance", and the line about getting in offers relay calls and email.
+- **19. A receipt for every fee.** When a fee goes through, the server takes the email the client gave on Stripe's card page and sets it as the fee's receipt email, so Stripe sends the receipt. The address isn't stored on our server. What became of the receipt (sent, no email, or couldn't be sent) is kept with the appointment, never the address; when none went out, the fee's details in Izzy Clipz Business and on the website say so, and how to send one from the Stripe Dashboard.
+- **20. Who runs the shop** (Bus. & Prof. Code §17538(d)): the website's footer and "Review and book" (website and app) show who runs the shop, with a "Refunds" link next to the Cancellation & No-Show Policy. Until the owner gives the LLC's registered name and the shop's email, they show only what's known, "Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.", and the website's strict build stops until both are in.
+- **21. The Visit page:** "Disabled parking space near the entrance", and the line about getting in welcomes relay calls (711) and adds the shop's email once there is one.
 - **22. The fee notice and the stored terms:** the title is "Late Cancellation & No-Show Fee" whenever late cancellations can be charged, and new bookings agree to "… may charge $40 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking." The Cancellation & No-Show Policy now lists that title and quotes these words.
 
 Two more promises are now kept by the server, not only by the staff:
