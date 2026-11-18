@@ -481,7 +481,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// After a card payment, the client may ask for a receipt: Stripe emails it, and the address isn't
-    /// kept. Nothing about an email is asked before the card.
+    /// kept. Nothing about an email is asked before the card. On the sample server (and in the demo
+    /// version) it says no email is sent.
     func testEmailAReceiptAfterACardPayment() {
         launch()
         openTab("Take payment")
@@ -493,9 +494,12 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(element("saleReceiptLine"), containing: "Sold $25 · Card · Julian"))
         tap("emailReceipt")
         typeInto("receiptEmailField", "client@example.com")
+        XCTAssertTrue(text(containing: "Test mode: no email is sent.").exists)
         screenshot("O50-Email-A-Receipt")
         tap("sendReceipt")
-        XCTAssertTrue(reveal("receiptSent").waitForExistence(timeout: 10), "The receipt wasn't sent")
+        let sent = reveal("receiptSent")
+        XCTAssertTrue(sent.waitForExistence(timeout: 10), "The receipt wasn't sent")
+        XCTAssertTrue(sent.label.contains("Test mode: no email was sent."), "Got: \(sent.label)")
         tap("paymentDone")
         XCTAssertEqual(element("paymentAmount").value as? String, "0 dollars")
     }

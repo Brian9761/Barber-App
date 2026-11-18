@@ -38,13 +38,11 @@ struct PaymentProgressView: View {
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
                 }
-                .onChange(of: typingReceiptEmail) { _, typing in
-                    guard typing else { return }
-                    Task {
-                        // Once the keyboard is up: iOS brings only the field itself into view.
-                        try? await Task.sleep(for: .milliseconds(500))
-                        withAnimation { page.scrollTo(ReceiptEmailOffer.endID, anchor: .bottom) }
-                    }
+                // Once the keyboard is up (iOS brings only the field itself into view), without
+                // motion, like the rest of the app.
+                .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                    guard typingReceiptEmail else { return }
+                    page.scrollTo(ReceiptEmailOffer.endID, anchor: .bottom)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -406,6 +404,8 @@ struct ReceiptEmailOffer: View {
     let checkout: CheckoutModel
     /// Whether the email field has the keyboard (the screen's Done steps aside meanwhile).
     var focus: FocusState<Bool>.Binding
+    /// The sample server (UI tests and the demo version): nothing is emailed, and it says so.
+    var isTestMode = false
     /// The line under Send receipt: the page scrolls to it once the field has the keyboard, so the
     /// field, Send receipt and the line are all in view above the keyboard.
     static let endID = "receiptEmailEnd"
@@ -416,7 +416,8 @@ struct ReceiptEmailOffer: View {
         VStack(alignment: .leading, spacing: 10) {
             switch checkout.receiptEmailState {
             case .sent:
-                Label("Receipt sent. Stripe is emailing it to the client.", systemImage: "envelope.badge.fill")
+                Label(isTestMode ? "Test mode: no email was sent. With real payments, Stripe emails the receipt." : "Receipt sent. Stripe is emailing it to the client.",
+                      systemImage: "envelope.badge.fill")
                     .foregroundStyle(.green)
                     .accessibilityIdentifier("receiptSent")
             default:
@@ -448,7 +449,7 @@ struct ReceiptEmailOffer: View {
                     .buttonStyle(.borderedProminent)
                     .disabled(checkout.receiptEmailState == .sending)
                     .accessibilityIdentifier("sendReceipt")
-                    Text("Stripe emails the receipt. The app doesn't keep the address.")
+                    Text(isTestMode ? "Test mode: no email is sent. The app doesn't keep the address." : "Stripe emails the receipt. The app doesn't keep the address.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .id(Self.endID)
