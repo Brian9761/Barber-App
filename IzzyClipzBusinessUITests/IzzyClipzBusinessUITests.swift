@@ -1215,17 +1215,20 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     /// Finds an element and scrolls it onto the screen. Lists and forms only build the rows on
     /// screen, so a row further down (or one scrolled past) isn't there until it's scrolled to.
+    /// On iOS 26 it's then moved up out of the blur just above the tab bar (liftAboveTabBarBlur).
     @discardableResult
     private func reveal(_ identifier: String, searchingFirst first: Direction = .down, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
         let target = element(identifier)
         // Most are on screen already, or show up once the screen has loaded.
-        if target.waitForExistence(timeout: 8), isOnScreen(target) {
+        if target.waitForExistence(timeout: 8), let frame = onScreenFrame(target) {
+            liftAboveTabBarBlur(target, from: frame)
             return target
         }
         let other: Direction = first == .down ? .up : .down
         for attempt in 0..<16 {
-            if isOnScreen(target) {
-                settle(target)
+            // onScreenFrame waits for it to stop moving first.
+            if let frame = onScreenFrame(target) {
+                liftAboveTabBarBlur(target, from: frame)
                 return target
             }
             if target.exists, !target.frame.isEmpty {
@@ -1254,29 +1257,70 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         return target
     }
 
+    /// The tab bar's frame, once seen in this test: it stays put, so it's looked up only once.
+    private var tabBarFrame: CGRect?
+
+    /// Moves an element up out of the band just above the tab bar, where iOS 26 blurs the page under
+    /// its floating tab bar. A tap there can go nowhere while XCUITest still counts the element as on
+    /// the screen and hittable: Tap to Pay on iPhone, its middle 49 points above the tab bar (inside
+    /// the blur, which reached 65 points above it), lit up under the tap but didn't open the reader.
+    /// The band is taken as a tab bar's height, and the page is dragged just far enough to bring the
+    /// element's middle 40 points above it. This only happens while the tab bar itself can be tapped,
+    /// so never under a sheet, a dialog, a full-screen cover or the keyboard, and only as far as the
+    /// page scrolls: at the end of a page the element stays where it is. An element above the band
+    /// costs no look at the screen: `start` is where reveal last saw it.
+    private func liftAboveTabBarBlur(_ target: XCUIElement, from start: CGRect) {
+        guard #available(iOS 26.0, *) else { return }
+        let bar = app.tabBars.firstMatch
+        if tabBarFrame == nil {
+            // Taken once the bar sits at the bottom of the screen, not while it's coming in.
+            guard bar.exists else { return }
+            let seen = bar.frame
+            guard !seen.isEmpty, abs(seen.maxY - app.frame.maxY) < 1 else { return }
+            tabBarFrame = seen
+        }
+        guard let barFrame = tabBarFrame else { return }
+        let bandTop = barFrame.minY - barFrame.height
+        var frame = start
+        for _ in 0..<3 {
+            // The bar, or its first tab, can be tapped: nothing is over it.
+            guard frame.midY > bandTop, bar.exists, bar.isHittable || bar.buttons.firstMatch.isHittable else { return }
+            // A drag loses about 10 points before the page starts to move.
+            drag(.down, by: frame.midY - bandTop + 40 + 10)
+            guard target.exists, let moved = settle(target) else { return }
+            // The end of the page: it goes no higher.
+            guard moved != frame else { return }
+            frame = moved
+        }
+    }
+
     /// On screen and tappable. isHittable is only asked about an element whose middle is on the
     /// screen, and once it has stopped moving: for one scrolled out of sight, or one still moving
     /// because a change just redrew the screen (Reopen, say), XCUITest can fail the test
     /// ("Activation point invalid") instead of answering no.
     private func isOnScreen(_ target: XCUIElement) -> Bool {
-        guard target.exists, middleIsOnScreen(target) else { return false }
-        settle(target)
-        guard target.exists, middleIsOnScreen(target) else { return false }
-        return target.isHittable
+        onScreenFrame(target) != nil
     }
 
-    /// Whether the middle of the element is on the screen.
-    private func middleIsOnScreen(_ target: XCUIElement) -> Bool {
-        let frame = target.frame
-        return !frame.isEmpty && app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+    /// Where the element is once it's on screen and tappable (as isOnScreen), nil otherwise.
+    private func onScreenFrame(_ target: XCUIElement) -> CGRect? {
+        guard target.exists, middleIsOnScreen(target.frame) else { return nil }
+        guard let frame = settle(target), middleIsOnScreen(frame) else { return nil }
+        return target.isHittable ? frame : nil
     }
 
-    /// Drags the page about a third of the screen and holds still before letting go, so it
-    /// doesn't keep gliding: a tap on a list that's still moving only stops it. The drag stays
-    /// above the keyboard while one is up.
-    private func drag(_ direction: Direction) {
+    /// Whether the middle of a frame is on the screen.
+    private func middleIsOnScreen(_ frame: CGRect) -> Bool {
+        !frame.isEmpty && app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+    }
+
+    /// Drags the page about a third of the screen (or `distance` points) and holds still before
+    /// letting go, so it doesn't keep gliding: a tap on a list that's still moving only stops it.
+    /// The drag stays above the keyboard while one is up.
+    private func drag(_ direction: Direction, by distance: CGFloat? = nil) {
         let lowY = min(0.7, pageBottom() - 0.1)
-        let highY = max(0.2, lowY - 0.35)
+        let span = distance.map { $0 / max(app.frame.height, 1) } ?? 0.35
+        let highY = max(0.2, lowY - span)
         let low = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: lowY))
         let high = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: highY))
         let (start, end) = direction == .down ? (low, high) : (high, low)
@@ -1291,16 +1335,19 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         return max(0.45, (keyboard.frame.minY - screen.minY) / screen.height)
     }
 
-    /// Waits until the element stops moving, up to two seconds.
-    private func settle(_ target: XCUIElement) {
+    /// Waits until the element stops moving, up to two seconds, and gives where it ended up: nil
+    /// once it's gone.
+    @discardableResult
+    private func settle(_ target: XCUIElement) -> CGRect? {
         var last = target.frame
         for _ in 0..<8 {
             Thread.sleep(forTimeInterval: 0.25)
-            guard target.exists else { return }
+            guard target.exists else { return nil }
             let now = target.frame
-            if now == last { return }
+            if now == last { return now }
             last = now
         }
+        return last
     }
 
     /// Flips a switch row. The switch sits at the row's trailing end (a tap on the row's middle
