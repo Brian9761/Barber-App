@@ -806,7 +806,8 @@ private struct VisitLegalSection: View {
                         VisitLinkRow(symbol: Self.symbol(for: page), title: page.title, detail: page.summary)
                     }
                     .buttonStyle(.pressable)
-                    .accessibilityLabel(page.title)
+                    // The title and its one-line summary, as they read on screen.
+                    .accessibilityLabel("\(page.title). \(page.summary)")
                     .accessibilityHint("Opens the page on the shop's website")
                     .accessibilityIdentifier(page.identifier)
                 }

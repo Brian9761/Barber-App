@@ -1185,6 +1185,8 @@ final class IzzyClipzUITests: XCTestCase {
             let row = element(identifier)
             scroll(toReveal: row)
             XCTAssertTrue(row.label.contains(title), row.label)
+            // VoiceOver reads the line under the title too.
+            XCTAssertTrue(row.label.contains(". "), "No summary in: \(row.label)")
             if identifier == "legal-privacy" {
                 screenshot("24b-Visit-Legal")
             }
@@ -1223,6 +1225,14 @@ final class IzzyClipzUITests: XCTestCase {
             XCTAssertTrue(warning.label.contains("Late Cancellation & No-Show Fee"), warning.label, file: file, line: line)
             XCTAssertTrue(warning.label.contains("the full service price ($45)"), warning.label, file: file, line: line)
             screenshot("50-Book-Time-Fee-Warning")
+            // The whole policy is a tap away, next to the notice.
+            let policyLink = element("feePolicyLink")
+            XCTAssertTrue(policyLink.waitForExistence(timeout: 10), "No link to the policy by the fee notice", file: file, line: line)
+            XCTAssertTrue(policyLink.label.contains("Read the Cancellation & No-Show Policy"), policyLink.label, file: file, line: line)
+            scroll(toReveal: policyLink, file: file, line: line)
+            policyLink.tap()
+            XCTAssertEqual(webPageURL(file: file, line: line), "https://izzy-clipz.vercel.app/cancellation-policy", file: file, line: line)
+            closeWebPage(file: file, line: line)
         }
         let time = pickFirstTime(file: file, line: line)
         let lessThanAnHourAway = checkingTheTimeStepWarning ? checkLateCancelNotice(forTime: time, file: file, line: line) : nil

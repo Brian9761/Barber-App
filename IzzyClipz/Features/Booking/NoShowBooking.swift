@@ -337,6 +337,8 @@ enum RememberedDetails {
 /// What the app says about no-show protection: on Review, on the appointment cards and on "You're
 /// booked". The policy and the warning themselves are the server's words.
 enum NoShowCopy {
+    /// Under the fee notice (Pick a day and time, Review): the whole policy, as the website says it.
+    static let readPolicyLink = "Read the Cancellation & No-Show Policy"
     /// Over the card section on Review.
     static let sectionTitle = "Card on file"
     static let sectionSubtitle = "Needed to book. You won't be charged now."
