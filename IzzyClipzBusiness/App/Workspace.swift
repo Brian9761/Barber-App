@@ -105,6 +105,12 @@ final class Workspace {
         stripeConnection.onChange = { [weak self] in
             Task { await self?.refreshStatus() }
         }
+        // Stripe's status, asked by Settings or Check again, isn't what Take payment has (Stripe
+        // finished checking the details while the app was open, say): read the server's again.
+        stripeConnection.onLoaded = { [weak self] connection in
+            guard let self, connection.status != self.ownerStatus?.connection?.status else { return }
+            await self.refreshStatus()
+        }
         // A sale saved (cash, other, or a card payment with its ticket): Today's sales and the
         // schedule (the appointment is checked out) change.
         checkout.onSaleRecorded = { [weak sales, weak schedule] in
@@ -174,12 +180,28 @@ final class Workspace {
         return statusError
     }
 
-    /// Checks the server again when Take payment still doesn't know whether
-    /// Stripe is set up and no check is running (Take payment opened, or
-    /// Tap to Pay on iPhone tapped, after a check that failed).
+    /// Checks again when Take payment opens (or Tap to Pay on iPhone is tapped) and no check is
+    /// running: the server, when it still doesn't know whether Stripe is set up (an earlier check
+    /// failed); Stripe, when the shop's own account couldn't take cards yet (Stripe may have
+    /// finished checking it since).
     func recheckStatusIfNeeded() async {
-        guard case .checking = checkout.mode, !isCheckingStatus else { return }
-        await refreshStatus()
+        guard !isCheckingStatus else { return }
+        switch checkout.mode {
+        case .checking:
+            await refreshStatus()
+        case .unavailable(let issue) where issue.fixInSettings:
+            await checkStripeAgain()
+        default:
+            return
+        }
+    }
+
+    /// Check again on Take payment's Stripe card: asks Stripe how the shop's account is doing, as
+    /// Settings does (`onLoaded` then reads the server's status again if it changed). When Stripe
+    /// can't be asked, the server's status is read again anyway.
+    func checkStripeAgain() async {
+        await stripeConnection.refresh()
+        if stripeConnection.loadState != .loaded { await refreshStatus() }
     }
 
     /// `GET /api/health`, for Settings.

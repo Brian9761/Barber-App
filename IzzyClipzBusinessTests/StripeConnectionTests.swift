@@ -217,6 +217,59 @@ final class StripeConnectionTests: XCTestCase {
         XCTAssertEqual(workspace.ownerStatus?.connection?.status, .active)
     }
 
+    /// Stripe finishes checking the shop's details while the app stays open: Settings shows
+    /// Connected, and Take payment follows without waiting for the app to come back to the front.
+    func testTakePaymentFollowsStripeFinishingLater() async throws {
+        let (workspace, server) = try await signedInNeedingDetails()
+        // Stripe is done (on its own, or on another device): the server's status says so.
+        server.finishStripeSetup(detailsSubmitted: true)
+        XCTAssertEqual(workspace.checkout.mode, .unavailable(.stripeNotConnected(.needsInfo)), "Nothing asked yet")
+
+        await workspace.stripeConnection.refresh()  // Settings opened
+        XCTAssertEqual(workspace.stripeConnection.display?.title, "Connected")
+        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+    }
+
+    /// Opening Take payment (its `.task`) asks again while the shop's account couldn't take cards.
+    func testOpeningTakePaymentAsksStripeAgain() async throws {
+        let (workspace, server) = try await signedInNeedingDetails()
+        await workspace.recheckStatusIfNeeded()
+        XCTAssertEqual(workspace.checkout.mode, .unavailable(.stripeNotConnected(.needsInfo)), "Still needs details")
+        server.finishStripeSetup(detailsSubmitted: true)
+        await workspace.recheckStatusIfNeeded()
+        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+        // Taking cards, it doesn't ask again each time.
+        server.finishStripeSetup(detailsSubmitted: false)
+        await workspace.recheckStatusIfNeeded()
+        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+    }
+
+    /// Check again on Take payment's card asks Stripe, and if Stripe can't be asked, the server.
+    func testCheckAgainOnTakePayment() async throws {
+        let (workspace, server) = try await signedInNeedingDetails()
+        XCTAssertEqual(
+            TerminalIssue.stripeNotConnected(.pending).message,
+            "This usually takes a few minutes. Card payments start once Stripe is done: tap Check again to see if it is. "
+                + "You can still record cash and other payments, or practice in test mode."
+        )
+        server.finishStripeSetup(detailsSubmitted: true)
+        await workspace.checkStripeAgain()
+        XCTAssertEqual(workspace.checkout.mode, .sampleServer(locationId: "tml_sample_location"))
+    }
+
+    /// Signed in on the sample server with the shop's Stripe account made but missing details.
+    private func signedInNeedingDetails() async throws -> (Workspace, FakeServer) {
+        let environment = AppEnvironment.sample(arguments: [LaunchArgument.signedIn, LaunchArgument.stripeNeedsInfo], stepDelay: .zero)
+        guard case .sample(let server) = environment.backend else { throw XCTSkip("Not the sample server") }
+        let model = AppModel(environment: environment)
+        await model.start()
+        let workspace = try XCTUnwrap(model.workspace)
+        await workspace.stripeConnection.connect()
+        let waiting = await eventually { workspace.checkout.mode == .unavailable(.stripeNotConnected(.needsInfo)) }
+        XCTAssertTrue(waiting, "Got \(workspace.checkout.mode)")
+        return (workspace, server)
+    }
+
     func testTheLaunchArgumentsPickWhatStripesWindowDoes() {
         func firstTry(_ arguments: Set<String>) -> FakeStripeConnector.FirstTry {
             AppEnvironment.sample(arguments: arguments).stripeFirstTry

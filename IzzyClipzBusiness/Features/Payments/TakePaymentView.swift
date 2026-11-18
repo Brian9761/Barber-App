@@ -157,10 +157,22 @@ struct TakePaymentView: View {
         case .unavailable(let issue):
             IssueCard(issue: issue) {
                 if issue.fixInSettings {
-                    // The shop's own Stripe account: connected (or finished) in Settings.
+                    // The shop's own Stripe account: connected (or finished) in Settings, or done
+                    // checking at Stripe meanwhile.
                     Button("Go to Settings") { workspace.openSettings() }
                         .buttonStyle(.borderedProminent)
                         .accessibilityIdentifier("goToStripeSettings")
+                    Button {
+                        Task { await workspace.checkStripeAgain() }
+                    } label: {
+                        if workspace.isCheckingStatus || workspace.stripeConnection.loadState == .loading {
+                            ProgressView()
+                        } else {
+                            Text("Check again")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("checkStripeAgain")
                     Button("Practice in test mode") { checkout.startPractice() }
                         .buttonStyle(.bordered)
                         .accessibilityIdentifier("startPractice")

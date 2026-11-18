@@ -44,6 +44,11 @@ final class StripeConnectionStore {
     /// Called when the connection changed (connected, finished, disconnected), so Take payment and
     /// Tap to Pay read the new status from the server too.
     @ObservationIgnored var onChange: (() -> Void)?
+    /// Called after a refresh (Settings opened or pulled, Check again on Take payment) with what
+    /// Stripe said, so Take payment follows a status that changed without anything done here: Stripe
+    /// finished checking the shop's details while the app was open. Not after Connect, which calls
+    /// `onChange` instead.
+    @ObservationIgnored var onLoaded: (@MainActor (IzzyAPI.StripeConnection) async -> Void)?
 
     init(api: any OwnerAPI, connector: any StripeConnector) {
         self.api = api
@@ -60,6 +65,11 @@ final class StripeConnectionStore {
     /// `GET /api/owner/stripe`: the server asks Stripe how the account is doing. Keeps what's on
     /// screen if it fails.
     func refresh() async {
+        await load(tellingTakePayment: true)
+    }
+
+    /// The load behind `refresh()`; Connect tells Take payment itself, with `onChange`.
+    private func load(tellingTakePayment: Bool) async {
         generation += 1
         let requested = generation
         if connection == nil { loadState = .loading }
@@ -68,6 +78,7 @@ final class StripeConnectionStore {
             guard requested == generation else { return }
             connection = loaded
             loadState = .loaded
+            if tellingTakePayment { await onLoaded?(loaded) }
         } catch is CancellationError {
             if requested == generation, loadState == .loading { loadState = .idle }
         } catch {
@@ -95,12 +106,12 @@ final class StripeConnectionStore {
             // The server made the shop's account if it had none: the status shows it from now on
             // (Finish setting up), here and on Take payment, even if the owner closes the window.
             guard let wayBack = try await connector.connect(using: link) else {
-                await refresh()
+                await load(tellingTakePayment: false)
                 onChange?()
                 return
             }
             let returned = IzzyAPI.StripeConnectReturn(callbackURL: wayBack) ?? IzzyAPI.StripeConnectReturn(status: .unknown)
-            await refresh()
+            await load(tellingTakePayment: false)
             // The server just asked Stripe again: its answer wins over the one on the way back.
             let status = loadState == .loaded ? (connection?.status ?? returned.status) : returned.status
             result = Result(message: IzzyAPI.StripeConnectReturn(status: status).resultMessage, isGoodNews: status == .active)

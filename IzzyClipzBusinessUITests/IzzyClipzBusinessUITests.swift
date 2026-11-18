@@ -599,19 +599,31 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// Stripe still needs details after its window (`-fake-stripe-needs-info`): Settings says so, and
-    /// Finish setting up opens it again.
+    /// Finish setting up opens it again. Take payment says the same, with Check again.
     func testStripeStillNeedingDetailsOffersFinishSettingUp() {
         launch("-fake-stripe-needs-info")
         openTab("Settings")
         tap("connectStripe")
         XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "Stripe still needs a few details: tap Finish setting up."))
         XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Finish setting up"))
+        XCTAssertTrue(waitForLabel(reveal("connectStripe"), containing: "Finish setting up"))
+        screenshot("O44-Settings-Stripe-Needs-Info")
+
+        openTab("Take payment")
+        XCTAssertTrue(element("paymentsUnavailable").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "Finish setting up Stripe").exists)
+        tap("checkStripeAgain")
+        XCTAssertTrue(element("goToStripeSettings").waitForExistence(timeout: 10), "Stripe still needs the details")
+        screenshot("O44b-Payments-Finish-Setting-Up")
+
+        tap("goToStripeSettings")
         let finish = reveal("connectStripe")
         XCTAssertTrue(waitForLabel(finish, containing: "Finish setting up"), "Got: \(finish.label)")
-        screenshot("O44-Settings-Stripe-Needs-Info")
         finish.tap()
         XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "You're connected."))
         XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Connected"))
+        openTab("Take payment")
+        XCTAssertTrue(waitForDisappearance(of: element("paymentsUnavailable")), "Take payment still says to finish setting up")
     }
 
     /// Closing Stripe's window (`-fake-stripe-cancel`) says nothing went wrong and shows no result:
