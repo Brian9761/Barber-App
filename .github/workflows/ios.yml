@@ -59,14 +59,20 @@ jobs:
         run: swift test --package-path Packages/IzzyClipzKit
 
       - name: Pick an iPhone simulator
+        env:
+          # macos-15 tests on the newest iOS 18, the oldest iOS both apps support; macos-26 on the newest iOS.
+          IOS_MAJOR: ${{ startsWith(matrix.runner, 'macos-15') && '18' || '' }}
         run: |
           SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
-          import json, sys
+          import json, os, sys
+          want = os.environ.get("IOS_MAJOR") or None
           best = None
           for runtime, devices in json.load(sys.stdin)["devices"].items():
               if ".iOS-" not in runtime:
                   continue
               version = tuple(int(part) for part in runtime.split(".iOS-")[-1].split("-"))
+              if want and version[0] != int(want):
+                  continue
               for device in devices:
                   name = device["name"]
                   if not name.startswith("iPhone") or not device.get("isAvailable", True):
@@ -76,7 +82,7 @@ jobs:
                   if best is None or rank > best[0]:
                       best = (rank, device["udid"], name, runtime)
           if best is None:
-              sys.exit("No iPhone simulator available")
+              sys.exit("No iOS " + want + " iPhone simulator available" if want else "No iPhone simulator available")
           print(best[1], best[2], best[3], file=sys.stderr)
           print(best[1])
           ')
@@ -263,14 +269,20 @@ jobs:
           exit 1
 
       - name: Pick an iPhone simulator
+        env:
+          # macos-15 tests on the newest iOS 18, the oldest iOS both apps support; macos-26 on the newest iOS.
+          IOS_MAJOR: ${{ startsWith(matrix.runner, 'macos-15') && '18' || '' }}
         run: |
           SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
-          import json, sys
+          import json, os, sys
+          want = os.environ.get("IOS_MAJOR") or None
           best = None
           for runtime, devices in json.load(sys.stdin)["devices"].items():
               if ".iOS-" not in runtime:
                   continue
               version = tuple(int(part) for part in runtime.split(".iOS-")[-1].split("-"))
+              if want and version[0] != int(want):
+                  continue
               # The owner app needs iOS 18.
               if version < (18,):
                   continue
@@ -282,7 +294,7 @@ jobs:
                   if best is None or rank > best[0]:
                       best = (rank, device["udid"], name, runtime)
           if best is None:
-              sys.exit("No iOS 18+ iPhone simulator available")
+              sys.exit("No iOS " + (want or "18+") + " iPhone simulator available")
           print(best[1], best[2], best[3], file=sys.stderr)
           print(best[1])
           ')
