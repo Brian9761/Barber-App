@@ -742,6 +742,25 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("customerDetailsRow")), "The details are still remembered")
     }
 
+    /// The Privacy Policy link under the name and number opens over Your details: closing the page
+    /// comes back to the sheet, with what was typed still there.
+    func testThePrivacyPolicyOpensOverYourDetails() {
+        launch(UITestArguments.savedDetails)
+        openYourDetails()
+        // Return puts the keyboard away, so the line under the fields is in view.
+        type(" Jr\n", into: "detailsSheetName")
+        XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "The keyboard stayed up")
+        let link = app.links["Privacy Policy"].firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 10), "No Privacy Policy link under the name and number")
+        link.tap()
+        XCTAssertEqual(webPageURL(), "https://izzy-clipz.vercel.app/privacy")
+        closeWebPage()
+        let name = element("detailsSheetName")
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "Your details closed with the page")
+        XCTAssertTrue((name.value as? String ?? "").contains("Jr"), "What was typed is gone: \(String(describing: name.value))")
+        closeYourDetails()
+    }
+
     // MARK: No-show protection
 
     /// The shop asks for a card (no-show protection on, its starting settings): the fee notice on

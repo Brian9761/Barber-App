@@ -8,6 +8,10 @@ struct LegalLinksText: View {
     let text: String
     /// The pages whose titles in `text` become links.
     let pages: [Website.LegalPage]
+    /// Opens a tapped page; `nil` opens it in the app's own web sheet (`AppRouter.openWeb`), which
+    /// takes the place of any sheet that's up. A sheet with the line in it opens the page over
+    /// itself instead, so it stays open underneath.
+    var open: ((URL) -> Void)?
 
     @Environment(AppRouter.self) private var router
 
@@ -15,7 +19,11 @@ struct LegalLinksText: View {
         Text(Self.attributed(text, linking: pages))
             .tint(Theme.electric)
             .environment(\.openURL, OpenURLAction { url in
-                router.openWeb(url)
+                if let open {
+                    open(url)
+                } else {
+                    router.openWeb(url)
+                }
                 return .handled
             })
     }
