@@ -133,6 +133,13 @@ test('the footer of every page links the four, Privacy first, and each opens wit
   await page.goto('/');
   const legal = page.getByRole('contentinfo').getByRole('navigation', { name: 'Legal' });
   await expect(legal.getByRole('link')).toHaveText(['Privacy Policy', 'Terms of Service', 'Cancellation & No-Show Policy', 'Accessibility']);
+  // Who runs the shop, where, how to get that by email, and where the refund policy is (OWNER-CHECKLIST
+  // §3 item 20), no smaller than the booking pages' words; the LLC's name and email are still to be added.
+  const operator = page.getByRole('contentinfo').getByTestId('footer-operator');
+  await expect(operator).toContainText("Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's registered name, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.");
+  await expect(operator).toContainText("and we'll send it within 5 days.");
+  await expect(operator.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute('href', '/terms#4-prices-and-paying');
+  expect(await operator.locator('p').first().evaluate((line) => getComputedStyle(line).fontSize)).toBe('17px');
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await view(page, testInfo, 'legal-05-footer');
 
@@ -285,6 +292,18 @@ test('booking says what it agrees to right above Book appointment, the fee notic
     });
     expect(above.next).toBe('book-button');
     expect(above.gap, 'the line ends above the button').toBeGreaterThanOrEqual(0);
+    // Who runs the shop and where the refund policy is, before any card is saved, under the button and
+    // its note, no smaller than the booking's own words (OWNER-CHECKLIST §3 item 20).
+    const operator = page.getByTestId('book-operator');
+    await expect(operator).toContainText('Izzy Clipz Barbershop is operated by');
+    await expect(operator).toContainText('1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.');
+    await expect(operator).toContainText("To get this information by email, email us at");
+    await expect(operator.getByRole('link', { name: /^Terms of Service/ })).toHaveAttribute('href', '/terms#4-prices-and-paying');
+    const sizes = await operator.evaluate((lines) => ({
+      lines: parseFloat(getComputedStyle(lines.querySelector('p')!).fontSize),
+      consent: parseFloat(getComputedStyle(document.querySelector('[data-testid="book-consent"]')!).fontSize),
+    }));
+    expect(sizes.lines).toBeGreaterThanOrEqual(sizes.consent);
     if (!demo) await expect(page.getByTestId('fee-warning').getByRole('link', { name: /^Read the Cancellation & No-Show Policy/ })).toBeVisible();
     await expectAccessible(page, 'Review and book with the consent line');
     await whole(page, testInfo, 'legal-06-review');
@@ -569,6 +588,7 @@ test.describe('without JavaScript', () => {
     await expect(note).toContainText(
       'This website needs JavaScript for online booking and for most of its pages. To book, call Izzy Clipz Barbershop at (442) 341-3053, or come by 1919 Mission Ave, Ste 105, Oceanside, CA 92058.',
     );
+    await expect(note).toContainText('Open Monday–Saturday: 10 AM – 7 PM; Sunday: 10 AM – 6 PM.');
     await expect(note).toContainText('Our policies open without it:');
     await expect(note).toBeInViewport({ ratio: 1 });
     await plainView(page, testInfo, 'legal-14-home-without-javascript');
@@ -607,6 +627,11 @@ test.describe('without JavaScript', () => {
     expect(words).not.toContain('TO FILL IN');
     expect(words).not.toContain('OWNER-CHECKLIST');
     await expect(page.locator('mark.legal__placeholder').first()).toHaveText(/^To be added by the shop: /);
+    // The footer gives the shop's hours (the Accessibility Statement asks people to call "during opening
+    // hours") and who runs the shop, from the catalog the build serves.
+    const footer = page.getByRole('contentinfo');
+    await expect(footer.getByRole('list', { name: 'Hours' }).getByRole('listitem')).toHaveText(['Monday–Saturday: 10 AM – 7 PM', 'Sunday: 10 AM – 6 PM']);
+    await expect(footer.getByTestId('footer-operator')).toContainText('Izzy Clipz Barbershop is operated by');
     await page.getByTestId('noscript').scrollIntoViewIfNeeded();
     await plainView(page, testInfo, 'legal-15-privacy-without-javascript');
 

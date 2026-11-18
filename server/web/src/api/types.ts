@@ -57,6 +57,10 @@ export interface Shop {
   highlights: string[];
   paymentMethods: string[];
   accessibility: string[];
+  /** The LLC's exact registered name, which runs the shop: left out until the owner gives it (the Kit's `ShopInfo.operatorName`). */
+  operatorName?: string;
+  /** The shop's email address: left out until the shop has one. */
+  email?: string;
 }
 
 /** GET /api/catalog */

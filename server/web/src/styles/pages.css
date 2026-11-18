@@ -867,6 +867,16 @@
   flex: 1 0 100%;
 }
 
+/* Who runs the shop, under the button and its note, in the page's own size. */
+.step-actions__operator {
+  flex: 1 0 100%;
+  color: var(--color-text-secondary);
+}
+
+.step-actions__operator p + p {
+  margin-top: var(--space-1);
+}
+
 .notice__strong {
   font-weight: 700;
 }

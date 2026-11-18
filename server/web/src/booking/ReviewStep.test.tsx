@@ -559,6 +559,26 @@ describe('what booking agrees to', () => {
     expect(screen.queryByTestId('card-section')).toBeNull();
     expect(visibleText(consent())).toBe('By booking, you agree to our Terms of Service and Cancellation & No-Show Policy.');
   });
+
+  it('comes with who runs the shop, how to get that by email, and where the refund policy is, before any card is saved', async () => {
+    storeCard(card, false);
+    mockApi([['GET /api/no-show-policy', { body: policy35 }]]);
+    keptBooking();
+    renderApp('/book/review');
+    await waitFor(() => expect(screen.getByTestId('book-button')).toHaveProperty('disabled', false));
+    const operator = screen.getByTestId('book-operator');
+    // Under the button and its note, never between the consent line and the button.
+    expect(screen.getByTestId('book-note').nextElementSibling).toBe(operator);
+    // The LLC's name and the shop's email aren't given yet: each is marked as still to be added.
+    expect(visibleText(operator)).toBe(
+      "Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's registered name, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States." +
+        "To get this information by email, email us at To be added by the shop: the shop's email address and we'll send it within 5 days." +
+        'Our refund policy is in section 4 of our Terms of Service.',
+    );
+    expect(operator.querySelectorAll('mark.operator__placeholder')).toHaveLength(2);
+    const terms = within(operator).getByRole('link', { name: /^Terms of Service/ });
+    expect([terms.getAttribute('href'), terms.getAttribute('target')]).toEqual(['/terms#4-prices-and-paying', '_blank']);
+  });
 });
 
 describe('coming back from Stripe’s card page', () => {

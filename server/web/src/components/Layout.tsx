@@ -11,6 +11,7 @@ import { Icon } from './Icon';
 import { Logo } from './Logo';
 import { PageErrorBoundary, PageLoadFailed } from './PageError';
 import { CallLink } from './ui';
+import { OperatorLines } from './OperatorLines';
 
 /** The nav's pages (the legal pages' plain HTML has them too: src/legal/prerender.tsx). */
 export const NAV_LINKS = [
@@ -281,8 +282,10 @@ export function Footer() {
               ))}
             </ul>
           </nav>
+          {/* Who runs the shop, at the size of the booking pages' words (OWNER-CHECKLIST §3 item 20). */}
+          {catalog ? <OperatorLines shop={catalog.shop} className="globalfooter__operator" testId="footer-operator" /> : null}
           <p>
-            Copyright © {year} {contact.fullName}. All rights reserved.
+            Copyright © {year} {catalog?.shop.operatorName ?? contact.fullName}. All rights reserved.
           </p>
           <p className="globalfooter__where">{contact.addressLines.join(', ')}</p>
         </div>

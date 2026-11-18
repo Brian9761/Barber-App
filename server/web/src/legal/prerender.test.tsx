@@ -61,4 +61,21 @@ describe('the legal pages in plain HTML', () => {
     expect(page.body).toContain('<nav class="globalfooter__policies" aria-label="Legal">');
     expect(page.body).not.toContain('<script');
   });
+
+  it('give the shop’s hours and who runs the shop in the footer, from the catalog the build serves', () => {
+    for (const page of renderLegalPages({ draft: true, demo: false })) {
+      const text = textOf(page.body);
+      // Without JavaScript too: the Accessibility Statement asks people to call "during opening hours".
+      expect(page.body, page.path).toContain('class="globalfooter__list globalfooter__hours" aria-label="Hours"');
+      expect(text, page.path).toContain('Monday–Saturday: 10 AM – 7 PM');
+      expect(text, page.path).toContain('Sunday: 10 AM – 6 PM');
+      // Who runs the shop (not given yet: marked as still to be added), and where the refund policy is.
+      expect(page.body, page.path).toContain('data-testid="footer-operator"');
+      expect(text, page.path).toContain(
+        "Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's registered name , 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.",
+      );
+      expect(text, page.path).toContain("To get this information by email, email us at To be added by the shop: the shop's email address and we'll send it within 5 days.");
+      expect(page.body, page.path).toContain('<a href="/terms#4-prices-and-paying">Terms of Service</a>');
+    }
+  });
 });
