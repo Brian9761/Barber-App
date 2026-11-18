@@ -109,13 +109,13 @@ for (const doc of DOCS) {
     await expect(page.locator('mark.legal__placeholder').first()).toHaveText(/^To be added by the shop: /);
     await view(page, testInfo, `legal-${doc.shot}-top`);
 
-    // "On this page": every section, a link to each; open on a computer, a tap away on a phone.
+    // "On this page": every section, a link to each. Opened at its address, it starts as its plain HTML
+    // had it, a tap away, at both sizes, so nothing moves when the site takes over (a policy opened in
+    // the site has it open on a computer: the takeover test below).
     const contents = page.getByRole('navigation', { name: 'On this page' });
     const details = contents.locator('details');
-    if (isPhone(testInfo)) {
-      await expect(details).not.toHaveAttribute('open');
-      await contents.locator('summary').click();
-    }
+    await expect(details).not.toHaveAttribute('open');
+    await contents.locator('summary').click();
     await expect(details).toHaveAttribute('open', '');
     const sections = page.getByTestId('legal-page').locator('h2');
     await expect(contents.getByRole('link')).toHaveCount(await sections.count());
@@ -132,9 +132,30 @@ for (const doc of DOCS) {
 test('the footer of every page links the four, Privacy first, and each opens with the focus on its words', async ({ page }, testInfo) => {
   await page.goto('/');
   const legal = page.getByRole('contentinfo').getByRole('navigation', { name: 'Legal' });
-  await expect(legal.getByRole('link')).toHaveText(['Privacy Policy', 'Terms of Service', 'Cancellation & No-Show Policy', 'Accessibility']);
+  // The refund policy ("Refunds", the Terms' refunds) next to the Cancellation & No-Show Policy (OWNER-CHECKLIST §3 item 20).
+  await expect(legal.getByRole('link')).toHaveText(['Privacy Policy', 'Terms of Service', 'Cancellation & No-Show Policy', 'Refunds', 'Accessibility']);
+  await expect(legal.getByRole('link', { name: 'Refunds' })).toHaveAttribute('href', '/terms#refunds');
+  // Who runs the shop and where (OWNER-CHECKLIST §3 item 20), no smaller than the booking pages' words.
+  // The LLC's name and the shop's email aren't given yet: only what exists, the shop and its address.
+  const operator = page.getByRole('contentinfo').getByTestId('footer-operator');
+  await expect(operator).toHaveText('Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.');
+  await expect(page.getByRole('contentinfo')).not.toContainText(/operated by|To be added|To get this information by email/);
+  await expect(page.getByRole('contentinfo')).toContainText(/Copyright © \d{4} Izzy Clipz Barbershop\. All rights reserved\./);
+  expect(await operator.locator('p').first().evaluate((line) => getComputedStyle(line).fontSize)).toBe('17px');
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await view(page, testInfo, 'legal-05-footer');
+
+  // "Refunds" opens the Terms at the refund policy, in view below the nav.
+  await legal.getByRole('link', { name: 'Refunds' }).click();
+  await expect(page).toHaveURL(/\/terms#refunds$/);
+  const refunds = page.locator('#refunds');
+  await expect(refunds).toContainText(/^Refunds\. /);
+  await expect(refunds).toBeFocused();
+  await expect(refunds).toBeInViewport();
+  const navBottomAtRefunds = await page.locator('nav.globalnav').evaluate((nav) => nav.getBoundingClientRect().bottom);
+  expect((await refunds.boundingBox())!.y, 'the refund policy starts below the nav').toBeGreaterThanOrEqual(navBottomAtRefunds);
+  await view(page, testInfo, 'legal-05b-terms-refunds');
+  await page.goto('/');
 
   await legal.getByRole('link', { name: 'Privacy Policy' }).click();
   await expect(page).toHaveURL(/\/privacy$/);
@@ -285,6 +306,22 @@ test('booking says what it agrees to right above Book appointment, the fee notic
     });
     expect(above.next).toBe('book-button');
     expect(above.gap, 'the line ends above the button').toBeGreaterThanOrEqual(0);
+    // Who runs the shop and where, and "Refunds" next to the Cancellation & No-Show Policy, before any
+    // card is saved, under the button and its note, no smaller than the booking's own words
+    // (OWNER-CHECKLIST §3 item 20). The LLC's name and the shop's email aren't given yet: only what
+    // exists, the shop and its address.
+    const operator = page.getByTestId('book-operator');
+    await expect(operator.locator('p').first()).toHaveText('Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.');
+    await expect(operator).not.toContainText(/operated by|To be added|email us/);
+    const policies = page.getByTestId('book-operator-policies');
+    await expect(policies.getByRole('link', { name: /^Cancellation & No-Show Policy/ })).toHaveAttribute('href', '/cancellation-policy');
+    await expect(policies.getByRole('link', { name: /^Refunds/ })).toHaveAttribute('href', '/terms#refunds');
+    await expect(policies.getByRole('link', { name: /^Refunds/ })).toHaveAttribute('target', '_blank');
+    const sizes = await operator.evaluate((lines) => ({
+      lines: parseFloat(getComputedStyle(lines.querySelector('p')!).fontSize),
+      consent: parseFloat(getComputedStyle(document.querySelector('[data-testid="book-consent"]')!).fontSize),
+    }));
+    expect(sizes.lines).toBeGreaterThanOrEqual(sizes.consent);
     if (!demo) await expect(page.getByTestId('fee-warning').getByRole('link', { name: /^Read the Cancellation & No-Show Policy/ })).toBeVisible();
     await expectAccessible(page, 'Review and book with the consent line');
     await whole(page, testInfo, 'legal-06-review');
@@ -334,11 +371,13 @@ test('Reviews shows Google’s reviews and only links to Yelp; Visit shows the c
   // confirmed step-free).
   await expect(page.getByTestId('visit-accessibility-lines').getByRole('listitem')).toHaveText([
     'Room for a wheelchair inside, at the chairs and the counter',
-    'Accessible parking near the entrance',
+    'Disabled parking space near the entrance',
   ]);
   const line = page.getByTestId('visit-accessibility-call');
-  await expect(line).toHaveText("Questions about getting in or around the shop? Call (442) 341-3053 and we'll help.");
+  // No email sentence yet: the shop has no email address in the catalog (OWNER-CHECKLIST §3 item 21).
+  await expect(line).toHaveText("Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome: dial 711) and we'll help.");
   await expect(line.getByRole('link', { name: '(442) 341-3053' })).toHaveAttribute('href', 'tel:+14423413053');
+  await expect(line.locator('a[href^="mailto:"]')).toHaveCount(0);
   await expect(page.locator('main')).not.toContainText(/\bADA\b|Wheelchair accessible|step-free/i);
   await expectAccessible(page, '/visit');
   await whole(page, testInfo, 'legal-09-visit');
@@ -569,6 +608,7 @@ test.describe('without JavaScript', () => {
     await expect(note).toContainText(
       'This website needs JavaScript for online booking and for most of its pages. To book, call Izzy Clipz Barbershop at (442) 341-3053, or come by 1919 Mission Ave, Ste 105, Oceanside, CA 92058.',
     );
+    await expect(note).toContainText('Open Monday–Saturday: 10 AM – 7 PM; Sunday: 10 AM – 6 PM.');
     await expect(note).toContainText('Our policies open without it:');
     await expect(note).toBeInViewport({ ratio: 1 });
     await plainView(page, testInfo, 'legal-14-home-without-javascript');
@@ -607,6 +647,12 @@ test.describe('without JavaScript', () => {
     expect(words).not.toContain('TO FILL IN');
     expect(words).not.toContain('OWNER-CHECKLIST');
     await expect(page.locator('mark.legal__placeholder').first()).toHaveText(/^To be added by the shop: /);
+    // The footer gives the shop's hours (the Accessibility Statement asks people to call "during opening
+    // hours") and who runs the shop, from the catalog the build serves.
+    const footer = page.getByRole('contentinfo');
+    await expect(footer.getByRole('list', { name: 'Hours' }).getByRole('listitem')).toHaveText(['Monday–Saturday: 10 AM – 7 PM', 'Sunday: 10 AM – 6 PM']);
+    await expect(footer.getByTestId('footer-operator')).toHaveText('Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.');
+    await expect(footer.getByRole('navigation', { name: 'Legal' }).getByRole('link', { name: 'Refunds' })).toHaveAttribute('href', '/terms#refunds');
     await page.getByTestId('noscript').scrollIntoViewIfNeeded();
     await plainView(page, testInfo, 'legal-15-privacy-without-javascript');
 
@@ -618,16 +664,93 @@ test.describe('without JavaScript', () => {
   });
 });
 
-test('with JavaScript, the site takes a legal page over from its plain HTML: its own nav, and “On this page” as the site has it', async ({ page }, testInfo) => {
+test('with JavaScript, the site takes a legal page over from its plain HTML in one go: never “Loading…”, its own nav, and “On this page” as it was', async ({
+  page,
+}, testInfo) => {
+  // Everything #root shows while the page loads, noted as it happens.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { izzyRootSeen: string[] }).izzyRootSeen = seen;
+    new MutationObserver(() => {
+      // Once the plain HTML is all there (the site's script runs only after that).
+      if (document.readyState === 'loading') return;
+      const root = document.getElementById('root');
+      if (!root) return;
+      if (root.querySelector('.legal-loading') || (root.textContent ?? '').includes('Loading…')) seen.push('loading');
+      if (root.querySelectorAll('h1').length > 1) seen.push('two pages');
+      if (root.querySelector('main') && root.querySelectorAll('h1').length === 0) seen.push('no page');
+    }).observe(document, { childList: true, subtree: true });
+  });
   await page.goto('/cancellation-policy');
   await siteTookOver(page);
   await expect(page.locator('h1')).toHaveCount(1);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cancellation & No-Show Policy');
+  expect(await page.evaluate(() => (window as unknown as { izzyRootSeen: string[] }).izzyRootSeen), 'the plain page, then the site’s, and nothing in between').toEqual([]);
   // The site's own nav: its Book link, and on a phone its menu.
   await expect(page.locator('nav.globalnav .globalnav__book')).toBeVisible();
   if (isPhone(testInfo)) await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
-  // "On this page" as the site has it: open on a computer, closed on a phone.
+  // "On this page" as the plain HTML had it (closed), on a computer too, so nothing on screen moves.
   const details = page.getByRole('navigation', { name: 'On this page' }).locator('details');
-  if (isPhone(testInfo)) await expect(details).not.toHaveAttribute('open');
-  else await expect(details).toHaveAttribute('open', '');
+  await expect(details).not.toHaveAttribute('open');
+  // A policy opened in the site itself has it as the site does: open on a computer, closed on a phone.
+  await page.getByRole('contentinfo').getByRole('navigation', { name: 'Legal' }).getByRole('link', { name: 'Privacy Policy' }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Privacy Policy');
+  const opened = page.getByRole('navigation', { name: 'On this page' }).locator('details');
+  if (isPhone(testInfo)) await expect(opened).not.toHaveAttribute('open');
+  else await expect(opened).toHaveAttribute('open', '');
+});
+
+test.describe('on a slow connection', () => {
+  // The page itself, as the network sends it (no service worker in between).
+  test.use({ serviceWorkers: 'block' });
+
+  test('a reader who started on the plain HTML keeps their place when the site takes over: the section on screen and the link the keyboard is on', async ({
+    page,
+  }, testInfo) => {
+    // The site's script comes late, as on a slow phone connection.
+    let release = () => undefined as void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/assets\/main-[^/]+\.js$/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto('/privacy', { waitUntil: 'commit' });
+    const heading = () => page.getByRole('heading', { level: 2, name: 'Who we share your information with' });
+    await expect(heading()).toBeVisible();
+    await expect(page.locator('[data-prerendered]')).toHaveCount(1);
+    // Read on to the middle of the policy, with the keyboard on a link there.
+    await heading().evaluate((h) => window.scrollBy(0, h.getBoundingClientRect().top - 160));
+    const link = page.locator('main a[href="https://stripe.com/privacy"]').first();
+    await link.focus();
+    const before = await heading().evaluate((h) => ({ top: h.getBoundingClientRect().top, scrollY: window.scrollY }));
+    expect(before.scrollY).toBeGreaterThan(1000);
+
+    release();
+    await siteTookOver(page);
+    const after = await heading().evaluate((h) => ({ top: h.getBoundingClientRect().top, scrollY: window.scrollY }));
+    expect(Math.abs(after.top - before.top), 'the section stays where it was on the screen').toBeLessThanOrEqual(2);
+    // The keyboard is still on the same link (its words and address), not back at the start of the page.
+    expect(
+      await page.evaluate(() => {
+        const active = document.activeElement;
+        return active instanceof HTMLAnchorElement ? [active.getAttribute('href'), active.closest('main') !== null] : [active?.tagName ?? null, false];
+      }),
+    ).toEqual(['https://stripe.com/privacy', true]);
+    await view(page, testInfo, 'legal-16-slow-takeover-keeps-place');
+  });
+});
+
+test('a legal page’s file address (“/privacy/index.html”) goes to the page itself, with or without JavaScript', async ({ page, request }) => {
+  for (const path of ['/privacy', '/terms', '/cancellation-policy', '/accessibility']) {
+    const response = await request.get(`${path}/index.html`, { maxRedirects: 0 });
+    expect(response.status(), path).toBe(308);
+    expect(response.headers().location, path).toBe(path);
+  }
+  await page.goto('/terms/index.html');
+  await expect(page).toHaveURL(/\/terms$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Terms of Service');
+  await expect(page).toHaveTitle('Terms of Service · Izzy Clipz Barbershop');
 });

@@ -5,13 +5,15 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadEnv, type ConfigEnv, type UserConfig } from 'vite';
-import { LEGAL_FILES, legalDocuments, legalStrict, readLegalFiles, strictFailure, unfinished } from './legal.js';
+import { LEGAL_FILES, legalDocuments, legalStrict, readLegalFiles, strictFailure, unfinished, unfinishedOperator } from './legal.js';
 
 // A strict build publishes the legal documents as they are, so it stops while any placeholder
 // is left in them, saying which file and line; every other build is a draft. Checked on the
 // documents as they are today, and on a copy with every placeholder filled in.
 
 const DOCS = fileURLToPath(new URL('../../../docs/legal', import.meta.url));
+/** The shop's catalog as the Kit exports it, which doesn't say who runs the shop yet (both ""). */
+const CATALOG = fileURLToPath(new URL('../../data/catalog.json', import.meta.url));
 
 /** What the shop might write in each placeholder's place. */
 function filledIn(text: string): string {
@@ -23,9 +25,19 @@ function filledIn(text: string): string {
   });
 }
 
+/** The catalog with who runs the shop and its email given, in `folder`: its path. */
+function catalogWithOperator(folder: string): string {
+  const catalog = JSON.parse(readFileSync(CATALOG, 'utf8')) as { shop: Record<string, unknown> };
+  catalog.shop.legalName = 'Izzy Clipz Barbershop LLC';
+  catalog.shop.email = 'hello@izzyclipz.example';
+  const path = join(folder, 'catalog.json');
+  writeFileSync(path, JSON.stringify(catalog));
+  return path;
+}
+
 /** The build's plugin at the start of a build: the message it stops with, or null when it goes ahead. */
-function buildStart(strict: boolean, dir: string): string | null {
-  const hook = legalDocuments({ strict, dir }).buildStart as (this: { error(message: string): never }) => void;
+function buildStart(strict: boolean, dir: string, catalog = CATALOG): string | null {
+  const hook = legalDocuments({ strict, dir, catalog }).buildStart as (this: { error(message: string): never }) => void;
   try {
     hook.call({
       error(message: string): never {
@@ -75,13 +87,24 @@ describe('a strict build', () => {
     const left = unfinished(readLegalFiles(DOCS));
     expect(left.length).toBeGreaterThanOrEqual(LEGAL_FILES.length * 2);
     expect(message!.split('\n').filter((line) => line.startsWith('  docs/legal/'))).toHaveLength(left.length);
+    // And who runs the shop, which the footer and "Review and book" show: not given yet either.
+    expect(message).toContain("  server/data/catalog.json: shop.legalName (the LLC's exact registered name, which runs the shop)");
+    expect(message).toContain("  server/data/catalog.json: shop.email (the shop's email address)");
+    expect(message).toContain('Packages/IzzyClipzKit/Sources/IzzyClipzKit/IzzyClipzData.swift');
   });
 
-  it('goes ahead once every placeholder is filled in', () => {
+  it('goes ahead once every placeholder is filled in, and the catalog says who runs the shop', () => {
     copy = mkdtempSync(join(tmpdir(), 'izzy-legal-'));
     for (const file of LEGAL_FILES) writeFileSync(join(copy, file), filledIn(readFileSync(join(DOCS, file), 'utf8')));
     expect(unfinished(readLegalFiles(copy))).toEqual([]);
-    expect(buildStart(true, copy)).toBeNull();
+    const catalog = catalogWithOperator(copy);
+    expect(unfinishedOperator(readFileSync(catalog, 'utf8'))).toEqual([]);
+    expect(buildStart(true, copy, catalog)).toBeNull();
+    // With the documents finished but the catalog not, it still stops, naming the two.
+    const message = buildStart(true, copy);
+    expect(message).toContain('2 placeholders are still to be filled in');
+    expect(message).toContain('server/data/catalog.json: shop.legalName');
+    expect(message).toContain('server/data/catalog.json: shop.email');
   });
 
   it('stops for a single placeholder left anywhere, at its line', () => {
@@ -90,9 +113,25 @@ describe('a strict build', () => {
     const terms = readFileSync(join(copy, 'terms.md'), 'utf8').split('\n');
     terms[57] = '- **Refunds.** [TO FILL IN: the refund policy]';
     writeFileSync(join(copy, 'terms.md'), terms.join('\n'));
-    const message = buildStart(true, copy);
+    const message = buildStart(true, copy, catalogWithOperator(copy));
     expect(message).toContain('a placeholder is still to be filled in');
     expect(message).toContain('docs/legal/terms.md:58: [TO FILL IN: the refund policy]');
+  });
+});
+
+describe('who runs the shop, in the catalog', () => {
+  it('is still to be given while either the LLC’s name or the shop’s email is missing or empty', () => {
+    const catalog = (shop: Record<string, unknown>) => JSON.stringify({ shop });
+    expect(unfinishedOperator(catalog({ legalName: 'Izzy Clipz Barbershop LLC', email: 'hello@izzyclipz.example' }))).toEqual([]);
+    expect(unfinishedOperator(catalog({ legalName: 'Izzy Clipz Barbershop LLC', email: '' }))).toEqual(["server/data/catalog.json: shop.email (the shop's email address)"]);
+    expect(unfinishedOperator(catalog({ legalName: 'Izzy Clipz Barbershop LLC' }))).toEqual(["server/data/catalog.json: shop.email (the shop's email address)"]);
+    expect(unfinishedOperator(catalog({ legalName: ' ', email: 'hello@izzyclipz.example' }))).toEqual([
+      "server/data/catalog.json: shop.legalName (the LLC's exact registered name, which runs the shop)",
+    ]);
+    expect(unfinishedOperator(JSON.stringify({}))).toHaveLength(2);
+    // The catalog as the Kit exports it today: both there, both empty.
+    expect(unfinishedOperator(readFileSync(CATALOG, 'utf8'))).toHaveLength(2);
+    expect(JSON.parse(readFileSync(CATALOG, 'utf8')).shop).toMatchObject({ legalName: '', email: '' });
   });
 });
 

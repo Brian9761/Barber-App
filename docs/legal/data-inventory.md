@@ -11,6 +11,7 @@ This file records what the Izzy Clipz website, web apps, iPhone apps and server 
   - The server is the same on both branches, with four exceptions: `server/src/website.ts` (web only), the website's build and headers in `server/vercel.json` (web only), the website's extra catalog content (barbers' bios, titles and Instagram handles) in `server/data/catalog.json` (web only), and one rounding detail when cancelling (int only).
   - The database migrations are identical on both branches.
 - **Re-checked after two independent reviews,** the same day: the new facts are marked in sections 2, 6, 8 and 9, and the gaps they added are G12 to G18 in section 11.
+- **Built since this check** (on `v5/int`, November 2026): the gaps the documents depend on (G1, G2, G3, G5, G12 to G18) and the November 14 legal check's code items (OWNER-CHECKLIST.md §3, items 19 to 22) are in the code. Sections 2 to 4 still describe the code as read on November 5, except where a line says "as built". Where they differ, the code wins.
 - **Keep it current:** check this file again whenever code that stores, sends or deletes data changes, and before changing the Privacy Policy.
 
 ## At a glance
@@ -208,11 +209,15 @@ This applies only once the owner has turned no-show protection on and Stripe is 
   - a description such as "No-show fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM" (`feeDescription`);
   - the appointment's id, the fee's kind and the attempt number, as metadata.
 
-  No name, number or receipt email is sent.
-- **Rules:** at most one fee per appointment; only after the start for a no-show; never for a booking the shop cancelled, or that the client cancelled online before the window (`feeCase` in `server/src/feecase.ts`). There's no time limit after the visit today (see G2).
-  - A booking with a card on file can be marked a no-show from its start time (`patchOwnerAppointment` in `server/src/appointments.ts`), and a completed one without a sale can be changed to a no-show. A client cancellation inside the window is late even right after booking a time that was already inside it (`cancelledLate` doesn't read `created_at`). The documents promise otherwise: see G13.
-- **Receipts:** Stripe may email the client a receipt, using the email on the Customer, if the shop turns on Stripe's receipt emails. That's a setting in the Stripe Dashboard, not in our code.
-- **How long:** forever.
+  No name or number is sent. The receipt email is added only after the fee has gone through (see Receipts).
+- **Rules (as built, November 18, 2026):**
+  - at most one fee per appointment, and only within 7 days after the appointment's start (`FEE_DEADLINE_DAYS` in `server/src/feecase.ts`, G2);
+  - never for a booking the shop cancelled, or that the client cancelled online before the window or within 15 minutes of booking (`feeCase` in `server/src/feecase.ts`, G13);
+  - a no-show only after the appointment's end, and never once it's marked completed (G13);
+  - no late-cancellation fee while another booked or completed appointment of the same barber overlaps that time (`timeTakenSince` in `server/src/noshowfee.ts`). A walk-in rung up at checkout without an appointment can't be seen, so the fee panel in Izzy Clipz Business and in the website's Business area says not to charge if another client, such as a walk-in, took the time;
+  - after a decline, or when the bank wants the client to approve the charge, the card isn't charged again, and the client pays another way (`server/src/noshowfee.ts`).
+- **Receipts (as built):** when a fee goes through, the server reads the email the client typed on Stripe's card page from the Checkout Session that saved the card, and sets it as the fee's `receipt_email`, which makes Stripe email the receipt (live mode only; `emailFeeReceipt` in `server/src/noshowfee.ts`). Our server doesn't store the address, but it stays on the fee's payment in the shop's Stripe account. If Stripe has no address, or the call fails, the fee still stands, and the server logs it so the shop can send the receipt from the Stripe Dashboard.
+- **How long (as built):** the fee stays with the appointment, whose name, number, email and note are removed 12 months after it (`server/src/retention.ts`). In the shop's Stripe account, with no set end date.
 
 ### 2.10 Card payments in the shop (Tap to Pay)
 
@@ -401,31 +406,35 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
   - "Add to Calendar" uses the system's event editor without calendar access, so the app can't read the calendar (`IzzyClipz/Components/CalendarEventEditor.swift`).
   - Notifications are requested right after the first booking, because each booking is saved with its reminders on (`appointments.add(confirmation, remind: true)` in `IzzyClipz/Features/Booking/BookingModels.swift`) and the next sync asks iOS while permission is undecided and a reminder is still ahead (`performSync` in `IzzyClipz/Stores/AppointmentStore.swift`). The client can turn an appointment's reminders off on "You're booked" (`BookedView.swift`). Turning on haircut reminders asks too. They're **local only**: the app doesn't register for push notifications and has no device token (`IzzyClipz/Features/Reminders/ReminderStore.swift`).
 - **Stored in UserDefaults:**
-  - `customer.name` and `customer.phone`, when "Remember me" is on. It's on by default in the app (`IzzyClipz/App/AppRouter.swift`, `IzzyClipz/Stores/CustomerDetailsStore.swift`).
+  - `customer.name` and `customer.phone`, when "Remember me" is on. It starts off, unless this iPhone already remembers the client (`IzzyClipz/App/AppRouter.swift`, `IzzyClipz/Stores/CustomerDetailsStore.swift`).
   - `appointments.v2`: each appointment as the server last described it, **including the client's own name, number, note, and card brand and last 4**, until 30 days after the appointment ends.
   - `favorites.barberID`.
   - `reminders.enabled`, `reminders.intervalWeeks` and `reminders.lastCut` (the date of the last haircut).
-- **Stored in the Keychain:** manage tokens and the saved card (see 2.6 and 2.7). On iOS, Keychain items can remain after the app is deleted.
-- **No files, databases or caches of its own.** API calls use a temporary connection with no cache and no cookies (`Packages/IzzyClipzKit/Sources/IzzyClipzKit/API/IzzyAPIClient.swift`).
+- **Stored in the Keychain:** manage tokens, the saved card (see 2.6 and 2.7) and any booking still being sent, with the client's number, until the server confirms it or its time has passed (`AppointmentStore.swift`). On iOS, Keychain items can remain after the app is deleted.
+- **No files or databases of its own.** API calls use a temporary connection with no cache and no cookies (`Packages/IzzyClipzKit/Sources/IzzyClipzKit/API/IzzyAPIClient.swift`). Reviewers' photos and product photos load with `AsyncImage`, which uses the system's shared connection and its default cache, so iOS may keep copies of those public pictures in the app's Caches folder (`ReviewsView.swift`, `ShopView.swift`).
 - **Network:**
   - the shop's API;
   - Stripe's card page, in a private session;
-  - Google's and Yelp's image servers, for reviewers' photos;
+  - Google's image servers, for reviewers' photos (Yelp's reviews are only linked, never shown, so nothing loads from Yelp);
   - Vercel Blob, for product photos;
+  - the shop's website, for the four legal pages, in an in-app browser (Visit → Legal);
   - Apple's map tiles, for the map of the shop (MapKit, without the user's location; `IzzyClipz/Features/Visit/VisitView.swift`).
 - **Links out:**
   - calling the shop;
   - directions in Apple Maps or Google Maps (`IzzyClipz/Components/ContactButtons.swift`);
   - Instagram (`IzzyClipz/Components/InstagramCard.swift`);
   - Google and Yelp review pages, and Google's terms (`IzzyClipz/Features/Reviews/ReviewsView.swift`);
-  - the shop's existing website, https://www.izzyclipzbarbershop.net (the catalog's `websiteUrl`), shown in an in-app browser from the Visit tab's "Website" row (`IzzyClipz/Features/Visit/VisitView.swift`). The Share link on the Visit tab and every Add to Calendar event use the same address (`IzzyClipz/Components/CalendarEventEditor.swift`). That site isn't part of this codebase: it runs on Squarespace (it sets Squarespace's `crumb` cookie and loads Squarespace's scripts), and its booking button goes to the shop's old booking page on Squire, web.getsquire.com/book/izzy-clipz-oceanside (checked November 5, 2026). The documents say they don't cover either. See G15.
-- **What the client can clear:** "Forget my details" (the remembered name and number, and the card), "Remove card", and "Remove from this list" on a past or cancelled appointment (an upcoming booked one must be cancelled first: `remove` in `AppointmentStore.swift`), which also deletes its key. All of these act on this iPhone only. "Forget my details" leaves the stored appointments, with the client's name, number and note, until 30 days after each one. Keychain items (appointment keys, the card key, and unconfirmed bookings with the number) can stay after the app is deleted, and nothing removes them then.
+  - the new website (the build setting `IZZY_WEBSITE_URL`, Info.plist `IzzyWebsiteURL`, default https://izzy-clipz.vercel.app, read only if it's https), shown in an in-app browser from the Visit tab's "Website" row; the Share link and every Add to Calendar event use the same address, and so do the four legal pages under Visit → Legal, the consent line on Review and the privacy line on Your details (`IzzyClipz/App/Website.swift`, `LegalLinksText`). The Reviews screen also links Google's privacy policy (`ReviewsView.swift`). The app no longer links the shop's older website or its Squire page.
+- **What the client can clear:** "Forget my details" (the remembered name and number, and the card, which is also deleted at the shop with `DELETE /api/cards`), "Remove card" (the same deletion, after a confirmation), and "Remove from this list" on a past or cancelled appointment (an upcoming booked one must be cancelled first: `remove` in `AppointmentStore.swift`), which also deletes its key. Apart from the card deletion at the shop, all of these act on this iPhone only. "Forget my details" leaves the stored appointments, with the client's name, number and note, until 30 days after each one. Keychain items (appointment keys, the card key, and unconfirmed bookings with the number) can stay after the app is deleted, and nothing removes them then.
+- **A card saved without "Remember me":** the booking says so (`keepCard: false`), so the server marks the card for deletion in the booking's own transaction, and the app also calls `DELETE /api/cards` right after, as a second safeguard (`IzzyClipz/Stores/CardRemoval.swift`).
+- **Age range:** on iOS 26 or later the app asks iOS for the user's age range at launch (Apple's Declared Age Range; from iOS 26.2 only where iOS says a law requires it), with the `com.apple.developer.declared-age-range` entitlement. The answer is kept in memory only, never stored or sent; someone under 13 sees only a screen asking a parent or guardian to book (`IzzyClipz/App/AgeCheck.swift`, `IzzyClipz/Features/AgeCheck/AgeRangeCheck.swift`).
+- **Photos:** the six gallery photos of clients, the Gallery screen and the Instagram photo strip are gone; Home shows the storefront.
 - **Demo builds:** these use an in-memory sample server, and nothing is sent to the shop (`IzzyClipz/App/DemoMode.swift`, `IzzyClipz/Services/FakeShopAPI.swift`).
 - **What the app tells clients:**
-  - "Your name and number are sent only to Izzy Clipz…" (`BookingDetailsView.swift`)
+  - "Your details go to Izzy Clipz Barbershop and the services that run its booking, as our Privacy Policy explains." (`BookingDetailsView.swift`), and "By booking, you agree to our Terms of Service and Cancellation & No-Show Policy." right above Book appointment, both with their policies linked
   - "Reminders are set on this iPhone only." (`ReminderSettingsView.swift`)
   - "Stripe keeps the card; this iPhone keeps only a key to it." (`NoShowBooking.swift`)
-- **No legal links yet:** the app has no Privacy Policy, Terms, Cancellation Policy or Accessibility links.
+- **Legal links:** Visit → Legal opens the Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility pages on the website. The Visit page lists only the accessibility features the owner confirmed, then a line to call about getting in.
 
 ## 7. The Business iPhone app (Izzy Clipz Business)
 
@@ -433,7 +442,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 - **UserDefaults:**
   - `pendingPaymentIntents`: payment ids and times, until each payment is settled (`IzzyClipzBusiness/Payments/PendingPayments.swift`);
   - `hasSetUpTapToPay`;
-  - `hasSeenHowToTap`.
+  - `hasSeenHowToTap`;
+  - `lastSoldByBarberId`: the barber last picked for "Sold by" at checkout, until sign-out (`CheckoutModel.swift`, cleared in `AppModel.swift`).
 
   The schedule is kept in memory only.
 - **Camera and photos:**
@@ -446,8 +456,14 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 - **Tap to Pay:** the app has the `com.apple.developer.proximity-reader.payment.acceptance` entitlement (`IzzyClipzBusiness/IzzyClipzBusiness.entitlements`). Apple's Tap to Pay reads the card.
 - **Client data that staff type in:**
   - a walk-in's name, and optionally a mobile number and note;
-  - a receipt email;
+  - a receipt email, offered only after a card payment has gone through, sent to Stripe and not kept by the server;
+  - what a client bought at checkout (services and products), with the client's name, kept with the sale (the name is removed after 12 months);
+  - a void reason, kept with the sale (removed with the sale's name after 12 months);
+  - an optional note on a card payment, which goes to Stripe as the payment's description in place of the item list (`TakePaymentView.swift`, `CheckoutModel.swift`). It can carry a client's name: Stripe keeps it with the payment, with no set end date; the shop's copy is removed after 12 months.
   - time-off reasons.
+- **Stripe connection and computers:** Settings connects the shop's own Stripe account (Stripe's page in `ASWebAuthenticationSession`), and "Use on a computer" makes one-time sign-in codes for Izzy Clipz Business on a computer.
+- **Age range:** the same check as the client app, kept in memory only; someone under 13 sees a screen saying the app is for the shop's team.
+- **Legal links:** Settings → Legal opens the four pages on the website.
 - **Call and Text buttons:** they open the iPhone's own Phone and Messages apps (see 2.2).
 
 ## 8. Third parties
@@ -746,11 +762,10 @@ This is what the Privacy Policy states. In the last column, "now" means it's alr
 
 ## Other things noticed (for the other documents)
 
-- **"In the app":**
-  - The policy text stored with every protected booking says "Cancelling in the app…", including for bookings made on the website (`policyText` in `server/src/noshow.ts`).
+- **"In the app" and "online":**
+  - The policy text stored with new protected bookings says "Cancelling online is free…", and when the card may be charged: "within 7 days after your appointment time" (`policyText` in `server/src/noshow.ts`, OWNER-CHECKLIST.md §3 item 22). Bookings made before keep the text they agreed to, which says "Cancelling in the app…".
   - The website's fee notice adds "Cancelling on this website, under My appointments, works the same as cancelling in the app." (`server/web/src/booking/TimeStep.tsx` (web)), and the Cancellation & No-Show Policy says both count.
-  - Optionally, change the server's wording to "online" for new bookings. Existing bookings keep the text they agreed to.
-- **"Is charged" and "may charge":** the fee notice says "is charged" (`feeWarning`), while the agreed text says "may charge" (`policyText`). The documents follow the agreed text (the shop decides each time). Optionally, make the notice say "may be charged" too.
+- **"May be charged":** the fee notices (`feeWarning` in `server/src/noshow.ts`, and the website's) say "may be charged", like the agreed text's "may charge" (`policyText`): the shop decides each time. The notice's title is "Late Cancellation & No-Show Fee" whenever late cancellations can be charged, or "No-Show Fee".
 - **Only clients' own online cancellations can count as late:**
   - A booking the shop cancels (after a phone call, for example) is never charged.
   - A no-show can be charged only after the appointment's start, and only if the client never cancelled (`feeCase` in `server/src/feecase.ts`). The documents promise only after its end (G13).

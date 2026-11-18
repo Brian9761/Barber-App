@@ -88,4 +88,39 @@ final class LegalTests: XCTestCase {
         )
         XCTAssertEqual(plist["IzzyWebsiteURL"] as? String, "$(IZZY_WEBSITE_URL)")
     }
+
+    // MARK: The privacy manifest
+
+    /// The app's own privacy manifest declares what the App Privacy answers give (the README, and the
+    /// owner checklist, docs/legal/OWNER-CHECKLIST.md §4): the clients' details staff enter and what
+    /// they bought, linked to the client, and product photos, linked to no one; all for the app's
+    /// own functionality, never for tracking. Stripe Terminal's own manifest declares the coarse
+    /// location and product interaction its Tap to Pay software collects.
+    func testThePrivacyManifestDeclaresWhatStaffEnter() throws {
+        // The committed manifest, as the app ships it.
+        let url = URL(fileURLWithPath: #filePath).resolvingSymlinksInPath()
+            .deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("IzzyClipzBusiness/Resources/PrivacyInfo.xcprivacy")
+        guard let data = try? Data(contentsOf: url) else {
+            throw XCTSkip("The repository isn't next to the test bundle here.")
+        }
+        let manifest = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any])
+        XCTAssertEqual(manifest["NSPrivacyTracking"] as? Bool, false)
+        let collected = try XCTUnwrap(manifest["NSPrivacyCollectedDataTypes"] as? [[String: Any]])
+        var linked: [String: Bool] = [:]
+        for entry in collected {
+            let type = try XCTUnwrap(entry["NSPrivacyCollectedDataType"] as? String)
+            linked[type] = entry["NSPrivacyCollectedDataTypeLinked"] as? Bool
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypeTracking"] as? Bool, false, type)
+            XCTAssertEqual(entry["NSPrivacyCollectedDataTypePurposes"] as? [String], ["NSPrivacyCollectedDataTypePurposeAppFunctionality"], type)
+        }
+        XCTAssertEqual(linked, [
+            "NSPrivacyCollectedDataTypeName": true,
+            "NSPrivacyCollectedDataTypePhoneNumber": true,
+            "NSPrivacyCollectedDataTypeEmailAddress": true,
+            "NSPrivacyCollectedDataTypeOtherUserContent": true,
+            "NSPrivacyCollectedDataTypePurchaseHistory": true,
+            "NSPrivacyCollectedDataTypePhotosorVideos": false,
+        ])
+    }
 }

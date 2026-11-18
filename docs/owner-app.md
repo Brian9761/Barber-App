@@ -144,9 +144,11 @@ booking, Take payment, Analytics and Settings.
 When it's on (Settings → **No-show protection**), clients who book online
 add a card (or Apple Pay) on Stripe's card page before they book. Nothing
 is charged then. While booking, on Pick a day and time and again on
-Review, they see a notice such as "Full Service Cancellation & No-Show
-Fee" (its title and amounts follow your settings), and they agree to the
-policy above Book appointment. Walk-ins and phone bookings made in this
+Review, they see a notice such as "Late Cancellation & No-Show Fee" (its
+amounts follow your settings; "No-Show Fee" when late cancellations aren't
+charged), and they agree to the policy above Book appointment: it says the
+card may be charged within 7 days after the appointment time, and that
+cancelling online is free in time or within 15 minutes of booking. Walk-ins and phone bookings made in this
 app never have a card on file.
 
 **What can be charged.** The same fee, for two cases, and you decide each
@@ -168,7 +170,12 @@ time:
   a booking the client cancelled that you reopened: once it's reopened,
   it can't be charged a no-show fee either (Reopen says so first). To
   keep a fee for a client who wants their time back, ask them to book
-  again in the app.
+  again in the app. If another client was booked into that time since
+  (a new booking, or a walk-in you booked in the app), there's no
+  late-cancellation fee: the Cancellation & No-Show Policy promises it,
+  so the details say so instead of offering the charge. A walk-in you
+  only rang up at checkout can't be seen there, so the charge's question
+  reminds you not to charge it then either.
 
 A fee is never more than the booked service's price (the settings'
 example says so, with the cheap service a flat fee is capped for), and it
@@ -186,14 +193,22 @@ card, the fee agreed at booking and what it covers. **Charge no-show fee
 to Kim Sample's Visa •••• 4242?"), then shows Stripe's answer:
 
 - **Charged**: the money is in Stripe, and Card payments today lists it. Only a
-  charge Stripe confirms counts as charged.
-- **Declined**, with the bank's reason in plain words. **Charge again**
-  tries once more (it asks first), or ask the client to pay at the shop.
-  Once the fee can't be charged any more (you reopened the appointment,
-  say), the section says why instead.
+  charge Stripe confirms counts as charged. Stripe emails the client a
+  receipt, at the address they gave on its card page (turn on Stripe's
+  receipts for successful payments in the Stripe Dashboard). If Stripe has
+  no email for the client, or couldn't be asked, the fee stays charged and
+  the details say so under it ("No receipt was sent: Stripe has no email
+  address for this client…" or "The receipt couldn't be sent…"): send the
+  receipt from the Stripe Dashboard (Payments, the fee, Send receipt). The
+  website's Business area says the same.
+- **Declined**, with the bank's reason in plain words. The card isn't
+  charged again (card networks' rules for saved cards): tell the client
+  in writing (a text, or an email if they gave one) and give them at
+  least 7 days to pay the fee another way, for example at the shop, as
+  the Cancellation & No-Show Policy promises.
 - **The card needs the client to approve it**: their bank wants them to
-  confirm the charge, which they can't do from here. Ask them to pay at
-  the shop.
+  confirm the charge, which they can't do from here. The same: it isn't
+  charged again, and the client pays another way.
 - **Not confirmed yet** (the answer got lost on the way): **Check again**
   finishes that charge. If it went through, it shows as charged; if it
   never reached Stripe, it's sent now (still only once). To not charge it,

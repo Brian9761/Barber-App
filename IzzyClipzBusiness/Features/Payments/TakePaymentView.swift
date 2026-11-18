@@ -36,6 +36,19 @@ struct TakePaymentView: View {
                         }
                         .accessibilityIdentifier("recoveryNotice")
                     }
+                    if let cents = checkout.unconfirmedCardCents, checkout.phase == .editing {
+                        // Nothing else is taken or recorded until the last card is settled: it may have gone through.
+                        IssueCard(issue: TerminalIssue(
+                            title: "Check the last card payment",
+                            message: "We still don't know if the last \(Money.amount(cents)) card payment went through. Check it before taking another payment or recording a cash or other sale, so the client isn't charged twice."
+                        ), symbol: "questionmark.circle.fill") {
+                            Button("Check the payment") { checkout.checkUnconfirmedCard() }
+                                .buttonStyle(.borderedProminent)
+                                .accessibilityIdentifier("checkUnconfirmedCard")
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("unconfirmedCardNotice")
+                    }
                     Text("Ring up services, products or any amount, then choose how the client pays.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -144,10 +157,22 @@ struct TakePaymentView: View {
         case .unavailable(let issue):
             IssueCard(issue: issue) {
                 if issue.fixInSettings {
-                    // The shop's own Stripe account: connected (or finished) in Settings.
+                    // The shop's own Stripe account: connected (or finished) in Settings, or done
+                    // checking at Stripe meanwhile.
                     Button("Go to Settings") { workspace.openSettings() }
                         .buttonStyle(.borderedProminent)
                         .accessibilityIdentifier("goToStripeSettings")
+                    Button {
+                        Task { await workspace.checkStripeAgain() }
+                    } label: {
+                        if workspace.isCheckingStatus || workspace.stripeConnection.loadState == .loading {
+                            ProgressView()
+                        } else {
+                            Text("Check again")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("checkStripeAgain")
                     Button("Practice in test mode") { checkout.startPractice() }
                         .buttonStyle(.bordered)
                         .accessibilityIdentifier("startPractice")

@@ -38,6 +38,20 @@ enum CardDeleter {
         }
         return .failed
     }
+
+    /// The cards this iPhone let go of without a booking settling them (the app closed while a card
+    /// was held only in memory: saved without "Remember me", or with "Remember me" turned off on the
+    /// details step, and then nothing was booked; `SavedCardStore.cardsToDelete`): the shop is asked
+    /// to delete each, and one it answered about is off the list. One it couldn't be asked about
+    /// stays on the list for the next time the app opens.
+    @MainActor
+    static func deleteLetGo(_ cards: SavedCardStore, api: any ShopAPI) async {
+        for token in cards.cardsToDelete() {
+            if await delete(token, api: api) != .failed {
+                cards.deletionAnswered(for: token)
+            }
+        }
+    }
 }
 
 /// While the shop is asked to delete the card, or what it answered: for Your details to say.

@@ -25,7 +25,8 @@ import Foundation
 ///           address: { street, unit?, city, state, postalCode, lines },
 ///           coordinate: { latitude, longitude }, instagram: { handle, url },
 ///           appleMapsUrl, appleMapsDirectionsUrl, googleMapsUrl, googleMapsDirectionsUrl,
-///           googleReviewUrl, websiteUrl, about, highlights, paymentMethods, accessibility } }
+///           googleReviewUrl, websiteUrl, about, highlights, paymentMethods, accessibility,
+///           legalName, email } }
 /// ```
 /// - `hours` keys are the Kit's `Weekday` numbers, like Foundation's
 ///   `.weekday`: "1" = Sunday, "2" = Monday … "7" = Saturday. Days the shop is
@@ -46,7 +47,9 @@ import Foundation
 ///   their tile (`Barber.monogram`), and `instagram` is left out without one.
 /// - `shop.phone.e164` is "+14423413053" and `display` "(442) 341-3053";
 ///   `shop.address.lines` are the street line and the city line. The map and
-///   review links are `ShopInfo`'s own.
+///   review links are `ShopInfo`'s own. `shop.legalName` (the LLC that runs
+///   the shop) and `shop.email` are always there, empty ("") until the owner
+///   gives them.
 public enum CatalogExport {
     public struct Document: Codable, Hashable, Sendable {
         public struct Hours: Codable, Hashable, Sendable {
@@ -126,6 +129,10 @@ public enum CatalogExport {
             public var highlights: [String]
             public var paymentMethods: [String]
             public var accessibility: [String]
+            /// The LLC's exact registered name, which runs the shop; empty ("") until the owner gives it.
+            public var legalName: String
+            /// The shop's email address; empty ("") until the shop has one.
+            public var email: String
         }
 
         public struct Offering: Codable, Hashable, Sendable {
@@ -253,7 +260,9 @@ public enum CatalogExport {
             about: shop.about,
             highlights: shop.highlights,
             paymentMethods: shop.paymentMethods,
-            accessibility: shop.accessibility
+            accessibility: shop.accessibility,
+            legalName: shop.legalName,
+            email: shop.email
         )
     }
 

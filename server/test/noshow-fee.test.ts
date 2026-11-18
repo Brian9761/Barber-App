@@ -1,7 +1,17 @@
 import Stripe from 'stripe';
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
-import { AUTHENTICATION_MESSAGE, declineMessage, feeStatusFor, needsTheClient, noShowFeeIdempotencyKey, outcomeOf } from '../src/noshowfee.js';
+import {
+  AUTHENTICATION_MESSAGE,
+  declineMessage,
+  feeStatusFor,
+  needsTheClient,
+  noShowFeeIdempotencyKey,
+  outcomeOf,
+  DECLINED_AGAIN_MESSAGE,
+  NEEDS_CLIENT_AGAIN_MESSAGE,
+  TIME_TAKEN_MESSAGE,
+} from '../src/noshowfee.js';
 import { RESPONSES } from './helpers/contract.js';
 import { protectionOn, stripeError, useHarness } from './helpers/harness.js';
 
@@ -84,8 +94,9 @@ describe('what Stripe says, in the fee’s words', () => {
     expect(declineMessage({ code: 'card_declined', decline_code: 'insufficient_funds' })).toBe("The card was declined: there isn't enough money on it.");
     expect(declineMessage({ code: 'expired_card' })).toBe('The card has expired.');
     expect(declineMessage({ code: 'incorrect_cvc' })).toBe("The card's details didn't work.");
-    expect(declineMessage({ code: 'processing_error' })).toBe("The bank couldn't process the card. Try again in a while.");
-    expect(declineMessage({ code: 'card_decline_rate_limit_exceeded' })).toBe('The card was declined too many times today. Try again tomorrow.');
+    // Never "try again": a card the bank turned down isn't charged a second time.
+    expect(declineMessage({ code: 'processing_error' })).toBe("The bank couldn't process the card.");
+    expect(declineMessage({ code: 'card_decline_rate_limit_exceeded' })).toBe('The card was declined too many times today.');
     expect(declineMessage({ code: 'authentication_required' })).toMatch(/^The client's bank wants them to approve this charge/);
     expect(declineMessage({ code: 'card_declined', decline_code: 'authentication_required' })).toMatch(/approve this charge/);
     for (const decline of ['stolen_card', 'lost_card', 'fraudulent', 'generic_decline', 'do_not_honor']) {
@@ -437,6 +448,7 @@ describe('late cancellations: the client cancels less than the agreed window bef
       customerCancelledAt: '2026-11-03T17:30:00Z',
       lateCancelWindowMinutes: 60,
       reason: 'lateCancel',
+      receipt: 'sent',
     });
     const [call] = creates();
     expect(call!.params).toMatchObject({
@@ -463,6 +475,35 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect(creates()).toHaveLength(1);
     const mine = await h.call('GET', `/api/appointments/${late.id}`, { headers: { 'x-manage-token': late.manageToken } });
     expect(mine.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
+  it('not when another client took the time since: a walk-in or a new booking in that slot (the policy’s promise)', async () => {
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    // A walk-in booked into Flowxbori's 10 AM, at 9:40.
+    h.setNow('2026-11-03T17:40:00Z');
+    const walkIn = await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Walk In' } } });
+    expect(walkIn.status, walkIn.text).toBe(201);
+    const refused = await charge(late.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect(creates()).toHaveLength(0);
+    expect((await feeRow(late.id)).no_show_fee_status).toBe('none');
+    // Marked done, it still had the time; cancelled, the time is free again and the fee can be charged.
+    expect((await setStatus(walkIn.body.appointment.id, 'completed')).status).toBe(200);
+    expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect((await setStatus(walkIn.body.appointment.id, 'booked')).status).toBe(200);
+    expect((await setStatus(walkIn.body.appointment.id, 'cancelled')).status).toBe(200);
+    expect((await charge(late.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
+  it('another barber’s booking at the same time, or one right after, leaves the time untaken', async () => {
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    h.setNow('2026-11-03T17:40:00Z');
+    const CARLOS = 'carlos-rafael/ff42ccab-844e-4afd-9ee1-0f6c5e2cf930';
+    expect((await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: CARLOS, start: TUE10, customer: { name: 'Other Barber' } } })).status).toBe(201);
+    // Flowxbori's 10:45, after the 10:00–10:45 haircut.
+    expect((await h.call('POST', '/api/owner/appointments', { ...owner, body: { offeringId: FLOW45, start: '2026-11-03T18:45:00Z', customer: { name: 'Next One' } } })).status).toBe(201);
+    expect((await charge(late.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
   });
 
   it('the edge of the window: exactly 1 hour before is free, 59 minutes before is late', async () => {
@@ -592,7 +633,7 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect(creates()).toHaveLength(0);
   });
 
-  it('a declined late-cancellation fee can be tried again, and stays a late cancellation', async () => {
+  it('a declined late-cancellation fee stays a late cancellation, and the card isn’t charged again', async () => {
     const late = await cancelledAt('2026-11-03T17:45:00Z');
     h.stripe.nextCharge = 'insufficient_funds';
     const declined = await charge(late.id);
@@ -606,13 +647,15 @@ describe('late cancellations: the client cancels less than the agreed window bef
       status: 'requires_payment_method',
     });
     expect((await feeRow(late.id)).no_show_fee_reason).toBe('late_cancel');
+    // The client pays another way: charging again is turned down, and nothing new goes to Stripe.
     h.advance(30);
-    const second = await charge(late.id);
-    expect(second.body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    const again = await charge(late.id);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toEqual({ code: 'not_chargeable', message: DECLINED_AGAIN_MESSAGE });
     expect(creates().map((c) => (c.params as { metadata: { kind: string; attempt: string } }).metadata)).toEqual([
       expect.objectContaining({ kind: 'late_cancel_fee', attempt: '1' }),
-      expect.objectContaining({ kind: 'late_cancel_fee', attempt: '2' }),
     ]);
+    expect(await feeRow(late.id)).toMatchObject({ no_show_fee_status: 'declined', no_show_fee_reason: 'late_cancel' });
   });
 
   it('a lost answer for a late-cancellation fee is found at Stripe and recorded as one', async () => {
@@ -656,6 +699,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
       customerCancelledAt: null,
       lateCancelWindowMinutes: 60,
       reason: 'noShow',
+      receipt: 'sent',
     });
     // A no-show fee isn't a payment for the service.
     expect(res.body.appointment.payment).toEqual({ status: 'unpaid', amountCents: null, paidAt: null });
@@ -719,7 +763,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(appointment.status).toBe('completed');
   });
 
-  it('declined: says why, records the attempt, and a new try makes a new PaymentIntent', async () => {
+  it('declined: says why and records the attempt; the card isn’t charged again, so the client pays another way', async () => {
     const id = await noShow();
     h.stripe.nextCharge = 'insufficient_funds';
     const declined = await charge(id);
@@ -733,6 +777,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
       customerCancelledAt: null,
       lateCancelWindowMinutes: 60,
       reason: 'noShow',
+      receipt: null,
     });
     const attempt1 = (await feeRow(id)).no_show_fee_payment_intent_id;
     expect(attempt1).toMatch(/^pi_/);
@@ -744,21 +789,32 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect(h.logs.at(-1)).toMatchObject({ level: 'warn', message: 'Stripe declined a no-show fee' });
 
     h.advance(60);
-    const second = await charge(id);
-    expect(second.body.appointment.noShowFee.status).toBe('charged');
-    expect(creates().map((c) => (c.options as { idempotencyKey: string }).idempotencyKey)).toEqual([
-      noShowFeeIdempotencyKey(id, 1),
-      noShowFeeIdempotencyKey(id, 2),
-    ]);
-    expect((await feeRow(id)).no_show_fee_payment_intent_id).not.toBe(attempt1);
+    const again = await charge(id);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toEqual({ code: 'not_chargeable', message: DECLINED_AGAIN_MESSAGE });
+    expect(creates().map((c) => (c.options as { idempotencyKey: string }).idempotencyKey)).toEqual([noShowFeeIdempotencyKey(id, 1)]);
+    expect(await feeRow(id)).toMatchObject({ no_show_fee_status: 'declined', no_show_fee_payment_intent_id: attempt1 });
+  });
+
+  it('after "needs the client", the card isn’t charged again either', async () => {
+    const id = await noShow();
+    h.stripe.nextCharge = 'authentication_required';
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('needsAction');
+    const again = await charge(id);
+    expect(again.status).toBe(409);
+    expect(again.body.error).toEqual({ code: 'not_chargeable', message: NEEDS_CLIENT_AGAIN_MESSAGE });
+    expect(creates()).toHaveLength(1);
   });
 
   it('a generic decline, and a card that was removed from Stripe', async () => {
     const id = await noShow();
     h.stripe.nextCharge = 'decline';
     expect((await charge(id)).body.appointment.noShowFee).toMatchObject({ status: 'declined', message: 'The bank declined the card.' });
+    const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
+    h.setNow('2026-11-03T20:50:00Z');
+    await markNoShow(other);
     h.stripe.nextCharge = 'card_removed';
-    const removed = await charge(id);
+    const removed = await charge(other);
     expect(removed.status).toBe(200);
     expect(removed.body.appointment.noShowFee).toMatchObject({
       status: 'declined',
@@ -780,6 +836,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
       customerCancelledAt: null,
       lateCancelWindowMinutes: 60,
       reason: 'noShow',
+      receipt: null,
     });
     // A PaymentIntent left needing action (never with off_session in practice) reads the same.
     const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
@@ -892,9 +949,7 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     expect((await charge(first)).body.appointment.noShowFee.status).toBe('charged');
     h.setNow('2026-11-03T19:50:00Z');
     await markNoShow(second);
-    // Attempt 1 declined, attempt 2 never reached Stripe.
-    h.stripe.nextCharge = 'decline';
-    expect((await charge(second)).body.appointment.noShowFee.status).toBe('declined');
+    // Its try never reached Stripe.
     h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
     expect((await charge(second)).status).toBe(500);
     // Plenty of other PaymentIntents on the card's Customer since then, so the look-up needs more than one page.
@@ -907,12 +962,11 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     const fees = [...h.stripe.intents.values()].filter((pi) => pi.metadata.kind === 'no_show_fee');
     expect(fees.map((pi) => [pi.metadata.appointment_id, pi.metadata.attempt, pi.status])).toEqual([
       [first, '1', 'succeeded'],
-      [second, '1', 'requires_payment_method'],
-      [second, '2', 'succeeded'],
+      [second, '1', 'succeeded'],
     ]);
   });
 
-  it('a lost answer whose charge was declined is recorded as declined; the next try is a new attempt', async () => {
+  it('a lost answer whose charge was declined is recorded as declined, and the card isn’t charged again', async () => {
     const id = await noShow();
     h.stripe.nextCharge = 'insufficient_funds';
     // Stripe declined it, but the answer never came back.
@@ -926,11 +980,8 @@ describe('POST /api/owner/appointments/:id/no-show-fee', () => {
     const found = await charge(id);
     expect(found.body.appointment.noShowFee).toMatchObject({ status: 'declined', message: "The card was declined: there isn't enough money on it." });
     expect(creates()).toHaveLength(1);
-    expect((await charge(id)).body.appointment.noShowFee.status).toBe('charged');
-    expect(creates().map((c) => (c.options as { idempotencyKey: string }).idempotencyKey)).toEqual([
-      noShowFeeIdempotencyKey(id, 1),
-      noShowFeeIdempotencyKey(id, 2),
-    ]);
+    expect((await charge(id)).body.error).toEqual({ code: 'not_chargeable', message: DECLINED_AGAIN_MESSAGE });
+    expect(creates().map((c) => (c.options as { idempotencyKey: string }).idempotencyKey)).toEqual([noShowFeeIdempotencyKey(id, 1)]);
   });
 
   it('when Stripe can’t be asked, nothing is sent again and the fee stays pending', async () => {
@@ -1221,6 +1272,7 @@ describe('POST /api/stripe/webhook for no-show fees', () => {
       customerCancelledAt: null,
       lateCancelWindowMinutes: 60,
       reason: 'noShow',
+      receipt: null,
     });
   });
 
@@ -1277,9 +1329,13 @@ describe('POST /api/stripe/webhook for no-show fees', () => {
     h.stripe.nextCharge = 'insufficient_funds';
     await charge(id);
     const first = (await feeRow(id)).no_show_fee_payment_intent_id;
-    h.stripe.nextCharge = 'processing';
-    await charge(id);
-    const second = (await feeRow(id)).no_show_fee_payment_intent_id;
+    // An older version of the server tried the card again (attempt 2), and Stripe is still processing that.
+    const second = (await h.stripe.paymentIntents.create({ amount: 3500, currency: 'usd', metadata: { kind: 'no_show_fee', appointment_id: id, attempt: '2' } })).id;
+    h.stripe.setStatus(second, 'processing');
+    await h.database.pool.query(
+      `UPDATE appointments SET no_show_fee_status = 'pending', no_show_fee_attempt = 2, no_show_fee_payment_intent_id = $2, no_show_fee_message = NULL WHERE id = $1`,
+      [id, second],
+    );
     expect(second).not.toBe(first);
     // Old news about attempt 1 (canceled) doesn't change attempt 2.
     await send(event('payment_intent.canceled', { id: first, status: 'canceled', metadata: { kind: 'no_show_fee', appointment_id: id, attempt: '1' } }));
@@ -1396,6 +1452,7 @@ describe('a try Stripe never got, on a booking that can’t be charged any more,
       customerCancelledAt: null,
       lateCancelWindowMinutes: 60,
       reason: null,
+      receipt: null,
     });
     expect((await h.call('GET', '/api/owner/payments?date=2026-11-03', owner)).body.payments).toEqual([]);
     expect(h.logs.at(-1)).toMatchObject({ level: 'warn', message: 'Settled a fee Stripe never got as not charged' });
@@ -1524,5 +1581,188 @@ describe('a try Stripe never got, on a booking that can’t be charged any more,
     expect(res.body.appointment.noShowFee.status).toBe('pending');
     expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.retrieve')).toHaveLength(1);
     expect(lookups()).toBe(0);
+  });
+});
+
+describe('a receipt for every fee', () => {
+  // The Cancellation & No-Show Policy promises one: Stripe emails it to the address the client gave
+  // on its card page, which the server reads from Stripe when the fee goes through and never keeps.
+  const receipts = () =>
+    h.stripe.calls.filter((c) => c.method === 'paymentIntents.update' && (c.params as { receipt_email?: string }).receipt_email !== undefined);
+  function event(type: string, intent: Record<string, unknown>) {
+    return JSON.stringify({
+      id: 'evt_fixture_fee_receipt',
+      object: 'event',
+      api_version: '2026-10-28.endive',
+      created: Math.floor(Date.now() / 1000),
+      type,
+      livemode: false,
+      pending_webhooks: 1,
+      request: { id: null, idempotency_key: null },
+      data: { object: { object: 'payment_intent', ...intent } },
+    });
+  }
+  const send = (payload: string) =>
+    h.call('POST', '/api/stripe/webhook', {
+      rawBody: payload,
+      headers: { 'content-type': 'application/json', 'stripe-signature': Stripe.webhooks.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET }) },
+    });
+
+  it('a fee that goes through asks Stripe to email the receipt to the card page’s address, once', async () => {
+    const id = await noShow();
+    const charged = await charge(id);
+    expect(charged.body.appointment.noShowFee.status).toBe('charged');
+    // The shop sees that the receipt went to Stripe, right in the charge's answer and in the day's list.
+    expect(charged.body.appointment.noShowFee.receipt).toBe('sent');
+    expect((await feeRow(id)).no_show_fee_receipt).toBe('sent');
+    const day = await h.call('GET', '/api/owner/appointments?date=2026-11-03', owner);
+    expect(day.body.appointments.find((a: { id: string }) => a.id === id).noShowFee.receipt).toBe('sent');
+    const piId = (await feeRow(id)).no_show_fee_payment_intent_id;
+    expect(receipts()).toHaveLength(1);
+    expect(receipts()[0]).toMatchObject({
+      params: { id: piId, receipt_email: 'client@example.com' },
+      options: { idempotencyKey: `izzy-fee-receipt-${piId}` },
+    });
+    expect(h.stripe.intents.get(piId)?.receipt_email).toBe('client@example.com');
+    // Never kept here: not on the payment, not on the appointment.
+    expect((await h.database.pool.query('SELECT receipt_email FROM payments WHERE id = $1', [piId])).rows[0].receipt_email).toBeNull();
+    expect(JSON.stringify(await feeRow(id))).not.toContain('client@example.com');
+    // Charging again is the same answer, with no second receipt.
+    expect((await charge(id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'sent' });
+    expect(receipts()).toHaveLength(1);
+  });
+
+  it('the client’s own view of the appointment never says anything about the receipt', async () => {
+    const booking = await protectedBooking();
+    h.setNow('2026-11-03T18:50:00Z');
+    await markNoShow(booking.id);
+    expect((await charge(booking.id)).body.appointment.noShowFee.receipt).toBe('sent');
+    const mine = await h.call('GET', `/api/appointments/${booking.id}`, { headers: { 'x-manage-token': booking.manageToken } });
+    expect(mine.body.appointment.noShowFee.status).toBe('charged');
+    expect(mine.body.appointment.noShowFee).not.toHaveProperty('receipt');
+    expect(mine.text).not.toContain('client@example.com');
+  });
+
+  it('before a fee is charged, and for a fee Stripe declined, nothing is said about a receipt', async () => {
+    const id = await noShow();
+    const day = await h.call('GET', '/api/owner/appointments?date=2026-11-03', owner);
+    expect(day.body.appointments.find((a: { id: string }) => a.id === id).noShowFee).toMatchObject({ status: 'none', receipt: null });
+    h.stripe.nextCharge = 'insufficient_funds';
+    expect((await charge(id)).body.appointment.noShowFee).toMatchObject({ status: 'declined', receipt: null });
+    expect((await feeRow(id)).no_show_fee_receipt).toBeNull();
+  });
+
+  it('a fee Stripe finishes later gets its receipt when the webhook says so, once; a decline gets none', async () => {
+    const id = await noShow();
+    h.stripe.nextCharge = 'processing';
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('pending');
+    expect(receipts()).toHaveLength(0);
+    const piId = (await feeRow(id)).no_show_fee_payment_intent_id;
+    h.stripe.succeed(piId);
+    const metadata = { kind: 'no_show_fee', appointment_id: id, attempt: '1' };
+    expect((await send(event('payment_intent.succeeded', { id: piId, status: 'succeeded', metadata }))).status).toBe(200);
+    expect(receipts()).toHaveLength(1);
+    expect(receipts()[0]?.params).toMatchObject({ id: piId, receipt_email: 'client@example.com' });
+    expect((await feeRow(id)).no_show_fee_receipt).toBe('sent');
+    // Stripe sends the event again, and Check again finds it charged: still one receipt.
+    await send(event('payment_intent.succeeded', { id: piId, status: 'succeeded', metadata }));
+    expect((await charge(id)).body.appointment.noShowFee.status).toBe('charged');
+    expect(receipts()).toHaveLength(1);
+
+    const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
+    h.setNow('2026-11-03T20:50:00Z');
+    await markNoShow(other);
+    h.stripe.nextCharge = 'insufficient_funds';
+    expect((await charge(other)).body.appointment.noShowFee.status).toBe('declined');
+    expect(receipts()).toHaveLength(1);
+  });
+
+  it('a late-cancellation fee gets one too, on the account the card was saved on', async () => {
+    const booking = await protectedBooking();
+    h.setNow('2026-11-03T17:40:00Z');
+    expect((await cancelInApp(booking, ACCEPT)).status).toBe(200);
+    expect((await charge(booking.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    expect(receipts()).toHaveLength(1);
+    const retrieve = h.stripe.calls.find((c) => c.method === 'checkout.sessions.retrieve' && receipts().length > 0);
+    expect(retrieve).toBeDefined();
+  });
+
+  it('when Stripe has no address, or can’t be asked, the fee stays charged and the log says to send it from the Dashboard', async () => {
+    await protectionOn(h);
+    h.config.stripeWebhookSecret = WEBHOOK_SECRET;
+    // A card page that didn't keep an email.
+    const token = newManageToken();
+    const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': token }, body: { offeringId: FLOW45 }, ip: '192.0.2.201' });
+    h.stripe.completeSession(checkout.body.sessionId, undefined, null);
+    await h.call('POST', '/api/cards', { headers: { 'x-card-token': token }, body: { sessionId: checkout.body.sessionId }, ip: '192.0.2.201' });
+    const id = await noShow({ cardToken: token });
+    const charged = await charge(id);
+    expect(charged.status).toBe(200);
+    expect(charged.body.appointment.noShowFee.status).toBe('charged');
+    expect(receipts()).toHaveLength(0);
+    expect(h.logs.some((l) => l.level === 'warn' && /no email for its receipt/.test(l.message))).toBe(true);
+    // The fee stays charged, and the shop is told no receipt went out, and why.
+    expect(charged.body.appointment.noShowFee.receipt).toBe('noEmail');
+    expect((await feeRow(id)).no_show_fee_receipt).toBe('no_email');
+    expect((await charge(id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'noEmail' });
+
+    const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
+    h.setNow('2026-11-03T20:50:00Z');
+    await markNoShow(other);
+    // The charge goes through; then Stripe is unreachable for the receipt.
+    const realRetrieve = h.stripe.checkout.sessions.retrieve;
+    h.stripe.checkout.sessions.retrieve = async () => {
+      h.stripe.checkout.sessions.retrieve = realRetrieve;
+      throw stripeError('StripeConnectionError', {}, 'socket hang up');
+    };
+    const second = await charge(other);
+    expect(second.status).toBe(200);
+    expect(second.body.appointment.noShowFee.status).toBe('charged');
+    expect(h.logs.at(-1)).toMatchObject({ level: 'error', message: 'Stripe send fee receipt failed' });
+    expect(second.body.appointment.noShowFee.receipt).toBe('failed');
+    expect((await feeRow(other)).no_show_fee_receipt).toBe('failed');
+  });
+
+  it('when Stripe turns the address down, the fee stays charged and the receipt is marked unsent', async () => {
+    const id = await noShow();
+    const realUpdate = h.stripe.paymentIntents.update;
+    h.stripe.paymentIntents.update = async () => {
+      h.stripe.paymentIntents.update = realUpdate;
+      throw stripeError('StripeInvalidRequestError', { param: 'receipt_email' }, 'Invalid email address');
+    };
+    const charged = await charge(id);
+    expect(charged.status).toBe(200);
+    expect(charged.body.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'failed' });
+    expect((await feeRow(id)).no_show_fee_status).toBe('charged');
+  });
+
+  it('a card whose Stripe details were deleted meanwhile: the fee stays charged, the receipt unsent, and the log says so', async () => {
+    const id = await noShow();
+    const realRetrieve = h.stripe.checkout.sessions.retrieve;
+    let calls = 0;
+    // The card is deleted (retention.ts clears its Stripe ids) just as the fee goes through.
+    h.stripe.checkout.sessions.retrieve = async (...args: Parameters<typeof realRetrieve>) => {
+      calls += 1;
+      return realRetrieve(...args);
+    };
+    const realCreate = h.stripe.paymentIntents.create;
+    h.stripe.paymentIntents.create = async (...args: Parameters<typeof realCreate>) => {
+      const intent = await realCreate(...args);
+      await h.database.pool.query(
+        `UPDATE saved_cards SET checkout_session_id = NULL, stripe_customer_id = NULL, stripe_payment_method_id = NULL, removed_at = now()
+          WHERE id = (SELECT saved_card_id FROM appointments WHERE id = $1)`,
+        [id],
+      );
+      return intent;
+    };
+    try {
+      const charged = await charge(id);
+      expect(charged.body.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'failed' });
+      expect(calls).toBe(0);
+      expect(h.logs.some((l) => l.level === 'warn' && /Stripe details are gone, so no receipt was sent/.test(l.message))).toBe(true);
+    } finally {
+      h.stripe.paymentIntents.create = realCreate;
+      h.stripe.checkout.sessions.retrieve = realRetrieve;
+    }
   });
 });

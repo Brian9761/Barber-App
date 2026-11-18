@@ -4,6 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { errorMessage } from '../api/errors';
+import { keepCanonicalOnThisPage } from '../components/usePageMeta';
 import { isDemo } from '../demo/mode';
 
 export const APP_NAME = 'Izzy Clipz Business';
@@ -13,6 +14,8 @@ export function useBusinessTitle(title: string | null, description?: string): vo
   useEffect(() => {
     document.title = title ? `${title} · ${APP_NAME}` : APP_NAME;
     if (description) document.head.querySelector('meta[name="description"]')?.setAttribute('content', description);
+    // Reached from a policy's plain HTML without a page load, its canonical link names this page.
+    keepCanonicalOnThisPage();
   }, [title, description]);
 }
 

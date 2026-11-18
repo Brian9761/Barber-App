@@ -59,6 +59,7 @@ describe('contract fixtures (API v1)', () => {
     // Reviews
     h.config.googlePlacesApiKey = 'AIzaFixtureKey';
     h.config.yelpApiKey = 'yelp-fixture-key';
+    h.config.yelpReviews = true;
     h.fetch.on('https://places.googleapis.com/v1/places/', () => json(fixture('google/place-details.json')));
     h.fetch.on('https://api.yelp.com/v3/businesses/', (url) =>
       json(fixture(url.pathname.endsWith('/reviews') ? 'yelp/reviews.json' : 'yelp/business.json')),
@@ -66,6 +67,7 @@ describe('contract fixtures (API v1)', () => {
     check('reviews', await h.call('GET', '/api/reviews'));
     h.config.googlePlacesApiKey = undefined;
     h.config.yelpApiKey = undefined;
+    h.config.yelpReviews = false;
     check('reviews-unavailable', await h.call('GET', '/api/reviews'));
 
     check('owner-me', await h.call('GET', '/api/owner/me', owner));
@@ -232,7 +234,17 @@ describe('contract fixtures (API v1)', () => {
     h.advance(2);
     check('late-cancel-fee-charged', await h.call('POST', `/api/owner/appointments/${lateBooking.body.appointment.id}/no-show-fee`, owner));
     check('payments-with-fees', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
-    // The client removes the card: the 11 AM's declined fee may still be tried again this week, so it waits.
+    // The client books Wednesday's 11 AM with the card too, then removes the card: that booking still needs it, so it waits.
+    const wednesday = await h.call('POST', '/api/appointments', {
+      headers: cardHeaders,
+      body: {
+        offeringId: JULIAN45,
+        start: '2026-11-04T19:00:00Z',
+        customer: { name: 'Third Client', phone: '4425550125' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(JULIAN45)}`)).body.policyText,
+      },
+    });
+    expect(wednesday.status, wednesday.text).toBe(201);
     check('card-deletion-scheduled', await h.call('DELETE', '/api/cards', { headers: cardHeaders }));
     // A card no booking uses is deleted at once.
     const spareToken = Buffer.alloc(32, 2).toString('base64url');
@@ -240,6 +252,27 @@ describe('contract fixtures (API v1)', () => {
     h.stripe.completeSession(spare.body.sessionId);
     expect((await h.call('POST', '/api/cards', { headers: { 'x-card-token': spareToken }, body: { sessionId: spare.body.sessionId } })).status).toBe(201);
     check('card-deletion', await h.call('DELETE', '/api/cards', { headers: { 'x-card-token': spareToken } }));
+    // A card page that kept no email: the fee still goes through, and the shop is told no receipt went out.
+    const noEmailToken = Buffer.alloc(32, 3).toString('base64url');
+    const noEmailHeaders = { 'x-card-token': noEmailToken };
+    const noEmailPage = await h.call('POST', '/api/cards/checkout', { headers: noEmailHeaders, body: { offeringId: FLOW45 }, ip: '198.51.100.30' });
+    h.stripe.completeSession(noEmailPage.body.sessionId, undefined, null);
+    expect((await h.call('POST', '/api/cards', { headers: noEmailHeaders, body: { sessionId: noEmailPage.body.sessionId }, ip: '198.51.100.30' })).status).toBe(201);
+    const thursday = await h.call('POST', '/api/appointments', {
+      headers: noEmailHeaders,
+      body: {
+        offeringId: FLOW45,
+        start: '2026-11-05T18:00:00Z',
+        customer: { name: 'Fifth Client', phone: '4425550129' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText,
+      },
+      ip: '198.51.100.30',
+    });
+    expect(thursday.status, thursday.text).toBe(201);
+    h.setNow('2026-11-05T18:50:00Z');
+    await h.call('PATCH', `/api/owner/appointments/${thursday.body.appointment.id}`, { ...owner, body: { status: 'noShow' } });
+    const unsent = check('no-show-fee-charged-no-receipt', await h.call('POST', `/api/owner/appointments/${thursday.body.appointment.id}/no-show-fee`, owner));
+    expect(unsent.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'noEmail' });
   });
 
   it('the shop’s own Stripe account (connect mode) and signing in on a computer', async () => {

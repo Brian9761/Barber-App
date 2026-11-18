@@ -104,12 +104,78 @@ final class ShopInfoTests: XCTestCase {
     func testOnlyTheAccessibilityLinesTheOwnerConfirmed() {
         XCTAssertEqual(shop.accessibility, [
             "Room for a wheelchair inside, at the chairs and the counter",
-            "Accessible parking near the entrance",
+            "Disabled parking space near the entrance",
         ])
         for line in shop.accessibility {
             XCTAssertNil(line.range(of: "ADA", options: .caseInsensitive), line)
             XCTAssertNil(line.range(of: "step-free", options: .caseInsensitive), line)
             XCTAssertNotEqual(line, "Wheelchair accessible")
         }
+    }
+
+    /// Who runs the shop, where, and how to get that by email (Business and Professions Code
+    /// §17538(d)): until the owner gives the LLC's registered name and the shop's email, the lines say
+    /// only what's known, the shop and where it is, and nothing made up: no "is operated by" without
+    /// the name, and no line about email without an address.
+    func testWhoRunsTheShopSaysOnlyWhatIsGiven() {
+        XCTAssertEqual(shop.legalName, "")
+        XCTAssertEqual(shop.email, "")
+        XCTAssertFalse(shop.hasLegalName)
+        XCTAssertFalse(shop.hasEmail)
+        XCTAssertFalse(shop.isOperatorKnown)
+        XCTAssertEqual(shop.operatedByLine, "Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.")
+        XCTAssertNil(shop.byEmailLine)
+        for line in [shop.operatedByLine] {
+            XCTAssertFalse(line.contains("["), line)
+            XCTAssertFalse(line.localizedCaseInsensitiveContains("to be added"), line)
+        }
+
+        let filledIn = Self.shop(legalName: "Izzy Clipz Barbershop LLC", email: "hello@izzyclipz.example")
+        XCTAssertTrue(filledIn.isOperatorKnown)
+        XCTAssertEqual(
+            filledIn.operatedByLine,
+            "Izzy Clipz Barbershop is operated by Izzy Clipz Barbershop LLC, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States."
+        )
+        XCTAssertEqual(filledIn.byEmailLine, "To get this information by email, email us at hello@izzyclipz.example and we'll send it within 5 days.")
+
+        // One without the other: each line says what's given.
+        let nameOnly = Self.shop(legalName: "Izzy Clipz Barbershop LLC", email: "")
+        XCTAssertFalse(nameOnly.isOperatorKnown)
+        XCTAssertTrue(nameOnly.operatedByLine.hasPrefix("Izzy Clipz Barbershop is operated by Izzy Clipz Barbershop LLC, "))
+        XCTAssertNil(nameOnly.byEmailLine)
+        let emailOnly = Self.shop(legalName: "", email: "hello@izzyclipz.example")
+        XCTAssertFalse(emailOnly.isOperatorKnown)
+        XCTAssertEqual(emailOnly.operatedByLine, shop.operatedByLine)
+        XCTAssertEqual(emailOnly.byEmailLine, filledIn.byEmailLine)
+        // Spaces alone are nothing given.
+        let blank = Self.shop(legalName: "  ", email: " \n")
+        XCTAssertEqual(blank.legalName, "")
+        XCTAssertEqual(blank.email, "")
+        XCTAssertEqual(blank.operatedByLine, shop.operatedByLine)
+        XCTAssertNil(blank.byEmailLine)
+    }
+
+    /// The shop with the business that runs it and its email filled in (or not).
+    static func shop(legalName: String, email: String) -> ShopInfo {
+        let shop = ShopInfo.izzyClipz
+        return ShopInfo(
+            name: shop.name,
+            fullName: shop.fullName,
+            tagline: shop.tagline,
+            about: shop.about,
+            address: shop.address,
+            coordinate: shop.coordinate,
+            phone: shop.phone,
+            timeZoneIdentifier: shop.timeZoneIdentifier,
+            schedule: shop.schedule,
+            instagramHandle: shop.instagramHandle,
+            websiteURL: shop.websiteURL,
+            paymentMethods: shop.paymentMethods,
+            highlights: shop.highlights,
+            accessibility: shop.accessibility,
+            googlePlaceID: shop.googlePlaceID,
+            legalName: legalName,
+            email: email
+        )
     }
 }

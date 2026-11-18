@@ -1,16 +1,45 @@
 import SwiftUI
 
-// No-show protection on screen: the "Full Service Cancellation & No-Show Fee" notice (Pick a day
+// No-show protection on screen: the "Late Cancellation & No-Show Fee" notice (Pick a day
 // and time, Review) and Review's card section. What they say comes from the shop's server
 // (`NoShowPolicy`) and `NoShowCopy`.
 
-/// "Full Service Cancellation & No-Show Fee" and the server's message, on a card with a caution
+/// "Late Cancellation & No-Show Fee" and the server's message, on a card with a caution
 /// outline so it can't be missed, and the note about the picked time when cancelling it can't be
-/// free any more.
+/// free any more. Under it, the Cancellation & No-Show Policy, in the in-app browser, as the
+/// website's notice has it (research.md §18 item 1: the policies next to the fee notice).
 struct NoShowWarningCard: View {
     let content: NoShowWarningContent
 
+    @Environment(AppRouter.self) private var router
+
     var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            notice
+            Button {
+                router.openWeb(Website.LegalPage.cancellationPolicy.url())
+            } label: {
+                Label(NoShowCopy.readPolicyLink, systemImage: Symbol.calendarClock)
+                    .textRole(.callout)
+                    .foregroundStyle(Theme.electric)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityHint("Opens the page on the shop's website")
+            .accessibilityIdentifier("feePolicyLink")
+        }
+        .card(padding: Theme.Space.xl)
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
+                .strokeBorder(Theme.caution.opacity(0.7), lineWidth: 1.5)
+        )
+    }
+
+    /// The notice itself, read by VoiceOver in one go.
+    private var notice: some View {
         HStack(alignment: .top, spacing: Theme.Space.l) {
             Image(systemName: Symbol.warning)
                 .font(.title3)
@@ -36,11 +65,6 @@ struct NoShowWarningCard: View {
             }
             Spacer(minLength: 0)
         }
-        .card(padding: Theme.Space.xl)
-        .overlay(
-            RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous)
-                .strokeBorder(Theme.caution.opacity(0.7), lineWidth: 1.5)
-        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(content.spoken)
         .accessibilityIdentifier("noShowWarning")

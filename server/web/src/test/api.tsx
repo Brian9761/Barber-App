@@ -30,12 +30,12 @@ export const policy35: NoShowPolicy = {
   minFeeCents: 3500,
   maxFeeCents: 3500,
   policyText:
-    "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.",
+    "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
   lateCancelWindowMinutes: 60,
   warning: {
-    title: 'Full Service Cancellation & No-Show Fee',
+    title: 'Late Cancellation & No-Show Fee',
     message:
-      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($35). Cancelling in the app more than 1 hour before is free.',
+      'Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($35). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
   },
 };
 
@@ -109,10 +109,10 @@ export function mockApi(routes: Route[]) {
 }
 
 /** The whole site at `path`, with the catalog already loaded. */
-export function renderApp(path: string) {
+export function renderApp(path: string, options: { catalog?: Catalog } = {}) {
   return render(
     <MemoryRouter initialEntries={[path]} future={ROUTER_FUTURE}>
-      <CatalogProvider initial={catalog}>
+      <CatalogProvider initial={options.catalog ?? catalog}>
         <App />
       </CatalogProvider>
     </MemoryRouter>,

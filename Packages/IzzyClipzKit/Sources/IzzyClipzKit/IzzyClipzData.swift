@@ -49,8 +49,17 @@ extension ShopInfo {
         highlights: ["Walk-ins welcome", "Appointments available", "Traditional & modern styles"],
         // The two the owner checked and confirmed (docs/legal/OWNER-CHECKLIST.md). Not a step-free
         // entrance: he didn't confirm one, so the apps and the website also ask clients to call.
-        accessibility: ["Room for a wheelchair inside, at the chairs and the counter", "Accessible parking near the entrance"],
-        googlePlaceID: IzzyClipzListing.googlePlaceID
+        // "Disabled parking space", not "Accessible parking", which reads as a claim the space meets
+        // ADA parking standards that nobody has inspected (the November 14 legal check, item 21).
+        accessibility: ["Room for a wheelchair inside, at the chairs and the counter", "Disabled parking space near the entrance"],
+        googlePlaceID: IzzyClipzListing.googlePlaceID,
+        // Not given yet: the LLC's exact registered name and the shop's email address
+        // (docs/legal/OWNER-CHECKLIST.md §1). Fill them in here, then regenerate
+        // server/data/catalog.json (see CatalogExport): the website's footer, its "Review and book"
+        // and the app's Review show them (until then, the shop's name and address only), the Visit
+        // page offers the email, and the website's strict build stops until both are in.
+        legalName: "",
+        email: ""
     )
 }
 

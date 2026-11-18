@@ -14,27 +14,41 @@ import { email as emailField, normalizeUSPhone, personName, UUID_RE } from './va
 // calling or texting the number on file. Run by the owner next to `npm run migrate`
 // (scripts/privacy.ts reads DATABASE_URL, and STRIPE_SECRET_KEY to delete cards):
 //
-//   npm run privacy:find -- --phone "(442) 555-0170"    (or --email; --out file.json to save it)
+//   npm run privacy:find -- --phone "(442) 555-0170"    (or --email or --name; --out file.json to save it)
 //   npm run privacy:correct -- --appointment <id> --name "…" --phone "…" --email "…"
-//   npm run privacy:forget -- --phone "(442) 555-0170"  (or --email; --dry-run to only show what it would do)
+//   npm run privacy:forget -- --phone "(442) 555-0170"  (or --email or --name; --dry-run to only show what it would do)
 //
 // A person is found by the mobile number (any way it's written) or the email on their
-// appointments. What's linked to those appointments comes with them: their checkouts (sales),
-// card payments and fees, and the cards saved for them. A walk-in sale recorded with only a typed
-// name can't be found this way.
+// appointments, or, for someone the shop knows only by name (a walk-in booked at the shop without
+// a number, or a checkout with a typed name), by that name, written the same way (any capitals):
+// their appointments, and their walk-in checkouts with no appointment. Names aren't unique, so a
+// search by name says so, and the owner checks each record with the client before sending or
+// deleting anything. What's linked to the appointments comes with them: their checkouts (sales),
+// card payments and fees, and the cards saved for them.
 
 export class PrivacyError extends Error {}
 
 export interface Person {
   phone?: string | undefined;
   email?: string | undefined;
+  name?: string | undefined;
 }
 
-/** The phone number (E.164) or email (lowercase) to look for; exactly one of them. */
-function who(person: Person): { phone: string } | { email: string } {
+type Who = { phone: string } | { email: string } | { name: string };
+
+/** What a search by name says with what it found: names aren't unique. */
+export const SAME_NAME_NOTE =
+  "Found by name. Names aren't unique: check every appointment and sale here with the client before you send it or delete anything.";
+
+/** The phone number (E.164), email (lowercase) or name (spaces tidied) to look for; exactly one of them. */
+function who(person: Person): Who {
   const phone = person.phone?.trim();
   const email = person.email?.trim();
-  if (phone && email) throw new PrivacyError('Look for one person at a time: give --phone or --email, not both.');
+  const name = person.name?.trim().replace(/\s+/g, ' ');
+  if ([phone, email, name].filter(Boolean).length > 1) {
+    throw new PrivacyError('Look for one person at a time: give --phone, --email or --name, not more than one.');
+  }
+  if (name) return { name };
   if (phone) {
     const normalized = normalizeUSPhone(phone);
     if (!normalized) throw new PrivacyError('Enter a US mobile number, like (442) 341-3053.');
@@ -45,16 +59,34 @@ function who(person: Person): { phone: string } | { email: string } {
     if (!parsed.success || !parsed.data) throw new PrivacyError('Enter a valid email address.');
     return { email: parsed.data.toLowerCase() };
   }
-  throw new PrivacyError('Give the --phone or the --email the client booked with.');
+  throw new PrivacyError('Give the --phone or the --email the client booked with, or the --name the shop knows them by.');
 }
 
-async function appointmentsOf(db: Queryable, person: Person): Promise<{ who: { phone: string } | { email: string }; rows: AppointmentRow[] }> {
+async function appointmentsOf(db: Queryable, person: Person): Promise<{ who: Who; rows: AppointmentRow[] }> {
   const key = who(person);
   const { rows } =
     'phone' in key
       ? await db.query<AppointmentRow>('SELECT * FROM appointments WHERE customer_phone = $1 ORDER BY start_at, id', [key.phone])
-      : await db.query<AppointmentRow>('SELECT * FROM appointments WHERE lower(customer_email) = $1 ORDER BY start_at, id', [key.email]);
+      : 'email' in key
+        ? await db.query<AppointmentRow>('SELECT * FROM appointments WHERE lower(customer_email) = $1 ORDER BY start_at, id', [key.email])
+        : await db.query<AppointmentRow>(
+            `SELECT * FROM appointments WHERE anonymized_at IS NULL AND lower(regexp_replace(btrim(customer_name), '\\s+', ' ', 'g')) = lower($1)
+              ORDER BY start_at, id`,
+            [key.name],
+          );
   return { who: key, rows };
+}
+
+/** For a search by name, the walk-in checkouts with that name and no appointment (their ids), whose details go with the person's. */
+async function walkInSalesOf(db: Queryable, key: Who): Promise<string[]> {
+  if (!('name' in key)) return [];
+  const { rows } = await db.query<{ id: string }>(
+    `SELECT id FROM sales
+      WHERE appointment_id IS NULL AND anonymized_at IS NULL AND lower(regexp_replace(btrim(customer_name), '\\s+', ' ', 'g')) = lower($1)
+      ORDER BY sold_at, id`,
+    [key.name],
+  );
+  return rows.map((row) => row.id);
 }
 
 function cardJSON(card: SavedCardRow) {
@@ -78,10 +110,20 @@ function cardJSON(card: SavedCardRow) {
 export async function findPersonData(deps: Pick<Deps, 'db' | 'now'>, person: Person) {
   const { who: key, rows } = await appointmentsOf(deps.db, person);
   const ids = rows.map((r) => r.id);
-  const sales = ids.length > 0 ? await loadSales(deps.db, 's.appointment_id = ANY($1::uuid[])', [ids], 's.sold_at, s.id') : [];
+  const walkIns = await walkInSalesOf(deps.db, key);
+  const sales =
+    ids.length > 0 || walkIns.length > 0
+      ? await loadSales(deps.db, '(s.appointment_id = ANY($1::uuid[]) OR s.id = ANY($2::uuid[]))', [ids, walkIns], 's.sold_at, s.id')
+      : [];
+  // Card payments of the appointments, and of the walk-in checkouts paid by card.
   const { rows: payments } =
-    ids.length > 0
-      ? await deps.db.query<PaymentRow>(`SELECT ${PAYMENT_COLUMNS} FROM payments WHERE appointment_id = ANY($1::uuid[]) ORDER BY created_at, id`, [ids])
+    ids.length > 0 || walkIns.length > 0
+      ? await deps.db.query<PaymentRow>(
+          `SELECT ${PAYMENT_COLUMNS} FROM payments
+            WHERE appointment_id = ANY($1::uuid[]) OR id IN (SELECT payment_intent_id FROM sales WHERE id = ANY($2::uuid[]) AND payment_intent_id IS NOT NULL)
+            ORDER BY created_at, id`,
+          [ids, walkIns],
+        )
       : { rows: [] as PaymentRow[] };
   const cardIds = [...new Set(rows.map((r) => r.saved_card_id).filter((id): id is string => id !== null))];
   const { rows: cards } =
@@ -90,6 +132,7 @@ export async function findPersonData(deps: Pick<Deps, 'db' | 'now'>, person: Per
       : { rows: [] as SavedCardRow[] };
   return {
     person: key,
+    ...('name' in key ? { note: SAME_NAME_NOTE } : {}),
     exportedAt: formatInstant(deps.now()),
     appointments: rows.map((row) => ({
       ...appointmentJSON(row),
@@ -197,18 +240,25 @@ export async function forgetPerson(deps: Pick<Deps, 'config' | 'db' | 'stripe' |
   });
   const keptIds = new Set(kept.map((k) => k.id));
   const removable = rows.filter((row) => !keptIds.has(row.id)).map((row) => row.id);
+  // Found by name: their walk-in checkouts with no appointment too.
+  const walkIns = await walkInSalesOf(deps.db, key);
   const { rows: sales } =
-    removable.length > 0
-      ? await deps.db.query<{ id: string }>('SELECT id FROM sales WHERE appointment_id = ANY($1::uuid[])', [removable])
+    removable.length > 0 || walkIns.length > 0
+      ? await deps.db.query<{ id: string }>('SELECT id FROM sales WHERE appointment_id = ANY($1::uuid[]) OR id = ANY($2::uuid[])', [removable, walkIns])
       : { rows: [] as { id: string }[] };
   const { rows: payments } =
-    removable.length > 0
-      ? await deps.db.query<{ id: string }>('SELECT id FROM payments WHERE appointment_id = ANY($1::uuid[])', [removable])
+    removable.length > 0 || walkIns.length > 0
+      ? await deps.db.query<{ id: string }>(
+          `SELECT id FROM payments
+            WHERE appointment_id = ANY($1::uuid[]) OR id IN (SELECT payment_intent_id FROM sales WHERE id = ANY($2::uuid[]) AND payment_intent_id IS NOT NULL)`,
+          [removable, walkIns],
+        )
       : { rows: [] as { id: string }[] };
   const cardIds = [...new Set(rows.map((r) => r.saved_card_id).filter((id): id is string => id !== null))];
   const latest = rows.filter((row) => keptIds.has(row.id)).map((row) => feeDeadline(row.start_at).getTime());
   const result = {
     person: key,
+    ...('name' in key ? { note: SAME_NAME_NOTE } : {}),
     dryRun: options.dryRun === true,
     appointments: { removed: removable.length, kept },
     sales: sales.length,
@@ -237,10 +287,12 @@ export const PRIVACY_USAGE = `Answer a client's privacy request, after checking 
 
   npm run privacy:find -- --phone "(442) 555-0170" [--out request.json]
   npm run privacy:find -- --email client@example.com
+  npm run privacy:find -- --name "Andre Sample"
   npm run privacy:correct -- --appointment <id> [--name "Name"] [--phone "(442) 555-0170"] [--email "a@b.com"]
   npm run privacy:forget -- --phone "(442) 555-0170" [--dry-run]
 
 find prints everything kept about that person as JSON (save it with --out and send it to them).
+--name is for someone the shop knows only by name (a walk-in booked without a number, a checkout with a typed name): names aren't unique, so run find first and check every record with the client before forget --name.
 correct fixes an appointment's name, number or email ("" removes the number or email), and the same name where its checkout copied it.
 forget removes their name, number, email and notes now, except from appointments still needed (it says which, and when to run it again), and deletes their saved cards at Stripe.`;
 
@@ -273,7 +325,7 @@ export async function privacyCommand(
   try {
     switch (command) {
       case 'find': {
-        const text = `${JSON.stringify(await findPersonData(deps, { phone: values.phone, email: values.email }), null, 2)}\n`;
+        const text = `${JSON.stringify(await findPersonData(deps, { phone: values.phone, email: values.email, name: values.name }), null, 2)}\n`;
         if (values.out) return { output: `Saved to ${values.out}.`, exitCode: 0, file: { path: values.out, text } };
         return { output: text, exitCode: 0 };
       }
@@ -283,7 +335,7 @@ export async function privacyCommand(
         return { output: `${JSON.stringify(corrected, null, 2)}\n`, exitCode: 0 };
       }
       case 'forget': {
-        const forgotten = await forgetPerson(deps, { phone: values.phone, email: values.email }, { dryRun: values['dry-run'] === true });
+        const forgotten = await forgetPerson(deps, { phone: values.phone, email: values.email, name: values.name }, { dryRun: values['dry-run'] === true });
         return { output: `${JSON.stringify(forgotten, null, 2)}\n`, exitCode: 0 };
       }
       default:

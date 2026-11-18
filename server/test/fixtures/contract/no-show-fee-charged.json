@@ -36,7 +36,8 @@
       "message": null,
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
-      "reason": "noShow"
+      "reason": "noShow",
+      "receipt": "sent"
     },
     "sale": null,
     "completedAt": null

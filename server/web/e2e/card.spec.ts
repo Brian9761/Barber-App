@@ -61,7 +61,7 @@ async function toReview(page: Page, testInfo: TestInfo, client: { name: string; 
   // Carlos has one haircut, so it goes straight to the times.
   await expectStep(page, 3, 'Pick a day and time');
   const notice = page.getByTestId('fee-warning');
-  await expect(notice).toContainText('Full Service Cancellation & No-Show Fee');
+  await expect(notice).toContainText('Late Cancellation & No-Show Fee');
   await expect(notice).toContainText('charged the full service price');
   await expect(notice).toContainText('Cancelling on this website, under My appointments, works the same as cancelling in the app.');
 

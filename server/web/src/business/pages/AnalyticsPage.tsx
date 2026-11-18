@@ -224,7 +224,7 @@ function TotalSales({ data, range, today, isToday }: { data: Analytics; range: R
       {explain ? (
         <p className="biz-tile__explain" id="change-info">
           Sales for the same number of days just before this period ({rangeLabel(data.previous, today)}), for{' '}
-          {data.barberId ? 'the same barber' : 'the whole shop'}. For a week, that's the week before.
+          {data.barberId ? 'the same barber' : 'the whole shop'}.
         </p>
       ) : null}
       {empty ? (

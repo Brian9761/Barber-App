@@ -114,6 +114,14 @@ export function percentLabel(percent: number): string {
 
 export const ON_FOOTER =
   'Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation.';
+
+/**
+ * Under the switch while it's on: what clients do on the real site. The demo's client side never
+ * asks for a card (DEMO_NO_CARD, said just below), so there it says "On the real site".
+ */
+export function onFooter(demo: boolean): string {
+  return demo ? `On the real site, ${ON_FOOTER.charAt(0).toLowerCase()}${ON_FOOTER.slice(1)}` : ON_FOOTER;
+}
 export const OFF_FOOTER = "Off: new online bookings don't need a card. Bookings already made with a card keep their fee, and you can still charge it.";
 export const FEE_FOOTER =
   "The same fee for a no-show and a late cancellation, and never more than the service's price. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings.";
@@ -149,18 +157,26 @@ export function feeRangeLabel(minCents: number, maxCents: number): string {
   return minCents === maxCents ? money(minCents) : `${money(minCents)}–${money(maxCents)}`;
 }
 
-/** The policy clients agree to, as the server words it. */
+/**
+ * The policy clients agree to, as the server words it: when the card may be charged (within 7 days
+ * after the appointment time) and when cancelling online is free (in time, or within 15 minutes of
+ * booking).
+ */
 export function policyText(minCents: number, maxCents: number, settings: NoShowSettings): string {
   const share = settings.feeMode === 'percent' ? ` (${settings.percent}% of the service)` : '';
   const fee = feeRangeLabel(minCents, maxCents) + share;
   if (settings.lateCancelEnabled) {
     const window = windowLabel(settings.lateCancelWindowMinutes);
-    return `No payment now. If you cancel less than ${window} before your appointment, or don't come, Izzy Clipz may charge ${fee} to this card. Cancelling in the app more than ${window} before is free.`;
+    return `No payment now. If you cancel less than ${window} before your appointment, or don't come, Izzy Clipz may charge ${fee} to this card within 7 days after your appointment time. Cancelling online is free more than ${window} before, or within 15 minutes of booking.`;
   }
-  return `No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge ${fee} to this card. Cancelling in the app before your appointment is free.`;
+  return `No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge ${fee} to this card within 7 days after your appointment time. Cancelling online before your appointment is free.`;
 }
 
-/** The notice clients see while booking, as the server words it: the fee "may be charged", like the policy's "may charge". */
+/**
+ * The notice clients see while booking, as the server words it: "Late Cancellation & No-Show Fee"
+ * whenever late cancellations can be charged, whatever the fee, or "No-Show Fee"; the fee "may be
+ * charged", like the policy's "may charge".
+ */
 export function clientNotice(minCents: number, maxCents: number, settings: NoShowSettings): { title: string; message: string } {
   const fee = feeRangeLabel(minCents, maxCents);
   const fullPrice = settings.feeMode === 'percent' && settings.percent === 100;
@@ -168,11 +184,11 @@ export function clientNotice(minCents: number, maxCents: number, settings: NoSho
   if (settings.lateCancelEnabled) {
     const window = windowLabel(settings.lateCancelWindowMinutes);
     return {
-      title: fullPrice ? 'Full Service Cancellation & No-Show Fee' : 'Late Cancellation & No-Show Fee',
-      message: `Cancelling less than ${window} before your appointment, or not showing up, may be charged ${amount}. Cancelling in the app more than ${window} before is free.`,
+      title: 'Late Cancellation & No-Show Fee',
+      message: `Cancelling less than ${window} before your appointment, or not showing up, may be charged ${amount}. Cancelling online more than ${window} before, or within 15 minutes of booking, is free.`,
     };
   }
-  return { title: 'No-Show Fee', message: `Not showing up may be charged ${amount}. Cancelling in the app before your appointment is free.` };
+  return { title: 'No-Show Fee', message: `Not showing up may be charged ${amount}. Cancelling online before your appointment is free.` };
 }
 
 /** "A" or "An", as "$8", "$11", "$18" and "$80" are said. */

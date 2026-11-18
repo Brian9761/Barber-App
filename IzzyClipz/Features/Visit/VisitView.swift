@@ -532,32 +532,42 @@ private struct VisitInfoSection: View {
 /// "Accessibility": the lines the owner checked and confirmed about getting in and around the shop
 /// (the shop's data), one each, then always an invitation to call, since the entrance isn't
 /// confirmed step-free. The invitation calls the shop, with the number in the link color: the
-/// whole row while there are no lines, the sentence under them otherwise. It claims nothing the
-/// owner hasn't checked, and never "ADA" (docs/legal/research.md §10).
+/// whole row while there are no lines, the sentence under them otherwise. Once the shop has an
+/// email address, "Or email us at …" follows it, writing to the shop. It claims nothing the owner
+/// hasn't checked, and never "ADA" (docs/legal/research.md §10).
 private struct VisitAccessibilityRow: View {
     let lines: [String]
 
-    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    @Environment(\.openURL) private var openURL
+
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome:
+    /// dial 711) and we'll help."
     static var text: String { VisitAccessibility.callLine }
 
     var body: some View {
         if lines.isEmpty {
-            CallButton(spokenLabel: "Accessibility: \(Self.text)") {
-                HStack(alignment: .top, spacing: Theme.Space.l) {
-                    VisitIconTile(symbol: Symbol.accessibility)
-                    VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-                        title
-                        callSentence
+            VStack(alignment: .leading, spacing: 0) {
+                CallButton(spokenLabel: "Accessibility: \(Self.text)") {
+                    HStack(alignment: .top, spacing: Theme.Space.l) {
+                        VisitIconTile(symbol: Symbol.accessibility)
+                        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                            title
+                            callSentence
+                        }
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        Spacer(minLength: 0)
                     }
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: 0)
+                    .padding(Theme.Space.m)
+                    .contentShape(Rectangle())
                 }
-                .padding(Theme.Space.m)
-                .contentShape(Rectangle())
+                .buttonStyle(.pressable)
+                .accessibilityIdentifier("visitAccessibilityCall")
+                // Under the sentence, clear of the icon.
+                emailButton
+                    .padding(.leading, Theme.Space.m + Theme.minimumTapSize + Theme.Space.l)
+                    .padding([.trailing, .bottom], Theme.Space.m)
             }
-            .buttonStyle(.pressable)
-            .accessibilityIdentifier("visitAccessibilityCall")
         } else {
             HStack(alignment: .top, spacing: Theme.Space.l) {
                 VisitIconTile(symbol: Symbol.accessibility)
@@ -582,6 +592,7 @@ private struct VisitAccessibilityRow: View {
                     }
                     .buttonStyle(.pressable)
                     .accessibilityIdentifier("visitAccessibilityCall")
+                    emailButton
                 }
                 .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
@@ -600,6 +611,37 @@ private struct VisitAccessibilityRow: View {
         Text(Self.styledText)
             .textRole(.body)
             .foregroundStyle(Theme.smoke)
+    }
+
+    /// "Or email us at <email>.", writing to the shop, once it has an email address; nothing until then.
+    @ViewBuilder
+    private var emailButton: some View {
+        if let line = VisitAccessibility.emailLine(), let url = VisitAccessibility.emailURL() {
+            Button {
+                openURL(url)
+            } label: {
+                Text(Self.styledEmail(line))
+                    .textRole(.body)
+                    .foregroundStyle(Theme.smoke)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, minHeight: Theme.minimumTapSize, alignment: .leading)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel(line)
+            .accessibilityHint("Writes an email to the shop")
+            .accessibilityIdentifier("visitAccessibilityEmail")
+        }
+    }
+
+    /// The email sentence with the address electric and underlined, so it reads as something to tap.
+    private static func styledEmail(_ line: String) -> AttributedString {
+        var text = AttributedString(line)
+        if let range = text.range(of: AppData.shop.email) {
+            text[range].swiftUI.foregroundColor = Theme.electric
+            text[range].swiftUI.underlineStyle = .single
+        }
+        return text
     }
 
     /// The sentence with the number electric and underlined, so it reads as something to tap, and
@@ -805,7 +847,8 @@ private struct VisitLegalSection: View {
                         VisitLinkRow(symbol: Self.symbol(for: page), title: page.title, detail: page.summary)
                     }
                     .buttonStyle(.pressable)
-                    .accessibilityLabel(page.title)
+                    // The title and its one-line summary, as they read on screen.
+                    .accessibilityLabel("\(page.title). \(page.summary)")
                     .accessibilityHint("Opens the page on the shop's website")
                     .accessibilityIdentifier(page.identifier)
                 }

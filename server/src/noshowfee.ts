@@ -16,7 +16,7 @@ import {
   type ShopStripe,
   type StripeErrorLike,
 } from './stripeaccount.js';
-import { appointmentJSON, type AppointmentRow, type NoShowFeeRowStatus } from './serialize.js';
+import { appointmentJSON, type AppointmentRow, type NoShowFeeReceiptRow, type NoShowFeeRowStatus } from './serialize.js';
 import { UUID_RE } from './validation.js';
 
 // Charging the fee to the card on file (POST /api/owner/appointments/:id/no-show-fee): for a
@@ -28,8 +28,9 @@ import { UUID_RE } from './validation.js';
 // ever makes the fee "charged". A try whose answer was lost keeps the same key,
 // and before sending it again the server asks Stripe for that attempt's
 // PaymentIntent (Stripe may forget a key after 24 hours, and then a reused key
-// would charge again); only a definite "no" from Stripe (declined, or the bank
-// wants the client to approve it) lets the next try make a new one. When Stripe
+// would charge again). A definite "no" from Stripe (declined, or the bank wants
+// the client to approve it) ends it: the card isn't charged again, and the client
+// pays another way (an older fee row may still be on a later attempt). When Stripe
 // has nothing for that try and the booking can't be charged any more (the shop
 // reopened it, say), the fee is settled as not charged instead of staying
 // pending for good; a later charge picks up that same try (same key) first.
@@ -49,6 +50,11 @@ const notChargeable = (message: string) => new ApiError('not_chargeable', messag
 export const OLD_ACCOUNT_MESSAGE = "This card was saved with the shop's old Stripe account.";
 /** The card was deleted (the client removed it, or it went unused): nothing can be charged to it. */
 export const DELETED_CARD_MESSAGE = "The client's saved card was deleted, so it can't be charged.";
+/**
+ * A late cancellation whose time someone else took (a new booking, or a walk-in booked in the app):
+ * the Cancellation & No-Show Policy promises no late-cancellation fee then.
+ */
+export const TIME_TAKEN_MESSAGE = "Another client was booked into this time after the cancellation, so there's no late-cancellation fee.";
 /** A fee whose answer was lost, on a card Stripe can't be asked about from here (see `chargeNoShowFee`). */
 export const UNCHECKABLE_FEE_MESSAGE =
   "This card was saved with the shop's old Stripe account, so the app can't check whether its fee went through. Look for it in that Stripe account's Dashboard.";
@@ -81,6 +87,16 @@ export function feeStatusFor(status: string): NoShowFeeRowStatus {
 
 export const AUTHENTICATION_MESSAGE =
   "The client's bank wants them to approve this charge, so it can't go through from here. Ask them to pay at the shop.";
+/**
+ * Charging again after the bank said no. A saved card isn't charged again after a decline without
+ * the client's new say-so (card networks' rules for stored cards, research.md §9.2), and the
+ * Cancellation & No-Show Policy gives the client at least 7 days to pay the fee another way: a
+ * second charge could take it twice.
+ */
+export const DECLINED_AGAIN_MESSAGE =
+  "The card was declined, so it isn't charged again. Ask the client to pay the fee another way, for example at the shop.";
+export const NEEDS_CLIENT_AGAIN_MESSAGE =
+  "The client's bank wants them to approve this charge, so the card isn't charged again. Ask them to pay the fee another way, for example at the shop.";
 export const UNUSABLE_CARD_MESSAGE = "Stripe couldn't use the saved card. Ask the client to pay at the shop.";
 
 /** Why a card was turned down, in plain words for the owner (never "lost" or "stolen": just declined). */
@@ -101,10 +117,11 @@ export function declineMessage(error: { code?: string | null; decline_code?: str
     case 'invalid_expiry_year':
     case 'incorrect_zip':
       return "The card's details didn't work.";
+    // Never "try again": a card the bank turned down isn't charged a second time (DECLINED_AGAIN_MESSAGE).
     case 'processing_error':
-      return "The bank couldn't process the card. Try again in a while.";
+      return "The bank couldn't process the card.";
     case 'card_decline_rate_limit_exceeded':
-      return 'The card was declined too many times today. Try again tomorrow.';
+      return 'The card was declined too many times today.';
     default:
       return error?.code === 'authentication_required' ? AUTHENTICATION_MESSAGE : 'The bank declined the card.';
   }
@@ -224,7 +241,12 @@ export async function recordFeeIntent(
   intent: FeeIntent,
   attempt: number | null,
   now: Date,
-  options: { override?: { status: NoShowFeeRowStatus; message: string | null }; succeeded?: Date } = {},
+  options: {
+    override?: { status: NoShowFeeRowStatus; message: string | null };
+    succeeded?: Date;
+    /** Called when this call turned the fee charged (it wasn't before): its receipt goes out then (`emailFeeReceipt`). */
+    onCharged?: (row: AppointmentRow) => void;
+  } = {},
 ): Promise<AppointmentRow | null> {
   const { status, message } = options.override ?? outcomeOf(intent);
   // Dated when Stripe made it, so a charge found after a lost answer lands on the day the money moved.
@@ -256,9 +278,99 @@ export async function recordFeeIntent(
       [intent.id, row.no_show_fee_cents, row.description, row.id, intent.status, now, row.kind, createdAt, row.stripeAccountId, succeeded],
     );
   }
-  if (rows[0]) return rows[0];
+  if (rows[0]) {
+    // The row wasn't charged before this update (see its WHERE): the fee went through just now.
+    if (rows[0].no_show_fee_status === 'charged') options.onCharged?.(rows[0]);
+    return rows[0];
+  }
   const { rows: current } = await tx.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1', [row.id]);
   return current[0] ?? null;
+}
+
+/** What became of a fee's receipt, as the appointment keeps it (migrations/009). */
+export type FeeReceiptOutcome = NoShowFeeReceiptRow;
+
+/**
+ * A fee just went through: Stripe emails the client a receipt, as the Cancellation & No-Show
+ * Policy promises (and card networks expect for a charge to a saved card). The address is the one
+ * the client gave on Stripe's card page, from the Checkout Session that saved the card, read from
+ * Stripe now and never kept here; setting it as the fee's `receipt_email` is what makes Stripe send
+ * the receipt (live mode only), as for a receipt at the counter (payments.ts). Asked once per fee
+ * (the same idempotency key, if the webhook and the charge both get here). It never fails the fee:
+ * anything that goes wrong is logged, and a receipt can still be sent from the Stripe Dashboard.
+ *
+ * What became of it is kept with the appointment (`no_show_fee_receipt`: sent, no_email or failed,
+ * never the address), so Izzy Clipz Business and the website's Business area can say when no
+ * receipt went out. Returns the appointment as it is then (null if that couldn't be kept or read).
+ */
+export async function emailFeeReceipt(
+  deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log' | 'now'>,
+  appointmentId: string,
+  paymentIntentId: string,
+): Promise<AppointmentRow | null> {
+  let outcome: FeeReceiptOutcome;
+  try {
+    const { rows } = await deps.db.query<{ checkout_session_id: string | null; stripe_account_id: string | null }>(
+      `SELECT c.checkout_session_id, c.stripe_account_id
+         FROM appointments a JOIN saved_cards c ON c.id = a.saved_card_id
+        WHERE a.id = $1`,
+      [appointmentId],
+    );
+    const card = rows[0];
+    if (!card?.checkout_session_id) {
+      // The card's Stripe details were deleted meanwhile (retention.ts): there's nothing to read the address from.
+      deps.log.warn("A fee went through, but its card's Stripe details are gone, so no receipt was sent: send one from the Stripe Dashboard", {
+        appointmentId,
+        paymentIntentId,
+      });
+      outcome = 'failed';
+    } else {
+      // On the account the card (and so the fee) is on.
+      const shop = await shopStripe(deps, { account: card.stripe_account_id });
+      const session = await shop.stripe.checkout.sessions.retrieve(card.checkout_session_id, { expand: ['setup_intent.payment_method'] }, requestOptions(shop));
+      const setupIntent = typeof session.setup_intent === 'object' ? session.setup_intent : null;
+      const method = setupIntent && typeof setupIntent.payment_method === 'object' ? setupIntent.payment_method : null;
+      const email = session.customer_details?.email ?? method?.billing_details?.email ?? null;
+      if (!email) {
+        deps.log.warn("A fee went through, but Stripe has no email for its receipt: send one from the Stripe Dashboard", { appointmentId, paymentIntentId });
+        outcome = 'no_email';
+      } else {
+        await shop.stripe.paymentIntents.update(
+          paymentIntentId,
+          { receipt_email: email },
+          requestOptions(shop, { idempotencyKey: `izzy-fee-receipt-${paymentIntentId}` }),
+        );
+        outcome = 'sent';
+      }
+    }
+  } catch (error) {
+    // Logged (stripeFailure): the fee is charged either way.
+    stripeFailure(deps, error, 'send fee receipt');
+    outcome = 'failed';
+  }
+  return recordReceipt(deps, appointmentId, outcome);
+}
+
+/**
+ * Keeps what became of a charged fee's receipt with its appointment, and returns the appointment. A
+ * receipt Stripe already has is never marked unsent again. A database error is logged, never thrown:
+ * the fee is charged either way.
+ */
+async function recordReceipt(deps: Pick<Deps, 'db' | 'log' | 'now'>, appointmentId: string, outcome: FeeReceiptOutcome): Promise<AppointmentRow | null> {
+  try {
+    const { rows } = await deps.db.query<AppointmentRow>(
+      `UPDATE appointments SET no_show_fee_receipt = $2, updated_at = $3
+        WHERE id = $1 AND no_show_fee_status = 'charged' AND no_show_fee_receipt IS DISTINCT FROM 'sent'
+        RETURNING *`,
+      [appointmentId, outcome, deps.now()],
+    );
+    if (rows[0]) return rows[0];
+    const { rows: current } = await deps.db.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1', [appointmentId]);
+    return current[0] ?? null;
+  } catch (error) {
+    deps.log.error("Couldn't keep what became of a fee's receipt", { appointmentId, outcome, error: error instanceof Error ? error.message : String(error) });
+    return null;
+  }
 }
 
 /**
@@ -324,6 +436,22 @@ function chargeCase(row: AppointmentRow, now: Date): { reason: FeeReason; refusa
   return { reason: found.reason, refusal: null };
 }
 
+/**
+ * Whether someone else has this cancelled booking's time now: another booked or completed
+ * appointment of the same barber that overlaps it. Then a late-cancellation fee isn't charged
+ * (the policy's promise). A walk-in rung up without an appointment can't be seen here, which is
+ * why the owner's confirmation reminds them of it.
+ */
+export async function timeTakenSince(db: Queryable, row: Pick<AppointmentRow, 'id' | 'barber_id' | 'start_at' | 'end_at'>): Promise<boolean> {
+  const { rows } = await db.query(
+    `SELECT 1 FROM appointments
+      WHERE barber_id = $1 AND id <> $2 AND status IN ('booked', 'completed') AND start_at < $4 AND end_at > $3
+      LIMIT 1`,
+    [row.barber_id, row.id, row.start_at, row.end_at],
+  );
+  return rows.length > 0;
+}
+
 export async function chargeNoShowFee(ctx: Context): Promise<Response> {
   await requireOwner(ctx);
   const { deps } = ctx;
@@ -352,7 +480,15 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (!row.saved_card_id || row.no_show_fee_cents === null) {
       throw notChargeable("This booking has no card on file, so there's no fee to charge.");
     }
-    const chargeable = chargeCase(row, now);
+    // The bank said no (declined, or it wants the client to approve the charge): the card isn't
+    // charged again; the client pays another way.
+    if (row.no_show_fee_status === 'declined') throw notChargeable(DECLINED_AGAIN_MESSAGE);
+    if (row.no_show_fee_status === 'needs_action') throw notChargeable(NEEDS_CLIENT_AGAIN_MESSAGE);
+    let chargeable = chargeCase(row, now);
+    // A late cancellation whose time another client has now isn't charged (the policy's promise).
+    if (chargeable.reason === 'late_cancel' && (await timeTakenSince(tx, row))) {
+      chargeable = { reason: null, refusal: notChargeable(TIME_TAKEN_MESSAGE) };
+    }
     // The card was deleted at Stripe (retention.ts) once no booking needed it: why there's no fee, if
     // there's another reason, or else that the card is gone.
     if (!row.stripe_customer_id || !row.stripe_payment_method_id) throw chargeable.refusal ?? notChargeable(DELETED_CARD_MESSAGE);
@@ -363,7 +499,7 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     const unusable = match === 'otherAccount' ? notChargeable(OLD_ACCOUNT_MESSAGE) : match === 'otherMode' ? notChargeable(otherModeMessage(savedLive)) : null;
     const refusal = chargeable.refusal ?? unusable;
     // A try whose answer never came keeps its attempt (Stripe key and reason) and is looked up
-    // first, whatever happened since; after a "no", a new attempt, only for a chargeable case.
+    // first, whatever happened since; otherwise a new attempt, only for a chargeable case.
     const pending = row.no_show_fee_status === 'pending';
     // A try settled as not charged (Stripe had nothing for it when the booking couldn't be charged
     // any more): charging again picks up that same attempt, looked up first, so a request of it that
@@ -410,10 +546,16 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
       throw stripeFailure(deps, error, 'retrieve no-show fee');
     }
     const now = deps.now();
+    let charged = false;
     const updated = await deps.db.transaction((tx) =>
-      recordFeeIntent(tx, recordRow, intent, claim.row.no_show_fee_attempt, now, { succeeded: succeededAt(intent, now, intent.created) }),
+      recordFeeIntent(tx, recordRow, intent, claim.row.no_show_fee_attempt, now, {
+        succeeded: succeededAt(intent, now, intent.created),
+        onCharged: () => (charged = true),
+      }),
     );
-    return json({ appointment: appointmentJSON(updated ?? claim.row) });
+    // With what became of its receipt, once it's charged.
+    const receipted = charged ? await emailFeeReceipt(deps, id, intent.id) : null;
+    return json({ appointment: appointmentJSON(receipted ?? updated ?? claim.row) });
   }
 
   const { row, attempt } = claim;
@@ -427,8 +569,10 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
       throw stripeFailure(deps, error, 'find no-show fee');
     }
     if (found) {
-      const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, found, attempt, deps.now()));
-      return json({ appointment: appointmentJSON(updated ?? row) });
+      let charged = false;
+      const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, found, attempt, deps.now(), { onCharged: () => (charged = true) }));
+      const receipted = charged ? await emailFeeReceipt(deps, id, found.id) : null;
+      return json({ appointment: appointmentJSON(receipted ?? updated ?? row) });
     }
     // Nothing reached Stripe: send it again (same key), unless it can't be charged any more. Then
     // nothing was charged, so the try is settled as that instead of staying pending for good; but
@@ -452,7 +596,8 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
         // Not payment_method_types: that's a 400 since API version 2026-09-30.endive.
         allowed_payment_method_types: ['card'],
         description,
-        // No receipt_email: an address Stripe turned down would fail the charge for a reason that isn't the card.
+        // No receipt_email here: an address Stripe turned down would fail the charge for a reason that
+        // isn't the card. Once the fee goes through, emailFeeReceipt asks Stripe to send the receipt.
         metadata: { source: 'izzy-clipz-api', kind: FEE_KIND[reason], appointment_id: id, attempt: String(attempt) },
       },
       requestOptions(onCard, { idempotencyKey: noShowFeeIdempotencyKey(id, attempt) }),
@@ -486,8 +631,10 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     });
     return json({ appointment: appointmentJSON(updated ?? row) });
   }
-  const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, intent, attempt, deps.now()));
-  return json({ appointment: appointmentJSON(updated ?? row) });
+  let charged = false;
+  const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, intent, attempt, deps.now(), { onCharged: () => (charged = true) }));
+  const receipted = charged ? await emailFeeReceipt(deps, id, intent.id) : null;
+  return json({ appointment: appointmentJSON(receipted ?? updated ?? row) });
 }
 
 /**
@@ -496,7 +643,9 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
  * or, if the server stopped before writing it, by the PaymentIntent's metadata.
  * `paymentKind` is our payments row's kind, when there is one; `stripeAccountId`
  * the account the PaymentIntent is on (null: the server's own key); `succeeded`
- * when Stripe says it went through (the event's time, or its charge's).
+ * when Stripe says it went through (the event's time, or its charge's). Returns the
+ * appointment's id when this turned its fee charged, so the caller emails the receipt
+ * once its transaction is in (`emailFeeReceipt`); otherwise null.
  */
 export async function syncNoShowFeeFromStripe(
   tx: Queryable,
@@ -507,16 +656,17 @@ export async function syncNoShowFeeFromStripe(
   paymentKind: string | null,
   stripeAccountId: string | null,
   succeeded?: Date,
-): Promise<void> {
+): Promise<string | null> {
   const appointmentId = paymentAppointmentId ?? intent.metadata?.appointment_id ?? '';
-  if (!UUID_RE.test(appointmentId)) return;
+  if (!UUID_RE.test(appointmentId)) return null;
   const { rows } = await tx.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1 FOR UPDATE', [appointmentId]);
   const row = rows[0];
-  if (!row || !row.saved_card_id || row.no_show_fee_cents === null) return;
+  if (!row || !row.saved_card_id || row.no_show_fee_cents === null) return null;
   const attemptText = intent.metadata?.attempt ?? '';
   const attempt = /^\d{1,6}$/.test(attemptText) ? Number(attemptText) : null;
   const metadataKind = intent.metadata?.kind;
   const kind: FeeKind = isFeeKind(paymentKind) ? paymentKind : isFeeKind(metadataKind) ? metadataKind : FEE_KIND[row.no_show_fee_reason ?? 'no_show'];
+  let charged = false;
   await recordFeeIntent(
     tx,
     {
@@ -529,6 +679,7 @@ export async function syncNoShowFeeFromStripe(
     intent,
     attempt,
     now,
-    { succeeded },
+    { succeeded, onCharged: () => (charged = true) },
   );
+  return charged ? row.id : null;
 }

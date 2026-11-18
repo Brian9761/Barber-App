@@ -26,6 +26,14 @@ struct CustomerDetailsSheet: View {
     @State private var forgotten = false
     /// Asking the shop to delete the card just removed or forgotten, or what it said.
     @State private var cardRemoval: CardRemovalState?
+    /// The Privacy Policy, opened from the line under the name and number: over this sheet, which
+    /// stays open underneath with what was typed (and any word about the card) still there.
+    @State private var legalPage: LegalPageLink?
+
+    private struct LegalPageLink: Identifiable {
+        let url: URL
+        var id: String { url.absoluteString }
+    }
 
     private var details: CustomerDetails { CustomerDetails(name: name, phone: phone) }
 
@@ -68,7 +76,10 @@ struct CustomerDetailsSheet: View {
                     if DemoMode.isOn {
                         Text(Self.demoFooter)
                     } else {
-                        LegalLinksText(text: Self.footer, pages: LegalCopy.detailsPrivacyPages)
+                        LegalLinksText(text: Self.footer, pages: LegalCopy.detailsPrivacyPages) { url in
+                            legalPage = LegalPageLink(url: url)
+                        }
+                        .accessibilityIdentifier("detailsSheetPrivacy")
                     }
                 }
                 if let card = cards.saved {
@@ -129,6 +140,11 @@ struct CustomerDetailsSheet: View {
             .background(Theme.ink2.ignoresSafeArea())
             .navigationTitle("Your details")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $legalPage) { page in
+                WebSheet(url: page.url)
+                    .tint(Theme.bone)
+                    .presentationBackground(Theme.ink2)
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(forgotten ? "Close" : "Cancel") { dismiss() }

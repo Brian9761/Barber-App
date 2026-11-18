@@ -36,6 +36,17 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         launch(signedIn: false)
         XCTAssertTrue(element("ownerKeyField").exists)
         screenshot("O01-Sign-In")
+        // The Privacy Policy (and the other policies) can be read before signing in.
+        let privacy = reveal("legal-privacy")
+        XCTAssertTrue(privacy.label.contains("Privacy Policy"), "Got: \(privacy.label)")
+        XCTAssertTrue(reveal("legal-accessibility").exists)
+        screenshot("O01b-Sign-In-Legal")
+        privacy.tap()
+        let address = element("webURL")
+        XCTAssertTrue(address.waitForExistence(timeout: 10), "The Privacy Policy didn't open")
+        XCTAssertEqual(address.label, "https://izzy-clipz.vercel.app/privacy")
+        closeWebPage(address)
+        _ = reveal("ownerKeyField", searchingFirst: .up)
         signIn(with: ownerKey)
         XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 15), "Signing in didn't open the schedule")
         for tab in ["Schedule", "New booking", "Take payment", "Analytics", "Settings"] {
@@ -400,6 +411,15 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         let row = element("appointment-Andre Sample")
         XCTAssertTrue(waitForLabel(row, containing: "Paid $55 · Cash"), "Got: \(row.label)")
+
+        // Voided from the appointment itself (a sale from an earlier day isn't in Today's sales):
+        // it asks first, with the amount, and the appointment can be checked out again.
+        row.tap()
+        tap("detailVoidSale")
+        XCTAssertTrue(text(containing: "Void this $55 cash sale?").waitForExistence(timeout: 10), "Void asks first")
+        tapDialogButton("Void sale", identifier: "confirmDetailVoidSale")
+        XCTAssertTrue(reveal("checkOutAppointment").waitForExistence(timeout: 15), "Checked out again after the void")
+        XCTAssertFalse(element("detailVoidSale").exists)
     }
 
     /// A walk-in buys two pomades and a beard oil (which has no price, so it asks for one), sold by
@@ -472,7 +492,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// After a card payment, the client may ask for a receipt: Stripe emails it, and the address isn't
-    /// kept. Nothing about an email is asked before the card.
+    /// kept. Nothing about an email is asked before the card. On the sample server (and in the demo
+    /// version) it says no email is sent.
     func testEmailAReceiptAfterACardPayment() {
         launch()
         openTab("Take payment")
@@ -484,9 +505,12 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(element("saleReceiptLine"), containing: "Sold $25 · Card · Julian"))
         tap("emailReceipt")
         typeInto("receiptEmailField", "client@example.com")
+        XCTAssertTrue(text(containing: "Test mode: no email is sent.").exists)
         screenshot("O50-Email-A-Receipt")
         tap("sendReceipt")
-        XCTAssertTrue(reveal("receiptSent").waitForExistence(timeout: 10), "The receipt wasn't sent")
+        let sent = reveal("receiptSent")
+        XCTAssertTrue(sent.waitForExistence(timeout: 10), "The receipt wasn't sent")
+        XCTAssertTrue(sent.label.contains("Test mode: no email was sent."), "Got: \(sent.label)")
         tap("paymentDone")
         XCTAssertEqual(element("paymentAmount").value as? String, "0 dollars")
     }
@@ -590,19 +614,31 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// Stripe still needs details after its window (`-fake-stripe-needs-info`): Settings says so, and
-    /// Finish setting up opens it again.
+    /// Finish setting up opens it again. Take payment says the same, with Check again.
     func testStripeStillNeedingDetailsOffersFinishSettingUp() {
         launch("-fake-stripe-needs-info")
         openTab("Settings")
         tap("connectStripe")
         XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "Stripe still needs a few details: tap Finish setting up."))
         XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Finish setting up"))
+        XCTAssertTrue(waitForLabel(reveal("connectStripe"), containing: "Finish setting up"))
+        screenshot("O44-Settings-Stripe-Needs-Info")
+
+        openTab("Take payment")
+        XCTAssertTrue(element("paymentsUnavailable").waitForExistence(timeout: 10))
+        XCTAssertTrue(text(containing: "Finish setting up Stripe").exists)
+        tap("checkStripeAgain")
+        XCTAssertTrue(element("goToStripeSettings").waitForExistence(timeout: 10), "Stripe still needs the details")
+        screenshot("O44b-Payments-Finish-Setting-Up")
+
+        tap("goToStripeSettings")
         let finish = reveal("connectStripe")
         XCTAssertTrue(waitForLabel(finish, containing: "Finish setting up"), "Got: \(finish.label)")
-        screenshot("O44-Settings-Stripe-Needs-Info")
         finish.tap()
         XCTAssertTrue(waitForLabel(reveal("stripeResult"), containing: "You're connected."))
         XCTAssertTrue(waitForLabel(reveal("stripeStatus"), containing: "Connected"))
+        openTab("Take payment")
+        XCTAssertTrue(waitForDisappearance(of: element("paymentsUnavailable")), "Take payment still says to finish setting up")
     }
 
     /// Closing Stripe's window (`-fake-stripe-cancel`) says nothing went wrong and shows no result:
@@ -682,8 +718,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             let address = element("webURL")
             XCTAssertTrue(address.waitForExistence(timeout: 10), "\(title) didn't open")
             XCTAssertEqual(address.label, "https://izzy-clipz.vercel.app" + path)
-            tap("webDone")
-            XCTAssertTrue(waitForDisappearance(of: address))
+            closeWebPage(address, "\(title) didn't close")
         }
     }
 
@@ -724,6 +759,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(status, containing: "No-show fee charged"), "Got: \(status.label)")
         XCTAssertTrue(status.label.contains("$35 to Visa •••• 4242"), "Got: \(status.label)")
         XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        // Stripe emailed the receipt: nothing more to say about it.
+        XCTAssertFalse(element("feeReceipt").exists, "The receipt went out")
         // The service itself isn't paid, and the fee is said apart, so it isn't taken again.
         let payment = reveal("detailPayment")
         XCTAssertTrue(waitForLabel(payment, containing: "Service not paid"), "Got: \(payment.label)")
@@ -788,7 +825,24 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("feePayment"), containing: "Late cancellation fee"))
     }
 
-    func testADeclinedFeeSaysWhyAndCanBeTriedAgain() {
+    /// A fee that goes through without a receipt (its card page kept no email: `-fake-fee-receipt-unsent`)
+    /// stays charged, and the details say no receipt went out and how to send one (owner checklist
+    /// §3 item 19).
+    func testAFeeChargedWithoutAReceiptSaysSoAndWhatToDo() {
+        launch("-fake-cards-on-file", "-fake-fee-receipt-unsent")
+        tap("appointment-Lee Sample")
+        tap("chargeFee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        let status = reveal("feeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "Late cancellation fee charged"), "Got: \(status.label)")
+        let receipt = reveal("feeReceipt")
+        XCTAssertTrue(waitForLabel(receipt, containing: "No receipt was sent: Stripe has no email address for this client."), "Got: \(receipt.label)")
+        XCTAssertTrue(receipt.label.contains("send the receipt from the Stripe Dashboard"), "Got: \(receipt.label)")
+        XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        screenshot("O25b-Fee-Charged-No-Receipt")
+    }
+
+    func testADeclinedFeeSaysWhyAndIsntChargedAgain() {
         launch("-fake-cards-on-file", "-fake-no-show-declined")
         tap("appointment-Kim Sample")
         tap("chargeFee")
@@ -796,16 +850,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let status = reveal("feeStatus")
         XCTAssertTrue(waitForLabel(status, containing: "Declined"), "Got: \(status.label)")
         XCTAssertTrue(status.label.contains("there isn't enough money on it"), "Got: \(status.label)")
+        // The card isn't charged again: no second try, and what to do instead.
+        let footer = reveal("feeFooter")
+        XCTAssertTrue(waitForLabel(footer, containing: "The card isn't charged again"), "Got: \(footer.label)")
+        XCTAssertTrue(footer.label.contains("at least 7 days to pay the fee another way"), "Got: \(footer.label)")
+        XCTAssertFalse(element("chargeFee").exists, "A declined card isn't charged again")
         screenshot("O29-No-Show-Fee-Declined")
-
-        // Another try is a new charge, and it asks again.
-        let again = reveal("chargeFee")
-        XCTAssertTrue(waitForLabel(again, containing: "Charge again ($35)"), "Got: \(again.label)")
-        again.tap()
-        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
-        XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "No-show fee charged"))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        XCTAssertTrue(waitForLabel(reveal("appointment-Kim Sample"), containing: "No-show fee $35 charged"))
+        XCTAssertTrue(waitForLabel(reveal("appointment-Kim Sample"), containing: "Fee declined"))
     }
 
     func testAFeeTheBankWantsTheClientToApproveSaysToAskThemToPayAtTheShop() {
@@ -855,7 +907,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(element("paymentsFees"), containing: "$35.00"))
     }
 
-    /// The same for a decline: it shows with the bank's reason and Charge again, and nothing else.
+    /// The same for a decline: it shows with the bank's reason and what to do, and nothing else.
     func testADeclineWhoseAnswerIsLostShowsTheDecline() {
         launch("-fake-cards-on-file", "-fake-no-show-declined", "-fake-no-show-answer-lost")
         tap("appointment-Kim Sample")
@@ -865,7 +917,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(status, containing: "Declined"), "Got: \(status.label)")
         XCTAssertTrue(status.label.contains("there isn't enough money on it"), "Got: \(status.label)")
         XCTAssertFalse(element("feeError").exists, "Stripe's answer is on screen")
-        XCTAssertTrue(waitForLabel(reveal("chargeFee"), containing: "Charge again ($35)"))
+        XCTAssertTrue(waitForLabel(reveal("feeFooter"), containing: "The card isn't charged again"))
+        XCTAssertFalse(element("chargeFee").exists, "A declined card isn't charged again")
     }
 
     /// Nia Sample booked online with a card for 2:30 PM. Until her haircut ends (3:15 PM) she may
@@ -884,10 +937,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: "once the appointment ends at 3:15 PM"))
 
         // Marked done, then reopened: the client came, so it never becomes a no-show (the server's
-        // `completedAt`), and the details say so in the server's words.
+        // `completedAt`), and the details say so in the server's words. Both ask first, saying so.
         tap("markCompleted")
+        XCTAssertTrue(text(containing: "this booking can't become a no-show later").waitForExistence(timeout: 10), "Mark done asks first")
+        tapDialogButton("Mark done", identifier: "confirmMarkCompleted")
         XCTAssertTrue(statusShows("Completed"))
         tap("reopenAppointment")
+        XCTAssertTrue(text(containing: "It was marked done, so even once it's reopened").waitForExistence(timeout: 10), "Reopen says so first")
+        tapDialogButton("Reopen", identifier: "confirmReopen")
         XCTAssertTrue(statusShows("Booked"))
         let completedLine = "This appointment was marked completed, so it can't become a no-show."
         XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: completedLine))
@@ -908,7 +965,7 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         link.tap()
         flipSwitch(reveal("noShowEnabled"))
         XCTAssertTrue(waitForLabel(reveal("noShowExample"), containing: "A $40 haircut: $40"))
-        XCTAssertTrue(waitForLabel(reveal("noShowClientWarning"), containing: "Full Service Cancellation & No-Show Fee"))
+        XCTAssertTrue(waitForLabel(reveal("noShowClientWarning"), containing: "Late Cancellation & No-Show Fee"))
         screenshot("O31-No-Show-Settings")
 
         // A flat amount the server wouldn't take is explained, and Save says so too.
@@ -928,6 +985,10 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let warning = reveal("noShowClientWarning")
         XCTAssertTrue(waitForLabel(warning, containing: "Late Cancellation & No-Show Fee"), "Got: \(warning.label)")
         XCTAssertTrue(warning.label.contains("may be charged $25."), "Got: \(warning.label)")
+        // What clients agree to: when the card may be charged, and when cancelling is free (owner checklist §3 item 22).
+        let agreed = reveal("noShowClientPolicy")
+        XCTAssertTrue(waitForLabel(agreed, containing: "may charge $25 to this card within 7 days after your appointment time."), "Got: \(agreed.label)")
+        XCTAssertTrue(agreed.label.contains("Cancelling online is free more than 1 hour before, or within 15 minutes of booking."), "Got: \(agreed.label)")
         // The Save message sits just above Stripe's costs. It's looked for with those on screen:
         // under the keyboard, a busy simulator kept reporting it there after it had gone.
         reveal("noShowCosts")
@@ -1049,6 +1110,27 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         field.tap()
         field.typeText(key)
         tap("signInButton")
+    }
+
+    /// Closes the in-app browser with Done and waits for the page (`address`) to go. A tap on Done
+    /// can light the button up and still not close the page: on a macos-15 run, Done dimmed and
+    /// brightened again under a tap at its middle, and then nothing on the screen moved for the
+    /// minute the test waited, while the same Done had closed the same page four times in Settings
+    /// in that run. So when the page and its Done are both still there 10 seconds after the tap,
+    /// Done is tapped once more, as the client app's UI tests close their sheets (tapToClose). A page
+    /// that two taps on Done can't close still fails the test.
+    private func closeWebPage(
+        _ address: XCUIElement,
+        _ message: String = "The web page didn't close",
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        tap("webDone", file: file, line: line)
+        let done = element("webDone")
+        if !waitForDisappearance(of: address, timeout: 10), address.exists, done.exists {
+            done.tap()
+        }
+        XCTAssertTrue(waitForDisappearance(of: address), message, file: file, line: line)
     }
 
     private func chooseService(_ name: String) {
@@ -1175,17 +1257,20 @@ final class IzzyClipzBusinessUITests: XCTestCase {
 
     /// Finds an element and scrolls it onto the screen. Lists and forms only build the rows on
     /// screen, so a row further down (or one scrolled past) isn't there until it's scrolled to.
+    /// On iOS 26 it's then moved up out of the blur just above the tab bar (liftAboveTabBarBlur).
     @discardableResult
     private func reveal(_ identifier: String, searchingFirst first: Direction = .down, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
         let target = element(identifier)
         // Most are on screen already, or show up once the screen has loaded.
-        if target.waitForExistence(timeout: 8), isOnScreen(target) {
+        if target.waitForExistence(timeout: 8), let frame = onScreenFrame(target) {
+            liftAboveTabBarBlur(target, from: frame)
             return target
         }
         let other: Direction = first == .down ? .up : .down
         for attempt in 0..<16 {
-            if isOnScreen(target) {
-                settle(target)
+            // onScreenFrame waits for it to stop moving first.
+            if let frame = onScreenFrame(target) {
+                liftAboveTabBarBlur(target, from: frame)
                 return target
             }
             if target.exists, !target.frame.isEmpty {
@@ -1214,22 +1299,70 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         return target
     }
 
-    /// On screen and tappable. isHittable is only asked about an element whose middle is on the
-    /// screen: for one scrolled out of sight, XCUITest can fail the test ("Activation point
-    /// invalid") instead of answering no.
-    private func isOnScreen(_ target: XCUIElement) -> Bool {
-        guard target.exists else { return false }
-        let frame = target.frame
-        guard !frame.isEmpty, app.frame.contains(CGPoint(x: frame.midX, y: frame.midY)) else { return false }
-        return target.isHittable
+    /// The tab bar's frame, once seen in this test: it stays put, so it's looked up only once.
+    private var tabBarFrame: CGRect?
+
+    /// Moves an element up out of the band just above the tab bar, where iOS 26 blurs the page under
+    /// its floating tab bar. A tap there can go nowhere while XCUITest still counts the element as on
+    /// the screen and hittable: Tap to Pay on iPhone, its middle 49 points above the tab bar (inside
+    /// the blur, which reached 65 points above it), lit up under the tap but didn't open the reader.
+    /// The band is taken as a tab bar's height, and the page is dragged just far enough to bring the
+    /// element's middle 40 points above it. This only happens while the tab bar itself can be tapped,
+    /// so never under a sheet, a dialog, a full-screen cover or the keyboard, and only as far as the
+    /// page scrolls: at the end of a page the element stays where it is. An element above the band
+    /// costs no look at the screen: `start` is where reveal last saw it.
+    private func liftAboveTabBarBlur(_ target: XCUIElement, from start: CGRect) {
+        guard #available(iOS 26.0, *) else { return }
+        let bar = app.tabBars.firstMatch
+        if tabBarFrame == nil {
+            // Taken once the bar sits at the bottom of the screen, not while it's coming in.
+            guard bar.exists else { return }
+            let seen = bar.frame
+            guard !seen.isEmpty, abs(seen.maxY - app.frame.maxY) < 1 else { return }
+            tabBarFrame = seen
+        }
+        guard let barFrame = tabBarFrame else { return }
+        let bandTop = barFrame.minY - barFrame.height
+        var frame = start
+        for _ in 0..<3 {
+            // The bar, or its first tab, can be tapped: nothing is over it.
+            guard frame.midY > bandTop, bar.exists, bar.isHittable || bar.buttons.firstMatch.isHittable else { return }
+            // A drag loses about 10 points before the page starts to move.
+            drag(.down, by: frame.midY - bandTop + 40 + 10)
+            guard target.exists, let moved = settle(target) else { return }
+            // The end of the page: it goes no higher.
+            guard moved != frame else { return }
+            frame = moved
+        }
     }
 
-    /// Drags the page about a third of the screen and holds still before letting go, so it
-    /// doesn't keep gliding: a tap on a list that's still moving only stops it. The drag stays
-    /// above the keyboard while one is up.
-    private func drag(_ direction: Direction) {
+    /// On screen and tappable. isHittable is only asked about an element whose middle is on the
+    /// screen, and once it has stopped moving: for one scrolled out of sight, or one still moving
+    /// because a change just redrew the screen (Reopen, say), XCUITest can fail the test
+    /// ("Activation point invalid") instead of answering no.
+    private func isOnScreen(_ target: XCUIElement) -> Bool {
+        onScreenFrame(target) != nil
+    }
+
+    /// Where the element is once it's on screen and tappable (as isOnScreen), nil otherwise.
+    private func onScreenFrame(_ target: XCUIElement) -> CGRect? {
+        guard target.exists, middleIsOnScreen(target.frame) else { return nil }
+        guard let frame = settle(target), middleIsOnScreen(frame) else { return nil }
+        return target.isHittable ? frame : nil
+    }
+
+    /// Whether the middle of a frame is on the screen.
+    private func middleIsOnScreen(_ frame: CGRect) -> Bool {
+        !frame.isEmpty && app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
+    }
+
+    /// Drags the page about a third of the screen (or `distance` points) and holds still before
+    /// letting go, so it doesn't keep gliding: a tap on a list that's still moving only stops it.
+    /// The drag stays above the keyboard while one is up.
+    private func drag(_ direction: Direction, by distance: CGFloat? = nil) {
         let lowY = min(0.7, pageBottom() - 0.1)
-        let highY = max(0.2, lowY - 0.35)
+        let span = distance.map { $0 / max(app.frame.height, 1) } ?? 0.35
+        let highY = max(0.2, lowY - span)
         let low = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: lowY))
         let high = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: highY))
         let (start, end) = direction == .down ? (low, high) : (high, low)
@@ -1244,16 +1377,19 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         return max(0.45, (keyboard.frame.minY - screen.minY) / screen.height)
     }
 
-    /// Waits until the element stops moving, up to two seconds.
-    private func settle(_ target: XCUIElement) {
+    /// Waits until the element stops moving, up to two seconds, and gives where it ended up: nil
+    /// once it's gone.
+    @discardableResult
+    private func settle(_ target: XCUIElement) -> CGRect? {
         var last = target.frame
         for _ in 0..<8 {
             Thread.sleep(forTimeInterval: 0.25)
-            guard target.exists else { return }
+            guard target.exists else { return nil }
             let now = target.frame
-            if now == last { return }
+            if now == last { return now }
             last = now
         }
+        return last
     }
 
     /// Flips a switch row. The switch sits at the row's trailing end (a tap on the row's middle

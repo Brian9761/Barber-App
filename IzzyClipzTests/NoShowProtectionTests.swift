@@ -26,10 +26,10 @@ final class ScriptedCardSaver: CardSaver {
 /// What the shop's server says when protection is on with its starting settings (the full service
 /// price, cancelling less than 1 hour before or not coming), for Carlos's $45 haircut.
 enum NoShowTestData {
-    static let carlosPolicyText = "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $45 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free."
+    static let carlosPolicyText = "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $45 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking."
     static let carlosWarning = IzzyAPI.NoShowWarning(
-        title: "Full Service Cancellation & No-Show Fee",
-        message: "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($45). Cancelling in the app more than 1 hour before is free."
+        title: "Late Cancellation & No-Show Fee",
+        message: "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($45). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free."
     )
     static let carlosPolicy = IzzyAPI.NoShowPolicy(
         required: true, minFeeCents: 4_500, maxFeeCents: 4_500, policyText: carlosPolicyText,
@@ -379,10 +379,10 @@ final class NoShowWarningContentTests: XCTestCase {
 
     func testTheServersWords() throws {
         let content = try XCTUnwrap(NoShowWarningContent(policy: NoShowTestData.carlosPolicy, start: nil, now: TestData.now))
-        XCTAssertEqual(content.title, "Full Service Cancellation & No-Show Fee")
+        XCTAssertEqual(content.title, "Late Cancellation & No-Show Fee")
         XCTAssertEqual(content.message, NoShowTestData.carlosWarning.message)
         XCTAssertNil(content.notice)
-        XCTAssertEqual(content.spoken, "Full Service Cancellation & No-Show Fee. \(NoShowTestData.carlosWarning.message)")
+        XCTAssertEqual(content.spoken, "Late Cancellation & No-Show Fee. \(NoShowTestData.carlosWarning.message)")
     }
 
     /// A time less than the window away can be cancelled for free only for 15 minutes once it's
@@ -1034,6 +1034,98 @@ final class RememberedDetailsTests: XCTestCase {
         XCTAssertEqual(cardsNextTime.saved, card)
     }
 
+    /// Remember me off on the details step, then no booking: the card left the Keychain, so once the
+    /// app has closed (its key is gone for good) the shop is asked to delete it the next time the
+    /// app opens. Not before: the booking being made may still use it.
+    func testACardLetGoWithoutABookingIsDeletedAtTheShopNextTime() async throws {
+        let fake = NoShowTestData.fake()
+        let keptResult = await CardSetup(api: fake, saver: FakeCardSaver(api: fake), cards: cards).addCard(for: carlos, remember: true)
+        let kept = try XCTUnwrap(keptResult)
+        XCTAssertTrue(cardsNextTime.cardsToDelete().isEmpty, "A remembered card is kept")
+        RememberedDetails.apply(remember: false, details: alex, to: details, cards: cards)
+        XCTAssertTrue(cards.cardsToDelete().isEmpty, "Still kept for the booking being made")
+        await CardDeleter.deleteLetGo(cards, api: fake)
+        XCTAssertEqual(fake.cardRemoval(for: kept.token)?.requested, false, "…so the shop isn't asked yet")
+
+        // The app closes without booking. Next time, offline at first: it stays on the list.
+        let offline = NoShowTestData.fake { $0.offline = true }
+        let reopened = cardsNextTime
+        XCTAssertNil(reopened.saved)
+        XCTAssertEqual(reopened.cardsToDelete(), [kept.token])
+        await CardDeleter.deleteLetGo(reopened, api: offline)
+        XCTAssertEqual(reopened.cardsToDelete(), [kept.token], "Asked again next time")
+        // Online: the shop deletes it (no booking needs it), and it's off the list.
+        await CardDeleter.deleteLetGo(reopened, api: fake)
+        XCTAssertEqual(fake.cardRemoval(for: kept.token)?.requested, true)
+        XCTAssertEqual(fake.cardRemoval(for: kept.token)?.deleted, true)
+        XCTAssertTrue(cardsNextTime.cardsToDelete().isEmpty)
+    }
+
+    /// The first try (Remember me off, so `keepCard: false`) books but its answer is lost. The client
+    /// goes back, turns Remember me on and tries again: the retry finds that booking, whose card the
+    /// shop marked for deletion with it, so the app doesn't keep it for next time either, and the
+    /// next booking asks for a card instead of failing with one the shop no longer has.
+    func testARetryThatFindsABookingMadeWithoutRememberMeDoesntKeepItsCard() async throws {
+        let fake = NoShowTestData.fake { $0.loseBookingResponseOnce = true }
+        let policies = NoShowPolicyStore(api: fake, now: { TestData.now })
+        let appointments = AppointmentStore(api: fake, tokens: InMemorySecretStore(), scheduler: FakeNotificationScheduler(), defaults: defaults, calendar: AppData.bookingCalendar, now: { TestData.now })
+        let submitter = BookingSubmitter(api: fake, appointments: appointments, cards: cards, policies: policies)
+        let offering = try XCTUnwrap(AppData.catalog.offering(withID: TestData.carlosHaircutID))
+        let tomorrow = TestData.calendarDay(2026, 10, 29)
+        let open = try await fake.availability(IzzyAPI.AvailabilityQuery(target: carlos, from: tomorrow, days: 1)).slots(on: tomorrow)
+        let (first, later) = (try XCTUnwrap(open.first?.start), try XCTUnwrap(open.last?.start))
+        await policies.load(carlos)
+        func draft(_ start: Date, remember: Bool) -> BookingDraft {
+            BookingDraft(plan: BookingPlan(choice: .offering(offering), start: start), customer: alex, note: "", remember: remember)
+        }
+
+        let addedResult = await CardSetup(api: fake, saver: FakeCardSaver(api: fake), cards: cards).addCard(for: carlos, remember: false)
+        let added = try XCTUnwrap(addedResult)
+        let agreement = NoShowRequirement(entry: policies.entry(for: carlos), cards: cards, start: first).agreement
+        XCTAssertNotNil(agreement)
+        let lost = await submitter.book(draft(first, remember: false), noShow: agreement)
+        XCTAssertNil(lost)
+        XCTAssertEqual(fake.cardRemoval(for: added.token)?.requested, true, "Marked with the booking that went through")
+
+        // Back to the details: Remember me on, Continue, Book again.
+        RememberedDetails.apply(remember: true, details: alex, to: details, cards: cards)
+        let replayed = await submitter.book(draft(first, remember: true), noShow: agreement)
+        XCTAssertNotNil(replayed, "The retry finds the booking")
+        XCTAssertEqual(fake.bookingsMade, 1)
+        XCTAssertNil(cards.saved, "The card the shop is deleting isn't kept")
+        XCTAssertNil(keychain.secrets[SavedCardStore.account])
+        XCTAssertNil(cardsNextTime.saved)
+        XCTAssertTrue(cardsNextTime.cardsToDelete().isEmpty, "The shop was asked already")
+        XCTAssertEqual(details.saved, CustomerDetails(name: "Alex", phone: "(442) 555-0123"), "The name and number are still remembered")
+        XCTAssertEqual(
+            NoShowRequirement(entry: policies.entry(for: carlos), cards: cards, start: later),
+            .needsCard(NoShowTestData.carlosPolicy, unusable: nil),
+            "The next booking asks for a card"
+        )
+    }
+
+    /// A card added with Remember me off is held only until the app closes: closed without booking,
+    /// it's deleted at the shop next time. Turned back on, or booked with, it isn't on the list.
+    func testOnlyACardHeldUntilTheAppClosesIsOnTheList() async throws {
+        let fake = NoShowTestData.fake()
+        let addedResult = await CardSetup(api: fake, saver: FakeCardSaver(api: fake), cards: cards).addCard(for: carlos, remember: false)
+        let added = try XCTUnwrap(addedResult)
+        XCTAssertTrue(cards.cardsToDelete().isEmpty, "Kept for this booking")
+        XCTAssertEqual(cardsNextTime.cardsToDelete(), [added.token], "…until the app closes")
+
+        // Remember me turned on before booking: kept for next time, nothing to delete.
+        RememberedDetails.apply(remember: true, details: alex, to: details, cards: cards)
+        XCTAssertTrue(cardsNextTime.cardsToDelete().isEmpty)
+        XCTAssertEqual(cardsNextTime.saved, added)
+
+        // Forgotten ("Forget my details", or after a booking without Remember me): whoever forgets
+        // it asks the shop at once, so it isn't on the list either.
+        RememberedDetails.apply(remember: false, details: alex, to: details, cards: cards)
+        XCTAssertEqual(cardsNextTime.cardsToDelete(), [added.token])
+        XCTAssertEqual(RememberedDetails.forget(details, cards: cards), added.token)
+        XCTAssertTrue(cardsNextTime.cardsToDelete().isEmpty)
+    }
+
     /// "Forget my details": the name and number, and the card, from this iPhone. It hands back the
     /// card's key, for the shop to delete the card too.
     func testForgettingTheDetailsForgetsTheCard() {
@@ -1462,7 +1554,7 @@ final class FakeShopAPINoShowTests: XCTestCase {
 
     /// The server's own answer for "any barber" Haircut & Beard (server/test/fixtures/contract/no-show-policy.json).
     func testAnyBarberGivesTheRangeOfTheirFees() async throws {
-        let fixture = #"{"required":true,"minFeeCents":5500,"maxFeeCents":6000,"policyText":"No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $55–$60 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.","lateCancelWindowMinutes":60,"warning":{"title":"Full Service Cancellation & No-Show Fee","message":"Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($55–$60). Cancelling in the app more than 1 hour before is free."}}"#
+        let fixture = #"{"required":true,"minFeeCents":5500,"maxFeeCents":6000,"policyText":"No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $55–$60 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.","lateCancelWindowMinutes":60,"warning":{"title":"Late Cancellation & No-Show Fee","message":"Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($55–$60). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free."}}"#
         let server = try IzzyAPI.makeDecoder().decode(IzzyAPI.NoShowPolicy.self, from: Data(fixture.utf8))
         let policy = try await NoShowTestData.fake().noShowPolicy(for: .anyBarber(serviceId: "haircut-and-beard"))
         XCTAssertEqual(policy, server)
@@ -1486,8 +1578,8 @@ final class FakeShopAPINoShowTests: XCTestCase {
     func testLateCancellationsOff() async throws {
         let policy = try await NoShowTestData.fake { $0.noShowSettings.lateCancelEnabled = false }.noShowPolicy(for: carlos)
         XCTAssertNil(policy.lateCancelWindowMinutes)
-        XCTAssertEqual(policy.policyText, "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $45 (100% of the service) to this card. Cancelling in the app before your appointment is free.")
-        XCTAssertEqual(policy.warning, IzzyAPI.NoShowWarning(title: "No-Show Fee", message: "Not showing up may be charged the full service price ($45). Cancelling in the app before your appointment is free."))
+        XCTAssertEqual(policy.policyText, "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $45 (100% of the service) to this card within 7 days after your appointment time. Cancelling online before your appointment is free.")
+        XCTAssertEqual(policy.warning, IzzyAPI.NoShowWarning(title: "No-Show Fee", message: "Not showing up may be charged the full service price ($45). Cancelling online before your appointment is free."))
     }
 
     /// Booking needs a usable card and today's policy, checked in the server's order, with its words.

@@ -271,12 +271,12 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.examples, ["A $40 haircut: $40", "A $5 hot lather shave: $5"])
         XCTAssertEqual(store.capNote, "A fee is never more than the booked service's price. It can be charged up to 7 days after the appointment.")
         XCTAssertEqual(store.clientWarning, IzzyAPI.NoShowWarning(
-            title: "Full Service Cancellation & No-Show Fee",
-            message: "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($40). Cancelling in the app more than 1 hour before is free."
+            title: "Late Cancellation & No-Show Fee",
+            message: "Cancelling less than 1 hour before your appointment, or not showing up, may be charged the full service price ($40). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free."
         ))
         XCTAssertEqual(
             store.clientPolicy,
-            "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $40 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free."
+            "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $40 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking."
         )
         XCTAssertEqual(
             store.costsText,
@@ -294,7 +294,7 @@ final class NoShowSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.clientWarning?.title, "Late Cancellation & No-Show Fee")
         XCTAssertEqual(
             store.clientWarning?.message,
-            "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling in the app more than 1 hour before is free."
+            "Cancelling less than 1 hour before your appointment, or not showing up, may be charged $20 (50% of the service). Cancelling online more than 1 hour before, or within 15 minutes of booking, is free."
         )
         store.draft.feeMode = .flat
         store.draft.flatText = "25"
@@ -307,11 +307,11 @@ final class NoShowSettingsStoreTests: XCTestCase {
         store.draft.lateCancelWindowMinutes = 120
         store.draft.lateCancelEnabled = false
         XCTAssertEqual(store.clientWarning, IzzyAPI.NoShowWarning(
-            title: "No-Show Fee", message: "Not showing up may be charged $25. Cancelling in the app before your appointment is free."
+            title: "No-Show Fee", message: "Not showing up may be charged $25. Cancelling online before your appointment is free."
         ))
         XCTAssertEqual(
             store.clientPolicy,
-            "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $25 to this card. Cancelling in the app before your appointment is free."
+            "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $25 to this card within 7 days after your appointment time. Cancelling online before your appointment is free."
         )
         store.draft.lateCancelEnabled = true
         XCTAssertEqual(store.clientWarning?.message.contains("less than 2 hours before"), true)

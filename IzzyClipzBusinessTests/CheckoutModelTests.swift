@@ -146,6 +146,129 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertTrue(pending.entries.isEmpty)
     }
 
+    /// While nobody knows whether the last card went through, a cash or other sale waits too: if
+    /// the card did go through, the client would have paid twice. Take payment says so, with Check
+    /// the payment, and the server's answer settles it.
+    func testACashSaleWaitsWhileTheLastCardIsUnconfirmed() async throws {
+        harness.server.options.completeStatusOverride = "processing"
+        let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        let checkout = makeCheckout()
+        XCTAssertTrue(checkout.start(for: andre))
+        checkout.charge()
+        await checkout.waitUntilSettled()
+        guard case .outcomeUnknown = checkout.phase else { return XCTFail("Expected a check, got \(checkout.phase)") }
+        XCTAssertEqual(checkout.unconfirmedCardCents, 5500, "Take payment says which card is unconfirmed")
+
+        // Back, then Cash: not recorded until the card is checked.
+        checkout.backToEditing()
+        checkout.record(.cash)
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(checkout.phase, .outcomeUnknown(CheckoutModel.unconfirmedCardBeforeSaleMessage))
+        XCTAssertTrue(harness.server.sales.filter { $0.appointmentId == andre.id }.isEmpty, "No cash sale while the card is unknown")
+
+        // Checked from Take payment's notice: the card went through, and the sale is the card's.
+        checkout.backToEditing()
+        harness.server.options.completeStatusOverride = nil
+        checkout.checkUnconfirmedCard()
+        await checkout.waitUntilSettled()
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertEqual(receipt.sale?.summary, "Sold $55 · Card · Izzy")
+        XCTAssertFalse(receipt.appointmentAlreadyCheckedOut)
+        XCTAssertNil(checkout.unconfirmedCardCents)
+        XCTAssertEqual(harness.server.sales.filter { $0.voidedAt == nil && $0.appointmentId == andre.id }.map(\.method), [.card], "One sale, the card's")
+    }
+
+    /// Check out from the schedule or the Booked sheet asks before it replaces a ticket being rung up
+    /// for someone else; never for an empty ticket or the appointment's own, and not while a payment
+    /// runs (that has its own message).
+    func testCheckingOutAnAppointmentAsksBeforeReplacingAWalkInsTicket() async throws {
+        let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        let checkout = makeCheckout()
+        XCTAssertTrue(checkout.canStartCheckout)
+        XCTAssertNil(checkout.replacedTicketMessage(forAppointment: andre.id), "Nothing rung up yet")
+
+        checkout.ring(1_800)
+        checkout.ticket.addAmount(700, name: "Tip")
+        checkout.ticket.walkInName = "Sam"
+        XCTAssertEqual(
+            checkout.replacedTicketMessage(forAppointment: andre.id),
+            "Take payment has a sale being rung up for Sam (2 items, $25.00). This checkout takes its place."
+        )
+        XCTAssertEqual(CheckoutModel.replaceTicketQuestion, "Replace the sale on Take payment?")
+        checkout.ticket.walkInName = ""
+        XCTAssertEqual(
+            checkout.replacedTicketMessage(forAppointment: nil),
+            "Take payment has a sale being rung up (2 items, $25.00). This checkout takes its place."
+        )
+
+        // Andre's own ticket, opened again: nothing to lose.
+        XCTAssertTrue(checkout.start(for: andre))
+        XCTAssertNil(checkout.replacedTicketMessage(forAppointment: andre.id))
+        XCTAssertNotNil(checkout.replacedTicketMessage(forAppointment: "another"), "…but another appointment would replace it")
+
+        // While a payment runs, Check out can't start at all.
+        terminal.automaticOutcome = nil
+        checkout.charge()
+        let collecting = await eventually { checkout.phase == .collecting && self.terminal.pendingTap != nil }
+        XCTAssertTrue(collecting, "Got \(checkout.phase)")
+        XCTAssertFalse(checkout.canStartCheckout)
+        XCTAssertNil(checkout.replacedTicketMessage(forAppointment: "another"))
+        XCTAssertFalse(checkout.start(for: andre))
+        checkout.cancel()
+        await checkout.waitUntilSettled()
+        XCTAssertEqual(checkout.phase, .cancelled)
+    }
+
+    /// A card that went through for an appointment someone checked out another way meanwhile (on
+    /// the website, say) is kept by the server as a sale of its own: the success screen says the
+    /// client may have paid twice, and what to do.
+    func testACardForAnAppointmentAlreadyCheckedOutSaysTheClientMayHavePaidTwice() async throws {
+        harness.server.options.completeStatusOverride = "processing"
+        let andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        let checkout = makeCheckout()
+        XCTAssertTrue(checkout.start(for: andre))
+        checkout.charge()
+        await checkout.waitUntilSettled()
+        // Checked out in cash on another device while the card was processing.
+        _ = try await harness.api.recordSale(
+            IzzyAPI.NewSale(method: .cash, barberId: andre.barberId, appointmentId: andre.id, customerName: nil, items: [.service(andre.serviceId, unitCents: 5500)]),
+            idempotencyKey: .generate()
+        )
+        harness.server.options.completeStatusOverride = nil
+        checkout.checkAgain()
+        await checkout.waitUntilSettled()
+        guard case .succeeded(let receipt) = checkout.phase else { return XCTFail("Expected paid, got \(checkout.phase)") }
+        XCTAssertTrue(receipt.appointmentAlreadyCheckedOut)
+        XCTAssertTrue(CheckoutModel.alreadyCheckedOutMessage.contains("void one sale in Today's sales"))
+    }
+
+    /// An answer the app can't read, after the server took the sale, may mean it's saved: Record
+    /// again sends the same key, so it's never saved twice.
+    func testAnUnreadableAnswerToASaleIsUnknownAndKeepsItsKey() async throws {
+        let salesBefore = harness.server.sales.count
+        let checkout = makeCheckout()
+        checkout.ring(2500)
+        var keys: [IzzyAPI.IdempotencyKey] = []
+        api.recordSaleHandler = { [base = harness.api] sale, key in
+            keys.append(key)
+            if keys.count == 1 {
+                _ = try await base.recordSale(sale, idempotencyKey: key)
+                throw APIError.decoding("an answer from a newer server")
+            }
+            return try await base.recordSale(sale, idempotencyKey: key)
+        }
+        checkout.record(.cash)
+        await checkout.waitUntilSettled()
+        guard case .recordUnknown(let message) = checkout.phase else { return XCTFail("Expected unknown, got \(checkout.phase)") }
+        XCTAssertTrue(message.hasPrefix("The server answered, but the app couldn't read the answer."), message)
+        checkout.recordAgain()
+        await checkout.waitUntilSettled()
+        guard case .recorded = checkout.phase else { return XCTFail("Expected recorded, got \(checkout.phase)") }
+        XCTAssertEqual(keys.count, 2)
+        XCTAssertEqual(keys[0], keys[1], "The same key again")
+        XCTAssertEqual(harness.server.sales.count, salesBefore + 1, "Saved once")
+    }
+
     /// The receipt shows what was charged, even if the ticket on screen changed while the payment
     /// waited to be checked.
     func testTheReceiptShowsTheTicketAsItWasCharged() async {
@@ -559,6 +682,32 @@ final class CheckoutModelTests: XCTestCase {
         checkout.start(for: included)
         XCTAssertEqual(checkout.amountCents, 0, "Included with a cut: $0")
         XCTAssertEqual(checkout.ticket.customerName, "B Sample")
+    }
+
+    /// The price the client saw is the price they pay: an appointment booked before a price change
+    /// is checked out at its booked price, shown on its card, and one the app's menu doesn't know
+    /// (a newer server) still gets its price, not $0.
+    func testAnAppointmentIsCheckedOutAtThePriceItWasBookedAt() throws {
+        var andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        XCTAssertEqual(Catalog.izzyClipz.offering(withID: andre.offeringId)?.price, .dollars(55), "today's menu")
+        andre.priceLabel = "$45"
+        let checkout = makeCheckout()
+        XCTAssertTrue(checkout.start(for: andre))
+        XCTAssertEqual(checkout.amountCents, 4500)
+        XCTAssertEqual(checkout.ticket.appointment?.priceLabel, "$45", "the card shows the booked price")
+        XCTAssertFalse(try XCTUnwrap(checkout.ticket.items.first).startsAtThisPrice)
+
+        var unknown = andre
+        unknown.offeringId = "someone-new/haircut"
+        unknown.priceLabel = "$62.50"
+        XCTAssertTrue(checkout.start(for: unknown))
+        XCTAssertEqual(checkout.amountCents, 6250)
+
+        // A label with no price in it falls back to the menu.
+        unknown.offeringId = andre.offeringId
+        unknown.priceLabel = "Ask the barber"
+        XCTAssertTrue(checkout.start(for: unknown))
+        XCTAssertEqual(checkout.amountCents, 5500)
     }
 
     func testCheckingOutWaitsForARunningPayment() async throws {

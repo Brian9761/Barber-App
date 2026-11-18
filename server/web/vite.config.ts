@@ -182,7 +182,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [
       react(),
-      legalDocuments({ strict, dir: LEGAL_DIR }),
+      legalDocuments({ strict, dir: LEGAL_DIR, catalog: here('../data/catalog.json') }),
       // The four legal pages as plain HTML too, readable without JavaScript (tools/prerender.ts).
       legalPages({
         root: here('.'),

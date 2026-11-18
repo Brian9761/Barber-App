@@ -35,10 +35,12 @@ jobs:
   app:
     name: App on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    # With no-show protection's UI tests, a run takes 55 to 80 minutes on Apple silicon and two hours
-    # or more on Intel Macs, which run the simulator much more slowly (the owner app's UI tests go past
-    # three hours there). The limits leave room for a slow Mac, under GitHub's six hours for any job.
-    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 120 }}
+    # On Apple silicon a run takes 55 to 95 minutes, and the owner app's 85 to more than 120: its 54 UI
+    # tests alone take 70 to 90 minutes on a Mac of usual speed, a slow one adds a quarter, and a new
+    # simulator can take 12 minutes to boot. Intel Macs run the simulator much more slowly: two hours
+    # or more, past three for the owner app. The limits leave room for a slow Mac, under GitHub's six
+    # hours for any job.
+    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 180 }}
     strategy:
       fail-fast: false
       matrix:
@@ -104,9 +106,12 @@ jobs:
           status=$?
           # A slow simulator can keep the UI test runner from starting at all ("failed to initialize for
           # UI testing", before any UI test has run): that's the Mac, not the app, so the tests run once
-          # more. Any test that fails still fails the job.
-          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/test.log; then
-            echo "The UI test runner couldn't start on this simulator; running the tests once more"
+          # more, but only if no test had failed by then (the unit tests run first). Any test that fails
+          # still fails the job, and the first try's log is uploaded.
+          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/test.log \
+            && ! grep -qiE "^Test case .* failed" build/test.log; then
+            echo "The UI test runner couldn't start on this simulator; running the tests once more. The first try:"
+            grep -E "Executed [0-9]+ test|encountered an error" build/test.log | sort -u | head -20
             mv build/test.log build/test-first-try.log
             rm -rf build/TestResults.xcresult
             run_tests
@@ -198,7 +203,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload test results
-        if: failure()
+        if: failure() || hashFiles('build/test-first-try.log') != ''
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.runner }}
@@ -210,7 +215,8 @@ jobs:
   owner-app:
     name: Owner app on ${{ matrix.runner }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 120 }}
+    # The longest job: see the app's limits above.
+    timeout-minutes: ${{ inputs.macs == 'intel' && 330 || 180 }}
     strategy:
       fail-fast: false
       matrix:
@@ -306,9 +312,12 @@ jobs:
           run_tests
           status=$?
           # As for the customer app: a UI test runner that couldn't start on a slow simulator is the
-          # Mac's doing, so the tests run once more. Any test that fails still fails the job.
-          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/owner-test.log; then
-            echo "The UI test runner couldn't start on this simulator; running the tests once more"
+          # Mac's doing, so the tests run once more if no test had failed by then. Any test that fails
+          # still fails the job, and the first try's log is uploaded.
+          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/owner-test.log \
+            && ! grep -qiE "^Test case .* failed" build/owner-test.log; then
+            echo "The UI test runner couldn't start on this simulator; running the tests once more. The first try:"
+            grep -E "Executed [0-9]+ test|encountered an error" build/owner-test.log | sort -u | head -20
             mv build/owner-test.log build/owner-test-first-try.log
             rm -rf build/OwnerTestResults.xcresult
             run_tests
@@ -398,7 +407,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload test results
-        if: failure()
+        if: failure() || hashFiles('build/owner-test-first-try.log') != ''
         uses: actions/upload-artifact@v7
         with:
           name: test-results-owner-${{ matrix.runner }}

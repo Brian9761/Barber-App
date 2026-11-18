@@ -2,7 +2,7 @@ import SafariServices
 import SwiftUI
 
 /// A web page in Safari's in-app browser, in a sheet, so the owner stays in the app: the
-/// website's legal pages (Settings → Legal).
+/// website's legal pages (Settings → Legal, and the sign-in screen).
 ///
 /// UI tests (`-ui-testing`) see the page's address instead of Safari, so they check where a link
 /// leads without depending on the network. Anything that isn't an http(s) address is opened by
@@ -86,6 +86,34 @@ private struct WebAddressPreview: View {
                         .accessibilityIdentifier("webDone")
                 }
             }
+        }
+    }
+}
+
+/// The website's Privacy Policy, Terms of Service, Cancellation & No-Show Policy and Accessibility
+/// pages as rows, each opening in the in-app browser: in Settings → Legal, and on the sign-in
+/// screen, so they can be read before signing in (App Review, or anyone without the owner key).
+struct LegalPageRows: View {
+    let open: (Website.LegalPage) -> Void
+
+    var body: some View {
+        ForEach(Website.LegalPage.allCases) { page in
+            Button {
+                open(page)
+            } label: {
+                HStack {
+                    Text(page.title)
+                        .foregroundStyle(.primary)
+                    Spacer(minLength: 8)
+                    Image(systemName: "arrow.up.forward.square")
+                        .foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+                .contentShape(Rectangle())
+            }
+            .accessibilityHint("Opens the page on the shop's website.")
+            .accessibilityIdentifier(page.identifier)
         }
     }
 }

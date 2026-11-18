@@ -102,6 +102,13 @@ public struct ShopInfo: Sendable {
     public let accessibility: [String]
     /// The shop's Google Maps place ID, used for its Maps page and "Write a review".
     public let googlePlaceID: String
+    /// The business that runs the shop, as the legal documents' first paragraph names it ("Izzy
+    /// Clipz Barbershop is operated by …"): the LLC's exact registered name, empty until the owner
+    /// has given it (docs/legal/OWNER-CHECKLIST.md §1). See `operatedByLine`.
+    public let legalName: String
+    /// The shop's email address, for anyone who'd rather write, empty until the shop has one
+    /// (docs/legal/OWNER-CHECKLIST.md §1). See `byEmailLine`.
+    public let email: String
 
     public init(
         name: String,
@@ -118,7 +125,9 @@ public struct ShopInfo: Sendable {
         paymentMethods: [String],
         highlights: [String],
         accessibility: [String],
-        googlePlaceID: String
+        googlePlaceID: String,
+        legalName: String = "",
+        email: String = ""
     ) {
         precondition(TimeZone(identifier: timeZoneIdentifier) != nil, "Unknown time zone \(timeZoneIdentifier)")
         precondition(ShopInfo.isPlaceID(googlePlaceID), "Invalid Google place ID")
@@ -137,6 +146,9 @@ public struct ShopInfo: Sendable {
         self.highlights = highlights
         self.accessibility = accessibility
         self.googlePlaceID = googlePlaceID
+        // Spaces alone are nothing given.
+        self.legalName = legalName.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.email = email.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public var timeZone: TimeZone {
@@ -222,5 +234,36 @@ public struct ShopInfo: Sendable {
             preconditionFailure("Couldn't build a link to \(host)")
         }
         return url
+    }
+}
+
+// MARK: Who runs the shop
+
+extension ShopInfo {
+    /// Whether the owner has given the LLC's registered name (`legalName`).
+    public var hasLegalName: Bool { !legalName.isEmpty }
+
+    /// Whether the shop has an email address (`email`).
+    public var hasEmail: Bool { !email.isEmpty }
+
+    /// Whether both are given, so the lines say everything the shop will publish.
+    public var isOperatorKnown: Bool { hasLegalName && hasEmail }
+
+    /// Who runs the shop and where, as the website's footer and "Review and book" (on the website
+    /// and in the app) show it before any card is saved (Business and Professions Code §17538(d),
+    /// docs/legal/OWNER-CHECKLIST.md §3 item 20): "Izzy Clipz Barbershop is operated by
+    /// <legalName>, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States." Until the owner
+    /// gives the LLC's registered name, only what's known, nothing made up: "Izzy Clipz Barbershop,
+    /// 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States." (The website's strict build
+    /// stops until both the name and the email are given.)
+    public var operatedByLine: String {
+        let place = "\(address.singleLine), United States."
+        return hasLegalName ? "\(fullName) is operated by \(legalName), \(place)" : "\(fullName), \(place)"
+    }
+
+    /// The line next to `operatedByLine`: "To get this information by email, email us at <email>
+    /// and we'll send it within 5 days.", or nil until the shop has an email address.
+    public var byEmailLine: String? {
+        hasEmail ? "To get this information by email, email us at \(email) and we'll send it within 5 days." : nil
     }
 }

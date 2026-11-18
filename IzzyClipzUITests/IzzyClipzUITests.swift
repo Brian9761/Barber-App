@@ -319,6 +319,19 @@ final class IzzyClipzUITests: XCTestCase {
             "The consent line should sit right above Book appointment"
         )
         screenshot("15-Book-Review")
+        // Who runs the shop and where, and "Refunds" next to the Cancellation & No-Show Policy, before
+        // anything is booked. Until the owner gives the LLC's name and the shop's email, only what
+        // exists: the shop and its address, and nothing about email.
+        let whereItIs = containing("Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States")
+        scroll(toReveal: whereItIs)
+        XCTAssertTrue(whereItIs.exists, "No line saying where the shop is")
+        XCTAssertFalse(containing("is operated by").exists, "No LLC's name is given yet")
+        XCTAssertFalse(containing("To get this information by email").exists, "No email address is given yet")
+        let policies = element("reviewOperatorPolicies")
+        scroll(toReveal: policies)
+        XCTAssertTrue(policies.label.contains("Cancellation & No-Show Policy"), policies.label)
+        XCTAssertTrue(policies.label.contains("Refunds"), policies.label)
+        screenshot("15c-Book-Review-Who-Runs-The-Shop")
 
         bookAppointment()
         let booked = element("bookedSummary")
@@ -742,6 +755,25 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(waitForDisappearance(of: element("customerDetailsRow")), "The details are still remembered")
     }
 
+    /// The Privacy Policy link under the name and number opens over Your details: closing the page
+    /// comes back to the sheet, with what was typed still there.
+    func testThePrivacyPolicyOpensOverYourDetails() {
+        launch(UITestArguments.savedDetails)
+        openYourDetails()
+        // Return puts the keyboard away, so the line under the fields is in view.
+        type(" Jr\n", into: "detailsSheetName")
+        XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "The keyboard stayed up")
+        let link = app.links["Privacy Policy"].firstMatch
+        XCTAssertTrue(link.waitForExistence(timeout: 10), "No Privacy Policy link under the name and number")
+        link.tap()
+        XCTAssertEqual(webPageURL(), "https://izzy-clipz.vercel.app/privacy")
+        closeWebPage()
+        let name = element("detailsSheetName")
+        XCTAssertTrue(name.waitForExistence(timeout: 10), "Your details closed with the page")
+        XCTAssertTrue((name.value as? String ?? "").contains("Jr"), "What was typed is gone: \(String(describing: name.value))")
+        closeYourDetails()
+    }
+
     // MARK: No-show protection
 
     /// The shop asks for a card (no-show protection on, its starting settings): the fee notice on
@@ -754,7 +786,7 @@ final class IzzyClipzUITests: XCTestCase {
 
         let warning = element("noShowWarning")
         XCTAssertTrue(warning.waitForExistence(timeout: 10), "No fee notice on Review")
-        XCTAssertTrue(warning.label.contains("Full Service Cancellation & No-Show Fee"), warning.label)
+        XCTAssertTrue(warning.label.contains("Late Cancellation & No-Show Fee"), warning.label)
         if let lessThanAnHourAway {
             // The same note on Review, for the same time.
             XCTAssertEqual(warning.label.contains("This time is less than 1 hour away"), lessThanAnHourAway, warning.label)
@@ -763,6 +795,10 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(policy.waitForExistence(timeout: 10), "No policy to agree to")
         XCTAssertTrue(policy.label.contains("No payment now"), policy.label)
         XCTAssertTrue(policy.label.contains("$45 (100% of the service)"), policy.label)
+        // When the card may be charged, and when cancelling is free (owner checklist §3 item 22).
+        XCTAssertTrue(policy.label.contains("to this card within 7 days after your appointment time."), policy.label)
+        XCTAssertTrue(policy.label.contains("Cancelling online is free more than 1 hour before, or within 15 minutes of booking."), policy.label)
+        XCTAssertFalse(warning.label.contains("Full Service"), warning.label)
         let book = element("bookAppointmentButton")
         XCTAssertFalse(book.isEnabled, "Book should wait for a card")
         XCTAssertEqual(book.value as? String, "Add a card first")
@@ -863,7 +899,8 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(warning.waitForExistence(timeout: 15), "No fee notice on Pick a day and time")
         XCTAssertTrue(warning.label.contains("No-Show Fee"), warning.label)
         XCTAssertFalse(warning.label.contains("Cancellation"), warning.label)
-        XCTAssertTrue(warning.label.contains("Cancelling in the app before your appointment is free"), warning.label)
+        // The server's words, for every way to book: "online", not "in the app".
+        XCTAssertTrue(warning.label.contains("Cancelling online before your appointment is free"), warning.label)
     }
 
     /// An appointment with a card on file that starts in 45 minutes: cancelling it now warns first
@@ -1125,7 +1162,7 @@ final class IzzyClipzUITests: XCTestCase {
         // invitation to call, since the entrance isn't confirmed step-free.
         let lines = element("visitAccessibilityLines")
         scroll(toReveal: lines)
-        XCTAssertEqual(lines.label, "Accessibility: Room for a wheelchair inside, at the chairs and the counter. Accessible parking near the entrance")
+        XCTAssertEqual(lines.label, "Accessibility: Room for a wheelchair inside, at the chairs and the counter. Disabled parking space near the entrance")
         let access = element("visitAccessibilityCall")
         scroll(toReveal: access)
         XCTAssertTrue(access.label.contains("Questions about getting in or around the shop?"), access.label)
@@ -1135,6 +1172,9 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertFalse(containing("ADA-compliant").exists)
         XCTAssertFalse(containing("Wheelchair accessible").exists)
         XCTAssertFalse(containing("Step-free").exists)
+        // The shop has no email address yet, so the call line offers none (OWNER-CHECKLIST §3 item 21).
+        XCTAssertFalse(element("visitAccessibilityEmail").exists, "No email address is given yet")
+        XCTAssertFalse(containing("Or email us at").exists)
         screenshot("23b-Visit-Good-To-Know")
 
         let reviews = element("visitSeeAllReviews")
@@ -1166,6 +1206,8 @@ final class IzzyClipzUITests: XCTestCase {
             let row = element(identifier)
             scroll(toReveal: row)
             XCTAssertTrue(row.label.contains(title), row.label)
+            // VoiceOver reads the line under the title too.
+            XCTAssertTrue(row.label.contains(". "), "No summary in: \(row.label)")
             if identifier == "legal-privacy" {
                 screenshot("24b-Visit-Legal")
             }
@@ -1201,9 +1243,17 @@ final class IzzyClipzUITests: XCTestCase {
         if checkingTheTimeStepWarning {
             let warning = element("noShowWarning")
             XCTAssertTrue(warning.waitForExistence(timeout: 15), "No fee notice on Pick a day and time", file: file, line: line)
-            XCTAssertTrue(warning.label.contains("Full Service Cancellation & No-Show Fee"), warning.label, file: file, line: line)
+            XCTAssertTrue(warning.label.contains("Late Cancellation & No-Show Fee"), warning.label, file: file, line: line)
             XCTAssertTrue(warning.label.contains("the full service price ($45)"), warning.label, file: file, line: line)
             screenshot("50-Book-Time-Fee-Warning")
+            // The whole policy is a tap away, next to the notice.
+            let policyLink = element("feePolicyLink")
+            XCTAssertTrue(policyLink.waitForExistence(timeout: 10), "No link to the policy by the fee notice", file: file, line: line)
+            XCTAssertTrue(policyLink.label.contains("Read the Cancellation & No-Show Policy"), policyLink.label, file: file, line: line)
+            scroll(toReveal: policyLink, file: file, line: line)
+            policyLink.tap()
+            XCTAssertEqual(webPageURL(file: file, line: line), "https://izzy-clipz.vercel.app/cancellation-policy", file: file, line: line)
+            closeWebPage(file: file, line: line)
         }
         let time = pickFirstTime(file: file, line: line)
         let lessThanAnHourAway = checkingTheTimeStepWarning ? checkLateCancelNotice(forTime: time, file: file, line: line) : nil

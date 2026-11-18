@@ -5,7 +5,7 @@ import SwiftUI
 /// Service and Cancellation & No-Show Policy." (both linked) right above it.
 ///
 /// With no-show protection (the shop's server says this booking needs a card), Review also shows
-/// the "Full Service Cancellation & No-Show Fee" notice and a "Card on file" section: the card on
+/// the "Late Cancellation & No-Show Fee" notice and a "Card on file" section: the card on
 /// this iPhone with Change, or Add a card (Stripe's own page), and the policy the client agrees to
 /// by booking. Book appointment waits until there's a card that can hold this appointment.
 ///
@@ -106,6 +106,7 @@ private struct BookingReviewScreen: View {
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                ReviewOperatorLines()
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, Theme.Space.s)
@@ -367,5 +368,43 @@ private struct BookingFailureCard: View {
             .accessibilityIdentifier("bookingCallButton")
         }
         .card(padding: Theme.Space.xl)
+    }
+}
+
+/// At the end of Review, before any card is saved: who runs the shop and where, how to get that by
+/// email, and the refund policy ("Refunds") next to the Cancellation & No-Show Policy, in the
+/// website's words (Business and Professions Code §17538(d); docs/legal/OWNER-CHECKLIST.md §3 item
+/// 20). Until the owner gives the LLC's name and the shop's email, only what exists: the shop and its
+/// address (`ShopInfo.operatedByLine`), and no line about email.
+struct ReviewOperatorLines: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(AppData.shop.operatedByLine)
+            if let byEmail = Self.byEmail(for: AppData.shop) {
+                Text(byEmail)
+                    .tint(Theme.electric)
+            }
+            LegalLinksText(text: LegalCopy.reviewPolicies, pages: LegalCopy.reviewPolicyPages, linksRefunds: true)
+                .accessibilityIdentifier("reviewOperatorPolicies")
+        }
+        .textRole(.caption)
+        .foregroundStyle(Theme.smoke)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reviewOperator")
+    }
+
+    /// `ShopInfo.byEmailLine`, with the shop's email address linked (mailto:, underlined, so the
+    /// link never depends on color alone), or nil until the shop has an email address.
+    static func byEmail(for shop: ShopInfo) -> AttributedString? {
+        guard let line = shop.byEmailLine else { return nil }
+        var text = AttributedString(line)
+        if let range = text.range(of: shop.email), let url = URL(string: "mailto:\(shop.email)") {
+            text[range].link = url
+            text[range].swiftUI.underlineStyle = .single
+            text[range].swiftUI.foregroundColor = Theme.electric
+        }
+        return text
     }
 }

@@ -85,7 +85,7 @@ enum NoShowRequirement: Equatable {
     }
 }
 
-/// The "Full Service Cancellation & No-Show Fee" notice on Pick a day and time and on Review: the
+/// The "Late Cancellation & No-Show Fee" notice on Pick a day and time and on Review: the
 /// server's title and message, and for a picked time that starts less than the late-cancellation
 /// window from now, "This time is less than 1 hour away, so cancelling it more than 15 minutes after
 /// booking may be charged $40." (the Kit's words: cancelling within 15 minutes of booking is free).
@@ -337,6 +337,8 @@ enum RememberedDetails {
 /// What the app says about no-show protection: on Review, on the appointment cards and on "You're
 /// booked". The policy and the warning themselves are the server's words.
 enum NoShowCopy {
+    /// Under the fee notice (Pick a day and time, Review): the whole policy, as the website says it.
+    static let readPolicyLink = "Read the Cancellation & No-Show Policy"
     /// Over the card section on Review.
     static let sectionTitle = "Card on file"
     static let sectionSubtitle = "Needed to book. You won't be charged now."

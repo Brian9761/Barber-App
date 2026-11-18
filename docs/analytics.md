@@ -56,7 +56,7 @@ The website's Business area shows the same numbers on a computer.
 | **Checkouts** (`checkouts`) | Sales, plus appointments marked Done without a checkout. |
 | **Clients served** (`clientsServed`) | Appointments marked Done, plus sales to walk-ins (sales without an appointment). |
 | **Average ticket** (`averageTicketCents`) | (Services + products + other) divided by checkouts. Fees aren't part of it. |
-| **Compared with before** (`previous`) | Sales for the same number of days just before, so you can see if you're up or down. For a week, that's the week before. |
+| **Compared with before** (`previous`) | Sales for the same number of days just before, so you can see if you're up or down. The change names those days: on a Wednesday, Week (Monday to Wednesday) is compared with Friday to Sunday. |
 
 ## How productive the shop was
 

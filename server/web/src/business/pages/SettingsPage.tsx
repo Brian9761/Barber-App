@@ -231,7 +231,9 @@ function NoShowSection({ stripe }: { stripe: StripeConnection | null }) {
         <span className="biz-switch__track" aria-hidden="true" />
         <span className="biz-switch__label">No-show protection</span>
       </label>
-      <p className="secondary small">{draft.enabled ? noShow.ON_FOOTER : noShow.OFF_FOOTER}</p>
+      <p className="secondary small" data-testid="no-show-switch-note">
+        {draft.enabled ? noShow.onFooter(demo()) : noShow.OFF_FOOTER}
+      </p>
       {stripeLine ? (
         <Notice tone="info" testId="no-show-stripe-note">
           <p>{stripeLine}</p>

@@ -324,15 +324,19 @@
   padding: 2px 0;
 }
 
-/* Where the shop is, at the right, like apple.com's country (under the rest on a phone). */
-.globalfooter__where {
-  margin-left: auto;
+/*
+ * Who runs the shop, and how to get that by email: on a row of its own, in the booking pages' size and
+ * colour, never smaller (Business and Professions Code §17538(d), owner checklist §3 item 20).
+ */
+.globalfooter__operator {
+  flex: 1 0 100%;
+  color: var(--color-text);
+  font-size: var(--text-body);
+  line-height: 1.47;
 }
 
-@media (max-width: 733px) {
-  .globalfooter__where {
-    margin-left: 0;
-  }
+.globalfooter__operator p + p {
+  margin-top: var(--space-1);
 }
 
 /* ------------------------------------------------------------------- Buttons */

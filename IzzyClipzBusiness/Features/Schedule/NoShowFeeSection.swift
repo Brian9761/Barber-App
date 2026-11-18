@@ -2,9 +2,10 @@ import IzzyClipzKit
 import SwiftUI
 
 /// An appointment's card on file and its fee (a no-show or a late cancellation): what the client
-/// agreed to when booking, what happened to the fee, and Charge (which asks first), Charge again
-/// after a decline, or Check again when Stripe hasn't answered. Nothing for an appointment
-/// without a card on file.
+/// agreed to when booking, what happened to the fee, and Charge (which asks first), or Check again
+/// when Stripe hasn't answered. After a decline the card isn't charged again: it says to ask the
+/// client to pay another way. A charged fee whose receipt didn't go out says so, and how to send one.
+/// Nothing for an appointment without a card on file.
 struct NoShowFeeSection: View {
     let appointment: IzzyAPI.Appointment
     let now: Date
@@ -12,7 +13,7 @@ struct NoShowFeeSection: View {
     @State private var confirmation: FeePanel.Confirmation?
 
     var body: some View {
-        if let panel = FeePanel(appointment: appointment, now: now, shopTime: store.shopTime) {
+        if let panel = FeePanel(appointment: appointment, now: now, shopTime: store.shopTime, others: store.appointments) {
             Section {
                 LabeledContent("Card", value: panel.cardLabel)
                     .accessibilityIdentifier("detailCard")
@@ -26,6 +27,11 @@ struct NoShowFeeSection: View {
                 .accessibilityElement(children: .combine)
                 .accessibilityIdentifier("detailFee")
                 status(panel.status)
+                if let note = panel.receiptNote {
+                    // Charged, but no receipt went out: say so, and how to send one.
+                    InlineMessage(text: note, systemImage: "envelope.badge")
+                        .accessibilityIdentifier("feeReceipt")
+                }
                 if let error = store.feeError(for: appointment) {
                     InlineMessage(text: error, systemImage: "exclamationmark.octagon.fill", color: .red)
                         .accessibilityIdentifier("feeError")
@@ -36,7 +42,10 @@ struct NoShowFeeSection: View {
             } header: {
                 Text("Card on file")
             } footer: {
-                if let footer = panel.footer { Text(footer) }
+                if let footer = panel.footer {
+                    Text(footer)
+                        .accessibilityIdentifier("feeFooter")
+                }
             }
         }
     }

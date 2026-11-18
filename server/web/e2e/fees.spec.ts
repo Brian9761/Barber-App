@@ -123,6 +123,15 @@ async function moveBack(request: APIRequestContext, booked: Booked, days: number
   return { ...booked, start: by(booked.start), end: by(booked.end), createdAt: by(booked.createdAt) };
 }
 
+/**
+ * A no-show's fee recorded as charged, as the server does once Stripe says it went through (the e2e
+ * server's stand-in for Stripe takes no payments), with what became of its receipt.
+ */
+async function feeCharged(request: APIRequestContext, booked: Booked, receipt: 'sent' | 'no_email' | 'failed'): Promise<void> {
+  const response = await request.post('/__e2e/appointments/fee-charged', { data: { id: booked.id, receipt } });
+  expect(response.ok(), await response.text()).toBe(true);
+}
+
 /** How many days back from its start a booking has to move to start `daysAgo` days before today (same time of day). */
 function daysBackTo(booked: Booked, daysAgo: number): number {
   const day = shopDate(new Date(booked.start));
@@ -258,6 +267,19 @@ test.describe('on the real site', () => {
       await expect(confirm.getByRole('heading')).toHaveText(new RegExp(`^Charge \\$\\d+ to Missed ${who}'s Visa •••• 4242\\?$`));
       await confirm.getByRole('button', { name: "Don't charge" }).click();
 
+      // Charged at Stripe (recorded as the server does), but the card page kept no email: no receipt
+      // went out, and the details say so and how to send one (owner checklist §3 item 19).
+      await feeCharged(request, yesterday, 'no_email');
+      panel = await openInBusiness(page, yesterday, `Missed ${who}`);
+      await expect(panel.getByTestId('fee-status')).toContainText('No-show fee charged');
+      await expect(panel.getByTestId('fee-receipt')).toHaveText(
+        'No receipt was sent: Stripe has no email address for this client. Ask them for one, and send the receipt from the Stripe Dashboard.',
+      );
+      await expect(panel.getByTestId('fee-panel').getByRole('button')).toHaveCount(0);
+      await expectAccessible(page, 'a fee charged with no receipt sent');
+      await panel.getByTestId('fee-receipt').scrollIntoViewIfNeeded();
+      await view(page, testInfo, '05b-business-charged-no-receipt');
+
       panel = await openInBusiness(page, eightDaysAgo, `Late ${who}`);
       await expect(panel.getByTestId('fee-status')).toHaveText("It's more than 7 days after the appointment, so the fee can't be charged.");
       await expect(panel.getByTestId('fee-panel').getByRole('button')).toHaveCount(0);
@@ -307,7 +329,7 @@ test.describe('on the real site', () => {
       const notice = page.getByTestId('fee-warning');
       await expect(notice.locator('.notice__title')).toHaveText('Late Cancellation & No-Show Fee');
       await expect(notice).toContainText(
-        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling in the app more than 1 hour before is free.',
+        'Cancelling less than 1 hour before your appointment, or not showing up, may be charged $5. Cancelling online more than 1 hour before, or within 15 minutes of booking, is free.',
       );
       await (await firstTime(page)).click();
       await expect(notice).not.toContainText('$25');
@@ -320,11 +342,44 @@ test.describe('on the real site', () => {
       await expect(page.getByTestId('fee-warning')).not.toContainText('$25');
       // What they agree to by booking: the same $5.
       await expect(page.getByTestId('card-section')).toContainText(
-        "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card. Cancelling in the app more than 1 hour before is free.",
+        "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $5 to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
       );
       await expectAccessible(page, 'Review, with a flat fee capped at the price');
       await page.getByTestId('fee-warning').scrollIntoViewIfNeeded();
       await view(page, testInfo, '09-review-flat-fee-capped');
+    } finally {
+      await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', before);
+      await setProtection(request, false);
+    }
+  });
+
+  test('with late cancellations off, the notice is "No-Show Fee", and what clients agree to says only a no-show may be charged', async ({
+    page,
+    request,
+    phone,
+  }) => {
+    const before = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
+    await setProtection(request, true);
+    await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', { feeMode: 'percent', percent: 100, lateCancelEnabled: false });
+    try {
+      // Carlos's $45 haircut, the whole price as the fee.
+      await page.goto('/book?barber=carlos-rafael&service=haircut');
+      await expectStep(page, 3, 'Pick a day and time');
+      const notice = page.getByTestId('fee-warning');
+      await expect(notice.locator('.notice__title')).toHaveText('No-Show Fee');
+      await expect(notice).toContainText('Not showing up may be charged the full service price ($45). Cancelling online before your appointment is free.');
+      await expect(notice).not.toContainText(/Late Cancellation|Full Service/);
+      await (await firstTime(page)).click();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expectStep(page, 4, 'Your details');
+      await fillDetails(page, { name: 'Noah Noshow', phone });
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expectStep(page, 5, 'Review and book');
+      await expect(page.getByTestId('fee-warning').locator('.notice__title')).toHaveText('No-Show Fee');
+      // What they agree to by booking: when the card may be charged, and that cancelling online is free.
+      await expect(page.getByTestId('card-section')).toContainText(
+        "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $45 (100% of the service) to this card within 7 days after your appointment time. Cancelling online before your appointment is free.",
+      );
     } finally {
       await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', before);
       await setProtection(request, false);

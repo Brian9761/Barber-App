@@ -105,8 +105,10 @@ final class AppResourcesTests: XCTestCase {
     }
 
     /// The name, number and note sent with a booking, and the card saved for no-show protection
-    /// (its brand, last 4 digits and expiry; the number is typed on Stripe's page), are declared: used
-    /// for the app's own functionality, linked to the client, never for tracking.
+    /// (its brand, last 4 digits and expiry; the number is typed on Stripe's page, with the email
+    /// address that page asks for), are declared: used for the app's own functionality, linked to
+    /// the client, never for tracking, as the App Privacy answers in the README and the owner
+    /// checklist (docs/legal/OWNER-CHECKLIST.md §4) give them.
     func testPrivacyManifestDeclaresWhatGoesToTheShop() throws {
         let url = try XCTUnwrap(Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"))
         let manifest = try XCTUnwrap(try PropertyListSerialization.propertyList(from: Data(contentsOf: url), format: nil) as? [String: Any])
@@ -116,6 +118,7 @@ final class AppResourcesTests: XCTestCase {
         XCTAssertEqual(Set(types), [
             "NSPrivacyCollectedDataTypeName",
             "NSPrivacyCollectedDataTypePhoneNumber",
+            "NSPrivacyCollectedDataTypeEmailAddress",
             "NSPrivacyCollectedDataTypePaymentInfo",
             "NSPrivacyCollectedDataTypeOtherUserContent",
         ])

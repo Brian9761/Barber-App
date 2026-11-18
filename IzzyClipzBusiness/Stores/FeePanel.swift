@@ -22,6 +22,10 @@ struct FeePanel: Equatable {
     let action: Action?
     /// Under the section.
     let footer: String?
+    /// For a charged fee whose receipt didn't go out (Stripe had no email for the client, or
+    /// couldn't be asked): that, and how to send one, in plain words (the Kit's
+    /// `NoShowFeeReceipt.unsentNote`, as the website says it). `nil` otherwise.
+    let receiptNote: String?
 
     enum Status: Equatable {
         /// Nothing charged. `note` says why it can't be, or how it could be; `nil` when there's
@@ -38,7 +42,7 @@ struct FeePanel: Equatable {
     }
 
     struct Action: Equatable {
-        /// "Charge no-show fee ($35)", "Charge late cancellation fee ($35)", "Charge again ($35)" or "Check again".
+        /// "Charge no-show fee ($35)", "Charge late cancellation fee ($35)" or "Check again".
         let title: String
         /// Asked before every new charge. `nil` for Check again: it only finishes the try the owner
         /// already confirmed (the server never charges a fee twice). Finishing it can still send that
@@ -64,9 +68,16 @@ struct FeePanel: Equatable {
     /// Check again only asks Stripe how that try went, and nothing more is charged.
     static let pendingCheckOnlyMessage = "Stripe hasn't confirmed this charge yet. Check again asks Stripe how it went: if it went through, it shows as charged, and if not, nothing is charged."
 
+    /// Under a fee the bank turned down: the card isn't charged again (the server's rule), and the
+    /// Cancellation & No-Show Policy promises the client written notice and at least 7 days to pay
+    /// another way.
+    static let turnedDownFooter =
+        "The card isn't charged again. Tell the client in writing (a text, or an email if they gave one), and give them at least 7 days to pay the fee another way, for example at the shop."
+
     /// `nil` when the appointment has no card on file (booked at the shop, by phone, or before
-    /// no-show protection was on).
-    init?(appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime) {
+    /// no-show protection was on). `others` are the day's appointments: a late cancellation whose
+    /// time another client was booked into isn't charged (the policy's promise, and the server's rule).
+    init?(appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime, others: [IzzyAPI.Appointment] = []) {
         guard let fee = appointment.noShowFee else { return nil }
         let card = appointment.card?.label ?? "the card on file"
         cardLabel = appointment.card?.label ?? "Card on file"
@@ -76,8 +87,11 @@ struct FeePanel: Equatable {
         } else {
             agreement = "For not showing up. Cancelling in the app before the start is free."
         }
-        let chargeable = appointment.chargeableFee(at: now)
+        let found = appointment.chargeableFee(at: now)
+        let timeTaken = found == .lateCancel && appointment.timeTaken(among: others)
+        let chargeable = timeTaken ? nil : found
 
+        receiptNote = fee.status == .charged ? fee.receipt?.unsentNote : nil
         switch fee.status {
         case .charged:
             let when = fee.chargedAt.map { ", \(shopTime.dayAndTime($0))" } ?? ""
@@ -85,13 +99,10 @@ struct FeePanel: Equatable {
             footer = "Refunds are made in the Stripe Dashboard. Reopening the appointment doesn't refund the fee."
         case .declined:
             status = .declined(Self.text(fee.message, or: "The bank declined the card."))
-            // Trying again only while it can be: once it's reopened, say, the footer says why not.
-            footer = chargeable != nil
-                ? "You can try the card again later, or ask the client to pay at the shop."
-                : Self.whyNotAgain(for: appointment, now: now)
+            footer = Self.turnedDownFooter
         case .needsAction:
             status = .needsClient(Self.text(fee.message, or: "The client's bank wants them to approve this charge. Ask them to pay at the shop."))
-            footer = chargeable != nil ? nil : Self.whyNotAgain(for: appointment, now: now)
+            footer = Self.turnedDownFooter
         case .pending:
             if case .chargeable = appointment.feeCase(at: now) {
                 status = .pending(Self.pendingMessage)
@@ -100,7 +111,7 @@ struct FeePanel: Equatable {
             }
             footer = nil
         case .none:
-            status = .notCharged(note: Self.note(for: appointment, now: now))
+            status = .notCharged(note: timeTaken ? IzzyAPI.NoShowRule.timeTakenMessage : Self.note(for: appointment, now: now))
             footer = chargeable == nil
                 ? nil
                 : "Nothing is charged until you confirm, and a fee is only ever charged once."
@@ -110,10 +121,7 @@ struct FeePanel: Equatable {
             action = Action(title: "Check again", confirmation: nil)
         } else if let reason = chargeable {
             let amount = fee.amountLabel
-            let title = fee.status == .declined || fee.status == .needsAction
-                ? "Charge again (\(amount))"
-                : "Charge \(reason.title.lowercased()) (\(amount))"
-            action = Action(title: title, confirmation: Confirmation(
+            action = Action(title: "Charge \(reason.title.lowercased()) (\(amount))", confirmation: Confirmation(
                 title: "Charge \(amount) to \(appointment.customer.name)'s \(card)?",
                 message: Self.confirmationMessage(for: appointment, fee: fee, reason: reason, shopTime: shopTime),
                 button: "Charge \(amount)"
@@ -145,14 +153,6 @@ struct FeePanel: Equatable {
         }
     }
 
-    /// Why a fee Stripe said no to can't be tried again now, under the "Declined" (or "needs the
-    /// client") it still shows: the reason it gives when nothing was tried, or, for a visit marked
-    /// completed, that there's nothing to charge.
-    private static func whyNotAgain(for appointment: IzzyAPI.Appointment, now: Date) -> String? {
-        if let note = note(for: appointment, now: now) { return note }
-        return appointment.status == .completed ? "The appointment is marked completed, so there's no fee to charge." : nil
-    }
-
     private static func confirmationMessage(
         for appointment: IzzyAPI.Appointment,
         fee: IzzyAPI.NoShowFee,
@@ -176,7 +176,8 @@ struct FeePanel: Equatable {
                     message += ", less than \(IzzyAPI.NoShowRule.windowLabel(minutes: window)) before"
                 }
             }
-            return message + ". They agreed to it when booking."
+            // A walk-in rung up without an appointment can't be seen here: the policy promises no fee then too.
+            return message + ". They agreed to it when booking. Don't charge it if another client, such as a walk-in, took this time."
         }
     }
 
@@ -209,9 +210,17 @@ struct FeePanel: Equatable {
                 return "The client cancelled this booking in the app, so once it's reopened, it can't be charged a no-show fee. "
                     + "To keep a no-show fee, ask them to book again in the app instead."
             }
+            // Marked done: the client came, and that stays (the server's completedAt), as the website says.
+            if appointment.status == .completed, appointment.card != nil {
+                return Self.reopenCompletedWarning
+            }
             return nil
         }
     }
+
+    /// What Reopen says first for a booking with a card on file that was marked done.
+    static let reopenCompletedWarning =
+        "It was marked done, so even once it's reopened, it can't be marked a no-show or charged a no-show fee: the client came."
 
     /// Under the status buttons of a booking with a card on file that hasn't ended: "Mark no-show"
     /// isn't offered yet, because until the start the client can still cancel in the app, and a
@@ -257,6 +266,18 @@ extension IzzyAPI.Appointment {
     /// `already_completed`), for others whenever it's booked, as before.
     func canMarkNoShow(at now: Date) -> Bool {
         status == .booked && canBeMarkedNoShow(at: now)
+    }
+
+    /// Whether another client has this appointment's time now: another booked or completed
+    /// appointment of the same barber that overlaps it, among `others` (the day's). Then a late
+    /// cancellation isn't charged: the Cancellation & No-Show Policy promises it, and the server
+    /// refuses it (`timeTakenSince` in server/src/noshowfee.ts).
+    func timeTaken(among others: [IzzyAPI.Appointment]) -> Bool {
+        others.contains { other in
+            other.id != id && other.barberId == barberId
+                && (other.status == .booked || other.status == .completed)
+                && other.start < end && other.end > start
+        }
     }
 
     /// The client cancelled in the app less than the agreed window before the start, and more than

@@ -193,7 +193,7 @@ extension TerminalIssue {
         case .pending:
             return TerminalIssue(
                 title: "Stripe is checking your details",
-                message: "This usually takes a few minutes, and card payments start by themselves once Stripe is done. \(meanwhile)",
+                message: "This usually takes a few minutes. Card payments start once Stripe is done: tap Check again to see if it is. \(meanwhile)",
                 fixInSettings: true
             )
         case .restricted:

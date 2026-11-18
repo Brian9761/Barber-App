@@ -1049,6 +1049,25 @@
   font-weight: 700;
 }
 
+/* A charged fee whose receipt didn't go out: what happened and what to do, with a warning sign so it's not color alone. */
+.biz-fee__receipt {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-left: 5px solid var(--color-warning-line);
+  border-radius: 12px;
+  background: var(--color-warning-bg);
+  color: var(--color-text);
+}
+
+.biz-fee__receipt svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+}
+
 .biz-fee .button,
 .biz-paid .button {
   justify-self: start;

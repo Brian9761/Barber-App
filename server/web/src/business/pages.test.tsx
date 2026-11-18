@@ -7,6 +7,7 @@ import computersFixture from '../../../test/fixtures/contract/computer-sessions.
 import codeFixture from '../../../test/fixtures/contract/computer-code.json';
 import alreadyCompleted from '../../../test/fixtures/contract/errors/already_completed.json';
 import feeCharged from '../../../test/fixtures/contract/no-show-fee-charged.json';
+import feeUnsent from '../../../test/fixtures/contract/no-show-fee-charged-no-receipt.json';
 import noShowSettings from '../../../test/fixtures/contract/no-show-settings.json';
 import ownerAppointments from '../../../test/fixtures/contract/owner-appointments-with-sale.json';
 import ownerProducts from '../../../test/fixtures/contract/owner-products.json';
@@ -234,6 +235,43 @@ describe('Today', () => {
     expect(outcome).toBeTruthy();
     expect(within(panel).queryByRole('button', { name: /Charge no-show fee/ })).toBeNull();
     expect(api.calls.find((c) => c.method === 'POST')).toMatchObject({ path: `/api/owner/appointments/${noShow.id}/no-show-fee` });
+  });
+
+  it('says when a charged fee’s receipt didn’t go out, and how to send one, under what was charged', async () => {
+    signedIn();
+    // The server's own answer for a fee whose card page kept no email (no receipt went out).
+    const unsent = feeUnsent.appointment;
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [unsent] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-05', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today?date=2026-11-05');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const fee = within(screen.getByTestId('side-panel')).getByTestId('fee-panel');
+    expect(within(fee).getByTestId('fee-status').textContent).toContain('No-show fee charged');
+    const receipt = within(fee).getByTestId('fee-receipt');
+    expect(receipt.textContent).toBe(
+      'No receipt was sent: Stripe has no email address for this client. Ask them for one, and send the receipt from the Stripe Dashboard.',
+    );
+    // Right under what was charged, before the refunds line.
+    expect(within(fee).getByTestId('fee-status').nextElementSibling).toBe(receipt);
+    expect(within(fee).queryByRole('button')).toBeNull();
+  });
+
+  it('says nothing about the receipt when Stripe emailed it', async () => {
+    signedIn();
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [{ ...feeCharged.appointment, ...when }] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const fee = within(screen.getByTestId('side-panel')).getByTestId('fee-panel');
+    expect(within(fee).getByTestId('fee-status').textContent).toContain('No-show fee charged');
+    expect(within(fee).queryByTestId('fee-receipt')).toBeNull();
   });
 
   it('says why a fee wasn’t charged next to its button, with the way to Settings when Stripe isn’t connected', async () => {

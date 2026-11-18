@@ -14,12 +14,25 @@ enum AppData {
 /// isn't confirmed step-free. Never "ADA" (docs/legal/research.md §10). The website's Visit page
 /// says the same.
 enum VisitAccessibility {
-    /// "Room for a wheelchair inside, at the chairs and the counter" and "Accessible parking near the entrance".
+    /// "Room for a wheelchair inside, at the chairs and the counter" and "Disabled parking space near the entrance".
     static var lines: [String] { AppData.shop.accessibility }
 
-    /// "Questions about getting in or around the shop? Call (442) 341-3053 and we'll help."
+    /// "Questions about getting in or around the shop? Call (442) 341-3053 (relay calls welcome: dial
+    /// 711) and we'll help." Any relay service is welcome, as the Accessibility Statement says.
     static var callLine: String {
-        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) and we'll help."
+        "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) (relay calls welcome: dial 711) and we'll help."
+    }
+
+    /// "Or email us at <email>." right after the call line, once the shop has an email address (the
+    /// Kit's `ShopInfo.email`), so the line about getting in offers email too; nil until then, so no
+    /// address is made up (docs/legal/OWNER-CHECKLIST.md §3 item 21). The website says the same.
+    static func emailLine(for shop: ShopInfo = AppData.shop) -> String? {
+        shop.hasEmail ? "Or email us at \(shop.email)." : nil
+    }
+
+    /// Where `emailLine` writes to (mailto:), or nil without an email address.
+    static func emailURL(for shop: ShopInfo = AppData.shop) -> URL? {
+        shop.hasEmail ? URL(string: "mailto:\(shop.email)") : nil
     }
 }
 

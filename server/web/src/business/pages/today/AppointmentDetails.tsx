@@ -59,6 +59,7 @@ export function canCheckOut(appointment: OwnerAppointment): boolean {
 
 export function AppointmentDetails({
   appointment,
+  others = [],
   zone,
   now,
   onChanged,
@@ -66,6 +67,8 @@ export function AppointmentDetails({
   onVoidSale,
 }: {
   appointment: OwnerAppointment;
+  /** The day's appointments: a late cancellation whose time another client took isn't charged. */
+  others?: readonly OwnerAppointment[];
   zone: string;
   now: Date;
   /** The server's answer after a change: shown right away, and the day loads again. */
@@ -145,7 +148,7 @@ export function AppointmentDetails({
   }, [focusNext, appointment, feeError, changed]);
 
   const start = new Date(appointment.start);
-  const panel = feePanel(appointment, now, zone);
+  const panel = feePanel(appointment, now, zone, others);
   const payment = paymentSummary(appointment);
   const paid = paidLabel(appointment);
   const phone = appointment.customer.phone;
@@ -297,6 +300,13 @@ export function AppointmentDetails({
               <p>{panel.status.detail}</p>
             </div>
           )}
+          {panel.receiptNote ? (
+            // Charged, but no receipt went out: say so, and how to send one.
+            <p className="biz-fee__receipt" data-testid="fee-receipt">
+              <Icon name="warning" />
+              <span>{panel.receiptNote}</span>
+            </p>
+          ) : null}
           {feeError ? (
             <div className="field__error biz-fee__error" role="alert" tabIndex={-1} ref={feeErrorLine} data-testid="fee-error">
               <Icon name="error" />

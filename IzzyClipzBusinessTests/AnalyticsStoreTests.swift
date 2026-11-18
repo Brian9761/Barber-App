@@ -264,6 +264,23 @@ final class ProductivityTileTests: XCTestCase {
         XCTAssertTrue(privacy.text.contains("every number here stays the same"))
         XCTAssertEqual(Set(AnalyticsHelp.topics.map(\.id)).count, AnalyticsHelp.topics.count)
     }
+
+    /// Week is Monday to today, compared with the same number of days just before (the server's
+    /// `previous`): the week before only on a Sunday. And by sales, a tie is broken by services.
+    func testWhatTheNumbersMeanSaysWhatsComparedAndHowTiesRank() throws {
+        let compared = try XCTUnwrap(AnalyticsHelp.topics.first { $0.id == "compared" })
+        XCTAssertFalse(compared.text.contains("the week before"), compared.text)
+        XCTAssertTrue(compared.text.contains("on a Wednesday, Week (Monday to Wednesday) is compared with Friday to Sunday"), compared.text)
+        let leaderboard = try XCTUnwrap(AnalyticsHelp.topics.first { $0.id == "leaderboard" })
+        XCTAssertTrue(leaderboard.text.contains("share a place only if that's the same too"), leaderboard.text)
+        // What Week on Wednesday, November 4 is compared with: Friday to Sunday.
+        let wednesday = range("2026-11-02", "2026-11-04")
+        let before = IzzyAPI.Analytics.Previous(from: day("2026-10-30"), to: day("2026-11-01"), salesCents: 10_000)
+        XCTAssertEqual(
+            AnalyticsText.change(current: 6_000, previous: before, range: wednesday, today: wednesday.to),
+            "Down 40% from Oct 30 – Nov 1"
+        )
+    }
 }
 
 /// Loading, live refresh and what's on screen meanwhile.
@@ -322,7 +339,7 @@ final class AnalyticsStoreTests: XCTestCase {
         XCTAssertEqual(analytics.leaderboard.count, 5, "the leaderboard stays the whole shop's")
         XCTAssertEqual(store.emptySalesText, "No sales in this period.")
         XCTAssertEqual(store.monogram(for: IzzyAPI.Analytics.Barber(barberId: "israel-flores", name: "Izzy")), "IZ")
-        XCTAssertEqual(store.changeInfo, "Sales for the same number of days just before this period (Oct 30 – Oct 31), for the same barber. For a week, that's the week before.")
+        XCTAssertEqual(store.changeInfo, "Sales for the same number of days just before this period (Oct 30 – Oct 31), for the same barber.")
         store.selectBarber(nil)
         XCTAssertEqual(store.scopeName, "Whole shop")
     }

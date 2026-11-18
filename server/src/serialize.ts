@@ -51,6 +51,8 @@ export interface AppointmentRow {
   no_show_fee_payment_intent_id: string | null;
   no_show_fee_message: string | null;
   no_show_fee_charged_at: Date | null;
+  /** Once the fee is charged, whether Stripe was asked to email its receipt (migrations/009); null before. */
+  no_show_fee_receipt: NoShowFeeReceiptRow | null;
   /** When the client cancelled in the app, or asked to, before the start; never cleared. No fee then. */
   customer_cancelled_at: Date | null;
   /**
@@ -72,6 +74,11 @@ export type SaleMethod = 'card' | 'cash' | 'other';
 export type NoShowFeeRowStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needs_action';
 export type NoShowFeeStatus = 'none' | 'pending' | 'charged' | 'declined' | 'needsAction';
 export type NoShowFeeReason = 'noShow' | 'lateCancel';
+/** What became of a charged fee's receipt (migrations/009): emailed by Stripe, or not and why. */
+export type NoShowFeeReceiptRow = 'sent' | 'no_email' | 'failed';
+export type NoShowFeeReceipt = 'sent' | 'noEmail' | 'failed';
+
+const FEE_RECEIPT_OUT: Record<NoShowFeeReceiptRow, NoShowFeeReceipt> = { sent: 'sent', no_email: 'noEmail', failed: 'failed' };
 
 const FEE_REASON_OUT: Record<FeeReason, NoShowFeeReason> = { no_show: 'noShow', late_cancel: 'lateCancel' };
 
@@ -128,6 +135,13 @@ export interface Appointment {
      * that applies now (a late cancellation by the client, or a no-show), or null when neither does.
      */
     reason: NoShowFeeReason | null;
+    /**
+     * Once the fee is charged, its receipt: "sent" (Stripe has the email the client gave on its card
+     * page, never kept here, and emails the receipt), or why not, "noEmail" (Stripe has no email for
+     * the client) or "failed" (Stripe couldn't be asked). Null before it's charged, for a fee charged
+     * before the server kept this, or while it's being asked. Only the shop sees it.
+     */
+    receipt: NoShowFeeReceipt | null;
   } | null;
   /** The appointment's checkout (its live sale), or null. Only the shop sees it. */
   sale: { id: string; totalCents: number; method: SaleMethod } | null;
@@ -139,8 +153,13 @@ export interface Appointment {
   completedAt: string | null;
 }
 
-/** What a client sees of their own appointment: everything but the shop's checkout and when it was first completed. */
-export type CustomerAppointment = Omit<Appointment, 'sale' | 'completedAt'>;
+/**
+ * What a client sees of their own appointment: everything but the shop's checkout, when it was first
+ * completed, and what became of a fee's receipt.
+ */
+export type CustomerAppointment = Omit<Appointment, 'sale' | 'completedAt' | 'noShowFee'> & {
+  noShowFee: Omit<NonNullable<Appointment['noShowFee']>, 'receipt'> | null;
+};
 
 const STATUS_OUT: Record<AppointmentRow['status'], AppointmentStatus> = {
   booked: 'booked',
@@ -191,6 +210,7 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
             customerCancelledAt: row.customer_cancelled_at ? formatInstant(row.customer_cancelled_at) : null,
             lateCancelWindowMinutes: row.late_cancel_window_minutes,
             reason: feeReasonOf(row),
+            receipt: row.no_show_fee_status === 'charged' && row.no_show_fee_receipt ? FEE_RECEIPT_OUT[row.no_show_fee_receipt] : null,
           }
         : null,
     sale:
@@ -201,10 +221,16 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
   };
 }
 
-/** The appointment as its client sees it (the customer endpoints): without the shop's checkout, or when it was first completed. */
+/**
+ * The appointment as its client sees it (the customer endpoints): without the shop's checkout, when it
+ * was first completed, or what became of a fee's receipt.
+ */
 export function customerAppointmentJSON(row: AppointmentRow): CustomerAppointment {
   const { sale: _sale, completedAt: _completedAt, ...appointment } = appointmentJSON(row);
-  return appointment;
+  // Replacing noShowFee keeps it where it was among the keys.
+  if (!appointment.noShowFee) return { ...appointment, noShowFee: null };
+  const { receipt: _receipt, ...fee } = appointment.noShowFee;
+  return { ...appointment, noShowFee: fee };
 }
 
 /**

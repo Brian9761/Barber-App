@@ -1,15 +1,17 @@
 // @vitest-environment node
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { rewriteFor, rewritesOf, sourcePattern } from './hosting.js';
+import { redirectFor, redirectsOf, rewriteFor, rewritesOf, sourcePattern } from './hosting.js';
 import { LEGAL_PAGE_FILES } from './prerender.js';
 
 // The hosting's rewrites, as the end-to-end servers apply them, with the site's real settings:
 // the shop's (../vercel.json) and the demo's (vercel.json here). A file of the build is always
 // served first; these say what an address without one opens.
 
-const SHOP = rewritesOf(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'));
-const DEMO = rewritesOf(readFileSync(new URL('../vercel.json', import.meta.url), 'utf8'));
+const SHOP_HOSTING = readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8');
+const DEMO_HOSTING = readFileSync(new URL('../vercel.json', import.meta.url), 'utf8');
+const SHOP = rewritesOf(SHOP_HOSTING);
+const DEMO = rewritesOf(DEMO_HOSTING);
 
 describe('a vercel.json source', () => {
   it('reads paths, ":name*" for the rest of the path, and regular expressions in parentheses', () => {
@@ -25,6 +27,43 @@ describe('a vercel.json source', () => {
     expect(page.test('/assets/main.js')).toBe(false);
     expect(page.test('/api/catalog')).toBe(false);
     expect(sourcePattern('/privacy.html').test('/privacyxhtml')).toBe(false);
+  });
+});
+
+describe('a vercel.json redirect', () => {
+  it('is permanent (308) unless it says otherwise (307), and leaves every other path alone', () => {
+    const redirects = redirectsOf(
+      JSON.stringify({
+        redirects: [
+          { source: '/old', destination: '/new', permanent: true },
+          { source: '/for-now', destination: '/later', permanent: false },
+          { source: '/plain', destination: '/elsewhere' },
+        ],
+      }),
+    );
+    expect(redirectFor(redirects, '/old')).toEqual({ destination: '/new', status: 308 });
+    expect(redirectFor(redirects, '/for-now')).toEqual({ destination: '/later', status: 307 });
+    expect(redirectFor(redirects, '/plain')).toEqual({ destination: '/elsewhere', status: 308 });
+    expect(redirectFor(redirects, '/old/more')).toBeNull();
+    expect(redirectsOf(JSON.stringify({ rewrites: [] }))).toEqual([]);
+  });
+});
+
+describe.each([
+  ['the shop’s site', SHOP_HOSTING],
+  ['the demo', DEMO_HOSTING],
+])('the redirects of %s', (_name, hosting) => {
+  // Its plain HTML is a file at "/privacy/index.html" too: that address goes to the page itself, so
+  // it's never the policy without JavaScript and "This page isn't here." with it.
+  it('send each legal page’s file address to the page’s own, for good, before any file is served', () => {
+    const redirects = redirectsOf(hosting);
+    for (const file of LEGAL_PAGE_FILES) {
+      const path = `/${file.replace(/\/index\.html$/, '')}`;
+      expect(redirectFor(redirects, `/${file}`), file).toEqual({ destination: path, status: 308 });
+      expect(redirectFor(redirects, path), path).toBeNull();
+      expect(redirectFor(redirects, `${path}/`), `${path}/`).toBeNull();
+    }
+    for (const path of ['/', '/index.html', '/book/time', '/business/index.html']) expect(redirectFor(redirects, path), path).toBeNull();
   });
 });
 

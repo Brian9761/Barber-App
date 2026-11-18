@@ -157,6 +157,10 @@ struct PendingBooking: Codable, Equatable {
     let token: IzzyAPI.ManageToken
     /// When the appointment would start. After that there's nothing left to retry.
     let start: Date
+    /// The card the first try booked with and said not to keep (`keepCard: false`, Remember me
+    /// off): the server marked it for deletion with that booking, and a retry that finds it keeps
+    /// that choice, whatever the retry says. `nil` for one with Remember me on, or saved before.
+    var cardNotKept: IzzyAPI.CardToken?
 }
 
 /// The client's appointments: kept on this iPhone with their manage tokens (in the Keychain),
@@ -330,9 +334,17 @@ final class AppointmentStore {
             return known.token
         }
         let token = IzzyAPI.ManageToken.generate()
-        pending.append(PendingBooking(request: key, token: token, start: request.start))
+        let cardNotKept = request.keepCard == false ? request.noShow?.cardToken : nil
+        pending.append(PendingBooking(request: key, token: token, start: request.start, cardNotKept: cardNotKept))
         savePendingBookings(Array(pending.suffix(Self.maxPendingBookings)))
         return token
+    }
+
+    /// The card the first try of `request` said not to keep, while it's still unconfirmed (see
+    /// `PendingBooking.cardNotKept`): a retry that finds that booking can't keep it for next time.
+    func cardNotKept(by request: IzzyAPI.NewAppointment) -> IzzyAPI.CardToken? {
+        let key = Self.bookingKey(for: request)
+        return currentPendingBookings().first(where: { $0.request == key })?.cardNotKept
     }
 
     /// The server has answered `request` with its appointment (saved with `add`): its token is

@@ -6,6 +6,12 @@ export interface Config {
   googlePlaceId: string;
   googleDailyLimit: number;
   yelpApiKey: string | undefined;
+  /**
+   * YELP_REVIEWS=on: fetch and show Yelp's reviews (with YELP_API_KEY). Off unless set, even with a
+   * key: Yelp's API terms bar commercial use without Yelp's written consent, so the website and the
+   * apps only link to Yelp (docs/legal/research.md §12.2). A key alone never calls Yelp.
+   */
+  yelpReviews: boolean;
   yelpBusinessId: string;
   stripeSecretKey: string | undefined;
   /** Used only when STRIPE_CONNECT is off: in connect mode each connected account gets its own location. */
@@ -64,6 +70,7 @@ export function configFromEnv(env: Env = process.env): Config {
     googlePlaceId: value(env, 'GOOGLE_PLACE_ID') ?? DEFAULT_GOOGLE_PLACE_ID,
     googleDailyLimit: nonNegativeInt(value(env, 'GOOGLE_DAILY_LIMIT'), DEFAULT_GOOGLE_DAILY_LIMIT),
     yelpApiKey: value(env, 'YELP_API_KEY'),
+    yelpReviews: value(env, 'YELP_REVIEWS') === 'on',
     yelpBusinessId: value(env, 'YELP_BUSINESS_ID') ?? DEFAULT_YELP_BUSINESS_ID,
     stripeSecretKey: value(env, 'STRIPE_SECRET_KEY'),
     stripeTerminalLocationId: value(env, 'STRIPE_TERMINAL_LOCATION_ID'),

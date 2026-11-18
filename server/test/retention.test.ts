@@ -93,7 +93,7 @@ describe('clients’ details are removed 12 months after the appointment', () =>
     expect((await cron()).body.anonymized).toEqual({ appointments: 0, sales: 0, payments: 0, receiptEmails: 0 });
   });
 
-  it('waits while a fee for the appointment is pending, then removes them', async () => {
+  it('a fee try nobody checked again, still pending a year on, doesn’t keep them', async () => {
     const token = await saveCard();
     const booking = await book(token);
     h.setNow('2026-11-03T18:50:00Z');
@@ -101,11 +101,10 @@ describe('clients’ details are removed 12 months after the appointment', () =>
     h.stripe.nextCharge = 'processing';
     expect((await h.call('POST', `/api/owner/appointments/${booking.id}/no-show-fee`, owner)).body.appointment.noShowFee.status).toBe('pending');
     h.setNow('2027-12-01T19:00:00Z');
-    expect((await cron()).body.anonymized.appointments).toBe(0);
-    expect((await row('appointments', booking.id)).customer_name).toBe('Andre Sample');
-    await h.database.pool.query(`UPDATE appointments SET no_show_fee_status = 'declined' WHERE id = $1`, [booking.id]);
     expect((await cron()).body.anonymized.appointments).toBe(1);
     expect((await row('appointments', booking.id)).customer_name).toBe(NAME_REMOVED);
+    // The try itself is still there, for Check again.
+    expect((await row('appointments', booking.id)).no_show_fee_status).toBe('pending');
   });
 
   it('names on sales and void reasons, and card payments’ descriptions, names on tickets and receipt emails, after 12 months', async () => {
@@ -242,10 +241,15 @@ describe('a booking still needs its card…', () => {
     expect(bookingNeedsCard({ ...late, customer_cancelled_at: at('2026-11-03T16:00:00Z') }, at('2026-11-04T17:00:00Z')), 'cancelled in time').toBe(false);
   });
 
-  it('while a fee is pending, whenever; never once it’s charged, completed or cancelled by the shop', () => {
-    expect(bookingNeedsCard({ ...base, status: 'no_show', no_show_fee_status: 'pending' }, at('2027-01-01T00:00:00Z'))).toBe(true);
+  it('while a fee is pending, for two weeks after the start at most; never once it’s charged, turned down, completed or cancelled by the shop', () => {
+    const pending = { ...base, status: 'no_show' as const, no_show_fee_status: 'pending' as const };
+    expect(bookingNeedsCard(pending, at('2026-11-10T18:01:00Z')), 'past the 7 days, still waiting for Stripe').toBe(true);
+    expect(bookingNeedsCard(pending, at('2026-11-17T18:00:00Z')), '14 days after the start').toBe(true);
+    expect(bookingNeedsCard(pending, at('2026-11-17T18:01:00Z')), 'nobody checked it again').toBe(false);
+    expect(bookingNeedsCard(pending, at('2027-01-01T00:00:00Z'))).toBe(false);
     expect(bookingNeedsCard({ ...base, status: 'no_show', no_show_fee_status: 'charged' }, at('2026-11-04T00:00:00Z'))).toBe(false);
-    expect(bookingNeedsCard({ ...base, status: 'no_show', no_show_fee_status: 'declined' }, at('2026-11-04T00:00:00Z')), 'tried again').toBe(true);
+    expect(bookingNeedsCard({ ...base, status: 'no_show', no_show_fee_status: 'declined' }, at('2026-11-04T00:00:00Z')), 'not charged again').toBe(false);
+    expect(bookingNeedsCard({ ...base, status: 'no_show', no_show_fee_status: 'needs_action' }, at('2026-11-04T00:00:00Z'))).toBe(false);
     expect(bookingNeedsCard({ ...base, status: 'completed' }, at('2026-11-04T00:00:00Z'))).toBe(false);
     expect(bookingNeedsCard({ ...base, status: 'cancelled', cancelled_by: 'shop' }, at('2026-11-02T18:00:00Z'))).toBe(false);
     expect(bookingNeedsCard({ ...base, saved_card_id: null, no_show_fee_cents: null }, at('2026-11-02T17:00:00Z'))).toBe(false);
@@ -349,7 +353,7 @@ describe('DELETE /api/cards: the client removes their saved card', () => {
     expect((await cron()).body.savedCards).toEqual({ deleted: 1, stillNeeded: 0, failed: 0 });
   });
 
-  it('a pending fee keeps it, even after the 7 days, until Stripe answers', async () => {
+  it('a pending fee keeps it past the 7 days while Stripe may still answer, but not for good', async () => {
     const token = await saveCard();
     const booking = await book(token);
     h.setNow('2026-11-03T18:50:00Z');
@@ -357,8 +361,21 @@ describe('DELETE /api/cards: the client removes their saved card', () => {
     h.stripe.nextCharge = 'processing';
     await h.call('POST', `/api/owner/appointments/${booking.id}/no-show-fee`, owner);
     expect((await removeCard(token)).body.cardDeletion.status).toBe('scheduled');
-    h.setNow('2026-11-20T19:17:00Z');
+    h.setNow('2026-11-12T19:17:00Z');
     expect((await cron()).body.savedCards).toEqual({ deleted: 0, stillNeeded: 1, failed: 0 });
+    // Two weeks after the appointment, nobody has checked it again: the card goes.
+    h.setNow('2026-11-18T19:17:00Z');
+    expect((await cron()).body.savedCards).toEqual({ deleted: 1, stillNeeded: 0, failed: 0 });
+  });
+
+  it('a fee the bank turned down doesn’t keep it: the card isn’t charged again', async () => {
+    const token = await saveCard();
+    const booking = await book(token);
+    h.setNow('2026-11-03T18:50:00Z');
+    await setStatus(booking.id, 'noShow');
+    h.stripe.nextCharge = 'insufficient_funds';
+    expect((await h.call('POST', `/api/owner/appointments/${booking.id}/no-show-fee`, owner)).body.appointment.noShowFee.status).toBe('declined');
+    expect((await removeCard(token)).body.cardDeletion.status).toBe('deleted');
   });
 
   it('Stripe doesn’t answer: marked for the daily job, which deletes it the next day', async () => {

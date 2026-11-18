@@ -57,6 +57,13 @@ export interface Shop {
   highlights: string[];
   paymentMethods: string[];
   accessibility: string[];
+  /**
+   * The LLC's exact registered name, which runs the shop (the Kit's `ShopInfo.legalName`): empty ("")
+   * until the owner gives it. Missing only from a catalog older than it.
+   */
+  legalName?: string;
+  /** The shop's email address: empty ("") until the shop has one. Missing only from a catalog older than it. */
+  email?: string;
 }
 
 /** GET /api/catalog */
@@ -119,6 +126,12 @@ export interface NoShowFee {
   customerCancelledAt: string | null;
   lateCancelWindowMinutes: number | null;
   reason: 'noShow' | 'lateCancel' | null;
+  /**
+   * The shop's view only: once the fee is charged, its receipt: "sent" (Stripe emails it), or why
+   * not, "noEmail" (Stripe has no email for the client) or "failed" (Stripe couldn't be asked); null
+   * before. Missing in the client's view and from a server before it.
+   */
+  receipt?: 'sent' | 'noEmail' | 'failed' | null;
 }
 
 export interface Appointment {

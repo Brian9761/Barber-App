@@ -86,6 +86,21 @@ enum Website {
             base.appendingPathComponent(path)
         }
     }
+
+    /// The refund policy: the "Refunds" part of the Terms of Service, which has its own anchor on the
+    /// Terms page (`/terms#refunds`). Linked as "Refunds" next to the Cancellation & No-Show Policy on
+    /// Review, as on the website (docs/legal/OWNER-CHECKLIST.md §3 item 20).
+    enum Refunds {
+        /// What the link says.
+        static let title = "Refunds"
+
+        /// `/terms#refunds` on the site at `base`.
+        static func url(on base: URL = Website.baseURL) -> URL {
+            var components = URLComponents(url: LegalPage.terms.url(on: base), resolvingAgainstBaseURL: false)
+            components?.fragment = "refunds"
+            return components?.url ?? LegalPage.terms.url(on: base)
+        }
+    }
 }
 
 /// What the app says about the legal pages where it links them, in the website's words.
@@ -107,4 +122,11 @@ enum LegalCopy {
     static var demoDetailsPrivacy: String {
         "Demo version: your name and number stay on this iPhone. Nothing is sent to \(AppData.shop.name) or anywhere else."
     }
+
+    /// At the end of Review, under who runs the shop (`ShopInfo.operatedByLine`): the Cancellation &
+    /// No-Show Policy with the refund policy ("Refunds", the Terms' refunds) next to it, both linked,
+    /// as on the website (docs/legal/OWNER-CHECKLIST.md §3 item 20).
+    static let reviewPolicies = "Cancellation & No-Show Policy · \(Website.Refunds.title)"
+    /// The pages `reviewPolicies` links by their titles ("Refunds" links to the Terms' refunds).
+    static let reviewPolicyPages: [Website.LegalPage] = [.cancellationPolicy]
 }

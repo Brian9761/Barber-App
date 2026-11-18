@@ -2,8 +2,9 @@
 // over the wire protocol by pglite-socket, as in the server's own tests) with the
 // migrations and the catalog's barbers, and the built site from ../public, from
 // one Node server routed like Vercel: /api to the API, files on disk first, then
-// the rewrites in ../vercel.json (each legal page's plain HTML, Business's page,
-// and index.html for every other path but /assets/).
+// the redirects and rewrites in ../vercel.json (each legal page's address with
+// "/index.html" sent to the page itself; then each legal page's plain HTML,
+// Business's page, and index.html for every other path but /assets/).
 //
 //   npm run build && npm run serve:local     (then open http://127.0.0.1:4173)
 //
@@ -14,8 +15,10 @@
 // Test plumbing under /__e2e/ (never part of the real server): turn the live
 // reviews and no-show protection on and off, a stand-in for Stripe's card page
 // (and for deleting a saved card), what became of a saved card, a booking moved
-// back in time (for the fee's rules after the end and within 7 days), and a new
-// version of the service worker (for the "A new version is ready" bar). Like
+// back in time (for the fee's rules after the end and within 7 days), a no-show's
+// fee recorded as charged with what became of its receipt (the stand-in takes no
+// payments), and a new version of the service worker (for the "A new version is
+// ready" bar). Like
 // Stripe, the card page's Save and Back go to the success_url and cancel_url the
 // server gave the Checkout Session, so the server's own way back to the website
 // (/api/cards/return and /api/cards/cancel with to=web) is part of the test.
@@ -44,7 +47,7 @@ import { configFromEnv } from '../../src/config.js';
 import { createPool, poolDb } from '../../src/db.js';
 import type { Deps, StripeClient } from '../../src/deps.js';
 import { migrate, seedBarbers } from '../../src/migrate.js';
-import { rewriteFor, rewritesOf } from '../tools/hosting.js';
+import { redirectFor, redirectsOf, rewriteFor, rewritesOf } from '../tools/hosting.js';
 
 const PORT = Number(process.env.E2E_PORT) || 4173;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -52,8 +55,12 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 const E2E_OWNER_KEY = process.env.E2E_OWNER_KEY || 'e2e-owner-key-for-local-tests-only';
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('../../public/', import.meta.url)));
 const FIXTURES = new URL('../../test/fixtures/', import.meta.url);
-/** The hosting's rewrites, as Vercel applies them once no file matches (../vercel.json). */
-const REWRITES = rewritesOf(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'));
+/** The hosting's settings (../vercel.json). */
+const HOSTING = readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8');
+/** Its redirects, which Vercel applies before anything else. */
+const REDIRECTS = redirectsOf(HOSTING);
+/** Its rewrites, as Vercel applies them once no file matches. */
+const REWRITES = rewritesOf(HOSTING);
 
 if (!existsSync(join(PUBLIC_DIR, 'index.html'))) {
   console.error(`No built site in ${PUBLIC_DIR}. Run \`npm run build\` in server/web first.`);
@@ -353,6 +360,22 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Pr
     );
     return send(res, rowCount === 1 ? 200 : 404, JSON.stringify({ moved: rowCount === 1 }));
   }
+  if (parts[1] === 'appointments' && parts[2] === 'fee-charged' && req.method === 'POST') {
+    // A no-show's fee charged, as the server records it once Stripe says it went through (the
+    // stand-in for Stripe takes no payments), with what became of its receipt: "sent", "no_email"
+    // (the card page kept no email) or "failed". Never an address.
+    const { id, receipt } = await readBody(req);
+    if (!['sent', 'no_email', 'failed'].includes(String(receipt))) return send(res, 400, JSON.stringify({ error: 'receipt is sent, no_email or failed' }));
+    const { rowCount } = await pool.query(
+      `UPDATE appointments
+          SET no_show_fee_status = 'charged', no_show_fee_attempt = 1, no_show_fee_attempt_at = now(), no_show_fee_reason = 'no_show',
+              no_show_fee_payment_intent_id = 'pi_e2e_' || replace(id::text, '-', ''), no_show_fee_message = NULL,
+              no_show_fee_charged_at = now(), no_show_fee_receipt = $2, updated_at = now()
+        WHERE id = $1 AND saved_card_id IS NOT NULL AND status = 'no_show'`,
+      [String(id), String(receipt)],
+    );
+    return send(res, rowCount === 1 ? 200 : 404, JSON.stringify({ charged: rowCount === 1 }));
+  }
   if (parts[1] === 'stripe' && parts[2]) {
     const id = parts[2];
     if (req.method === 'GET' && parts.length === 3) {
@@ -438,6 +461,12 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', ORIGIN);
     if (url.pathname.startsWith('/__e2e/')) return await plumbing(req, res, url);
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return await api(req, res);
+    // vercel.json's redirects first, as on Vercel: a legal page's address with "/index.html".
+    const redirect = redirectFor(REDIRECTS, url.pathname);
+    if (redirect) {
+      res.writeHead(redirect.status, { location: redirect.destination + url.search });
+      return res.end();
+    }
     const file = siteFile(url.pathname);
     if (file) return serveFile(res, file);
     // Then vercel.json's rewrites: each legal page's plain HTML, Izzy Clipz Business's own page (with

@@ -31,6 +31,7 @@ import { rememberLastBooked } from './lastBooked';
 import { BookingLayout, StepHeader } from './StepChrome';
 import { FeeWarning } from './TimeStep';
 import { useNoShowPolicy } from './usePolicy';
+import { OperatorLines } from '../components/OperatorLines';
 
 /** Where Stripe's card page sends the client back to, through the server. */
 export interface ReviewLocationState {
@@ -293,6 +294,8 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         <p className="step-actions__note" aria-live="polite" data-testid="book-note">
           {policy ? bookNote(policy, usableCard, start, now, zone) : null}
         </p>
+        {/* Who runs the shop and where, and the refund policy next to the Cancellation & No-Show Policy, before any card is saved (OWNER-CHECKLIST §3 item 20). */}
+        <OperatorLines shop={catalog.shop} className="step-actions__operator" testId="book-operator" policyLinks newTab />
       </div>
     </BookingLayout>
   );
