@@ -987,6 +987,10 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         let warning = reveal("noShowClientWarning")
         XCTAssertTrue(waitForLabel(warning, containing: "Late Cancellation & No-Show Fee"), "Got: \(warning.label)")
         XCTAssertTrue(warning.label.contains("may be charged $25."), "Got: \(warning.label)")
+        // What clients agree to: when the card may be charged, and when cancelling is free (owner checklist §3 item 22).
+        let agreed = reveal("noShowClientPolicy")
+        XCTAssertTrue(waitForLabel(agreed, containing: "may charge $25 to this card within 7 days after your appointment time."), "Got: \(agreed.label)")
+        XCTAssertTrue(agreed.label.contains("Cancelling online is free more than 1 hour before, or within 15 minutes of booking."), "Got: \(agreed.label)")
         // The Save message sits just above Stripe's costs. It's looked for with those on screen:
         // under the keyboard, a busy simulator kept reporting it there after it had gone.
         reveal("noShowCosts")

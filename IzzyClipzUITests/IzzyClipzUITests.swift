@@ -795,6 +795,10 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(policy.waitForExistence(timeout: 10), "No policy to agree to")
         XCTAssertTrue(policy.label.contains("No payment now"), policy.label)
         XCTAssertTrue(policy.label.contains("$45 (100% of the service)"), policy.label)
+        // When the card may be charged, and when cancelling is free (owner checklist §3 item 22).
+        XCTAssertTrue(policy.label.contains("to this card within 7 days after your appointment time."), policy.label)
+        XCTAssertTrue(policy.label.contains("Cancelling online is free more than 1 hour before, or within 15 minutes of booking."), policy.label)
+        XCTAssertFalse(warning.label.contains("Full Service"), warning.label)
         let book = element("bookAppointmentButton")
         XCTAssertFalse(book.isEnabled, "Book should wait for a card")
         XCTAssertEqual(book.value as? String, "Add a card first")

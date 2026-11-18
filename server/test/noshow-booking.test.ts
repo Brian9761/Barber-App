@@ -214,6 +214,42 @@ describe('booking when a card is needed', () => {
     expect((await row(noShowOnly.body.appointment.id)).no_show_policy).toBe(policy);
   });
 
+  it('a booking made under the earlier wording keeps the terms it agreed to; the earlier words no longer book', async () => {
+    // What the server showed and stored before owner checklist §3 item 22 (no 7 days, "in the app").
+    const EARLIER =
+      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card. Cancelling in the app more than 1 hour before is free.";
+    await protectionOn(h);
+    const token = await savedCard();
+    const headers = { 'x-card-token': token };
+    const now = await flowPolicy();
+    // New bookings show and store the new terms: when the card may be charged, and the grace period.
+    expect(now).toBe(
+      "No payment now. If you cancel less than 1 hour before your appointment, or don't come, Izzy Clipz may charge $35 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking.",
+    );
+    expect((await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.warning.title).toBe('Late Cancellation & No-Show Fee');
+    const booked = await book({ noShowPolicy: now }, headers);
+    expect(booked.status, booked.text).toBe(201);
+    expect((await row(booked.body.appointment.id)).no_show_policy).toBe(now);
+    // A booking made before (stored as the server stored it then) keeps its words, whatever happens since:
+    // settings changes, new bookings, the owner's changes to it.
+    const earlier = await book({ start: '2026-11-03T19:00:00Z', noShowPolicy: now }, headers, '203.0.113.71');
+    expect(earlier.status, earlier.text).toBe(201);
+    await h.database.pool.query('UPDATE appointments SET no_show_policy = $2 WHERE id = $1', [earlier.body.appointment.id, EARLIER]);
+    await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { percent: 50 } });
+    await h.call('PATCH', '/api/owner/no-show-settings', { owner: true, body: { percent: 100 } });
+    expect((await book({ start: '2026-11-04T18:00:00Z', noShowPolicy: await flowPolicy() }, headers, '203.0.113.72')).status).toBe(201);
+    // The shop cancels it (after a call, say), then reopens it.
+    for (const status of ['cancelled', 'booked']) {
+      const changed = await h.call('PATCH', `/api/owner/appointments/${earlier.body.appointment.id}`, { owner: true, body: { status } });
+      expect(changed.status, changed.text).toBe(200);
+    }
+    expect((await row(earlier.body.appointment.id)).no_show_policy).toBe(EARLIER);
+    // An app still showing the earlier words can't book with them: it's asked to show the new ones.
+    const stale = await book({ start: '2026-11-05T18:00:00Z', noShowPolicy: EARLIER }, headers, '203.0.113.73');
+    expect(stale.status).toBe(409);
+    expect(stale.body.error.code).toBe('policy_changed');
+  });
+
   it('says whether the agreed fee is the full service price, so the cancel warning can say it', async () => {
     await protectionOn(h);
     const headers = { 'x-card-token': await savedCard() };

@@ -353,6 +353,39 @@ test.describe('on the real site', () => {
     }
   });
 
+  test('with late cancellations off, the notice is "No-Show Fee", and what clients agree to says only a no-show may be charged', async ({
+    page,
+    request,
+    phone,
+  }) => {
+    const before = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
+    await setProtection(request, true);
+    await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', { feeMode: 'percent', percent: 100, lateCancelEnabled: false });
+    try {
+      // Carlos's $45 haircut, the whole price as the fee.
+      await page.goto('/book?barber=carlos-rafael&service=haircut');
+      await expectStep(page, 3, 'Pick a day and time');
+      const notice = page.getByTestId('fee-warning');
+      await expect(notice.locator('.notice__title')).toHaveText('No-Show Fee');
+      await expect(notice).toContainText('Not showing up may be charged the full service price ($45). Cancelling online before your appointment is free.');
+      await expect(notice).not.toContainText(/Late Cancellation|Full Service/);
+      await (await firstTime(page)).click();
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expectStep(page, 4, 'Your details');
+      await fillDetails(page, { name: 'Noah Noshow', phone });
+      await page.getByRole('button', { name: 'Continue' }).click();
+      await expectStep(page, 5, 'Review and book');
+      await expect(page.getByTestId('fee-warning').locator('.notice__title')).toHaveText('No-Show Fee');
+      // What they agree to by booking: when the card may be charged, and that cancelling online is free.
+      await expect(page.getByTestId('card-section')).toContainText(
+        "No payment now. If you don't come and haven't cancelled, Izzy Clipz may charge $45 (100% of the service) to this card within 7 days after your appointment time. Cancelling online before your appointment is free.",
+      );
+    } finally {
+      await ownerCall(request, 'PATCH', '/api/owner/no-show-settings', before);
+      await setProtection(request, false);
+    }
+  });
+
   test('Izzy Clipz Business previews a flat fee capped at each service’s price, which clients may be charged', async ({ page, request }, testInfo) => {
     const before = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
     try {
