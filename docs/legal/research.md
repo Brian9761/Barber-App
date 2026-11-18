@@ -896,7 +896,9 @@ The periods are proposals for the owner to confirm (`OWNER-CHECKLIST.md`).
 
 ## 18. What the documents promise that the code must do first
 
-The documents are written for the live version, and they're not in effect until it ships: their dates say "[TO FILL IN]". These promises aren't kept by the code yet. **All of them ship in one release together with the documents**, with tests that fail if any piece is missing; publishing the documents first would make them untrue on the day they go up.
+**Status, November 18, 2026:** all 18 items below are built on `v5/int` (OWNER-CHECKLIST.md §3), and the gallery photos are gone from the website and the apps. Before the apps are built for release, the website they link to (`IZZY_WEBSITE_URL` in `project.yml`) must be the live site: it's now the public demo, whose policies are drafts, so either change it or put the live site at that address (items 1 and 12).
+
+The documents are written for the live version, and they're not in effect until it ships: their dates say "[TO FILL IN]". On November 5, these promises weren't kept by the code yet. **All of them ship in one release together with the documents**, with tests that fail if any piece is missing; publishing the documents first would make them untrue on the day they go up.
 
 1. **Publish the four policies and link them** on every page (live site and demo), in both apps and in the booking steps (CalOPPA §1, Apple §11, the fee notice §8.3). Add the four pages to the website's accessibility, phone-size and offline lists, and check that no "TO FILL IN" is left in them.
 2. **Show the Terms and the Cancellation & No-Show Policy at booking**, directly above "Book appointment" (§8.4).
@@ -921,9 +923,10 @@ The gallery photos are a separate, urgent step: they come off the public demo an
 
 ## 19. Recommended, but not promised by the documents
 
+**Status, November 18, 2026:** none of these is built on `v5/int`, except the age check (§18 item 18) and the apps' privacy manifests, which now list what each app collects (the App Store answers are entered in App Store Connect: OWNER-CHECKLIST.md §4). `sale_draft` now stays, because voiding a sale reads it; its client name is removed after 12 months.
+
 - Apple's age-assurance steps for Texas, Utah and Louisiana (§4.3).
 - Accurate App Store privacy answers for both apps (§11).
-- The fee notice says "is charged"; the agreed text says "may charge". Use "may be charged" in the notice too, and "online" rather than "in the app" in the stored text, for new bookings.
 - Clear `sale_draft` once a sale is recorded.
 - Use an HMAC with a server secret for the rate-limit IP hash; add a Content-Security-Policy and Permissions-Policy to the live site, as the demo has.
 - Publish `/.well-known/gpc.json` (§2).
