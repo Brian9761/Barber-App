@@ -104,9 +104,12 @@ jobs:
           status=$?
           # A slow simulator can keep the UI test runner from starting at all ("failed to initialize for
           # UI testing", before any UI test has run): that's the Mac, not the app, so the tests run once
-          # more. Any test that fails still fails the job.
-          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/test.log; then
-            echo "The UI test runner couldn't start on this simulator; running the tests once more"
+          # more, but only if no test had failed by then (the unit tests run first). Any test that fails
+          # still fails the job, and the first try's log is uploaded.
+          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/test.log \
+            && ! grep -qiE "^Test case .* failed" build/test.log; then
+            echo "The UI test runner couldn't start on this simulator; running the tests once more. The first try:"
+            grep -E "Executed [0-9]+ test|encountered an error" build/test.log | sort -u | head -20
             mv build/test.log build/test-first-try.log
             rm -rf build/TestResults.xcresult
             run_tests
@@ -198,7 +201,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload test results
-        if: failure()
+        if: failure() || hashFiles('build/test-first-try.log') != ''
         uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.runner }}
@@ -306,9 +309,12 @@ jobs:
           run_tests
           status=$?
           # As for the customer app: a UI test runner that couldn't start on a slow simulator is the
-          # Mac's doing, so the tests run once more. Any test that fails still fails the job.
-          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/owner-test.log; then
-            echo "The UI test runner couldn't start on this simulator; running the tests once more"
+          # Mac's doing, so the tests run once more if no test had failed by then. Any test that fails
+          # still fails the job, and the first try's log is uploaded.
+          if [ $status -ne 0 ] && grep -q "failed to initialize for UI testing" build/owner-test.log \
+            && ! grep -qiE "^Test case .* failed" build/owner-test.log; then
+            echo "The UI test runner couldn't start on this simulator; running the tests once more. The first try:"
+            grep -E "Executed [0-9]+ test|encountered an error" build/owner-test.log | sort -u | head -20
             mv build/owner-test.log build/owner-test-first-try.log
             rm -rf build/OwnerTestResults.xcresult
             run_tests
@@ -398,7 +404,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload test results
-        if: failure()
+        if: failure() || hashFiles('build/owner-test-first-try.log') != ''
         uses: actions/upload-artifact@v7
         with:
           name: test-results-owner-${{ matrix.runner }}
