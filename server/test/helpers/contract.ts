@@ -327,6 +327,10 @@ export const WebsiteCatalog = z.strictObject({
     highlights: z.array(z.string().min(1)),
     paymentMethods: z.array(z.string().min(1)),
     accessibility: z.array(z.string().min(1)),
+    /** The LLC's registered name, which runs the shop: always there, empty ("") until the owner gives it. */
+    legalName: z.string().refine((value) => value === value.trim(), { error: 'legalName is trimmed' }),
+    /** The shop's email address: always there, empty ("") until the shop has one. */
+    email: z.union([z.literal(''), z.string().regex(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)]),
   }),
 });
 

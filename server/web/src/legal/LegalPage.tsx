@@ -209,7 +209,8 @@ function BlockView({ block, dates = false }: { block: Block; dates?: boolean }) 
       return (
         <ul className="legal__list">
           {block.items.map((item, index) => (
-            <li key={index}>
+            // An item with an id (it starts with a bold name) can be linked to, like a section.
+            <li key={index} id={item.id} tabIndex={item.id ? -1 : undefined}>
               <Inlines nodes={item.content} />
               {item.blocks.map((child, childIndex) => (
                 <BlockView key={childIndex} block={child} />

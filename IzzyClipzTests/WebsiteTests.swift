@@ -64,12 +64,21 @@ final class WebsiteTests: XCTestCase {
             XCTAssertTrue(LegalCopy.detailsPrivacy.contains(page.title), page.title)
         }
         XCTAssertFalse(LegalCopy.demoDetailsPrivacy.contains("go to"), "The demo sends nothing anywhere")
-        // Under who runs the shop on Review: where the refund policy is, as the website says it.
-        XCTAssertEqual(LegalCopy.refundPolicy, "Our refund policy is in section 4 of our Terms of Service.")
-        XCTAssertEqual(LegalCopy.refundPolicyPages, [.terms])
-        for page in LegalCopy.refundPolicyPages {
-            XCTAssertTrue(LegalCopy.refundPolicy.contains(page.title), page.title)
+        // Under who runs the shop on Review: the refund policy ("Refunds") next to the Cancellation &
+        // No-Show Policy, as the website has them.
+        XCTAssertEqual(LegalCopy.reviewPolicies, "Cancellation & No-Show Policy · Refunds")
+        XCTAssertEqual(LegalCopy.reviewPolicyPages, [.cancellationPolicy])
+        for page in LegalCopy.reviewPolicyPages {
+            XCTAssertTrue(LegalCopy.reviewPolicies.contains(page.title), page.title)
         }
+        XCTAssertTrue(LegalCopy.reviewPolicies.contains(Website.Refunds.title))
+    }
+
+    /// "Refunds" goes to the refund policy, the Terms' own anchor for it, on the site the app links to.
+    func testRefundsGoesToTheTermsRefunds() {
+        XCTAssertEqual(Website.Refunds.title, "Refunds")
+        XCTAssertEqual(Website.Refunds.url(on: URL(string: "https://izzy-clipz.vercel.app")!).absoluteString, "https://izzy-clipz.vercel.app/terms#refunds")
+        XCTAssertEqual(Website.Refunds.url(on: URL(string: "https://example.com/shop")!).absoluteString, "https://example.com/shop/terms#refunds")
     }
 }
 
@@ -95,6 +104,19 @@ final class LegalLinksTextTests: XCTestCase {
         let found = links(in: text)
         XCTAssertEqual(found.map(\.words), ["Terms of Service", "Cancellation & No-Show Policy"])
         XCTAssertEqual(found.map(\.url), ["https://izzy-clipz.vercel.app/terms", "https://izzy-clipz.vercel.app/cancellation-policy"])
+    }
+
+    /// On Review, under who runs the shop: the Cancellation & No-Show Policy and, next to it, "Refunds"
+    /// (the Terms' refunds), each its own link.
+    func testReviewsPolicyLineLinksTheCancellationPolicyAndRefunds() {
+        let text = LegalLinksText.attributed(LegalCopy.reviewPolicies, linking: LegalCopy.reviewPolicyPages, refunds: true, on: base)
+        XCTAssertEqual(String(text.characters), "Cancellation & No-Show Policy · Refunds")
+        let found = links(in: text)
+        XCTAssertEqual(found.map(\.words), ["Cancellation & No-Show Policy", "Refunds"])
+        XCTAssertEqual(found.map(\.url), ["https://izzy-clipz.vercel.app/cancellation-policy", "https://izzy-clipz.vercel.app/terms#refunds"])
+        // Without asking for it, "Refunds" stays plain words.
+        let plain = LegalLinksText.attributed(LegalCopy.reviewPolicies, linking: LegalCopy.reviewPolicyPages, on: base)
+        XCTAssertEqual(links(in: plain).map(\.words), ["Cancellation & No-Show Policy"])
     }
 
     func testTheDetailsLineLinksThePrivacyPolicy() {

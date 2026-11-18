@@ -319,13 +319,18 @@ final class IzzyClipzUITests: XCTestCase {
             "The consent line should sit right above Book appointment"
         )
         screenshot("15-Book-Review")
-        // Who runs the shop and where, and where the refund policy is, before anything is booked
-        // (until the owner gives the LLC's name and the shop's email, those parts say so).
-        let operatedBy = containing("Izzy Clipz Barbershop is operated by")
-        scroll(toReveal: operatedBy)
-        XCTAssertTrue(operatedBy.label.contains("1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States"), operatedBy.label)
-        XCTAssertTrue(containing("To get this information by email, email us at").exists, "No line offering it by email")
-        XCTAssertTrue(containing("Our refund policy is in section 4 of our Terms of Service").exists, "No refund policy line")
+        // Who runs the shop and where, and "Refunds" next to the Cancellation & No-Show Policy, before
+        // anything is booked. Until the owner gives the LLC's name and the shop's email, only what
+        // exists: the shop and its address, and nothing about email.
+        let whereItIs = containing("Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States")
+        scroll(toReveal: whereItIs)
+        XCTAssertTrue(whereItIs.exists, "No line saying where the shop is")
+        XCTAssertFalse(containing("is operated by").exists, "No LLC's name is given yet")
+        XCTAssertFalse(containing("To get this information by email").exists, "No email address is given yet")
+        let policies = element("reviewOperatorPolicies")
+        scroll(toReveal: policies)
+        XCTAssertTrue(policies.label.contains("Cancellation & No-Show Policy"), policies.label)
+        XCTAssertTrue(policies.label.contains("Refunds"), policies.label)
         screenshot("15c-Book-Review-Who-Runs-The-Shop")
 
         bookAppointment()
@@ -1163,6 +1168,9 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertFalse(containing("ADA-compliant").exists)
         XCTAssertFalse(containing("Wheelchair accessible").exists)
         XCTAssertFalse(containing("Step-free").exists)
+        // The shop has no email address yet, so the call line offers none (OWNER-CHECKLIST §3 item 21).
+        XCTAssertFalse(element("visitAccessibilityEmail").exists, "No email address is given yet")
+        XCTAssertFalse(containing("Or email us at").exists)
         screenshot("23b-Visit-Good-To-Know")
 
         let reviews = element("visitSeeAllReviews")

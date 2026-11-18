@@ -2,7 +2,9 @@
 // use: headings (# to ###), paragraphs, **bold**, [links](…), `code`, bulleted lists (nested by
 // indenting), tables, block quotes, a backslash at the end of a line for a line break, and the
 // shop's placeholders ("[TO FILL IN: …]"). It makes a tree that the page draws as React
-// elements, so nothing from the files is ever put in the page as HTML.
+// elements, so nothing from the files is ever put in the page as HTML. Headings get ids from their
+// words, and so does a bulleted item that starts with its own bold name ("- **Refunds.** …" is
+// #refunds), so a link can go straight to it.
 
 import { PLACEHOLDER_START } from './placeholders';
 
@@ -19,6 +21,8 @@ export interface ListItem {
   content: Inline[];
   /** What's indented under it: a list, a quote, more paragraphs. */
   blocks: Block[];
+  /** From the bold name it starts with, if it does ("- **Refunds.** …": "refunds"), for links to it. */
+  id?: string;
 }
 
 export type Block =
@@ -28,10 +32,47 @@ export type Block =
   | { kind: 'table'; head: Inline[][]; rows: Inline[][][] }
   | { kind: 'quote'; blocks: Block[] };
 
-/** The document's blocks, top to bottom. Headings get ids from their words, as GitHub makes them. */
+/**
+ * The document's blocks, top to bottom. Headings get ids from their words, as GitHub makes them, and
+ * so do bulleted items that start with a bold name (`anchorItems`).
+ */
 export function parseMarkdown(source: string): Block[] {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
-  return parseBlocks(lines, new Map());
+  const blocks = parseBlocks(lines, new Map());
+  anchorItems(blocks);
+  return blocks;
+}
+
+/** Every block, depth first: those inside list items and quotes too. */
+function eachBlock(blocks: Block[], visit: (block: Block) => void): void {
+  for (const block of blocks) {
+    visit(block);
+    if (block.kind === 'quote') eachBlock(block.blocks, visit);
+    if (block.kind === 'list') for (const item of block.items) eachBlock(item.blocks, visit);
+  }
+}
+
+/**
+ * A bulleted item that starts with its own bold name ("- **Refunds.** Card refunds go back…") gets an
+ * id from that name, as a heading's is made ("refunds"), so the site can link straight to it (the
+ * refund policy, /terms#refunds). The headings' ids stay as they are: an item never takes one of
+ * theirs, and a name used again gets "-1", "-2"… after it.
+ */
+function anchorItems(blocks: Block[]): void {
+  const slugs = new Map<string, number>();
+  eachBlock(blocks, (block) => {
+    if (block.kind === 'heading') slugs.set(block.id, 1);
+  });
+  eachBlock(blocks, (block) => {
+    if (block.kind !== 'list') return;
+    for (const item of block.items) {
+      const first = item.content[0];
+      // Only plain words: a name with a placeholder in it would change its id once it's filled in.
+      if (first?.kind !== 'strong' || first.children.some((child) => child.kind !== 'text')) continue;
+      const name = plainText(first.children);
+      if (slugify(name)) item.id = uniqueSlug(name, slugs);
+    }
+  });
 }
 
 // ------------------------------------------------------------------- Blocks

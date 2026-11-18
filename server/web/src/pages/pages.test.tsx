@@ -208,6 +208,28 @@ describe('Visit', () => {
     expect(screen.queryByTestId('visit-accessibility-lines')).toBeNull();
     expect(within(access).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
   });
+
+  it('offers email too once the shop has an address (none yet: the call line alone, no email made up)', () => {
+    // The catalog as the Kit exports it today: no email yet, so nothing about writing.
+    expect(catalog.shop.email).toBe('');
+    renderApp('/visit');
+    expect(screen.getByTestId('visit-accessibility-call').textContent).toBe(CALL_LINE);
+    expect(within(screen.getByTestId('visit-accessibility')).queryByRole('link', { name: /@/ })).toBeNull();
+  });
+
+  it('with the shop’s email in the catalog, the call line ends “Or email us at …”, the address writing to it', () => {
+    render(
+      <MemoryRouter initialEntries={['/visit']} future={ROUTER_FUTURE}>
+        <CatalogProvider initial={{ ...catalog, shop: { ...catalog.shop, email: 'hello@izzyclipz.example' } }}>
+          <App />
+        </CatalogProvider>
+      </MemoryRouter>,
+    );
+    const call = screen.getByTestId('visit-accessibility-call');
+    expect(call.textContent).toBe(`${CALL_LINE} Or email us at hello@izzyclipz.example.`);
+    expect(within(call).getByRole('link', { name: 'hello@izzyclipz.example' }).getAttribute('href')).toBe('mailto:hello@izzyclipz.example');
+    expect(within(call).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
+  });
 });
 
 describe('the phone number', () => {

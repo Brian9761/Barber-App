@@ -152,21 +152,28 @@ final class CatalogExportTests: XCTestCase {
         XCTAssertEqual(exported.accessibility, shop.accessibility)
         // The two lines the owner confirmed, in order: the website's Visit page shows them, then asks people to call.
         XCTAssertEqual(exported.accessibility, ["Room for a wheelchair inside, at the chairs and the counter", "Disabled parking space near the entrance"])
-        // Who runs the shop and its email: left out until the owner gives them.
-        XCTAssertNil(exported.operatorName)
-        XCTAssertNil(exported.email)
+        // Who runs the shop and its email: always there, empty until the owner gives them.
+        XCTAssertEqual(exported.legalName, "")
+        XCTAssertEqual(exported.email, "")
     }
 
-    /// Once the owner gives them, the LLC that runs the shop and the shop's email go to the website
-    /// with the rest (its footer and "Review and book" show them, and its strict build needs them).
-    func testWhoRunsTheShopGoesToTheWebsiteOnceGiven() throws {
-        let shop = ShopInfoTests.shop(operatorName: "Izzy Clipz Barbershop LLC", email: "hello@izzyclipz.example")
+    /// The LLC that runs the shop and the shop's email are always in the file, empty ("") until the
+    /// owner gives them, so the website reads the same keys before and after; once given, they go to
+    /// the website with the rest (its footer, "Review and book" and Visit show them, and its strict
+    /// build needs them).
+    func testWhoRunsTheShopGoesToTheWebsite() throws {
+        let empty = try JSONValue(data: CatalogExport.jsonData())
+        XCTAssertEqual(empty["shop"]?["legalName"], .string(""))
+        XCTAssertEqual(empty["shop"]?["email"], .string(""))
+
+        let shop = ShopInfoTests.shop(legalName: "Izzy Clipz Barbershop LLC", email: "hello@izzyclipz.example")
         let exported = CatalogExport.document(shop: shop).shop
-        XCTAssertEqual(exported.operatorName, "Izzy Clipz Barbershop LLC")
+        XCTAssertEqual(exported.legalName, "Izzy Clipz Barbershop LLC")
         XCTAssertEqual(exported.email, "hello@izzyclipz.example")
         let json = try JSONValue(data: CatalogExport.jsonData(shop: shop))
-        XCTAssertEqual(json["shop"]?["operatorName"], .string("Izzy Clipz Barbershop LLC"))
+        XCTAssertEqual(json["shop"]?["legalName"], .string("Izzy Clipz Barbershop LLC"))
         XCTAssertEqual(json["shop"]?["email"], .string("hello@izzyclipz.example"))
+        XCTAssertNil(json["shop"]?["operatorName"])
     }
 
     func testOfferingsMatchTheKit() {
@@ -253,6 +260,7 @@ final class CatalogExportTests: XCTestCase {
         XCTAssertEqual(json["shop"]?.keys, [
             "name", "fullName", "tagline", "phone", "address", "coordinate", "instagram", "appleMapsUrl", "appleMapsDirectionsUrl",
             "googleMapsUrl", "googleMapsDirectionsUrl", "googleReviewUrl", "websiteUrl", "about", "highlights", "paymentMethods", "accessibility",
+            "legalName", "email",
         ])
         XCTAssertEqual(json["shop"]?["phone"], .object(["e164": .string("+14423413053"), "display": .string("(442) 341-3053")]))
         // The same bytes every time, so the committed file only changes when the data does.

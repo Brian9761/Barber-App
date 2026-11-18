@@ -22,6 +22,18 @@ enum VisitAccessibility {
     static var callLine: String {
         "Questions about getting in or around the shop? Call \(AppData.shop.phone.display) (relay calls welcome: dial 711) and we'll help."
     }
+
+    /// "Or email us at <email>." right after the call line, once the shop has an email address (the
+    /// Kit's `ShopInfo.email`), so the line about getting in offers email too; nil until then, so no
+    /// address is made up (docs/legal/OWNER-CHECKLIST.md §3 item 21). The website says the same.
+    static func emailLine(for shop: ShopInfo = AppData.shop) -> String? {
+        shop.hasEmail ? "Or email us at \(shop.email)." : nil
+    }
+
+    /// Where `emailLine` writes to (mailto:), or nil without an email address.
+    static func emailURL(for shop: ShopInfo = AppData.shop) -> URL? {
+        shop.hasEmail ? URL(string: "mailto:\(shop.email)") : nil
+    }
 }
 
 /// Where the shop's reviews live on Yelp.

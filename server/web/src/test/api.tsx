@@ -109,10 +109,10 @@ export function mockApi(routes: Route[]) {
 }
 
 /** The whole site at `path`, with the catalog already loaded. */
-export function renderApp(path: string) {
+export function renderApp(path: string, options: { catalog?: Catalog } = {}) {
   return render(
     <MemoryRouter initialEntries={[path]} future={ROUTER_FUTURE}>
-      <CatalogProvider initial={catalog}>
+      <CatalogProvider initial={options.catalog ?? catalog}>
         <App />
       </CatalogProvider>
     </MemoryRouter>,

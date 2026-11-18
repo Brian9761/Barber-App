@@ -8,6 +8,8 @@ struct LegalLinksText: View {
     let text: String
     /// The pages whose titles in `text` become links.
     let pages: [Website.LegalPage]
+    /// Whether "Refunds" in `text` links to the refund policy (the Terms' refunds, `Website.Refunds`).
+    var linksRefunds = false
     /// Opens a tapped page; `nil` opens it in the app's own web sheet (`AppRouter.openWeb`), which
     /// takes the place of any sheet that's up. A sheet with the line in it opens the page over
     /// itself instead, so it stays open underneath.
@@ -16,7 +18,7 @@ struct LegalLinksText: View {
     @Environment(AppRouter.self) private var router
 
     var body: some View {
-        Text(Self.attributed(text, linking: pages))
+        Text(Self.attributed(text, linking: pages, refunds: linksRefunds))
             .tint(Theme.electric)
             .environment(\.openURL, OpenURLAction { url in
                 if let open {
@@ -28,13 +30,20 @@ struct LegalLinksText: View {
             })
     }
 
-    /// `text` with each page's title in it linked to that page on `base`, underlined. A title that
-    /// isn't in `text` is skipped.
-    static func attributed(_ text: String, linking pages: [Website.LegalPage], on base: URL = Website.baseURL) -> AttributedString {
+    /// `text` with each page's title in it linked to that page on `base`, underlined, and with
+    /// `refunds`, "Refunds" linked to the Terms' refunds. A title that isn't in `text` is skipped.
+    static func attributed(
+        _ text: String,
+        linking pages: [Website.LegalPage],
+        refunds: Bool = false,
+        on base: URL = Website.baseURL
+    ) -> AttributedString {
         var attributed = AttributedString(text)
-        for page in pages {
-            guard let range = attributed.range(of: page.title) else { continue }
-            attributed[range].link = page.url(on: base)
+        var links = pages.map { ($0.title, $0.url(on: base)) }
+        if refunds { links.append((Website.Refunds.title, Website.Refunds.url(on: base))) }
+        for (title, url) in links {
+            guard let range = attributed.range(of: title) else { continue }
+            attributed[range].link = url
             attributed[range].swiftUI.underlineStyle = .single
             attributed[range].swiftUI.foregroundColor = Theme.electric
         }

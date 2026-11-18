@@ -46,6 +46,11 @@ const shopSchema = z.object({
   highlights: z.array(text),
   paymentMethods: z.array(text),
   accessibility: z.array(text),
+  // Who runs the shop (the LLC's registered name) and the shop's email, from the Kit's ShopInfo:
+  // empty ("") until the owner gives them. The website's footer, "Review and book" and Visit show
+  // them once given (Business and Professions Code §17538(d), OWNER-CHECKLIST §3 items 20 and 21).
+  legalName: z.string(),
+  email: z.string(),
 });
 
 /** catalog.json as the website gets it: the booking catalog plus the shop and the menu's and team's words. */

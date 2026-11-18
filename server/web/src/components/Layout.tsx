@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCatalog, useShopContact } from '../data/catalog';
 import { LEGAL_DOCUMENTS } from '../legal/documents';
@@ -11,7 +11,7 @@ import { Icon } from './Icon';
 import { Logo } from './Logo';
 import { PageErrorBoundary, PageLoadFailed } from './PageError';
 import { CallLink } from './ui';
-import { OperatorLines } from './OperatorLines';
+import { legalNameOf, OperatorLines, REFUNDS_HREF, REFUNDS_LABEL } from './OperatorLines';
 
 /** The nav's pages (the legal pages' plain HTML has them too: src/legal/prerender.tsx). */
 export const NAV_LINKS = [
@@ -271,23 +271,30 @@ export function Footer() {
             </ul>
           </div>
         </nav>
-        {/* The shop's policies (Privacy first) on a row of their own, then the copyright and where the shop is. */}
+        {/* The shop's policies (Privacy first) on a row of their own, then who runs the shop and where, and the copyright. */}
         <div className="globalfooter__legal">
           <nav className="globalfooter__policies" aria-label="Legal">
             <ul>
               {LEGAL_DOCUMENTS.map((document) => (
-                <li key={document.id}>
-                  <Link to={document.path}>{document.title}</Link>
-                </li>
+                <Fragment key={document.id}>
+                  <li>
+                    <Link to={document.path}>{document.title}</Link>
+                  </li>
+                  {/* The refund policy, next to the Cancellation & No-Show Policy (OWNER-CHECKLIST §3 item 20). */}
+                  {document.id === 'cancellation-policy' ? (
+                    <li>
+                      <Link to={REFUNDS_HREF}>{REFUNDS_LABEL}</Link>
+                    </li>
+                  ) : null}
+                </Fragment>
               ))}
             </ul>
           </nav>
-          {/* Who runs the shop, at the size of the booking pages' words (OWNER-CHECKLIST §3 item 20). */}
+          {/* Who runs the shop and where, at the size of the booking pages' words (OWNER-CHECKLIST §3 item 20). */}
           {catalog ? <OperatorLines shop={catalog.shop} className="globalfooter__operator" testId="footer-operator" /> : null}
           <p>
-            Copyright © {year} {catalog?.shop.operatorName ?? contact.fullName}. All rights reserved.
+            Copyright © {year} {(catalog && legalNameOf(catalog.shop)) ?? contact.fullName}. All rights reserved.
           </p>
-          <p className="globalfooter__where">{contact.addressLines.join(', ')}</p>
         </div>
       </div>
     </footer>

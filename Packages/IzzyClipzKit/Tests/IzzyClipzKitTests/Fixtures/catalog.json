@@ -93,6 +93,7 @@
     "appleMapsDirectionsUrl": "https://maps.apple.com/?daddr=1919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058&dirflg=d",
     "appleMapsUrl": "https://maps.apple.com/?q=Izzy%20Clipz%20Barbershop&address=1919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058&ll=33.2034409,-117.364815",
     "coordinate": { "latitude": 33.2034409, "longitude": -117.364815 },
+    "email": "",
     "fullName": "Izzy Clipz Barbershop",
     "googleMapsDirectionsUrl": "https://www.google.com/maps/dir/?api=1&destination=Izzy%20Clipz%20Barbershop,%201919%20Mission%20Ave,%20Ste%20105,%20Oceanside,%20CA%2092058",
     "googleMapsUrl": "https://www.google.com/maps/search/?api=1&query=Izzy%20Clipz%20Barbershop&query_place_id=ChIJGz5HChRv3IARYJJy_6jyRm8",
@@ -102,6 +103,7 @@
       "handle": "izzy_clipz_barbershop_",
       "url": "https://www.instagram.com/izzy_clipz_barbershop_/"
     },
+    "legalName": "",
     "name": "Izzy Clipz",
     "paymentMethods": ["Credit card", "Gift card"],
     "phone": { "display": "(442) 341-3053", "e164": "+14423413053" },

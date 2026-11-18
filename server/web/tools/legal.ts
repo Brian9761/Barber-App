@@ -3,7 +3,8 @@
 // until the shop publishes them: every build is a draft, except a strict one, which publishes
 // them as they are and so refuses to build while any "[TO FILL IN: …]" is left, or while the
 // shop's catalog doesn't yet say who runs the shop and its email (the footer and "Review and book"
-// show them before any card is saved: src/components/OperatorLines.tsx).
+// show them before any card is saved: src/components/OperatorLines.tsx; until then they say only
+// what's known, the shop and its address).
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -37,15 +38,15 @@ export function readLegalFiles(dir: string): (file: (typeof LEGAL_FILES)[number]
 
 /**
  * What the shop's catalog (`catalog`, data/catalog.json's text, from the Kit) doesn't say yet of who
- * runs the shop: the LLC's registered name and the shop's email, which the footer and "Review and
- * book" show before any card is saved (Business and Professions Code §17538(d)), as
- * "server/data/catalog.json: shop.operatorName (…)".
+ * runs the shop: the LLC's registered name and the shop's email (both "" until the owner gives
+ * them), which the footer and "Review and book" show before any card is saved (Business and
+ * Professions Code §17538(d)), as "server/data/catalog.json: shop.legalName (…)".
  */
 export function unfinishedOperator(catalog: string, file = 'server/data/catalog.json'): string[] {
-  const shop = (JSON.parse(catalog) as { shop?: { operatorName?: unknown; email?: unknown } }).shop ?? {};
+  const shop = (JSON.parse(catalog) as { shop?: { legalName?: unknown; email?: unknown } }).shop ?? {};
   const given = (value: unknown) => typeof value === 'string' && value.trim() !== '';
   return [
-    ...(given(shop.operatorName) ? [] : [`${file}: shop.operatorName (the LLC's exact registered name, which runs the shop)`]),
+    ...(given(shop.legalName) ? [] : [`${file}: shop.legalName (the LLC's exact registered name, which runs the shop)`]),
     ...(given(shop.email) ? [] : [`${file}: shop.email (the shop's email address)`]),
   ];
 }
@@ -64,7 +65,7 @@ export function strictFailure(left: string[]): string {
  * The build's plugin: a strict build stops at its start, saying which file and line, while any
  * placeholder is left in the documents in `dir`, or the shop's catalog (`catalog`, a path to
  * data/catalog.json) doesn't say who runs the shop and its email. Every other build goes ahead as a
- * draft, where the footer and "Review and book" show what's missing as still to be added.
+ * draft, where the footer and "Review and book" say only what's known (the shop and its address).
  */
 export function legalDocuments({ strict, dir, catalog }: { strict: boolean; dir: string; catalog: string }): Plugin {
   return {

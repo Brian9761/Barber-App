@@ -69,13 +69,13 @@ describe('the legal pages in plain HTML', () => {
       expect(page.body, page.path).toContain('class="globalfooter__list globalfooter__hours" aria-label="Hours"');
       expect(text, page.path).toContain('Monday–Saturday: 10 AM – 7 PM');
       expect(text, page.path).toContain('Sunday: 10 AM – 6 PM');
-      // Who runs the shop (not given yet: marked as still to be added), and where the refund policy is.
+      // Who runs the shop and where (the LLC's name and the shop's email aren't given yet: only what
+      // exists, the shop and its address), and the refund policy next to the Cancellation & No-Show Policy.
       expect(page.body, page.path).toContain('data-testid="footer-operator"');
-      expect(text, page.path).toContain(
-        "Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's registered name , 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.",
-      );
-      expect(text, page.path).toContain("To get this information by email, email us at To be added by the shop: the shop's email address and we'll send it within 5 days.");
-      expect(page.body, page.path).toContain('<a href="/terms#4-prices-and-paying">Terms of Service</a>');
+      const footer = textOf(page.body.slice(page.body.indexOf('<footer')));
+      expect(footer, page.path).toContain('Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.');
+      expect(footer, page.path).not.toMatch(/operated by|To be added|To get this information by email/);
+      expect(page.body, page.path).toContain('<a href="/cancellation-policy">Cancellation &amp; No-Show Policy</a></li><li><a href="/terms#refunds">Refunds</a>');
     }
   });
 });

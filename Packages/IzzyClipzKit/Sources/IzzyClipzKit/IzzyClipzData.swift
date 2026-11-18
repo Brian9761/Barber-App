@@ -56,9 +56,10 @@ extension ShopInfo {
         // Not given yet: the LLC's exact registered name and the shop's email address
         // (docs/legal/OWNER-CHECKLIST.md §1). Fill them in here, then regenerate
         // server/data/catalog.json (see CatalogExport): the website's footer, its "Review and book"
-        // and the app's Review show them, and the website's strict build stops until both are in.
-        operatorName: nil,
-        email: nil
+        // and the app's Review show them (until then, the shop's name and address only), the Visit
+        // page offers the email, and the website's strict build stops until both are in.
+        legalName: "",
+        email: ""
     )
 }
 

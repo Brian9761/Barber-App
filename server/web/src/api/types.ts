@@ -57,9 +57,12 @@ export interface Shop {
   highlights: string[];
   paymentMethods: string[];
   accessibility: string[];
-  /** The LLC's exact registered name, which runs the shop: left out until the owner gives it (the Kit's `ShopInfo.operatorName`). */
-  operatorName?: string;
-  /** The shop's email address: left out until the shop has one. */
+  /**
+   * The LLC's exact registered name, which runs the shop (the Kit's `ShopInfo.legalName`): empty ("")
+   * until the owner gives it. Missing only from a catalog older than it.
+   */
+  legalName?: string;
+  /** The shop's email address: empty ("") until the shop has one. Missing only from a catalog older than it. */
   email?: string;
 }
 

@@ -372,16 +372,20 @@ private struct BookingFailureCard: View {
 }
 
 /// At the end of Review, before any card is saved: who runs the shop and where, how to get that by
-/// email, and where the refund policy is, in the website's words (Business and Professions Code
-/// §17538(d); docs/legal/OWNER-CHECKLIST.md §3 item 20). A part the owner hasn't given yet reads
-/// "[to be added by the shop: …]" (`ShopInfo.operatedByLine`), so it's never silently missing.
-private struct ReviewOperatorLines: View {
+/// email, and the refund policy ("Refunds") next to the Cancellation & No-Show Policy, in the
+/// website's words (Business and Professions Code §17538(d); docs/legal/OWNER-CHECKLIST.md §3 item
+/// 20). Until the owner gives the LLC's name and the shop's email, only what exists: the shop and its
+/// address (`ShopInfo.operatedByLine`), and no line about email.
+struct ReviewOperatorLines: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.xs) {
             Text(AppData.shop.operatedByLine)
-            Text(Self.byEmail(for: AppData.shop))
-                .tint(Theme.electric)
-            LegalLinksText(text: LegalCopy.refundPolicy, pages: LegalCopy.refundPolicyPages)
+            if let byEmail = Self.byEmail(for: AppData.shop) {
+                Text(byEmail)
+                    .tint(Theme.electric)
+            }
+            LegalLinksText(text: LegalCopy.reviewPolicies, pages: LegalCopy.reviewPolicyPages, linksRefunds: true)
+                .accessibilityIdentifier("reviewOperatorPolicies")
         }
         .textRole(.caption)
         .foregroundStyle(Theme.smoke)
@@ -392,10 +396,11 @@ private struct ReviewOperatorLines: View {
     }
 
     /// `ShopInfo.byEmailLine`, with the shop's email address linked (mailto:, underlined, so the
-    /// link never depends on color alone) once it has one.
-    static func byEmail(for shop: ShopInfo) -> AttributedString {
-        var text = AttributedString(shop.byEmailLine)
-        if let email = shop.email, let range = text.range(of: email), let url = URL(string: "mailto:\(email)") {
+    /// link never depends on color alone), or nil until the shop has an email address.
+    static func byEmail(for shop: ShopInfo) -> AttributedString? {
+        guard let line = shop.byEmailLine else { return nil }
+        var text = AttributedString(line)
+        if let range = text.range(of: shop.email), let url = URL(string: "mailto:\(shop.email)") {
             text[range].link = url
             text[range].swiftUI.underlineStyle = .single
             text[range].swiftUI.foregroundColor = Theme.electric

@@ -13,7 +13,7 @@ import slotTaken from '../../../test/fixtures/contract/errors/slot_taken.json';
 import { leaveTo } from '../lib/leave';
 import { CARD_KEY, loadAppointments, loadCard, loadPendingCheckout, savePendingCheckout, storeCard } from '../lib/storage';
 import { isToken, newToken } from '../lib/tokens';
-import { apiError, availability, FLOW45, mockApi, policy35, policyNotRequired, renderApp, type ApiCall } from '../test/api';
+import { apiError, availability, catalog, FLOW45, mockApi, policy35, policyNotRequired, renderApp, type ApiCall } from '../test/api';
 import { canTryAgain } from './CardReturnPage';
 import { EMPTY_DRAFT, loadDraft, saveDraft, type BookingDraft } from './flow';
 import { bookNote, CANT_KEEP_BOOKING } from './ReviewStep';
@@ -560,7 +560,7 @@ describe('what booking agrees to', () => {
     expect(visibleText(consent())).toBe('By booking, you agree to our Terms of Service and Cancellation & No-Show Policy.');
   });
 
-  it('comes with who runs the shop, how to get that by email, and where the refund policy is, before any card is saved', async () => {
+  it('comes with who runs the shop and where, and "Refunds" next to the Cancellation & No-Show Policy, before any card is saved', async () => {
     storeCard(card, false);
     mockApi([['GET /api/no-show-policy', { body: policy35 }]]);
     keptBooking();
@@ -569,15 +569,31 @@ describe('what booking agrees to', () => {
     const operator = screen.getByTestId('book-operator');
     // Under the button and its note, never between the consent line and the button.
     expect(screen.getByTestId('book-note').nextElementSibling).toBe(operator);
-    // The LLC's name and the shop's email aren't given yet: each is marked as still to be added.
+    // The LLC's name and the shop's email aren't given yet: only what exists, the shop and its address.
     expect(visibleText(operator)).toBe(
-      "Izzy Clipz Barbershop is operated by To be added by the shop: the LLC's registered name, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States." +
-        "To get this information by email, email us at To be added by the shop: the shop's email address and we'll send it within 5 days." +
-        'Our refund policy is in section 4 of our Terms of Service.',
+      'Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.' + 'Cancellation & No-Show Policy · Refunds',
     );
-    expect(operator.querySelectorAll('mark.operator__placeholder')).toHaveLength(2);
-    const terms = within(operator).getByRole('link', { name: /^Terms of Service/ });
-    expect([terms.getAttribute('href'), terms.getAttribute('target')]).toEqual(['/terms#4-prices-and-paying', '_blank']);
+    expect(operator.textContent).not.toMatch(/operated by|To be added|email us/i);
+    const links = within(screen.getByTestId('book-operator-policies')).getAllByRole('link');
+    expect(links.map((link) => [visibleText(link), link.getAttribute('href'), link.getAttribute('target')])).toEqual([
+      ['Cancellation & No-Show Policy', '/cancellation-policy', '_blank'],
+      ['Refunds', '/terms#refunds', '_blank'],
+    ]);
+  });
+
+  it('once the owner gives them, names the LLC that runs the shop and offers that by email', async () => {
+    storeCard(card, false);
+    mockApi([['GET /api/no-show-policy', { body: policy35 }]]);
+    keptBooking();
+    renderApp('/book/review', { catalog: { ...catalog, shop: { ...catalog.shop, legalName: 'Izzy Clipz Barbershop LLC', email: 'hello@izzyclipz.example' } } });
+    await waitFor(() => expect(screen.getByTestId('book-button')).toHaveProperty('disabled', false));
+    const operator = screen.getByTestId('book-operator');
+    expect(visibleText(operator)).toBe(
+      'Izzy Clipz Barbershop is operated by Izzy Clipz Barbershop LLC, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.' +
+        "To get this information by email, email us at hello@izzyclipz.example and we'll send it within 5 days." +
+        'Cancellation & No-Show Policy · Refunds',
+    );
+    expect(within(operator).getByRole('link', { name: 'hello@izzyclipz.example' }).getAttribute('href')).toBe('mailto:hello@izzyclipz.example');
   });
 });
 

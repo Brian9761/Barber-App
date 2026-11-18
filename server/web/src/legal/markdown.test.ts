@@ -53,6 +53,18 @@ describe('blocks', () => {
     });
   });
 
+  it('a bulleted item that starts with a bold name gets an id from it, never a heading’s, repeats numbered', () => {
+    const blocks = parseMarkdown(
+      "## Refunds\n\n- **Refunds.** Card refunds go back to the card.\n- **Charge within 7 days** of the appointment.\n- Plain, with **bold** later.\n  - **Nested.** Too.\n- **Refunds.** Again.\n- **Email us at [TO FILL IN: the shop's email address].**\n\n## Later",
+    );
+    expect(blocks[0]).toMatchObject({ kind: 'heading', id: 'refunds' });
+    const list = blocks[1] as Extract<Block, { kind: 'list' }>;
+    expect(list.items.map((item) => item.id)).toEqual(['refunds-1', 'charge-within-7-days', undefined, 'refunds-2', undefined]);
+    expect((list.items[2]!.blocks[0] as Extract<Block, { kind: 'list' }>).items[0]!.id).toBe('nested');
+    // The headings keep the ids they always had.
+    expect(blocks[2]).toMatchObject({ kind: 'heading', id: 'later' });
+  });
+
   it('a block quote indented under a list item, after a blank line, belongs to it', () => {
     const blocks = parseMarkdown('- a notice;\n- the terms. For example:\n\n  > No payment now.\n\nAfter the list.');
     expect(blocks).toMatchObject([
@@ -159,6 +171,30 @@ describe('the four documents', () => {
     const nested = blocks.find((b) => b.kind === 'list' && b.items.some((item) => item.blocks.some((child) => child.kind === 'list')));
     expect(nested).toBeDefined();
     expect(JSON.stringify(blocks)).toContain('{"kind":"code","text":"izzy_appointments"}');
+  });
+
+  it('terms.md: its refund policy is #refunds, in "4. Prices and paying", where the site’s "Refunds" links go', () => {
+    const blocks = parseMarkdown(read('terms.md'));
+    const section = blocks.findIndex((b) => b.kind === 'heading' && b.id === '4-prices-and-paying');
+    const next = blocks.findIndex((b, index) => index > section && b.kind === 'heading');
+    const items = blocks.slice(section, next).flatMap((b) => (b.kind === 'list' ? b.items : []));
+    const refunds = items.find((item) => item.id === 'refunds');
+    expect(refunds).toBeDefined();
+    expect(plainText(refunds!.content)).toMatch(/^Refunds\. /);
+    // The only one: no heading or other item has that id.
+    const ids: string[] = [];
+    const collect = (list: Block[]) => {
+      for (const b of list) {
+        if (b.kind === 'heading') ids.push(b.id);
+        if (b.kind === 'list') for (const item of b.items) {
+          if (item.id) ids.push(item.id);
+          collect(item.blocks);
+        }
+      }
+    };
+    collect(blocks);
+    expect(ids.filter((id) => id === 'refunds')).toHaveLength(1);
+    expect(new Set(ids).size).toBe(ids.length);
   });
 
   it('cancellation-policy.md: the example of the agreed terms as a quote, under its list item', () => {

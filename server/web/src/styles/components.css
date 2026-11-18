@@ -339,36 +339,6 @@
   margin-top: var(--space-1);
 }
 
-/* A part the owner hasn't given yet, marked as the draft documents mark theirs. */
-.operator__placeholder {
-  padding: 1px 6px;
-  border: 1px dashed var(--color-warning-line);
-  border-radius: 6px;
-  background: var(--color-warning-bg);
-  color: var(--color-text);
-  font-weight: 600;
-}
-
-@media (forced-colors: active) {
-  .operator__placeholder {
-    forced-color-adjust: none;
-    border-color: MarkText;
-    background: Mark;
-    color: MarkText;
-  }
-}
-
-/* Where the shop is, at the right, like apple.com's country (under the rest on a phone). */
-.globalfooter__where {
-  margin-left: auto;
-}
-
-@media (max-width: 733px) {
-  .globalfooter__where {
-    margin-left: 0;
-  }
-}
-
 /* ------------------------------------------------------------------- Buttons */
 
 .button {

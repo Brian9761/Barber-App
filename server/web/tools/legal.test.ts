@@ -12,7 +12,7 @@ import { LEGAL_FILES, legalDocuments, legalStrict, readLegalFiles, strictFailure
 // documents as they are today, and on a copy with every placeholder filled in.
 
 const DOCS = fileURLToPath(new URL('../../../docs/legal', import.meta.url));
-/** The shop's catalog as the Kit exports it, which doesn't say who runs the shop yet. */
+/** The shop's catalog as the Kit exports it, which doesn't say who runs the shop yet (both ""). */
 const CATALOG = fileURLToPath(new URL('../../data/catalog.json', import.meta.url));
 
 /** What the shop might write in each placeholder's place. */
@@ -28,7 +28,7 @@ function filledIn(text: string): string {
 /** The catalog with who runs the shop and its email given, in `folder`: its path. */
 function catalogWithOperator(folder: string): string {
   const catalog = JSON.parse(readFileSync(CATALOG, 'utf8')) as { shop: Record<string, unknown> };
-  catalog.shop.operatorName = 'Izzy Clipz Barbershop LLC';
+  catalog.shop.legalName = 'Izzy Clipz Barbershop LLC';
   catalog.shop.email = 'hello@izzyclipz.example';
   const path = join(folder, 'catalog.json');
   writeFileSync(path, JSON.stringify(catalog));
@@ -88,7 +88,7 @@ describe('a strict build', () => {
     expect(left.length).toBeGreaterThanOrEqual(LEGAL_FILES.length * 2);
     expect(message!.split('\n').filter((line) => line.startsWith('  docs/legal/'))).toHaveLength(left.length);
     // And who runs the shop, which the footer and "Review and book" show: not given yet either.
-    expect(message).toContain("  server/data/catalog.json: shop.operatorName (the LLC's exact registered name, which runs the shop)");
+    expect(message).toContain("  server/data/catalog.json: shop.legalName (the LLC's exact registered name, which runs the shop)");
     expect(message).toContain("  server/data/catalog.json: shop.email (the shop's email address)");
     expect(message).toContain('Packages/IzzyClipzKit/Sources/IzzyClipzKit/IzzyClipzData.swift');
   });
@@ -103,7 +103,7 @@ describe('a strict build', () => {
     // With the documents finished but the catalog not, it still stops, naming the two.
     const message = buildStart(true, copy);
     expect(message).toContain('2 placeholders are still to be filled in');
-    expect(message).toContain('server/data/catalog.json: shop.operatorName');
+    expect(message).toContain('server/data/catalog.json: shop.legalName');
     expect(message).toContain('server/data/catalog.json: shop.email');
   });
 
@@ -122,12 +122,16 @@ describe('a strict build', () => {
 describe('who runs the shop, in the catalog', () => {
   it('is still to be given while either the LLC’s name or the shop’s email is missing or empty', () => {
     const catalog = (shop: Record<string, unknown>) => JSON.stringify({ shop });
-    expect(unfinishedOperator(catalog({ operatorName: 'Izzy Clipz Barbershop LLC', email: 'hello@izzyclipz.example' }))).toEqual([]);
-    expect(unfinishedOperator(catalog({ operatorName: 'Izzy Clipz Barbershop LLC' }))).toEqual(["server/data/catalog.json: shop.email (the shop's email address)"]);
-    expect(unfinishedOperator(catalog({ operatorName: ' ', email: 'hello@izzyclipz.example' }))).toEqual([
-      "server/data/catalog.json: shop.operatorName (the LLC's exact registered name, which runs the shop)",
+    expect(unfinishedOperator(catalog({ legalName: 'Izzy Clipz Barbershop LLC', email: 'hello@izzyclipz.example' }))).toEqual([]);
+    expect(unfinishedOperator(catalog({ legalName: 'Izzy Clipz Barbershop LLC', email: '' }))).toEqual(["server/data/catalog.json: shop.email (the shop's email address)"]);
+    expect(unfinishedOperator(catalog({ legalName: 'Izzy Clipz Barbershop LLC' }))).toEqual(["server/data/catalog.json: shop.email (the shop's email address)"]);
+    expect(unfinishedOperator(catalog({ legalName: ' ', email: 'hello@izzyclipz.example' }))).toEqual([
+      "server/data/catalog.json: shop.legalName (the LLC's exact registered name, which runs the shop)",
     ]);
     expect(unfinishedOperator(JSON.stringify({}))).toHaveLength(2);
+    // The catalog as the Kit exports it today: both there, both empty.
+    expect(unfinishedOperator(readFileSync(CATALOG, 'utf8'))).toHaveLength(2);
+    expect(JSON.parse(readFileSync(CATALOG, 'utf8')).shop).toMatchObject({ legalName: '', email: '' });
   });
 });
 

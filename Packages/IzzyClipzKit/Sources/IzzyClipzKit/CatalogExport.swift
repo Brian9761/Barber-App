@@ -26,7 +26,7 @@ import Foundation
 ///           coordinate: { latitude, longitude }, instagram: { handle, url },
 ///           appleMapsUrl, appleMapsDirectionsUrl, googleMapsUrl, googleMapsDirectionsUrl,
 ///           googleReviewUrl, websiteUrl, about, highlights, paymentMethods, accessibility,
-///           operatorName?, email? } }
+///           legalName, email } }
 /// ```
 /// - `hours` keys are the Kit's `Weekday` numbers, like Foundation's
 ///   `.weekday`: "1" = Sunday, "2" = Monday … "7" = Saturday. Days the shop is
@@ -47,8 +47,9 @@ import Foundation
 ///   their tile (`Barber.monogram`), and `instagram` is left out without one.
 /// - `shop.phone.e164` is "+14423413053" and `display` "(442) 341-3053";
 ///   `shop.address.lines` are the street line and the city line. The map and
-///   review links are `ShopInfo`'s own. `shop.operatorName` (the LLC that runs
-///   the shop) and `shop.email` are left out until the owner gives them.
+///   review links are `ShopInfo`'s own. `shop.legalName` (the LLC that runs
+///   the shop) and `shop.email` are always there, empty ("") until the owner
+///   gives them.
 public enum CatalogExport {
     public struct Document: Codable, Hashable, Sendable {
         public struct Hours: Codable, Hashable, Sendable {
@@ -128,10 +129,10 @@ public enum CatalogExport {
             public var highlights: [String]
             public var paymentMethods: [String]
             public var accessibility: [String]
-            /// The LLC's exact registered name, which runs the shop; left out until the owner gives it.
-            public var operatorName: String?
-            /// The shop's email address; left out until the shop has one.
-            public var email: String?
+            /// The LLC's exact registered name, which runs the shop; empty ("") until the owner gives it.
+            public var legalName: String
+            /// The shop's email address; empty ("") until the shop has one.
+            public var email: String
         }
 
         public struct Offering: Codable, Hashable, Sendable {
@@ -260,7 +261,7 @@ public enum CatalogExport {
             highlights: shop.highlights,
             paymentMethods: shop.paymentMethods,
             accessibility: shop.accessibility,
-            operatorName: shop.operatorName,
+            legalName: shop.legalName,
             email: shop.email
         )
     }

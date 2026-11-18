@@ -114,33 +114,49 @@ final class ShopInfoTests: XCTestCase {
     }
 
     /// Who runs the shop, where, and how to get that by email (Business and Professions Code
-    /// §17538(d)): until the owner gives the LLC's registered name and the shop's email, each reads as
-    /// still to be added, so a release can't quietly leave it out.
-    func testWhoRunsTheShopIsToBeAddedUntilTheOwnerGivesIt() {
-        XCTAssertNil(shop.operatorName)
-        XCTAssertNil(shop.email)
+    /// §17538(d)): until the owner gives the LLC's registered name and the shop's email, the lines say
+    /// only what's known, the shop and where it is, and nothing made up: no "is operated by" without
+    /// the name, and no line about email without an address.
+    func testWhoRunsTheShopSaysOnlyWhatIsGiven() {
+        XCTAssertEqual(shop.legalName, "")
+        XCTAssertEqual(shop.email, "")
+        XCTAssertFalse(shop.hasLegalName)
+        XCTAssertFalse(shop.hasEmail)
         XCTAssertFalse(shop.isOperatorKnown)
-        XCTAssertEqual(
-            shop.operatedByLine,
-            "Izzy Clipz Barbershop is operated by [to be added by the shop: the LLC's registered name], 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States."
-        )
-        XCTAssertEqual(
-            shop.byEmailLine,
-            "To get this information by email, email us at [to be added by the shop: the shop's email address] and we'll send it within 5 days."
-        )
+        XCTAssertEqual(shop.operatedByLine, "Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.")
+        XCTAssertNil(shop.byEmailLine)
+        for line in [shop.operatedByLine] {
+            XCTAssertFalse(line.contains("["), line)
+            XCTAssertFalse(line.localizedCaseInsensitiveContains("to be added"), line)
+        }
 
-        let filledIn = Self.shop(operatorName: "Izzy Clipz Barbershop LLC", email: "hello@izzyclipz.example")
+        let filledIn = Self.shop(legalName: "Izzy Clipz Barbershop LLC", email: "hello@izzyclipz.example")
         XCTAssertTrue(filledIn.isOperatorKnown)
         XCTAssertEqual(
             filledIn.operatedByLine,
             "Izzy Clipz Barbershop is operated by Izzy Clipz Barbershop LLC, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States."
         )
         XCTAssertEqual(filledIn.byEmailLine, "To get this information by email, email us at hello@izzyclipz.example and we'll send it within 5 days.")
-        XCTAssertFalse(Self.shop(operatorName: "Izzy Clipz Barbershop LLC", email: nil).isOperatorKnown)
+
+        // One without the other: each line says what's given.
+        let nameOnly = Self.shop(legalName: "Izzy Clipz Barbershop LLC", email: "")
+        XCTAssertFalse(nameOnly.isOperatorKnown)
+        XCTAssertTrue(nameOnly.operatedByLine.hasPrefix("Izzy Clipz Barbershop is operated by Izzy Clipz Barbershop LLC, "))
+        XCTAssertNil(nameOnly.byEmailLine)
+        let emailOnly = Self.shop(legalName: "", email: "hello@izzyclipz.example")
+        XCTAssertFalse(emailOnly.isOperatorKnown)
+        XCTAssertEqual(emailOnly.operatedByLine, shop.operatedByLine)
+        XCTAssertEqual(emailOnly.byEmailLine, filledIn.byEmailLine)
+        // Spaces alone are nothing given.
+        let blank = Self.shop(legalName: "  ", email: " \n")
+        XCTAssertEqual(blank.legalName, "")
+        XCTAssertEqual(blank.email, "")
+        XCTAssertEqual(blank.operatedByLine, shop.operatedByLine)
+        XCTAssertNil(blank.byEmailLine)
     }
 
     /// The shop with the business that runs it and its email filled in (or not).
-    static func shop(operatorName: String?, email: String?) -> ShopInfo {
+    static func shop(legalName: String, email: String) -> ShopInfo {
         let shop = ShopInfo.izzyClipz
         return ShopInfo(
             name: shop.name,
@@ -158,7 +174,7 @@ final class ShopInfoTests: XCTestCase {
             highlights: shop.highlights,
             accessibility: shop.accessibility,
             googlePlaceID: shop.googlePlaceID,
-            operatorName: operatorName,
+            legalName: legalName,
             email: email
         )
     }

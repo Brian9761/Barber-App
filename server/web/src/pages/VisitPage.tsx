@@ -4,6 +4,7 @@ import { CatalogGate } from '../components/CatalogGate';
 import { useNow } from '../components/hooks';
 import { Icon } from '../components/Icon';
 import { Logo } from '../components/Logo';
+import { emailOf } from '../components/OperatorLines';
 import { Photo } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
 import { openStatus, wallClock, weekRows } from '../lib/shopTime';
@@ -24,6 +25,7 @@ export function VisitPage() {
 function VisitDetails({ catalog }: { catalog: Catalog }) {
   const now = useNow();
   const shop = catalog.shop;
+  const email = emailOf(shop);
   const status = openStatus(catalog.hours, catalog.timeZone, now);
   const today = wallClock(now, catalog.timeZone).weekday;
   const rows = weekRows(catalog.hours, today);
@@ -121,6 +123,17 @@ function VisitDetails({ catalog }: { catalog: Catalog }) {
                   {shop.phone.display}
                 </a>{' '}
                 (relay calls welcome: dial 711) and we'll help.
+                {/* And email, once the shop has an address (OWNER-CHECKLIST §3 item 21): nothing until then. */}
+                {email ? (
+                  <>
+                    {' '}
+                    Or email us at{' '}
+                    <a className="inline-link" href={`mailto:${email}`}>
+                      {email}
+                    </a>
+                    .
+                  </>
+                ) : null}
               </p>
             </dd>
           </div>

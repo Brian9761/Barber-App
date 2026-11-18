@@ -294,8 +294,8 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         <p className="step-actions__note" aria-live="polite" data-testid="book-note">
           {policy ? bookNote(policy, usableCard, start, now, zone) : null}
         </p>
-        {/* Who runs the shop, and where the refund policy is, before any card is saved (OWNER-CHECKLIST §3 item 20). */}
-        <OperatorLines shop={catalog.shop} className="step-actions__operator" testId="book-operator" newTab />
+        {/* Who runs the shop and where, and the refund policy next to the Cancellation & No-Show Policy, before any card is saved (OWNER-CHECKLIST §3 item 20). */}
+        <OperatorLines shop={catalog.shop} className="step-actions__operator" testId="book-operator" policyLinks newTab />
       </div>
     </BookingLayout>
   );

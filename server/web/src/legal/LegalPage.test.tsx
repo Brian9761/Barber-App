@@ -220,6 +220,18 @@ describe('the legal pages, as drafts', () => {
     const heading = await screen.findByRole('heading', { level: 3, name: 'Saved cards' });
     await waitFor(() => expect(document.activeElement).toBe(heading));
   });
+
+  it('opened at the refund policy (the site’s “Refunds” links), starts at it, in “4. Prices and paying”', async () => {
+    renderApp('/terms#refunds');
+    await screen.findByRole('heading', { level: 1, name: 'Terms of Service' });
+    const refunds = document.getElementById('refunds')!;
+    expect(refunds.tagName).toBe('LI');
+    expect(refunds.textContent).toMatch(/^Refunds\. /);
+    expect(refunds.closest('.legal')).not.toBeNull();
+    await waitFor(() => expect(document.activeElement).toBe(refunds));
+    // Reached by the link, not by Tab.
+    expect(refunds.getAttribute('tabindex')).toBe('-1');
+  });
 });
 
 describe('a strict build, as the pages see it', () => {
@@ -253,13 +265,14 @@ describe('a legal page, as the shop publishes it (a strict build)', () => {
 });
 
 describe('links to the documents', () => {
-  it('the footer of every page has all four, with “Privacy” in the Privacy Policy’s', () => {
+  it('the footer of every page has all four, with “Privacy” in the Privacy Policy’s, and “Refunds” next to the Cancellation & No-Show Policy', () => {
     renderApp('/services');
     const legal = within(screen.getByRole('contentinfo')).getByRole('navigation', { name: 'Legal' });
     expect(within(legal).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
       ['Privacy Policy', '/privacy'],
       ['Terms of Service', '/terms'],
       ['Cancellation & No-Show Policy', '/cancellation-policy'],
+      ['Refunds', '/terms#refunds'],
       ['Accessibility', '/accessibility'],
     ]);
     expect(within(screen.getByRole('contentinfo')).getByText(/© \d{4} Izzy Clipz Barbershop/)).toBeTruthy();

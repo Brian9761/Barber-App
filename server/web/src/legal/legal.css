@@ -62,9 +62,10 @@
   margin-top: var(--space-3);
 }
 
-/* Reached from a link to its section: a ring only for the keyboard, clear of the words. */
+/* Reached from a link to its section (or to a named item, like the Terms' "Refunds"): a ring only for the keyboard, clear of the words. */
 .legal__h2:focus-visible,
-.legal__h3:focus-visible {
+.legal__h3:focus-visible,
+.legal__list li[id]:focus-visible {
   outline-offset: 6px;
   border-radius: 4px;
 }
