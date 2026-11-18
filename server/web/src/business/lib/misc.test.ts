@@ -169,7 +169,13 @@ describe('No-show protection', () => {
     expect(noShow.clientViewNote(false)).toBe(
       'For the example haircut. The notice shows while clients pick a day and time and on Review; they agree to the policy before booking.',
     );
+    expect(noShow.onFooter(false)).toBe(
+      'Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation.',
+    );
     // The demo: its client side never asks for a card (src/demo/api.ts), Stripe connected or not.
+    expect(noShow.onFooter(true)).toBe(
+      'On the real site, clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation.',
+    );
     expect(noShow.savedLine(true)).toBe("Saved. In the demo, client bookings never ask for a card, so the fee notice doesn't show there.");
     expect(noShow.clientViewNote(true)).toBe(
       "For the example haircut. On the real site, the notice shows while clients pick a day and time and on Review, and they agree to the policy before booking. In the demo, client bookings never ask for a card, so it doesn't show there.",

@@ -272,6 +272,10 @@ test('products, no-show settings and computers work in the demo, and Reset bring
     "In the demo, client bookings never ask for a card, with Stripe connected or not, so the fee notice doesn't show there.",
   );
   await noShow.getByRole('checkbox', { name: 'No-show protection' }).check();
+  // The line under the switch says what clients do on the real site, never that they add a card here.
+  await expect(noShow.getByTestId('no-show-switch-note')).toHaveText(
+    'On the real site, clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation.',
+  );
   await expect(noShow.getByTestId('client-view-note')).toContainText("In the demo, client bookings never ask for a card, so it doesn't show there.");
   await noShow.getByRole('button', { name: 'Save' }).click();
   await expect(noShow.getByTestId('no-show-saved')).toHaveText("Saved. In the demo, client bookings never ask for a card, so the fee notice doesn't show there.");

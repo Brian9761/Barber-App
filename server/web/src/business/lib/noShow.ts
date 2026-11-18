@@ -114,6 +114,14 @@ export function percentLabel(percent: number): string {
 
 export const ON_FOOTER =
   'Clients add a card (or Apple Pay) when they book online. Nothing is charged then: you decide whether to charge a no-show or a late cancellation.';
+
+/**
+ * Under the switch while it's on: what clients do on the real site. The demo's client side never
+ * asks for a card (DEMO_NO_CARD, said just below), so there it says "On the real site".
+ */
+export function onFooter(demo: boolean): string {
+  return demo ? `On the real site, ${ON_FOOTER.charAt(0).toLowerCase()}${ON_FOOTER.slice(1)}` : ON_FOOTER;
+}
 export const OFF_FOOTER = "Off: new online bookings don't need a card. Bookings already made with a card keep their fee, and you can still charge it.";
 export const FEE_FOOTER =
   "The same fee for a no-show and a late cancellation, and never more than the service's price. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings.";
