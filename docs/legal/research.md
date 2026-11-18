@@ -22,7 +22,7 @@ Labels used throughout:
 - **Recent:** changed in 2025–2026.
 - **Coming:** takes effect soon.
 
-**Facts about the shop** come from the code and the spec, not assumptions. The code was read on branches `v5/int` and `v5/webapp-business` as of November 5, 2026. Some facts are unknown: the legal entity name, the shop's revenue, its number of employees and its email address. Where one matters, this file says so instead of guessing.
+**Facts about the shop** come from the code and the spec, not assumptions. The code was read on branches `v5/int` and `v5/webapp-business` as of November 5, 2026, and sections 1 to 19 describe it as it was then. The dated sections at the end say what changed, and "The code catches up (November 18, 2026)" and the status lines at the top of §18 and §19 say what's built. Some facts are unknown: the legal entity name, the shop's revenue, its number of employees and its email address. Where one matters, this file says so instead of guessing.
 
 **How sources were checked:**
 
@@ -879,7 +879,7 @@ Visa's stored-credential framework ([Visa, "Improving Authorization Management f
 
 ## 17. Retention: what the documents promise
 
-The AG's CalOPPA guide asks for a retention period for each category (§1), Apple asks the policy to explain retention and deletion (§11), and California's disposal law asks for real deletion (§5). Today nothing deletes clients' details or saved cards.
+The AG's CalOPPA guide asks for a retention period for each category (§1), Apple asks the policy to explain retention and deletion (§11), and California's disposal law asks for real deletion (§5). On November 5, nothing deleted clients' details or saved cards (built since: see the status line in §18).
 
 **The plan the documents use** (details and code changes in `data-inventory.md`, G1 and G2):
 
