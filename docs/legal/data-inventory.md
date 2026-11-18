@@ -16,25 +16,23 @@ This file records what the Izzy Clipz website, web apps, iPhone apps and server 
 
 ## At a glance
 
-- **What clients give:** their name, mobile number and an optional note. The website also asks for an optional email. These are kept on the shop's server with each appointment, and **nothing deletes them today**.
+- **What clients give:** their name, mobile number and an optional note. The website also asks for an optional email. These are kept on the shop's server with each appointment. On November 5, nothing deleted them. **As built, the daily job removes them 12 months after the appointment** (`server/src/retention.ts`), or sooner when a client asks, with the owner's privacy tools (`npm run privacy:forget`). The appointment stays, without them.
 - **Cards:**
   - Card numbers never reach the shop's apps or server. Clients type them on Stripe's page or tap their card on the barber's iPhone.
   - For a saved card, the server keeps only the brand, last 4 digits, expiry and Stripe's ids.
   - Stripe keeps the card itself, plus **the email the client types on Stripe's page**.
-  - Nothing deletes saved cards today, either at the shop or at Stripe.
+  - On November 5, nothing deleted saved cards. As built, the server deletes a card at Stripe (it detaches the card and deletes its Customer) once the card has expired, gone 12 months without being used for a booking, or been removed by the client or saved without "Remember me", as soon as no booking still needs it (`server/src/retention.ts`). A card saved on a Stripe account the server can't use any more (the shop changed how it connects to Stripe) isn't deleted at Stripe: the server only logs a warning, and the shop has to delete it in that account's Stripe Dashboard. Either way, the server's row stays, with the brand, last 4 and expiry but without Stripe's ids. The Checkout Session, with the email typed on Stripe's page, can't be deleted.
 - **What the shop's own code doesn't do:** no analytics, ads, tracking, data sales, or marketing emails or texts. The one exception is the Business app (staff only): it includes Stripe's Tap to Pay software, which reports approximate location and usage to Stripe.
 - **The website:**
   - It sets **one functional cookie**. Everything else it keeps stays in the browser, for the client's own convenience.
   - It loads no third-party scripts, styles or fonts.
-  - **Reviewers' photos load from Google's and Yelp's servers.**
+  - **Reviewers' photos load from Google's servers** (on November 5, from Yelp's too). As built, Yelp's reviews are only linked, never shown (G16).
 - **IP addresses:** our code doesn't store them, except as an unsalted hash used for rate limits, deleted within about 2 days. Vercel processes IP addresses in its own logs.
 - **Main gaps** (details in section 11):
-  - There's no retention period for clients' details. The documents promise to remove them 12 months after the appointment, using the existing daily job.
-  - Saved cards are never deleted at Stripe.
-  - There's no tooling to answer requests for a copy, a correction or deletion.
-  - The client's name is sent to Stripe in Tap to Pay payment descriptions, and the receipt email is asked for before the card payment and kept.
-  - The Business app's App Store privacy answers need to cover more than they do.
-  - Added after the reviews: "Remember me" starts on in the app; a no-show can be charged before the appointment ends; the app links to the shop's older Squarespace site; Yelp's API terms likely don't allow its reviews on the shop's own site; and the gallery photos of clients are already on the public demo (G12 to G18).
+  - On November 5: no retention period for clients' details; saved cards never deleted at Stripe; no tooling to answer requests for a copy, a correction or deletion; the client's name in Tap to Pay payment descriptions, and the receipt email asked for before the card payment and kept; the Business app's App Store privacy answers; and, added after the reviews, G12 to G18.
+  - As built, the code fixes all of them but the App Store answers: clients' details are removed 12 months after the appointment and saved cards are deleted at Stripe (G1, G2); the shop has tools to answer requests for a copy, a correction or deletion (G3); Tap to Pay descriptions leave out the client's name (G5); and G12 to G18 are in the code, including the email receipt offered only after the payment, its address passed to Stripe and not kept (G14), and the gallery photos gone from the website and the client app (G17).
+  - The App Store privacy answers are written out in `README.md` and the apps' privacy manifests; the owner enters them in App Store Connect (G11; OWNER-CHECKLIST.md §4).
+  - Still open, recommended but not promised: G7, G8, G10 and G19.
 
 ## 1. The systems and where they run
 
@@ -321,11 +319,11 @@ This applies only once the owner has turned no-show protection on and Stripe is 
 
 | Table | Personal data | Form | Deleted today |
 |---|---|---|---|
-| `appointments` | Name, number, email, note, card brand and last 4, agreed policy and its time, visit and no-show history, Stripe's decline reason | Plain text; tokens and keys as SHA-256 hashes | Never |
-| `sales` | Client's name, void reason | Plain text | Never (voided only) |
+| `appointments` | Name, number, email, note, card brand and last 4, agreed policy and its time, visit and no-show history, Stripe's decline reason; as built, also whether a charged fee's receipt went out (`no_show_fee_receipt`: `sent`, `no_email` or `failed`, never the address; migration 009) | Plain text; tokens and keys as SHA-256 hashes | On November 5: never. As built: 12 months after the appointment's end, the daily job sets the name to "Name removed" and clears the number, email, note, the manage token's and booking key's hashes and Stripe's decline reason (`server/src/retention.ts`); `npm run privacy:forget` does it sooner for one person, except on an appointment still needed (upcoming, or with a fee pending or still chargeable). The row and the rest stay |
+| `sales` | Client's name, void reason | Plain text | On November 5: never (voided only). As built: the daily job clears the name and void reason 12 months after the sale, or `npm run privacy:forget` sooner; the row stays |
 | `sale_items` | None (only what was sold) | | Never |
-| `payments` | Description (may hold the client's name or a staff note), receipt email, `sale_draft` (client's name), Stripe ids | Plain text | Never |
-| `saved_cards` | Stripe Customer and card ids, brand, last 4, expiry | Card token as a SHA-256 hash | Never |
+| `payments` | Description (may hold the client's name or a staff note), receipt email, `sale_draft` (client's name), Stripe ids. As built: no receipt email (migration 008 cleared them, and none is stored since), and a new card payment's description is what was sold and the barber, or the staff's note | Plain text | On November 5: never. As built: 12 months after the payment, the daily job clears a card payment's description and the client's name on its ticket (a fee's description, which names only the service, barber and time, stays); `npm run privacy:forget` does it sooner. The row stays |
+| `saved_cards` | Stripe Customer and card ids, brand, last 4, expiry; as built, also when the client asked to delete it (or booked without "Remember me") and when it was removed (`delete_requested_at`, `removed_at`; migration 008) | Card token as a SHA-256 hash | Never (the row). As built: once the card is deleted at Stripe (section 12), its Stripe ids (Checkout Session, Customer and card) are cleared; the brand, last 4 and expiry stay, since old appointments name the brand and last 4. A card on a Stripe account the server can't use any more loses its ids too, but stays at Stripe: the server only logs it, to be deleted in that account's Dashboard (OWNER-CHECKLIST.md §3) |
 | `rate_limits` | Scrambled IP address | Unsalted SHA-256, shortened | Daily, once over 24 hours old |
 | `computer_sessions` | Computer's name, when it was used | Token as a SHA-256 hash | Ended ones, at the next computer sign-in |
 | `computer_codes` | None | HMAC | Replaced by the next code |
@@ -546,14 +544,15 @@ These are listed with the highest priority first. Each is either a change to the
 
 **Status in the documents:**
 
-- **Promised by the documents, so they must be built and released together with them:** G1, G2, G3, G5, G9, G12, G13, G14, G15, G16 and G18, plus publishing and linking the documents, showing the Terms at booking, and capping the fee at the service's price (see `research.md` §18). The documents' dates stay "[TO FILL IN]" until that release.
-- **Urgent, before launch and independent of it:** G17 (the gallery photos on the public demo).
+- **Promised by the documents, so they must be built and released together with them:** G1, G2, G3, G5, G9, G12, G13, G14, G15, G16 and G18, plus publishing and linking the documents, showing the Terms at booking, and capping the fee at the service's price (see `research.md` §18). The documents' dates stay "[TO FILL IN]" until that release. **As built (November 18, 2026):** all of them are in the code on `v5/int`, waiting for that release. Some details differ from the proposals below; where they do, the code wins.
+- **Urgent, before launch and independent of it:** G17 (the gallery photos on the public demo). **Done:** the photos are out of the code on `v5/int`, the public demo and the test builds. Other branches on GitHub, including `main`, `v5/legal` and `v5/webapp-business`, still have them.
 - **Disclosed in the Privacy Policy instead of changed:** G4 and G6.
-- **Recommended, not promised:** G7, G8, G10, G11 and G19.
+- **Recommended, not promised:** G7, G8, G10, G11 and G19. **Still open on November 18,** except that for G11 both privacy manifests and the README now give the answers, which still have to be entered in App Store Connect (OWNER-CHECKLIST.md §4).
 
 ### G1. No retention period for clients' details
 
-- **Now:** names, numbers, emails and notes stay on appointments forever.
+- **On November 5:** names, numbers, emails and notes stayed on appointments forever.
+- **As built:** the daily job removes them as below (`anonymizeExpired` in `server/src/retention.ts`, run from `server/src/cron.ts`; migration 008), with three differences. A fee try still pending holds them only until 14 days after the start (the 7-day fee deadline plus 7 days, `PENDING_FEE_HOLD_DAYS`), long before the 12 months are up. A payment's checkout ticket (`sale_draft`) loses only the client's name, and keeps its items and appointment. The owner's screens still show "Walk-in" for a sale whose name was removed.
 - **What the documents promise:**
   - Remove them **12 months after the appointment**, except while a fee for it is still pending.
   - Keep what was booked, when, the price, the status and the fee amounts, because the analytics use them.
@@ -601,10 +600,11 @@ These are listed with the highest priority first. Each is either a change to the
 
 ### G2. Saved cards are never deleted, and fees have no deadline
 
-- **Now:**
-  - The server's row, and the Customer and card at Stripe, stay forever.
-  - "Remove card" and "Forget me" clear only the device.
-  - There's **no time limit for charging a fee after the visit** (`server/src/feecase.ts`, `server/src/noshowfee.ts`).
+- **On November 5:**
+  - The server's row, and the Customer and card at Stripe, stayed forever.
+  - "Remove card" and "Forget me" cleared only the device.
+  - There was **no time limit for charging a fee after the visit** (`server/src/feecase.ts`, `server/src/noshowfee.ts`).
+- **As built:** as proposed below, except that a fee try still pending keeps the card only until 14 days after the start (`PENDING_FEE_HOLD_DAYS` in `server/src/retention.ts`). The server refuses a new fee try more than 7 days after the start (`FEE_DEADLINE_DAYS` and `feeCaseAt` in `server/src/feecase.ts`). `DELETE /api/cards` (`deleteCard` in `server/src/cards.ts`, `removeCard` in `server/src/retention.ts`) is called from "Remove card", "Forget my details", "Forget me" and "Not you?", and right after a booking made without "Remember me". Such a booking also says so itself (`keepCard: false`), and the server marks its card for deletion in the booking's own transaction (`server/src/booking.ts`). The daily job deletes the cards that are due (`purgeSavedCards`). One exception: a card saved on a Stripe account the server can no longer use (the shop changed how it connects to Stripe, or took the platform's access away) is only removed on the server, which logs it; it has to be deleted in that account's Stripe Dashboard.
 - **What the documents promise:**
   1. **A charging deadline of 7 days after the appointment's start.** After it, the server refuses a new fee attempt. It's fairer to clients, it gives the card agreement a clear end (card-network rules, `research.md` §9.2), and it tells the server when a card is no longer needed.
   2. **`DELETE /api/cards`**, called with `X-Card-Token`:
@@ -620,9 +620,14 @@ These are listed with the highest priority first. Each is either a change to the
 
 ### G3. No way to answer requests for a copy, a correction or deletion
 
-- **Now:**
-  - Only raw database commands can find or delete one client's data.
-  - Nobody can edit a name or number after booking.
+- **On November 5:**
+  - Only raw database commands could find or delete one client's data.
+  - Nobody could edit a name or number after booking.
+- **As built:** the three scripts below (`server/src/privacy.ts`, `server/scripts/privacy.ts`). The apps and the API still can't edit a name or number after booking. The scripts add a few things to the proposal:
+  - `privacy:find` and `privacy:forget` can also look for someone the shop knows only by name (`--name`, which also finds their walk-in checkouts).
+  - `privacy:find --out` saves the export to a file.
+  - `privacy:correct` also fixes the name copied to a card checkout's ticket.
+  - `privacy:forget --dry-run` only shows what it would do, and `privacy:forget` says when to run it again for the appointments it had to keep.
 - **What the documents promise:** a copy (including the agreed cancellation terms), a correction, and deletion, after checking the person by calling or texting the number on file.
 - **Proposal:** owner-run scripts alongside `npm run migrate`:
   - `npm run privacy:find -- --phone "+1…"` (or `--email`) lists that person's appointments (with `no_show_policy` and `no_show_consent_at`), sales, payments and saved cards, and exports them as JSON.
@@ -632,14 +637,16 @@ These are listed with the highest priority first. Each is either a change to the
 
 ### G4. Stripe's page collects an email
 
-- The email typed on Stripe's page, and possibly the name on the card and ZIP code, is saved on the shop's Stripe account. The server never reads it.
+- The email typed on Stripe's page, and possibly the name on the card and ZIP code, is saved on the shop's Stripe account. On November 5 the server never read it.
 - The Privacy Policy discloses it. Check the fields once in test mode.
 - No code change is needed.
+- **As built:** the server now reads that email, without storing it: when a fee goes through, it takes the email from the Checkout Session that saved the card and sets it as the fee's receipt email, so Stripe emails the receipt (live mode only; `emailFeeReceipt` in `server/src/noshowfee.ts`, see 2.9).
 
 ### G5. The client's name goes to Stripe with Tap to Pay payments
 
-- **Now:** without a note, the description is "<service> with <barber> for <client>". It's sent to Stripe and kept in `payments.description`.
-- **In the documents:** the Privacy Policy says the description sent to Stripe can include the client's name.
+- **On November 5:** without a note, the description was "<service> with <barber> for <client>". It's sent to Stripe and kept in `payments.description`.
+- **As built:** without a note, it's what was sold and the barber credited, such as "Haircut with Carlos"; the client's name is never added (`paymentDescription` in `IzzyClipzBusiness/Payments/CheckoutTicket.swift`). Of the clean-up below, the receipt email isn't kept (G14), but `sale_draft` isn't cleared when its sale is recorded (it's still read when a sale is voided, `server/src/sales.ts`); the daily job removes the client's name from it after 12 months (G1).
+- **In the documents:** the Privacy Policy says Stripe receives a short description of the visit, such as the service and the barber, or a note staff type.
 - **Required fix (the Privacy Policy now assumes it):** drop " for <client>" in `IzzyClipzBusiness/Payments/CheckoutModel.swift`, so the description is "<service> with <barber>" unless staff type a note. The copy of older descriptions in the shop's Stripe account stays as long as Stripe keeps payment records, which the policy's retention table says.
 - **Related clean-up:**
   - Stop keeping the receipt email after the payment, since Stripe has it.
@@ -648,6 +655,7 @@ These are listed with the highest priority first. Each is either a change to the
 ### G6. Reviewers' photos load from Google and Yelp
 
 - **In the documents:** disclosed (see 2.13).
+- **As built:** only Google's photos load. The website and the app never show Yelp's reviews, whatever the server sends (G16), so nothing loads from Yelp's servers.
 - **Alternatives:** show the reviewers' initials instead of photos, or pass the photos through the server without storing them (check Google's terms first).
 
 ### G7. The IP hash has no secret
@@ -740,19 +748,19 @@ This is what the Privacy Policy states. In the last column, "now" means it's alr
 
 | Data | Where | How long | How |
 |---|---|---|---|
-| Name, number, email and note on appointments | Server | 12 months after the appointment (later only while a fee is pending) | G1 (today: forever) |
-| Client's name on sales; void reasons | Server | 12 months | G1 (today: forever) |
-| Payment descriptions, checkout tickets | Server | At most 12 months | G1 (today: forever) |
-| Receipt emails typed at the counter | Server | Not kept: passed to Stripe after the payment | G14 (today: forever) |
+| Name, number, email and note on appointments | Server | 12 months after the appointment (later only while a fee is pending) | Now: the daily job, 12 months after the appointment's end (`server/src/retention.ts`). A fee still marked pending holds them only until 14 days after the start, so never past the 12 months. |
+| Client's name on sales; void reasons | Server | 12 months | Now: the daily job, 12 months after the sale |
+| Descriptions of card payments taken at the shop; the client's name on their checkout tickets | Server | 12 months | Now: the daily job, 12 months after the payment; a fee's description (only the kind of fee, the service, barber and time) and the ticket's items stay |
+| Receipt emails typed at the counter | Server | Not kept: passed to Stripe after the payment | Now (`server/src/payments.ts`); migration 008 clears the old ones, and the daily job clears any left |
 | Payment records, descriptions and receipt emails at Stripe; the card page's record (Checkout Session) with the email typed there | Stripe (the shop's account) | As long as Stripe keeps them; a Checkout Session can't be deleted | Stripe |
 | What was booked, prices, sales totals | Server | Kept for the shop's records, without personal details | n/a |
-| Saved card | Stripe and server | Until it expires, goes 12 months unused, or is removed; without "Remember me", until its booking can no longer be charged; in each case once no booking needs it | G2 (today: forever) |
-| Agreed policy text and its time | Server | Kept with the appointment, no longer linked to a person after 12 months | G1 |
+| Saved card | Stripe and server | Until it expires, goes 12 months unused, or is removed; without "Remember me", until its booking can no longer be charged; in each case once no booking needs it | Now (`server/src/retention.ts`): deleted at Stripe (detached, its Customer deleted) at once on removal when no booking needs it, otherwise by the daily job. Once deleted, the server keeps the row without Stripe's ids. A card on a Stripe account the server can't use any more is only marked removed, and logged for the shop to delete in that account's Dashboard |
+| Agreed policy text and its time | Server | Kept with the appointment, no longer linked to a person after 12 months | Now (the daily job, G1) |
 | Scrambled IP address for rate limits | Server | About 2 days | Now |
 | Request logs the shop can see | Vercel | 1 hour (Hobby), 1 day (Pro), up to 30 days (Observability Plus) | Vercel |
 | Traffic data Vercel keeps for itself (for example IP addresses, for security) | Vercel | "The minimum necessary period", as Vercel decides (its Privacy Notice) | Vercel |
 | Database restore history | Neon | 6 hours to 30 days, depending on the plan | Neon |
-| Yelp reviews (only with a Yelp key; the documents assume none, G16) | Server | At most 24 hours | Now |
+| Yelp reviews (only with `YELP_REVIEWS=on` and a Yelp key; a key alone never calls Yelp, the website and the app never show them, and the documents assume it's off, G16) | Server | At most 24 hours | Now |
 | Google reviews | Server | Not stored | Now |
 | Computer sign-ins | Server and browser | Up to 30 days (ended ones deleted at the next sign-in) | Now (G10 would make it daily) |
 | Product photos | Vercel Blob | Until replaced or deleted (copies cached for up to 30 days) | Now |
