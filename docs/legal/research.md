@@ -1004,9 +1004,9 @@ Three independent reviewers checked the four documents against current Californi
 
 The November 14 legal check's code items are now in the code on `v5/int` (OWNER-CHECKLIST.md §3, items 19 to 22):
 
-- **19. A receipt for every fee.** When a fee goes through, the server takes the email the client gave on Stripe's card page and sets it as the fee's receipt email, so Stripe sends the receipt. The address isn't stored on our server. If there's none, the shop can send the receipt from its Stripe Dashboard.
-- **20. Who runs the shop** (Bus. & Prof. Code §17538(d)): the website's footer and "Review and book" (website and app) show the operator line and the line about getting it by email, with "[TO FILL IN]" notes until the owner gives the LLC's name and the shop's email.
-- **21. The Visit page:** "Disabled parking space near the entrance", and the line about getting in offers relay calls and email.
+- **19. A receipt for every fee.** When a fee goes through, the server takes the email the client gave on Stripe's card page and sets it as the fee's receipt email, so Stripe sends the receipt. The address isn't stored on our server. What became of the receipt (sent, no email, or couldn't be sent) is kept with the appointment, never the address; when none went out, the fee's details in Izzy Clipz Business and on the website say so, and how to send one from the Stripe Dashboard.
+- **20. Who runs the shop** (Bus. & Prof. Code §17538(d)): the website's footer and "Review and book" (website and app) show who runs the shop, with a "Refunds" link next to the Cancellation & No-Show Policy. Until the owner gives the LLC's registered name and the shop's email, they show only what's known, "Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.", and the website's strict build stops until both are in.
+- **21. The Visit page:** "Disabled parking space near the entrance", and the line about getting in welcomes relay calls (711) and adds the shop's email once there is one.
 - **22. The fee notice and the stored terms:** the title is "Late Cancellation & No-Show Fee" whenever late cancellations can be charged, and new bookings agree to "… may charge $40 (100% of the service) to this card within 7 days after your appointment time. Cancelling online is free more than 1 hour before, or within 15 minutes of booking." The Cancellation & No-Show Policy now lists that title and quotes these words.
 
 Two more promises are now kept by the server, not only by the staff:
