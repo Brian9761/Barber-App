@@ -618,16 +618,91 @@ test.describe('without JavaScript', () => {
   });
 });
 
-test('with JavaScript, the site takes a legal page over from its plain HTML: its own nav, and “On this page” as the site has it', async ({ page }, testInfo) => {
+test('with JavaScript, the site takes a legal page over from its plain HTML in one go: never “Loading…”, its own nav, and “On this page” as it was', async ({
+  page,
+}, testInfo) => {
+  // Everything #root shows while the page loads, noted as it happens.
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { izzyRootSeen: string[] }).izzyRootSeen = seen;
+    new MutationObserver(() => {
+      const root = document.getElementById('root');
+      if (!root) return;
+      if (root.querySelector('.legal-loading') || (root.textContent ?? '').includes('Loading…')) seen.push('loading');
+      if (root.querySelectorAll('h1').length > 1) seen.push('two pages');
+      if (root.querySelector('main') && root.querySelectorAll('h1').length === 0) seen.push('no page');
+    }).observe(document, { childList: true, subtree: true });
+  });
   await page.goto('/cancellation-policy');
   await siteTookOver(page);
   await expect(page.locator('h1')).toHaveCount(1);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Cancellation & No-Show Policy');
+  expect(await page.evaluate(() => (window as unknown as { izzyRootSeen: string[] }).izzyRootSeen), 'the plain page, then the site’s, and nothing in between').toEqual([]);
   // The site's own nav: its Book link, and on a phone its menu.
   await expect(page.locator('nav.globalnav .globalnav__book')).toBeVisible();
   if (isPhone(testInfo)) await expect(page.getByRole('button', { name: 'Menu' })).toBeVisible();
-  // "On this page" as the site has it: open on a computer, closed on a phone.
+  // "On this page" as the plain HTML had it (closed), on a computer too, so nothing on screen moves.
   const details = page.getByRole('navigation', { name: 'On this page' }).locator('details');
-  if (isPhone(testInfo)) await expect(details).not.toHaveAttribute('open');
-  else await expect(details).toHaveAttribute('open', '');
+  await expect(details).not.toHaveAttribute('open');
+  // A policy opened in the site itself has it as the site does: open on a computer, closed on a phone.
+  await page.getByRole('contentinfo').getByRole('navigation', { name: 'Legal' }).getByRole('link', { name: 'Privacy Policy' }).click();
+  await expect(page).toHaveURL(/\/privacy$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Privacy Policy');
+  const opened = page.getByRole('navigation', { name: 'On this page' }).locator('details');
+  if (isPhone(testInfo)) await expect(opened).not.toHaveAttribute('open');
+  else await expect(opened).toHaveAttribute('open', '');
+});
+
+test.describe('on a slow connection', () => {
+  // The page itself, as the network sends it (no service worker in between).
+  test.use({ serviceWorkers: 'block' });
+
+  test('a reader who started on the plain HTML keeps their place when the site takes over: the section on screen and the link the keyboard is on', async ({
+    page,
+  }, testInfo) => {
+    // The site's script comes late, as on a slow phone connection.
+    let release = () => undefined as void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/assets\/main-[^/]+\.js$/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto('/privacy', { waitUntil: 'commit' });
+    const heading = () => page.getByRole('heading', { level: 2, name: 'Who we share your information with' });
+    await expect(heading()).toBeVisible();
+    await expect(page.locator('[data-prerendered]')).toHaveCount(1);
+    // Read on to the middle of the policy, with the keyboard on a link there.
+    await heading().evaluate((h) => window.scrollBy(0, h.getBoundingClientRect().top - 160));
+    const link = page.locator('main a[href="https://stripe.com/privacy"]').first();
+    await link.focus();
+    const before = await heading().evaluate((h) => ({ top: h.getBoundingClientRect().top, scrollY: window.scrollY }));
+    expect(before.scrollY).toBeGreaterThan(1000);
+
+    release();
+    await siteTookOver(page);
+    const after = await heading().evaluate((h) => ({ top: h.getBoundingClientRect().top, scrollY: window.scrollY }));
+    expect(Math.abs(after.top - before.top), 'the section stays where it was on the screen').toBeLessThanOrEqual(2);
+    // The keyboard is still on the same link (its words and address), not back at the start of the page.
+    expect(
+      await page.evaluate(() => {
+        const active = document.activeElement;
+        return active instanceof HTMLAnchorElement ? [active.getAttribute('href'), active.closest('main') !== null] : [active?.tagName ?? null, false];
+      }),
+    ).toEqual(['https://stripe.com/privacy', true]);
+    await view(page, testInfo, 'legal-16-slow-takeover-keeps-place');
+  });
+});
+
+test('a legal page’s file address (“/privacy/index.html”) goes to the page itself, with or without JavaScript', async ({ page, request }) => {
+  for (const path of ['/privacy', '/terms', '/cancellation-policy', '/accessibility']) {
+    const response = await request.get(`${path}/index.html`, { maxRedirects: 0 });
+    expect(response.status(), path).toBe(308);
+    expect(response.headers().location, path).toBe(path);
+  }
+  await page.goto('/terms/index.html');
+  await expect(page).toHaveURL(/\/terms$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Terms of Service');
+  await expect(page).toHaveTitle('Terms of Service · Izzy Clipz Barbershop');
 });

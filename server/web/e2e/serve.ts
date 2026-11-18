@@ -2,8 +2,9 @@
 // over the wire protocol by pglite-socket, as in the server's own tests) with the
 // migrations and the catalog's barbers, and the built site from ../public, from
 // one Node server routed like Vercel: /api to the API, files on disk first, then
-// the rewrites in ../vercel.json (each legal page's plain HTML, Business's page,
-// and index.html for every other path but /assets/).
+// the redirects and rewrites in ../vercel.json (each legal page's address with
+// "/index.html" sent to the page itself; then each legal page's plain HTML,
+// Business's page, and index.html for every other path but /assets/).
 //
 //   npm run build && npm run serve:local     (then open http://127.0.0.1:4173)
 //
@@ -44,7 +45,7 @@ import { configFromEnv } from '../../src/config.js';
 import { createPool, poolDb } from '../../src/db.js';
 import type { Deps, StripeClient } from '../../src/deps.js';
 import { migrate, seedBarbers } from '../../src/migrate.js';
-import { rewriteFor, rewritesOf } from '../tools/hosting.js';
+import { redirectFor, redirectsOf, rewriteFor, rewritesOf } from '../tools/hosting.js';
 
 const PORT = Number(process.env.E2E_PORT) || 4173;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -52,8 +53,12 @@ const ORIGIN = `http://127.0.0.1:${PORT}`;
 const E2E_OWNER_KEY = process.env.E2E_OWNER_KEY || 'e2e-owner-key-for-local-tests-only';
 const PUBLIC_DIR = resolve(fileURLToPath(new URL('../../public/', import.meta.url)));
 const FIXTURES = new URL('../../test/fixtures/', import.meta.url);
-/** The hosting's rewrites, as Vercel applies them once no file matches (../vercel.json). */
-const REWRITES = rewritesOf(readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8'));
+/** The hosting's settings (../vercel.json). */
+const HOSTING = readFileSync(new URL('../../vercel.json', import.meta.url), 'utf8');
+/** Its redirects, which Vercel applies before anything else. */
+const REDIRECTS = redirectsOf(HOSTING);
+/** Its rewrites, as Vercel applies them once no file matches. */
+const REWRITES = rewritesOf(HOSTING);
 
 if (!existsSync(join(PUBLIC_DIR, 'index.html'))) {
   console.error(`No built site in ${PUBLIC_DIR}. Run \`npm run build\` in server/web first.`);
@@ -438,6 +443,12 @@ const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', ORIGIN);
     if (url.pathname.startsWith('/__e2e/')) return await plumbing(req, res, url);
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) return await api(req, res);
+    // vercel.json's redirects first, as on Vercel: a legal page's address with "/index.html".
+    const redirect = redirectFor(REDIRECTS, url.pathname);
+    if (redirect) {
+      res.writeHead(redirect.status, { location: redirect.destination + url.search });
+      return res.end();
+    }
     const file = siteFile(url.pathname);
     if (file) return serveFile(res, file);
     // Then vercel.json's rewrites: each legal page's plain HTML, Izzy Clipz Business's own page (with

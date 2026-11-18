@@ -18,7 +18,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { rewriteFor, rewritesOf, sourcePattern } from '../tools/hosting.js';
+import { redirectFor, redirectsOf, rewriteFor, rewritesOf, sourcePattern } from '../tools/hosting.js';
 
 const PORT = Number(process.env.E2E_DEMO_PORT) || 4174;
 const ORIGIN = `http://127.0.0.1:${PORT}`;
@@ -36,6 +36,7 @@ interface HostingSettings {
 
 interface Site {
   root: string;
+  redirects: ReturnType<typeof redirectsOf>;
   rewrites: { pattern: RegExp; destination: string }[];
   headerRules: { pattern: RegExp; headers: { key: string; value: string }[] }[];
 }
@@ -46,6 +47,7 @@ function site(root: string): Site {
   const hosting = JSON.parse(text) as HostingSettings;
   return {
     root,
+    redirects: redirectsOf(text),
     rewrites: rewritesOf(text),
     headerRules: (hosting.headers ?? []).map((rule) => ({ pattern: sourcePattern(rule.source), headers: rule.headers })),
   };
@@ -135,9 +137,13 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, pathname: str
 
 const server = createServer(async (req, res) => {
   try {
-    const { pathname } = new URL(req.url ?? '/', ORIGIN);
+    const { pathname, search } = new URL(req.url ?? '/', ORIGIN);
     if (pathname.startsWith('/__e2e/')) return await plumbing(req, res, pathname);
     if (pathname === '/api' || pathname.startsWith('/api/')) apiRequests.push(`${req.method} ${pathname}`);
+
+    // The redirects before anything else, like Vercel: a legal page's address with "/index.html".
+    const redirect = redirectFor(current.redirects, pathname);
+    if (redirect) return send(res, redirect.status, '', { location: redirect.destination + search, ...headersFor(pathname) });
 
     // Files first, then the rewrites (each legal page's plain HTML, Business's page, and the site's
     // page for every other path but /api/ and /assets/), like Vercel.

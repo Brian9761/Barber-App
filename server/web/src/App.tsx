@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import { BookingRoutes } from './booking/BookingRoutes';
 import { BusinessLoadFailed, BusinessLoading } from './business/BusinessLoading';
@@ -21,10 +21,42 @@ import { VisitPage } from './pages/VisitPage';
  */
 const BusinessApp = lazy(() => import('./business/BusinessApp'));
 
-/** The legal pages, with the documents' words: loaded only when one is opened. */
-const LegalPage = lazy(() => import('./legal/LegalPage'));
+type LegalPageComponent = (typeof import('./legal/LegalPage'))['default'];
+
+/** The legal pages' code once it has loaded. */
+let loadedLegalPage: LegalPageComponent | null = null;
+let legalPageLoad: Promise<LegalPageComponent> | null = null;
+
+/**
+ * The legal pages, with the documents' words: their code, loaded once, when one is opened, or
+ * before the site first draws when it opens on one (main.tsx), so the site replaces a policy's
+ * plain HTML with the same page in one go, never with "Loading…" in between.
+ */
+export function loadLegalPage(): Promise<LegalPageComponent> {
+  legalPageLoad ??= import('./legal/LegalPage').then(
+    (module) => {
+      loadedLegalPage = module.default;
+      return module.default;
+    },
+    (error: unknown) => {
+      // Asked for again next time (the page's own load, when main.tsx's didn't come).
+      legalPageLoad = null;
+      throw error;
+    },
+  );
+  return legalPageLoad;
+}
+
+const LazyLegalPage = lazy(() => loadLegalPage().then((page) => ({ default: page })));
 
 function Legal({ id }: { id: LegalDocumentId }) {
+  // Chosen when the page opens, and kept: once the code is here the page draws at once (a lazy
+  // component shows its fallback the first time it's drawn, even when its code is already here),
+  // and until then it loads first.
+  const [Loaded] = useState(() => loadedLegalPage);
+  // Keyed by the document, so each one opened in the site starts as its own page (a policy taken
+  // over from its plain HTML keeps that page's state only).
+  if (Loaded) return <Loaded key={id} id={id} />;
   return (
     <Suspense
       fallback={
@@ -33,7 +65,7 @@ function Legal({ id }: { id: LegalDocumentId }) {
         </div>
       }
     >
-      <LegalPage id={id} />
+      <LazyLegalPage key={id} id={id} />
     </Suspense>
   );
 }

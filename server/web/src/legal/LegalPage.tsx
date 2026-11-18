@@ -7,7 +7,7 @@
 // note at the top says so, the dates read "Not in effect yet", and every placeholder shows as
 // "To be added by the shop: …".
 
-import { Fragment, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Notice } from '../components/ui';
@@ -17,6 +17,7 @@ import { legalDocument, siteLinkFor, type LegalDocumentId } from './documents';
 import { parseMarkdown, plainText, type Block, type Inline } from './markdown';
 import { legalDraft } from './mode';
 import { asDraft, placeholderNote } from './placeholders';
+import { finishTakingOver, takeOverInProgress } from './takeover';
 import { LEGAL_TEXTS } from './texts';
 import './legal.css';
 
@@ -28,13 +29,28 @@ export const DEMO_DRAFT_LINE = 'This is the demo version of the website.';
 export default function LegalPage({ id }: { id: LegalDocumentId }) {
   const document = legalDocument(id);
   usePageMeta(document.title, document.description);
-  return <LegalArticle source={LEGAL_TEXTS[id]} draft={legalDraft()} demo={isDemo()} />;
+  // Drawn over its own plain HTML (legal/takeover.ts): read at the first draw, and let go after it,
+  // so the next page opened in the site is drawn as usual.
+  const [tookOver] = useState(takeOverInProgress);
+  useEffect(finishTakingOver, []);
+  return <LegalArticle source={LEGAL_TEXTS[id]} draft={legalDraft()} demo={isDemo()} tookOver={tookOver} />;
 }
 
 /** A document's page from its Markdown: as a draft (with its note), or as published. */
-export function LegalArticle({ source, draft, demo }: { source: string; draft: boolean; demo: boolean }) {
+export function LegalArticle({
+  source,
+  draft,
+  demo,
+  tookOver = null,
+}: {
+  source: string;
+  draft: boolean;
+  demo: boolean;
+  /** Drawn over its own plain HTML: "On this page" as it was there, and no jump to the #section. */
+  tookOver?: { contentsOpen: boolean } | null;
+}) {
   const blocks = useMemo(() => parseMarkdown(draft ? asDraft(source) : source), [source, draft]);
-  useScrollToSection(blocks);
+  useScrollToSection(blocks, tookOver !== null);
 
   const [title, ...rest] = blocks;
   // The title, then its dates and opening lines, then "On this page" before the first section.
@@ -58,7 +74,7 @@ export function LegalArticle({ source, draft, demo }: { source: string; draft: b
         {opening.map((block, index) => (
           <BlockView key={index} block={block} dates={index === 0 && isDateLine(block)} />
         ))}
-        {contents.length > 0 ? <Contents headings={contents} /> : null}
+        {contents.length > 0 ? <Contents headings={contents} startsOpen={tookOver?.contentsOpen} /> : null}
         {sections.map((block, index) => (
           <BlockView key={index} block={block} />
         ))}
@@ -90,11 +106,20 @@ function useWide(): boolean {
   );
 }
 
-/** "On this page": the document's sections, each a link to its heading. */
-function Contents({ headings }: { headings: Extract<Block, { kind: 'heading' }>[] }) {
+/**
+ * "On this page": the document's sections, each a link to its heading. Open on a computer and
+ * closed on a phone, or as the plain HTML had it (`startsOpen`); after that it follows the
+ * screen's width when that changes.
+ */
+function Contents({ headings, startsOpen }: { headings: Extract<Block, { kind: 'heading' }>[]; startsOpen?: boolean }) {
   const wide = useWide();
-  const [open, setOpen] = useState(wide);
-  useEffect(() => setOpen(wide), [wide]);
+  const [open, setOpen] = useState(startsOpen ?? wide);
+  const shownFor = useRef(wide);
+  useEffect(() => {
+    if (shownFor.current === wide) return;
+    shownFor.current = wide;
+    setOpen(wide);
+  }, [wide]);
   return (
     <nav className="legal-toc" aria-label="On this page" data-testid="legal-contents">
       <details open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
@@ -120,9 +145,16 @@ function Contents({ headings }: { headings: Extract<Block, { kind: 'heading' }>[
  * Opened at a section (/privacy#saved-cards, or a section of "On this page"): that section's
  * heading comes into view below the nav, and screen readers and the keyboard go on from it.
  */
-function useScrollToSection(blocks: Block[]): void {
+function useScrollToSection(blocks: Block[], tookOver: boolean): void {
   const { hash } = useLocation();
-  useEffect(() => goToSection(hash), [hash, blocks]);
+  // Drawn over the plain HTML, where the browser already went to the #section (and the reader may
+  // have read on since): only a #section chosen after that.
+  const opened = useRef({ hash, tookOver });
+  useEffect(() => {
+    if (opened.current.tookOver && hash === opened.current.hash) return;
+    opened.current.tookOver = false;
+    goToSection(hash);
+  }, [hash, blocks]);
   // A link within the page changes only the address's #section: the browser scrolls, this moves the focus.
   useEffect(() => {
     const onHashChange = () => goToSection(window.location.hash);
