@@ -20,6 +20,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     private(set) lazy var noShowPolicies = NoShowPolicyStore(api: api)
     /// Stripe's card page, or a stand-in while UI testing.
     private(set) lazy var cardSaver: any CardSaver = APIConfiguration.makeCardSaver(api: api)
+    /// Asking the shop to delete the cards this iPhone let go of without a booking.
+    private var cardsLetGoDeletion: Task<Void, Never>?
 
     /// UI tests never see a permission alert; everyone else gets the real thing.
     private static func makeScheduler() -> NotificationScheduling {
@@ -73,6 +75,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     func becameActive() {
         // The Keychain may not have been readable when the app started (before the first unlock).
         savedCard.readIfNeeded()
+        // A card held only until the app closed (no "Remember me") and never booked with: nobody
+        // can use or remove it again, so the shop deletes it.
+        if cardsLetGoDeletion == nil {
+            cardsLetGoDeletion = Task { [savedCard, api] in
+                await CardDeleter.deleteLetGo(savedCard, api: api)
+                self.cardsLetGoDeletion = nil
+            }
+        }
         appointments.refreshLocally()
         updateLastCut()
         Task {

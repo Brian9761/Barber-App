@@ -288,9 +288,11 @@ final class BookingSubmitter {
             failure = Self.failure(for: apiError, start: draft.plan.start, calendar: calendar)
             return nil
         }
+        // Asked before the try is finished with: a retry that found an earlier try's booking.
+        let cardNotKept = appointments.cardNotKept(by: request)
         let saved = appointments.add(confirmation, remind: true)
         appointments.finishedBooking(request)
-        keepOrForgetCard(after: draft)
+        keepOrForgetCard(after: draft, notKeptByFirstTry: cardNotKept)
         guard saved.status == .booked else {
             // A retry found the booking an earlier try made, but it has been cancelled since.
             failure = .timeGone(Self.noLongerBooked(saved, calendar: calendar))
@@ -338,9 +340,14 @@ final class BookingSubmitter {
     /// be charged (it answers "scheduled"). The booking itself already said so (`keepCard: false`,
     /// which marks the card in the same step as the booking); this request is the second safeguard,
     /// for a card the booking didn't go with too.
-    private func keepOrForgetCard(after draft: BookingDraft) {
+    ///
+    /// A retry that found the booking an earlier try made with "Remember me" off keeps that try's
+    /// choice for its card (`notKeptByFirstTry`): the server marked that card for deletion with the
+    /// booking, so it's forgotten here too even if Remember me was turned on since.
+    private func keepOrForgetCard(after draft: BookingDraft, notKeptByFirstTry: IzzyAPI.CardToken? = nil) {
         guard let cards else { return }
-        if draft.remember {
+        let markedForDeletion = notKeptByFirstTry != nil && cards.saved?.token == notKeptByFirstTry
+        if draft.remember, !markedForDeletion {
             cards.setRemembered(true)
         } else {
             let token = cards.saved?.token
