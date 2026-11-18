@@ -112,4 +112,54 @@ final class ShopInfoTests: XCTestCase {
             XCTAssertNotEqual(line, "Wheelchair accessible")
         }
     }
+
+    /// Who runs the shop, where, and how to get that by email (Business and Professions Code
+    /// §17538(d)): until the owner gives the LLC's registered name and the shop's email, each reads as
+    /// still to be added, so a release can't quietly leave it out.
+    func testWhoRunsTheShopIsToBeAddedUntilTheOwnerGivesIt() {
+        XCTAssertNil(shop.operatorName)
+        XCTAssertNil(shop.email)
+        XCTAssertFalse(shop.isOperatorKnown)
+        XCTAssertEqual(
+            shop.operatedByLine,
+            "Izzy Clipz Barbershop is operated by [to be added by the shop: the LLC's registered name], 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States."
+        )
+        XCTAssertEqual(
+            shop.byEmailLine,
+            "To get this information by email, email us at [to be added by the shop: the shop's email address] and we'll send it within 5 days."
+        )
+
+        let filledIn = Self.shop(operatorName: "Izzy Clipz Barbershop LLC", email: "hello@izzyclipz.example")
+        XCTAssertTrue(filledIn.isOperatorKnown)
+        XCTAssertEqual(
+            filledIn.operatedByLine,
+            "Izzy Clipz Barbershop is operated by Izzy Clipz Barbershop LLC, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States."
+        )
+        XCTAssertEqual(filledIn.byEmailLine, "To get this information by email, email us at hello@izzyclipz.example and we'll send it within 5 days.")
+        XCTAssertFalse(Self.shop(operatorName: "Izzy Clipz Barbershop LLC", email: nil).isOperatorKnown)
+    }
+
+    /// The shop with the business that runs it and its email filled in (or not).
+    static func shop(operatorName: String?, email: String?) -> ShopInfo {
+        let shop = ShopInfo.izzyClipz
+        return ShopInfo(
+            name: shop.name,
+            fullName: shop.fullName,
+            tagline: shop.tagline,
+            about: shop.about,
+            address: shop.address,
+            coordinate: shop.coordinate,
+            phone: shop.phone,
+            timeZoneIdentifier: shop.timeZoneIdentifier,
+            schedule: shop.schedule,
+            instagramHandle: shop.instagramHandle,
+            websiteURL: shop.websiteURL,
+            paymentMethods: shop.paymentMethods,
+            highlights: shop.highlights,
+            accessibility: shop.accessibility,
+            googlePlaceID: shop.googlePlaceID,
+            operatorName: operatorName,
+            email: email
+        )
+    }
 }

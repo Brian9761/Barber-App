@@ -95,6 +95,7 @@ The menu, the team and the hours live in one file, `Packages/IzzyClipzKit/Source
 - **New service**: add a `Service`, then an `Offering` for each barber who offers it. Each offering needs a menu item ID (any UUID); its ID on the server is `<barber id>/<item id>`, so never change an existing one.
 - **New barber**: add a `Barber` with a URL-safe `id` (e.g. `jane-doe`), then their offerings. Their monogram tile shows the first two letters of `name`.
 - **Hours**: edit `schedule`, in Pacific time. Times are offered every 30 minutes from opening, as long as the appointment ends by closing, at least 30 minutes ahead and up to 60 days ahead.
+- **Who runs the shop**: `operatorName` (the LLC's exact registered name) and `email` (the shop's email address) in `ShopInfo.izzyClipz`. Until they're filled in, the website's footer, "Review and book" on the website and in the app say "[to be added by the shop: …]" in their place ("Izzy Clipz Barbershop is operated by …", Business and Professions Code §17538(d); docs/legal/OWNER-CHECKLIST.md §3 item 20), and the website's strict build stops.
 
 Then regenerate the server's copy and deploy the server:
 
@@ -189,7 +190,7 @@ The logo is the official one the shop sent, and the storefront photo is the shop
 ## Publishing to the App Store
 
 1. **Account**: Apple expects business apps to be published by the business, so use the shop's own Apple Developer account or get the owner's written permission to use the name, logo and storefront photo.
-2. **Server and website**: deploy `server/` first and put its address in `IzzyAPIBaseURL` (see `server/README.md`). Put the shop's website in `IZZY_WEBSITE_URL` (`project.yml`): the app opens its `/privacy`, `/terms`, `/cancellation-policy` and `/accessibility` pages, so they must be live there.
+2. **Server and website**: deploy `server/` first and put its address in `IzzyAPIBaseURL` (see `server/README.md`). Put the shop's website in `IZZY_WEBSITE_URL` (`project.yml`): the app opens its `/privacy`, `/terms`, `/cancellation-policy` and `/accessibility` pages, so they must be live there. Its default, https://izzy-clipz.vercel.app, is the public demo, whose legal pages are always drafts and whose booking reaches no one: change it, or deploy the shop's real site at that address first. Fill in who runs the shop (`operatorName` and `email`, see "Updating shop information") before building: "Review and book" shows them.
 3. **App Privacy** (as OWNER-CHECKLIST.md §4 in docs/legal lists it): answer **Data Collected**, **not used for tracking**, for **App Functionality** only.
    - **Izzy Clipz**, all **Linked to the user**:
      - **Contact Info → Name** and **Contact Info → Phone Number**: sent to the shop's server when the client books, so the shop knows who's coming and can reach them.

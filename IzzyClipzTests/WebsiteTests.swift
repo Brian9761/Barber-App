@@ -64,6 +64,12 @@ final class WebsiteTests: XCTestCase {
             XCTAssertTrue(LegalCopy.detailsPrivacy.contains(page.title), page.title)
         }
         XCTAssertFalse(LegalCopy.demoDetailsPrivacy.contains("go to"), "The demo sends nothing anywhere")
+        // Under who runs the shop on Review: where the refund policy is, as the website says it.
+        XCTAssertEqual(LegalCopy.refundPolicy, "Our refund policy is in section 4 of our Terms of Service.")
+        XCTAssertEqual(LegalCopy.refundPolicyPages, [.terms])
+        for page in LegalCopy.refundPolicyPages {
+            XCTAssertTrue(LegalCopy.refundPolicy.contains(page.title), page.title)
+        }
     }
 }
 

@@ -102,6 +102,13 @@ public struct ShopInfo: Sendable {
     public let accessibility: [String]
     /// The shop's Google Maps place ID, used for its Maps page and "Write a review".
     public let googlePlaceID: String
+    /// The business that runs the shop, as the legal documents' first paragraph names it ("Izzy
+    /// Clipz Barbershop is operated by …"): the LLC's exact registered name, or nil until the owner
+    /// has confirmed it (docs/legal/OWNER-CHECKLIST.md §1). See `operatedByLine`.
+    public let operatorName: String?
+    /// The shop's email address, for anyone who'd rather write, or nil until the shop has one
+    /// (docs/legal/OWNER-CHECKLIST.md §1). See `byEmailLine`.
+    public let email: String?
 
     public init(
         name: String,
@@ -118,7 +125,9 @@ public struct ShopInfo: Sendable {
         paymentMethods: [String],
         highlights: [String],
         accessibility: [String],
-        googlePlaceID: String
+        googlePlaceID: String,
+        operatorName: String? = nil,
+        email: String? = nil
     ) {
         precondition(TimeZone(identifier: timeZoneIdentifier) != nil, "Unknown time zone \(timeZoneIdentifier)")
         precondition(ShopInfo.isPlaceID(googlePlaceID), "Invalid Google place ID")
@@ -137,6 +146,8 @@ public struct ShopInfo: Sendable {
         self.highlights = highlights
         self.accessibility = accessibility
         self.googlePlaceID = googlePlaceID
+        self.operatorName = operatorName
+        self.email = email
     }
 
     public var timeZone: TimeZone {
@@ -222,5 +233,36 @@ public struct ShopInfo: Sendable {
             preconditionFailure("Couldn't build a link to \(host)")
         }
         return url
+    }
+}
+
+// MARK: Who runs the shop
+
+extension ShopInfo {
+    /// Who runs the shop and where, as the website's footer and "Review and book" (on the website
+    /// and in the app) show it before any card is saved (Business and Professions Code §17538(d),
+    /// docs/legal/OWNER-CHECKLIST.md §3 item 20): "Izzy Clipz Barbershop is operated by
+    /// <operatorName>, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States." Until the owner
+    /// gives the LLC's registered name, that part reads "[to be added by the shop: …]", so it's never
+    /// silently missing; the website's strict build stops until both parts are filled in.
+    public var operatedByLine: String {
+        "\(fullName) is operated by \(operatorName ?? Self.toBeAdded("the LLC's registered name")), \(address.singleLine), United States."
+    }
+
+    /// The line next to `operatedByLine`: "To get this information by email, email us at <email>
+    /// and we'll send it within 5 days." Until the shop has an email address, it reads
+    /// "[to be added by the shop: …]".
+    public var byEmailLine: String {
+        "To get this information by email, email us at \(email ?? Self.toBeAdded("the shop's email address")) and we'll send it within 5 days."
+    }
+
+    /// Whether both parts are given, so the lines read as the shop will publish them.
+    public var isOperatorKnown: Bool {
+        operatorName != nil && email != nil
+    }
+
+    /// A part the owner hasn't given yet, as the lines show it: "[to be added by the shop: …]".
+    static func toBeAdded(_ what: String) -> String {
+        "[to be added by the shop: \(what)]"
     }
 }

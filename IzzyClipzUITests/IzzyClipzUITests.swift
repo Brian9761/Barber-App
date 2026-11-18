@@ -319,6 +319,14 @@ final class IzzyClipzUITests: XCTestCase {
             "The consent line should sit right above Book appointment"
         )
         screenshot("15-Book-Review")
+        // Who runs the shop and where, and where the refund policy is, before anything is booked
+        // (until the owner gives the LLC's name and the shop's email, those parts say so).
+        let operatedBy = containing("Izzy Clipz Barbershop is operated by")
+        scroll(toReveal: operatedBy)
+        XCTAssertTrue(operatedBy.label.contains("1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States"), operatedBy.label)
+        XCTAssertTrue(containing("To get this information by email, email us at").exists, "No line offering it by email")
+        XCTAssertTrue(containing("Our refund policy is in section 4 of our Terms of Service").exists, "No refund policy line")
+        screenshot("15c-Book-Review-Who-Runs-The-Shop")
 
         bookAppointment()
         let booked = element("bookedSummary")

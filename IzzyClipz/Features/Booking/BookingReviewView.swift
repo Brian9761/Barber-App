@@ -106,6 +106,7 @@ private struct BookingReviewScreen: View {
                         .foregroundStyle(Theme.smoke)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                ReviewOperatorLines()
             }
             .padding(.horizontal, Theme.gutter)
             .padding(.top, Theme.Space.s)
@@ -367,5 +368,38 @@ private struct BookingFailureCard: View {
             .accessibilityIdentifier("bookingCallButton")
         }
         .card(padding: Theme.Space.xl)
+    }
+}
+
+/// At the end of Review, before any card is saved: who runs the shop and where, how to get that by
+/// email, and where the refund policy is, in the website's words (Business and Professions Code
+/// §17538(d); docs/legal/OWNER-CHECKLIST.md §3 item 20). A part the owner hasn't given yet reads
+/// "[to be added by the shop: …]" (`ShopInfo.operatedByLine`), so it's never silently missing.
+private struct ReviewOperatorLines: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+            Text(AppData.shop.operatedByLine)
+            Text(Self.byEmail(for: AppData.shop))
+                .tint(Theme.electric)
+            LegalLinksText(text: LegalCopy.refundPolicy, pages: LegalCopy.refundPolicyPages)
+        }
+        .textRole(.caption)
+        .foregroundStyle(Theme.smoke)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reviewOperator")
+    }
+
+    /// `ShopInfo.byEmailLine`, with the shop's email address linked (mailto:, underlined, so the
+    /// link never depends on color alone) once it has one.
+    static func byEmail(for shop: ShopInfo) -> AttributedString {
+        var text = AttributedString(shop.byEmailLine)
+        if let email = shop.email, let range = text.range(of: email), let url = URL(string: "mailto:\(email)") {
+            text[range].link = url
+            text[range].swiftUI.underlineStyle = .single
+            text[range].swiftUI.foregroundColor = Theme.electric
+        }
+        return text
     }
 }

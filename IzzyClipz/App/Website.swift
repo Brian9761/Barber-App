@@ -107,4 +107,10 @@ enum LegalCopy {
     static var demoDetailsPrivacy: String {
         "Demo version: your name and number stay on this iPhone. Nothing is sent to \(AppData.shop.name) or anywhere else."
     }
+
+    /// At the end of Review, under who runs the shop (`ShopInfo.operatedByLine`): where the refund
+    /// policy is, with the Terms linked, as on the website.
+    static let refundPolicy = "Our refund policy is in section 4 of our Terms of Service."
+    /// The pages `refundPolicy` links.
+    static let refundPolicyPages: [Website.LegalPage] = [.terms]
 }

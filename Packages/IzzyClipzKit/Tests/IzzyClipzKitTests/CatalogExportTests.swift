@@ -152,6 +152,21 @@ final class CatalogExportTests: XCTestCase {
         XCTAssertEqual(exported.accessibility, shop.accessibility)
         // The two lines the owner confirmed, in order: the website's Visit page shows them, then asks people to call.
         XCTAssertEqual(exported.accessibility, ["Room for a wheelchair inside, at the chairs and the counter", "Disabled parking space near the entrance"])
+        // Who runs the shop and its email: left out until the owner gives them.
+        XCTAssertNil(exported.operatorName)
+        XCTAssertNil(exported.email)
+    }
+
+    /// Once the owner gives them, the LLC that runs the shop and the shop's email go to the website
+    /// with the rest (its footer and "Review and book" show them, and its strict build needs them).
+    func testWhoRunsTheShopGoesToTheWebsiteOnceGiven() throws {
+        let shop = ShopInfoTests.shop(operatorName: "Izzy Clipz Barbershop LLC", email: "hello@izzyclipz.example")
+        let exported = CatalogExport.document(shop: shop).shop
+        XCTAssertEqual(exported.operatorName, "Izzy Clipz Barbershop LLC")
+        XCTAssertEqual(exported.email, "hello@izzyclipz.example")
+        let json = try JSONValue(data: CatalogExport.jsonData(shop: shop))
+        XCTAssertEqual(json["shop"]?["operatorName"], .string("Izzy Clipz Barbershop LLC"))
+        XCTAssertEqual(json["shop"]?["email"], .string("hello@izzyclipz.example"))
     }
 
     func testOfferingsMatchTheKit() {
