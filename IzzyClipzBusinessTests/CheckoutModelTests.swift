@@ -561,6 +561,32 @@ final class CheckoutModelTests: XCTestCase {
         XCTAssertEqual(checkout.ticket.customerName, "B Sample")
     }
 
+    /// The price the client saw is the price they pay: an appointment booked before a price change
+    /// is checked out at its booked price, shown on its card, and one the app's menu doesn't know
+    /// (a newer server) still gets its price, not $0.
+    func testAnAppointmentIsCheckedOutAtThePriceItWasBookedAt() throws {
+        var andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        XCTAssertEqual(Catalog.izzyClipz.offering(withID: andre.offeringId)?.price, .dollars(55), "today's menu")
+        andre.priceLabel = "$45"
+        let checkout = makeCheckout()
+        XCTAssertTrue(checkout.start(for: andre))
+        XCTAssertEqual(checkout.amountCents, 4500)
+        XCTAssertEqual(checkout.ticket.appointment?.priceLabel, "$45", "the card shows the booked price")
+        XCTAssertFalse(try XCTUnwrap(checkout.ticket.items.first).startsAtThisPrice)
+
+        var unknown = andre
+        unknown.offeringId = "someone-new/haircut"
+        unknown.priceLabel = "$62.50"
+        XCTAssertTrue(checkout.start(for: unknown))
+        XCTAssertEqual(checkout.amountCents, 6250)
+
+        // A label with no price in it falls back to the menu.
+        unknown.offeringId = andre.offeringId
+        unknown.priceLabel = "Ask the barber"
+        XCTAssertTrue(checkout.start(for: unknown))
+        XCTAssertEqual(checkout.amountCents, 5500)
+    }
+
     func testCheckingOutWaitsForARunningPayment() async throws {
         terminal.automaticOutcome = nil
         let checkout = makeCheckout()

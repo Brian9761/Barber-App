@@ -17,6 +17,25 @@ final class PriceTests: XCTestCase {
         XCTAssertEqual(Price.includedWithCut.label, "Included with cut")
     }
 
+    /// An appointment keeps the label it was booked at; its checkout reads the price back from it.
+    func testThePriceALabelSays() {
+        XCTAssertEqual(Price(label: "$35"), .dollars(35))
+        XCTAssertEqual(Price(label: "$7.50"), Price(cents: 750))
+        XCTAssertEqual(Price(label: "$1,500"), .dollars(1_500))
+        XCTAssertEqual(Price(label: "From $80"), .startingAt(dollars: 80))
+        XCTAssertEqual(Price(label: "Included with cut"), .includedWithCut)
+        XCTAssertNil(Price(label: "Ask"))
+        XCTAssertNil(Price(label: "$"))
+        XCTAssertNil(Price(label: "$7.5"))
+        // Every label the Kit writes reads back as the same price.
+        for price in [Price.dollars(35), Price(cents: 750), .startingAt(dollars: 80), .includedWithCut, .dollars(0)] {
+            XCTAssertEqual(Price(label: price.label), price, price.label)
+        }
+        for offering in Catalog.izzyClipz.offerings {
+            XCTAssertEqual(Price(label: offering.price.label), offering.price, offering.price.label)
+        }
+    }
+
     func testIncludedPricesAreAlwaysFree() {
         XCTAssertEqual(Price(cents: 500, kind: .includedWithCut).cents, 0)
     }

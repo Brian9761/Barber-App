@@ -82,9 +82,11 @@ struct CheckoutTicket: Equatable {
     }
 
     /// Checking out an appointment: its client, sold by its barber, with its service at the price
-    /// it was booked at (its menu price; a "From" price is where it starts, and can be changed).
+    /// it was booked at. That's the label the appointment keeps ("$45", "From $80"), not today's
+    /// menu, which may have changed since: the price the client saw is the price they pay, as the
+    /// website and the server check it out. The menu's price only when the label has none in it.
+    /// A "From" price is where it starts, and can be changed.
     init(appointment: IzzyAPI.Appointment, catalog: Catalog, shopTime: ShopTime, now: Date) {
-        let offering = catalog.offering(withID: appointment.offeringId)
         let day = shopTime.relativeDay(shopTime.day(containing: appointment.start), today: shopTime.day(containing: now))
         self.appointment = AppointmentLink(
             id: appointment.id,
@@ -93,11 +95,11 @@ struct CheckoutTicket: Equatable {
             barberId: appointment.barberId,
             barberName: appointment.barberName,
             when: "\(day) at \(shopTime.time(appointment.start))",
-            priceLabel: offering?.price.label ?? appointment.priceLabel,
+            priceLabel: appointment.priceLabel,
             alreadyPaidCents: appointment.payment.status == .paid ? appointment.payment.amountCents : nil
         )
         barberId = appointment.barberId
-        let price = offering?.price
+        let price = Price(label: appointment.priceLabel) ?? catalog.offering(withID: appointment.offeringId)?.price
         add(Item(
             id: 0, kind: .service(id: appointment.serviceId), name: appointment.serviceName,
             unitCents: price?.cents ?? 0, quantity: 1, startsAtThisPrice: price?.kind == .startingAt

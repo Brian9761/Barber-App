@@ -34,6 +34,29 @@ public struct Price: Hashable, Sendable {
 
     public static let includedWithCut = Price(cents: 0, kind: .includedWithCut)
 
+    /// The price a label says, the reverse of `label`: "$35", "$7.50", "$1,500", "From $80" (where
+    /// it starts) or "Included with cut". `nil` for a label with no price in it. An appointment
+    /// keeps the label it was booked at, so its checkout starts from that price, not today's menu.
+    public init?(label: String) {
+        let text = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.range(of: "included", options: .caseInsensitive) != nil {
+            self = .includedWithCut
+            return
+        }
+        guard let dollarSign = text.firstIndex(of: "$") else { return nil }
+        let amount = text[text.index(after: dollarSign)...].prefix { $0.isNumber || $0 == "," || $0 == "." }
+        let parts = amount.replacingOccurrences(of: ",", with: "").split(separator: ".", omittingEmptySubsequences: false)
+        guard let whole = parts.first, !whole.isEmpty, whole.allSatisfy(\.isASCII), let dollars = Int(whole), parts.count <= 2 else { return nil }
+        var cents = dollars * 100
+        if parts.count == 2 {
+            let fraction = parts[1]
+            guard fraction.count == 2, fraction.allSatisfy(\.isASCII), let value = Int(fraction) else { return nil }
+            cents += value
+        }
+        let startsAt = text.range(of: "from", options: [.caseInsensitive, .anchored]) != nil
+        self.init(cents: cents, kind: startsAt ? .startingAt : .fixed)
+    }
+
     /// Short label, e.g. "$35", "From $80" or "Included with cut".
     public var label: String {
         switch kind {
