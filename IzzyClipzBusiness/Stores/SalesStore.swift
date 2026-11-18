@@ -25,6 +25,9 @@ final class SalesStore {
     private(set) var voidMessages: [String: String] = [:]
     /// A void that didn't work, for an alert.
     var actionError: String?
+    /// The same for a void from an appointment's details (its own alert, so Today's sales doesn't
+    /// show it too).
+    var appointmentVoidError: String?
     /// Called after a sale was voided (its appointment can be checked out again).
     @ObservationIgnored var onVoided: ((IzzyAPI.Sale) -> Void)?
 
@@ -107,16 +110,56 @@ final class SalesStore {
 
     static let maxReasonLength = 200
 
+    /// Voids an appointment's sale from its details (after the owner confirmed it), whatever day it
+    /// was made: Today's sales lists only today's, and a sale from an earlier day still has to be
+    /// voidable before the appointment can be reopened, cancelled or marked a no-show.
+    @discardableResult
+    func void(_ sale: IzzyAPI.AppointmentSale, reason: String) async -> Bool {
+        guard !voiding.contains(sale.id) else { return false }
+        voiding.insert(sale.id)
+        defer { voiding.remove(sale.id) }
+        let trimmed = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count <= Self.maxReasonLength else {
+            appointmentVoidError = "Keep the reason to 200 characters or fewer."
+            return false
+        }
+        do {
+            let answer = try await api.voidSale(id: sale.id, reason: trimmed.isEmpty ? nil : trimmed)
+            // Shown in Today's sales too, when it's one of today's.
+            if shopTime.day(containing: answer.sale.soldAt) == shopTime.day(containing: clock()) {
+                generation += 1
+                replace(answer.sale)
+            }
+            voidMessages[sale.id] = answer.message
+            onVoided?(answer.sale)
+            return true
+        } catch is CancellationError {
+            return false
+        } catch {
+            appointmentVoidError = ErrorText.message(for: error)
+            return false
+        }
+    }
+
     /// What Void asks first, with the amount: "Void this $58 cash sale?"
     static func voidQuestion(for sale: IzzyAPI.Sale) -> String {
-        "Void this \(sale.totalLabel) \(sale.method.title.lowercased()) sale?"
+        voidQuestion(totalCents: sale.totalCents, method: sale.method)
+    }
+
+    /// The same for an appointment's sale, from its details.
+    static func voidQuestion(totalCents: Int, method: IzzyAPI.SaleMethod) -> String {
+        "Void this \(Price.currencyString(cents: totalCents)) \(method.title.lowercased()) sale?"
     }
 
     /// Under the question: what voiding does, and for a card, that it doesn't refund it.
     static func voidExplanation(for sale: IzzyAPI.Sale) -> String {
+        voidExplanation(method: sale.method, forAppointment: sale.appointmentId != nil)
+    }
+
+    static func voidExplanation(method: IzzyAPI.SaleMethod, forAppointment: Bool) -> String {
         var text = "It stops counting in your sales"
-        text += sale.appointmentId != nil ? ", and the appointment can be checked out again." : "."
-        if sale.method == .card {
+        text += forAppointment ? ", and the appointment can be checked out again." : "."
+        if method == .card {
             text += " Voiding doesn't refund the card. Refund the card in your Stripe Dashboard."
         }
         return text
@@ -125,13 +168,6 @@ final class SalesStore {
     /// A sale as the list shows it: "11 AM · Diego Sample · Carlos · Cash".
     func rowDetail(for sale: IzzyAPI.Sale) -> String {
         [shopTime.time(sale.soldAt), sale.customerName ?? "Walk-in", sale.barberName, sale.method.title].joined(separator: " · ")
-    }
-
-    /// A sale just recorded, shown right away (before the list loads again).
-    func didRecord(_ sale: IzzyAPI.Sale) {
-        guard shopTime.day(containing: sale.soldAt) == shopTime.day(containing: clock()) else { return }
-        generation += 1
-        replace(sale)
     }
 
     private func replace(_ sale: IzzyAPI.Sale) {

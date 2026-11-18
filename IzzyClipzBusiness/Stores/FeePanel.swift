@@ -205,9 +205,17 @@ struct FeePanel: Equatable {
                 return "The client cancelled this booking in the app, so once it's reopened, it can't be charged a no-show fee. "
                     + "To keep a no-show fee, ask them to book again in the app instead."
             }
+            // Marked done: the client came, and that stays (the server's completedAt), as the website says.
+            if appointment.status == .completed, appointment.card != nil {
+                return Self.reopenCompletedWarning
+            }
             return nil
         }
     }
+
+    /// What Reopen says first for a booking with a card on file that was marked done.
+    static let reopenCompletedWarning =
+        "It was marked done, so even once it's reopened, it can't be marked a no-show or charged a no-show fee: the client came."
 
     /// Under the status buttons of a booking with a card on file that hasn't ended: "Mark no-show"
     /// isn't offered yet, because until the start the client can still cancel in the app, and a

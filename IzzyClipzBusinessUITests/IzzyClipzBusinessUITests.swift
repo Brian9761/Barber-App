@@ -400,6 +400,15 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
         let row = element("appointment-Andre Sample")
         XCTAssertTrue(waitForLabel(row, containing: "Paid $55 · Cash"), "Got: \(row.label)")
+
+        // Voided from the appointment itself (a sale from an earlier day isn't in Today's sales):
+        // it asks first, with the amount, and the appointment can be checked out again.
+        row.tap()
+        tap("detailVoidSale")
+        XCTAssertTrue(text(containing: "Void this $55 cash sale?").waitForExistence(timeout: 10), "Void asks first")
+        tapDialogButton("Void sale", identifier: "confirmDetailVoidSale")
+        XCTAssertTrue(reveal("checkOutAppointment").waitForExistence(timeout: 15), "Checked out again after the void")
+        XCTAssertFalse(element("detailVoidSale").exists)
     }
 
     /// A walk-in buys two pomades and a beard oil (which has no price, so it asks for one), sold by
@@ -883,10 +892,14 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: "once the appointment ends at 3:15 PM"))
 
         // Marked done, then reopened: the client came, so it never becomes a no-show (the server's
-        // `completedAt`), and the details say so in the server's words.
+        // `completedAt`), and the details say so in the server's words. Both ask first, saying so.
         tap("markCompleted")
+        XCTAssertTrue(text(containing: "this booking can't become a no-show later").waitForExistence(timeout: 10), "Mark done asks first")
+        tapDialogButton("Mark done", identifier: "confirmMarkCompleted")
         XCTAssertTrue(statusShows("Completed"))
         tap("reopenAppointment")
+        XCTAssertTrue(text(containing: "It was marked done, so even once it's reopened").waitForExistence(timeout: 10), "Reopen says so first")
+        tapDialogButton("Reopen", identifier: "confirmReopen")
         XCTAssertTrue(statusShows("Booked"))
         let completedLine = "This appointment was marked completed, so it can't become a no-show."
         XCTAssertTrue(waitForLabel(reveal("noShowHint"), containing: completedLine))

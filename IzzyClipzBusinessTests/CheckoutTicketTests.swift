@@ -363,6 +363,42 @@ final class SalesStoreTests: XCTestCase {
         XCTAssertTrue(appointment.canCheckOut, "…and can be checked out again")
     }
 
+    /// A sale from an earlier day isn't in Today's sales, so the appointment's details void it
+    /// themselves: the appointment can then be reopened or checked out again, and today's list is
+    /// left alone.
+    func testAnAppointmentsSaleFromAnEarlierDayIsVoidedFromItsDetails() async throws {
+        let harness = Harness()
+        // Yesterday's checkout, made on another iPhone the day before.
+        let yesterday = TestClock.now.addingTimeInterval(-24 * 3_600)
+        let store = SalesStore(api: harness.api, shopTime: TestClock.shopTime, clock: { TestClock.now })
+        var andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        let sold = try await harness.api.recordSale(
+            IzzyAPI.NewSale(method: .cash, barberId: andre.barberId, appointmentId: andre.id, customerName: nil, items: [.service(andre.serviceId, unitCents: 5500)]),
+            idempotencyKey: .generate()
+        )
+        if let index = harness.server.sales.firstIndex(where: { $0.id == sold.id }) { harness.server.sales[index].soldAt = yesterday }
+        andre = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        let summary = try XCTUnwrap(andre.sale)
+        await store.refresh()
+        XCTAssertNil(store.sale(withID: summary.id), "not in today's sales")
+        XCTAssertEqual(SalesStore.voidQuestion(totalCents: summary.totalCents, method: summary.method), "Void this $55 cash sale?")
+        XCTAssertEqual(
+            SalesStore.voidExplanation(method: summary.method, forAppointment: true),
+            "It stops counting in your sales, and the appointment can be checked out again."
+        )
+        var voided: [String] = []
+        store.onVoided = { voided.append($0.id) }
+        let todayBefore = store.sales
+        let ok = await store.void(summary, reason: "Rang it up by mistake")
+        XCTAssertTrue(ok)
+        XCTAssertEqual(voided, [summary.id])
+        XCTAssertEqual(store.sales, todayBefore, "Today's sales don't change")
+        XCTAssertEqual(store.voidMessages[summary.id], "The sale was voided, so it no longer counts in your sales.")
+        let after = try XCTUnwrap(harness.appointment(named: "Andre Sample"))
+        XCTAssertNil(after.sale)
+        XCTAssertTrue(after.canCheckOut)
+    }
+
     func testVoidingACardSaleSaysToRefundTheCardInStripe() async throws {
         let card = IzzyAPI.Sale(id: "s", barberId: "israel-flores", barberName: "Izzy", method: .card, paymentIntentId: "pi_1", items: [], soldAt: TestClock.now)
         XCTAssertTrue(SalesStore.voidExplanation(for: card).contains("Refund the card in your Stripe Dashboard."))
