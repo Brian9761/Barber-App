@@ -890,7 +890,8 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(warning.waitForExistence(timeout: 15), "No fee notice on Pick a day and time")
         XCTAssertTrue(warning.label.contains("No-Show Fee"), warning.label)
         XCTAssertFalse(warning.label.contains("Cancellation"), warning.label)
-        XCTAssertTrue(warning.label.contains("Cancelling in the app before your appointment is free"), warning.label)
+        // The server's words, for every way to book: "online", not "in the app".
+        XCTAssertTrue(warning.label.contains("Cancelling online before your appointment is free"), warning.label)
     }
 
     /// An appointment with a card on file that starts in 45 minutes: cancelling it now warns first
