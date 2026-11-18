@@ -64,6 +64,10 @@ final class FakeServer {
         /// "no"), and the server records that, but the answer never reaches the phone: the app sees it
         /// as offline. Loading the day again shows what happened.
         var loseNextFeeAnswer = false
+        /// What becomes of the receipt of the next fee that goes through, like the server keeps it:
+        /// `nil` is Stripe emailing it (`sent`); `noEmail` is a card page that kept no email, so none
+        /// went out (`-fake-fee-receipt-unsent`).
+        var nextFeeReceipt: IzzyAPI.NoShowFeeReceipt?
         /// How long each call takes, so loading states are visible.
         var latency: Duration = .zero
         /// The shop's own Stripe account (Stripe Connect, with Stripe on the server): connected, so
@@ -502,11 +506,14 @@ final class FakeServer {
             fee.chargedAt = nil
             fee.message = answer == .declined ? Self.insufficientFundsMessage : Self.authenticationMessage
         } else {
-            // The simulated card is approved, like Stripe's test card 4242.
+            // The simulated card is approved, like Stripe's test card 4242, and Stripe emails the
+            // receipt (or not, `Options.nextFeeReceipt`), as the server records it.
             stripeStatus = "succeeded"
             fee.status = .charged
             fee.chargedAt = now()
             fee.message = nil
+            fee.receipt = options.nextFeeReceipt ?? .sent
+            options.nextFeeReceipt = nil
         }
         fee.reason = reason
         appointment.noShowFee = fee

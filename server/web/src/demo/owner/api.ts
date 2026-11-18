@@ -520,11 +520,12 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       const now = clock();
       const kept = keep(store, found.date);
       const appointment = kept.appointments.find((a) => a.id === id)!;
-      // The demo's declined card: like Stripe's test card that ends in 0002.
+      // The demo's declined card: like Stripe's test card that ends in 0002. A charge that goes through
+      // has its receipt emailed by Stripe, as the server records it (nothing to say about it then).
       appointment.noShowFee =
         appointment.card?.last4 === '0002'
-          ? { ...fee, status: 'declined', chargedAt: null, message: 'The card was declined. Ask the client to pay at the shop.', reason: rule.reason }
-          : { ...fee, status: 'charged', chargedAt: iso(now), message: null, reason: rule.reason };
+          ? { ...fee, status: 'declined', chargedAt: null, message: 'The card was declined. Ask the client to pay at the shop.', reason: rule.reason, receipt: null }
+          : { ...fee, status: 'charged', chargedAt: iso(now), message: null, reason: rule.reason, receipt: 'sent' };
       save(store);
       return answered(appointment);
     },

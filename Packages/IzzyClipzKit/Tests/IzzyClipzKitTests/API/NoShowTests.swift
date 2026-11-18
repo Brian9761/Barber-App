@@ -70,6 +70,43 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertEqual(try encodeAPI(made)["completedAt"], .string("2026-11-02T19:05:00Z"))
     }
 
+    /// The shop's view says what became of a charged fee's receipt (owner checklist §3 item 19): sent,
+    /// or not and why, in the server's own answers. The client's view never has it.
+    func testTheShopsViewSaysWhetherAFeesReceiptWentOut() throws {
+        let sent = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("no-show-fee-charged.json")).appointment
+        XCTAssertEqual(sent.noShowFee?.status, .charged)
+        XCTAssertEqual(sent.noShowFee?.receipt, .sent)
+        XCTAssertEqual(sent.noShowFee?.receiptUnsent, false)
+        XCTAssertNil(sent.noShowFee?.receipt?.unsentNote)
+        XCTAssertEqual(try encodeAPI(sent)["noShowFee"]?["receipt"], .string("sent"))
+
+        let unsent = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("no-show-fee-charged-no-receipt.json")).appointment
+        XCTAssertEqual(unsent.noShowFee?.status, .charged)
+        XCTAssertEqual(unsent.noShowFee?.receipt, .noEmail)
+        XCTAssertEqual(unsent.noShowFee?.receiptUnsent, true)
+        XCTAssertEqual(
+            unsent.noShowFee?.receipt?.unsentNote,
+            "No receipt was sent: Stripe has no email address for this client. Ask them for one, and send the receipt from the Stripe Dashboard."
+        )
+        XCTAssertEqual(IzzyAPI.NoShowFeeReceipt.failed.unsentNote, "The receipt couldn't be sent. Send it to the client from the Stripe Dashboard.")
+
+        // Declined: nothing about a receipt, null in the shop's view.
+        let declined = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("no-show-fee-declined.json")).appointment
+        XCTAssertNil(declined.noShowFee?.receipt)
+        XCTAssertEqual(try encodeAPI(declined)["noShowFee"]?["receipt"], .null, "the shop's view has it, null or not")
+
+        // The client's own view, and a server from before it, don't have it, and don't get it back.
+        let mine = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("appointment-cancelled-late.json")).appointment
+        XCTAssertNil(mine.noShowFee?.receipt)
+        XCTAssertNil(try encodeAPI(mine)["noShowFee"]?["receipt"])
+        // A value this version doesn't know: nothing known, so nothing is said to have gone out.
+        let unknown = try decodeAPI(IzzyAPI.NoShowFee.self, #"{ "amountCents": 2000, "status": "charged", "chargedAt": "2026-11-02T19:05:00Z", "message": null, "receipt": "queued" }"#)
+        XCTAssertNil(unknown.receipt)
+        XCTAssertFalse(unknown.receiptUnsent)
+        // Only a charged fee's receipt can be unsent.
+        XCTAssertFalse(IzzyAPI.NoShowFee(amountCents: 2000, status: .declined, receipt: .noEmail).receiptUnsent)
+    }
+
     func testAFeeFromAServerBeforeLateCancellations() throws {
         let old = try decodeAPI(IzzyAPI.NoShowFee.self, #"{ "amountCents": 2000, "status": "none", "chargedAt": null, "message": null }"#)
         XCTAssertEqual(old, IzzyAPI.NoShowFee(amountCents: 2000))

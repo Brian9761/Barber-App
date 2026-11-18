@@ -761,6 +761,8 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         XCTAssertTrue(waitForLabel(status, containing: "No-show fee charged"), "Got: \(status.label)")
         XCTAssertTrue(status.label.contains("$35 to Visa •••• 4242"), "Got: \(status.label)")
         XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        // Stripe emailed the receipt: nothing more to say about it.
+        XCTAssertFalse(element("feeReceipt").exists, "The receipt went out")
         // The service itself isn't paid, and the fee is said apart, so it isn't taken again.
         let payment = reveal("detailPayment")
         XCTAssertTrue(waitForLabel(payment, containing: "Service not paid"), "Got: \(payment.label)")
@@ -823,6 +825,23 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         openTab("Take payment")
         tap("paymentsTodayLink")
         XCTAssertTrue(waitForLabel(reveal("feePayment"), containing: "Late cancellation fee"))
+    }
+
+    /// A fee that goes through without a receipt (its card page kept no email: `-fake-fee-receipt-unsent`)
+    /// stays charged, and the details say no receipt went out and how to send one (owner checklist
+    /// §3 item 19).
+    func testAFeeChargedWithoutAReceiptSaysSoAndWhatToDo() {
+        launch("-fake-cards-on-file", "-fake-fee-receipt-unsent")
+        tap("appointment-Lee Sample")
+        tap("chargeFee")
+        tapDialogButton("Charge $35", identifier: "confirmChargeFee")
+        let status = reveal("feeStatus")
+        XCTAssertTrue(waitForLabel(status, containing: "Late cancellation fee charged"), "Got: \(status.label)")
+        let receipt = reveal("feeReceipt")
+        XCTAssertTrue(waitForLabel(receipt, containing: "No receipt was sent: Stripe has no email address for this client."), "Got: \(receipt.label)")
+        XCTAssertTrue(receipt.label.contains("send the receipt from the Stripe Dashboard"), "Got: \(receipt.label)")
+        XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")
+        screenshot("O25b-Fee-Charged-No-Receipt")
     }
 
     func testADeclinedFeeSaysWhyAndIsntChargedAgain() {

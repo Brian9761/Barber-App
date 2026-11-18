@@ -83,8 +83,34 @@ extension IzzyAPI {
         }
     }
 
+    /// What became of a charged fee's receipt (the owner's view only, `noShowFee.receipt`): Stripe
+    /// emails it to the address the client gave on its card page, which the server reads from Stripe
+    /// and never keeps; or it wasn't sent, and why (docs/legal/OWNER-CHECKLIST.md §3 item 19).
+    public enum NoShowFeeReceipt: String, Codable, CaseIterable, Hashable, Sendable {
+        /// Stripe has the client's email and emails the receipt.
+        case sent
+        /// Stripe has no email address for this client: no receipt was sent.
+        case noEmail
+        /// Stripe couldn't be asked: no receipt was sent.
+        case failed
+
+        /// What the fee's details say when no receipt went out, in plain words for the owner, with what
+        /// to do (the website's Business area says the same); `nil` when Stripe has it.
+        public var unsentNote: String? {
+            switch self {
+            case .sent:
+                return nil
+            case .noEmail:
+                return "No receipt was sent: Stripe has no email address for this client. Ask them for one, and send the receipt from the Stripe Dashboard."
+            case .failed:
+                return "The receipt couldn't be sent. Send it to the client from the Stripe Dashboard."
+            }
+        }
+    }
+
     /// An appointment's fee (for a no-show or a late cancellation): `{ amountCents, fullPrice,
-    /// status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason }`.
+    /// status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason }`, and in
+    /// the owner's view `receipt`.
     public struct NoShowFee: Codable, Hashable, Sendable {
         /// The fee agreed at booking, in cents. Changing the settings later doesn't change it.
         public var amountCents: Int
@@ -105,6 +131,12 @@ extension IzzyAPI {
         /// What the fee is (or would be) for, in the server's words: once the shop tried to charge
         /// it, what that charge was for; before, the case that applies now; `nil` when neither does.
         public var reason: NoShowFeeReason?
+        /// Once it's charged, what became of its receipt (owner calls only); `nil` before, in the
+        /// client's own view, from a server before it said so, or for a value this version doesn't know.
+        public var receipt: NoShowFeeReceipt?
+        /// Whether the server's answer had `receipt` at all (the shop's view does, the client's doesn't),
+        /// so encoding gives back exactly what came.
+        var receiptField = FieldPresence(false)
 
         public init(
             amountCents: Int,
@@ -114,7 +146,8 @@ extension IzzyAPI {
             message: String? = nil,
             customerCancelledAt: Date? = nil,
             lateCancelWindowMinutes: Int? = nil,
-            reason: NoShowFeeReason? = nil
+            reason: NoShowFeeReason? = nil,
+            receipt: NoShowFeeReceipt? = nil
         ) {
             self.amountCents = amountCents
             self.fullPrice = fullPrice
@@ -124,6 +157,12 @@ extension IzzyAPI {
             self.customerCancelledAt = customerCancelledAt
             self.lateCancelWindowMinutes = lateCancelWindowMinutes
             self.reason = reason
+            self.receipt = receipt
+        }
+
+        /// Charged, but no receipt went out (Stripe had no email for the client, or couldn't be asked).
+        public var receiptUnsent: Bool {
+            status == .charged && (receipt?.unsentNote != nil)
         }
 
         /// "$20", "$17.50".
@@ -141,7 +180,7 @@ extension IzzyAPI {
         }
 
         private enum CodingKeys: String, CodingKey {
-            case amountCents, fullPrice, status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason
+            case amountCents, fullPrice, status, chargedAt, message, customerCancelledAt, lateCancelWindowMinutes, reason, receipt
         }
 
         public init(from decoder: Decoder) throws {
@@ -157,6 +196,10 @@ extension IzzyAPI {
             customerCancelledAt = try container.decodeIfPresent(Date.self, forKey: .customerCancelledAt)
             lateCancelWindowMinutes = try container.decodeIfPresent(Int.self, forKey: .lateCancelWindowMinutes)
             reason = try container.decodeIfPresent(String.self, forKey: .reason).flatMap(NoShowFeeReason.init(rawValue:))
+            // Only in the shop's view, from a server that keeps it; one this version doesn't know reads
+            // as nothing known, so the app never says a receipt went out when it can't tell.
+            receipt = try container.decodeIfPresent(String.self, forKey: .receipt).flatMap(NoShowFeeReceipt.init(rawValue:))
+            receiptField = FieldPresence(container.contains(.receipt))
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -169,6 +212,9 @@ extension IzzyAPI {
             try container.encode(customerCancelledAt, forKey: .customerCancelledAt)
             try container.encode(lateCancelWindowMinutes, forKey: .lateCancelWindowMinutes)
             try container.encode(reason, forKey: .reason)
+            if receipt != nil || receiptField.isPresent {
+                try container.encode(receipt, forKey: .receipt)
+            }
         }
     }
 }

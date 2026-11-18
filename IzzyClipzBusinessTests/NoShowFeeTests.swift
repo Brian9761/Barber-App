@@ -443,6 +443,56 @@ final class NoShowFeeTests: XCTestCase {
         )
     }
 
+    /// A fee that went through without a receipt (Stripe had no email for the client, or couldn't be
+    /// asked) says so under it, with what to do, in the website's words (owner checklist §3 item 19);
+    /// a receipt Stripe has, or a fee from a server before it said, adds nothing.
+    func testAChargedFeeSaysWhenNoReceiptWentOut() throws {
+        let harness = Harness(options: cardsOnFile())
+        var kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        kim.noShowFee?.status = .charged
+        kim.noShowFee?.chargedAt = TestClock.now
+        XCTAssertNil(panel(kim)?.receiptNote, "nothing known: nothing said")
+        kim.noShowFee?.receipt = .sent
+        XCTAssertNil(panel(kim)?.receiptNote)
+        kim.noShowFee?.receipt = .noEmail
+        XCTAssertEqual(
+            panel(kim)?.receiptNote,
+            "No receipt was sent: Stripe has no email address for this client. Ask them for one, and send the receipt from the Stripe Dashboard."
+        )
+        // Still charged, as it was, with the refunds line.
+        XCTAssertEqual(panel(kim)?.status, .charged(title: "No-show fee charged", detail: "$35 to Visa •••• 4242, Mon, Nov 2 at 11:05 AM."))
+        XCTAssertEqual(panel(kim)?.footer, "Refunds are made in the Stripe Dashboard. Reopening the appointment doesn't refund the fee.")
+        kim.noShowFee?.receipt = .failed
+        XCTAssertEqual(panel(kim)?.receiptNote, "The receipt couldn't be sent. Send it to the client from the Stripe Dashboard.")
+        // Only a charged fee has a receipt to speak of.
+        kim.noShowFee?.status = .declined
+        XCTAssertNil(panel(kim)?.receiptNote)
+    }
+
+    /// The sample server answers like the real one: a fee that goes through has its receipt sent, or,
+    /// with `-fake-fee-receipt-unsent`, none (a card page that kept no email).
+    func testTheSampleServerSaysWhatBecameOfTheReceipt() async throws {
+        let harness = Harness(options: cardsOnFile())
+        let kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))
+        let charged = try await harness.api.chargeNoShowFee(appointmentId: kim.id)
+        XCTAssertEqual(charged.noShowFee?.status, .charged)
+        XCTAssertEqual(charged.noShowFee?.receipt, .sent)
+        XCTAssertNil(panel(charged)?.receiptNote)
+
+        var options = cardsOnFile()
+        options.nextFeeReceipt = .noEmail
+        let unsent = Harness(options: options)
+        let lee = try XCTUnwrap(unsent.appointment(named: "Lee Sample"))
+        let late = try await unsent.api.chargeNoShowFee(appointmentId: lee.id)
+        XCTAssertEqual(late.noShowFee?.status, .charged)
+        XCTAssertEqual(late.noShowFee?.receipt, .noEmail)
+        XCTAssertEqual(panel(late)?.receiptNote, IzzyAPI.NoShowFeeReceipt.noEmail.unsentNote)
+        // Only that one: the next fee's receipt is sent.
+        let kim2 = try XCTUnwrap(unsent.appointment(named: "Kim Sample"))
+        let next = try await unsent.api.chargeNoShowFee(appointmentId: kim2.id)
+        XCTAssertEqual(next.noShowFee?.receipt, .sent)
+    }
+
     func testWhatTheFeeIsForAndHowMuch() throws {
         let harness = Harness(options: cardsOnFile())
         var kim = try XCTUnwrap(harness.appointment(named: "Kim Sample"))

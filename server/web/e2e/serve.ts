@@ -15,8 +15,10 @@
 // Test plumbing under /__e2e/ (never part of the real server): turn the live
 // reviews and no-show protection on and off, a stand-in for Stripe's card page
 // (and for deleting a saved card), what became of a saved card, a booking moved
-// back in time (for the fee's rules after the end and within 7 days), and a new
-// version of the service worker (for the "A new version is ready" bar). Like
+// back in time (for the fee's rules after the end and within 7 days), a no-show's
+// fee recorded as charged with what became of its receipt (the stand-in takes no
+// payments), and a new version of the service worker (for the "A new version is
+// ready" bar). Like
 // Stripe, the card page's Save and Back go to the success_url and cancel_url the
 // server gave the Checkout Session, so the server's own way back to the website
 // (/api/cards/return and /api/cards/cancel with to=web) is part of the test.
@@ -357,6 +359,22 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Pr
       [String(id), Number(minutes)],
     );
     return send(res, rowCount === 1 ? 200 : 404, JSON.stringify({ moved: rowCount === 1 }));
+  }
+  if (parts[1] === 'appointments' && parts[2] === 'fee-charged' && req.method === 'POST') {
+    // A no-show's fee charged, as the server records it once Stripe says it went through (the
+    // stand-in for Stripe takes no payments), with what became of its receipt: "sent", "no_email"
+    // (the card page kept no email) or "failed". Never an address.
+    const { id, receipt } = await readBody(req);
+    if (!['sent', 'no_email', 'failed'].includes(String(receipt))) return send(res, 400, JSON.stringify({ error: 'receipt is sent, no_email or failed' }));
+    const { rowCount } = await pool.query(
+      `UPDATE appointments
+          SET no_show_fee_status = 'charged', no_show_fee_attempt = 1, no_show_fee_attempt_at = now(), no_show_fee_reason = 'no_show',
+              no_show_fee_payment_intent_id = 'pi_e2e_' || replace(id::text, '-', ''), no_show_fee_message = NULL,
+              no_show_fee_charged_at = now(), no_show_fee_receipt = $2, updated_at = now()
+        WHERE id = $1 AND saved_card_id IS NOT NULL AND status = 'no_show'`,
+      [String(id), String(receipt)],
+    );
+    return send(res, rowCount === 1 ? 200 : 404, JSON.stringify({ charged: rowCount === 1 }));
   }
   if (parts[1] === 'stripe' && parts[2]) {
     const id = parts[2];

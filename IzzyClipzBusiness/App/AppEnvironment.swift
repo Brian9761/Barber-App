@@ -35,6 +35,9 @@ enum LaunchArgument {
     /// The next fee charged to a card on file goes through (or is declined, with `noShowDeclined`), but
     /// the answer is lost on the way back: the app loads the day again and shows what happened.
     static let noShowAnswerLost = "-fake-no-show-answer-lost"
+    /// The next fee that goes through gets no receipt: its card page kept no email, so the fee's
+    /// details say none went out and how to send one.
+    static let feeReceiptUnsent = "-fake-fee-receipt-unsent"
     /// The shop's own Stripe account isn't connected yet (Stripe Connect): Settings offers Connect
     /// Stripe, which connects the sample account straight away (a stand-in for Stripe's window).
     static let stripeNotConnected = "-fake-stripe-not-connected"
@@ -233,6 +236,7 @@ final class AppEnvironment {
         if arguments.contains(LaunchArgument.noShowNeedsAction) { options.nextFeeAnswer = .needsAction }
         options.nextFeeChargeFails = arguments.contains(LaunchArgument.noShowUnreachable)
         options.loseNextFeeAnswer = arguments.contains(LaunchArgument.noShowAnswerLost)
+        if arguments.contains(LaunchArgument.feeReceiptUnsent) { options.nextFeeReceipt = .noEmail }
         var stripeFirstTry = FakeStripeConnector.FirstTry.finishes
         if arguments.contains(LaunchArgument.stripeNeedsInfo) { stripeFirstTry = .leavesDetailsMissing }
         if arguments.contains(LaunchArgument.stripeCancel) { stripeFirstTry = .closesTheWindow }

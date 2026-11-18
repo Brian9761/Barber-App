@@ -22,6 +22,10 @@ struct FeePanel: Equatable {
     let action: Action?
     /// Under the section.
     let footer: String?
+    /// For a charged fee whose receipt didn't go out (Stripe had no email for the client, or
+    /// couldn't be asked): that, and how to send one, in plain words (the Kit's
+    /// `NoShowFeeReceipt.unsentNote`, as the website says it). `nil` otherwise.
+    let receiptNote: String?
 
     enum Status: Equatable {
         /// Nothing charged. `note` says why it can't be, or how it could be; `nil` when there's
@@ -87,6 +91,7 @@ struct FeePanel: Equatable {
         let timeTaken = found == .lateCancel && appointment.timeTaken(among: others)
         let chargeable = timeTaken ? nil : found
 
+        receiptNote = fee.status == .charged ? fee.receipt?.unsentNote : nil
         switch fee.status {
         case .charged:
             let when = fee.chargedAt.map { ", \(shopTime.dayAndTime($0))" } ?? ""

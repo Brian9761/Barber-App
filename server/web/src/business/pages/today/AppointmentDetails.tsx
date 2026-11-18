@@ -300,6 +300,13 @@ export function AppointmentDetails({
               <p>{panel.status.detail}</p>
             </div>
           )}
+          {panel.receiptNote ? (
+            // Charged, but no receipt went out: say so, and how to send one.
+            <p className="biz-fee__receipt" data-testid="fee-receipt">
+              <Icon name="warning" />
+              <span>{panel.receiptNote}</span>
+            </p>
+          ) : null}
           {feeError ? (
             <div className="field__error biz-fee__error" role="alert" tabIndex={-1} ref={feeErrorLine} data-testid="fee-error">
               <Icon name="error" />

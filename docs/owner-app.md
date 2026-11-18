@@ -195,7 +195,12 @@ to Kim Sample's Visa •••• 4242?"), then shows Stripe's answer:
 - **Charged**: the money is in Stripe, and Card payments today lists it. Only a
   charge Stripe confirms counts as charged. Stripe emails the client a
   receipt, at the address they gave on its card page (turn on Stripe's
-  receipts for successful payments in the Stripe Dashboard).
+  receipts for successful payments in the Stripe Dashboard). If Stripe has
+  no email for the client, or couldn't be asked, the fee stays charged and
+  the details say so under it ("No receipt was sent: Stripe has no email
+  address for this client…" or "The receipt couldn't be sent…"): send the
+  receipt from the Stripe Dashboard (Payments, the fee, Send receipt). The
+  website's Business area says the same.
 - **Declined**, with the bank's reason in plain words. The card isn't
   charged again (card networks' rules for saved cards): tell the client
   in writing (a text, or an email if they gave one) and give them at

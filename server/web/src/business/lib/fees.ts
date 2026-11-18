@@ -283,6 +283,28 @@ export interface FeePanel {
   status: FeeStatusView;
   action: FeeAction | null;
   footer: string | null;
+  /**
+   * For a charged fee whose receipt didn't go out (Stripe had no email for the client, or couldn't
+   * be asked): that, and how to send one (`receiptNote`). Null otherwise.
+   */
+  receiptNote: string | null;
+}
+
+/**
+ * What a charged fee's details say when no receipt went out, in the app's words (the Kit's
+ * `NoShowFeeReceipt.unsentNote`): the policy promises a receipt for every fee (owner checklist §3
+ * item 19), and Stripe can still send one from its Dashboard. Null when Stripe has it, or nothing
+ * is known.
+ */
+export function receiptNote(receipt: NoShowFee['receipt']): string | null {
+  switch (receipt) {
+    case 'noEmail':
+      return 'No receipt was sent: Stripe has no email address for this client. Ask them for one, and send the receipt from the Stripe Dashboard.';
+    case 'failed':
+      return "The receipt couldn't be sent. Send it to the client from the Stripe Dashboard.";
+    default:
+      return null;
+  }
 }
 
 const PENDING =
@@ -408,6 +430,7 @@ export function feePanel(
     status,
     action,
     footer,
+    receiptNote: fee.status === 'charged' ? receiptNote(fee.receipt) : null,
   };
 }
 

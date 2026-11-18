@@ -3,6 +3,7 @@ import feeCases from '../../../../test/fixtures/fee-cases.json';
 import declinedFixture from '../../../../test/fixtures/contract/no-show-fee-declined.json';
 import chargedFixture from '../../../../test/fixtures/contract/no-show-fee-charged.json';
 import lateChargedFixture from '../../../../test/fixtures/contract/late-cancel-fee-charged.json';
+import unsentFixture from '../../../../test/fixtures/contract/no-show-fee-charged-no-receipt.json';
 import ownerAppointments from '../../../../test/fixtures/contract/owner-appointments-with-sale.json';
 import alreadyCompleted from '../../../../test/fixtures/contract/errors/already_completed.json';
 import notStarted from '../../../../test/fixtures/contract/errors/not_started.json';
@@ -25,6 +26,7 @@ import {
   paidLabel,
   pastFeeDeadline,
   paymentSummary,
+  receiptNote,
   reopenWarning,
   ruleFeeCase,
   ruleFeeCaseAt,
@@ -251,6 +253,27 @@ describe('the card on file in the details', () => {
     expect(panel.status).toEqual({ kind: 'charged', title: 'No-show fee charged', detail: times('$35 to Visa •••• 4242, Tue, Nov 3 at 10:50 AM.') });
     expect(panel.action).toBeNull();
     expect(panel.footer).toBe("Refunds are made in the Stripe Dashboard. Reopening the appointment doesn't refund the fee.");
+    // Stripe emailed the receipt (the server's own answer says so): nothing more to say.
+    expect(charged.noShowFee?.receipt).toBe('sent');
+    expect(panel.receiptNote).toBeNull();
+  });
+
+  it('says when a charged fee’s receipt didn’t go out, and how to send one, in the app’s words', () => {
+    // The server's own answer for a fee whose card page kept no email.
+    const unsent = unsentFixture.appointment as unknown as OwnerAppointment;
+    expect(unsent.noShowFee).toMatchObject({ status: 'charged', receipt: 'noEmail' });
+    const panel = feePanel(unsent, new Date('2026-11-05T19:00:00Z'), ZONE)!;
+    expect(panel.status.kind).toBe('charged');
+    expect(panel.receiptNote).toBe(
+      'No receipt was sent: Stripe has no email address for this client. Ask them for one, and send the receipt from the Stripe Dashboard.',
+    );
+    expect(receiptNote('failed')).toBe("The receipt couldn't be sent. Send it to the client from the Stripe Dashboard.");
+    expect(receiptNote('sent')).toBeNull();
+    expect(receiptNote(null)).toBeNull();
+    // A server from before it said nothing: nothing is said here either.
+    expect(receiptNote(undefined)).toBeNull();
+    // Only a charged fee has a receipt to speak of.
+    expect(feePanel({ ...declined, noShowFee: { ...declined.noShowFee!, receipt: 'noEmail' } }, new Date('2026-11-03T20:00:00Z'), ZONE)!.receiptNote).toBeNull();
   });
 
   it('never charges a declined card again: it says to tell the client and give them 7 days to pay another way', () => {
