@@ -517,12 +517,15 @@ enum AnalyticsHelp {
         ),
         Topic(
             id: "compared", title: "Compared with before",
-            text: "Sales for the same number of days just before, so you can see if you're up or down. For a week, that's the week before."
+            text: "Sales for the same number of days just before, so you can see if you're up or down. "
+                + "The change names those days: on a Wednesday, Week (Monday to Wednesday) is compared with Friday to Sunday."
         ),
         Topic(
             id: "leaderboard", title: "Leaderboard and top barber",
             text: "Every barber on the team, from the most to the least, even at $0. It's always the whole shop's, even on one barber's "
-                + "page, so each barber can see where he stands. Barbers with the same number share a place. The top barber is #1 "
+                + "page, so each barber can see where he stands. By sales, barbers with the same sales are ordered by how many "
+                + "services they did, and share a place only if that's the same too; by the other numbers, barbers with the same "
+                + "number share a place. The top barber is #1 "
                 + "by sales, once he has sold anything."
         ),
         Topic(
@@ -711,7 +714,7 @@ final class AnalyticsStore {
         guard let analytics = shown else { return nil }
         let previous = AnalyticsText.rangeLabel(AnalyticsDayRange(from: analytics.previous.from, to: analytics.previous.to), today: today)
         let whose = analytics.barberId == nil ? "the whole shop" : "the same barber"
-        return "Sales for the same number of days just before this period (\(previous)), for \(whose). For a week, that's the week before."
+        return "Sales for the same number of days just before this period (\(previous)), for \(whose)."
     }
 
     /// The leaderboard by `metric`.
