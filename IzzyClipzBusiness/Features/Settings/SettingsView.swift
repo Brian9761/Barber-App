@@ -130,24 +130,7 @@ struct SettingsView: View {
     /// Accessibility pages, in the in-app browser.
     private var legalSection: some View {
         Section {
-            ForEach(Website.LegalPage.allCases) { page in
-                Button {
-                    legalPage = page
-                } label: {
-                    HStack {
-                        Text(page.title)
-                            .foregroundStyle(.primary)
-                        Spacer(minLength: 8)
-                        Image(systemName: "arrow.up.forward.square")
-                            .foregroundStyle(.secondary)
-                            .accessibilityHidden(true)
-                    }
-                    .frame(minHeight: BusinessTheme.minimumTapSize)
-                    .contentShape(Rectangle())
-                }
-                .accessibilityHint("Opens the page on the shop's website.")
-                .accessibilityIdentifier(page.identifier)
-            }
+            LegalPageRows { legalPage = $0 }
         } header: {
             Text("Legal")
         } footer: {

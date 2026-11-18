@@ -6,6 +6,8 @@ struct SignInView: View {
     let model: AppModel
     @State private var key = ""
     @FocusState private var keyFocused: Bool
+    /// The legal page open in the in-app browser, if any.
+    @State private var legalPage: Website.LegalPage?
 
     var body: some View {
         NavigationStack {
@@ -99,9 +101,24 @@ struct SignInView: View {
                     .listRowBackground(Color.clear)
                     .accessibilityIdentifier("signInButton")
                 }
+
+                // The shop's policies, readable before signing in (as in Settings → Legal).
+                Section {
+                    LegalPageRows { page in
+                        keyFocused = false
+                        legalPage = page
+                    }
+                } header: {
+                    Text("Legal")
+                } footer: {
+                    Text("The shop's policies, on its website.")
+                }
             }
             .navigationTitle("Sign in")
             .navigationBarTitleDisplayMode(.inline)
+            .sheet(item: $legalPage) { page in
+                WebPageSheet(url: page.url(on: model.environment.websiteURL))
+            }
         }
     }
 

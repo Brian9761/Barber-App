@@ -36,6 +36,18 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         launch(signedIn: false)
         XCTAssertTrue(element("ownerKeyField").exists)
         screenshot("O01-Sign-In")
+        // The Privacy Policy (and the other policies) can be read before signing in.
+        let privacy = reveal("legal-privacy")
+        XCTAssertTrue(privacy.label.contains("Privacy Policy"), "Got: \(privacy.label)")
+        XCTAssertTrue(reveal("legal-accessibility").exists)
+        screenshot("O01b-Sign-In-Legal")
+        privacy.tap()
+        let address = element("webURL")
+        XCTAssertTrue(address.waitForExistence(timeout: 10), "The Privacy Policy didn't open")
+        XCTAssertEqual(address.label, "https://izzy-clipz.vercel.app/privacy")
+        tap("webDone")
+        XCTAssertTrue(waitForDisappearance(of: address))
+        _ = reveal("ownerKeyField", searchingFirst: .up)
         signIn(with: ownerKey)
         XCTAssertTrue(tabButton("Schedule").waitForExistence(timeout: 15), "Signing in didn't open the schedule")
         for tab in ["Schedule", "New booking", "Take payment", "Analytics", "Settings"] {
