@@ -36,7 +36,8 @@
       "message": null,
       "customerCancelledAt": "2026-11-03T20:30:00Z",
       "lateCancelWindowMinutes": 60,
-      "reason": "lateCancel"
+      "reason": "lateCancel",
+      "receipt": "sent"
     },
     "sale": null,
     "completedAt": null

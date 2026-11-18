@@ -28,6 +28,7 @@ describe('npm run migrate', () => {
       '006_sales.sql',
       '007_payment_succeeded_at.sql',
       '008_retention.sql',
+      '009_fee_receipt.sql',
     ]);
   });
 
@@ -561,6 +562,55 @@ describe('npm run migrate', () => {
     } finally {
       await client.query('SET search_path TO public').catch(() => undefined);
       await client.query('DROP SCHEMA IF EXISTS before_008 CASCADE').catch(() => undefined);
+      client.release();
+    }
+  });
+
+  it('009 keeps what became of a charged fee’s receipt (never the address), and every row before it stays valid', async () => {
+    const { rows: columns } = await db.pool.query(
+      `SELECT data_type, is_nullable FROM information_schema.columns WHERE table_name = 'appointments' AND column_name = 'no_show_fee_receipt'`,
+    );
+    expect(columns).toEqual([{ data_type: 'text', is_nullable: 'YES' }]);
+    // 001–008 into a schema of its own, an appointment the way the server wrote it, then 009 on top.
+    const dir = mkdtempSync(join(tmpdir(), 'izzy-migrations-before-009-'));
+    const all = migrationFiles();
+    for (const f of all.filter((f) => f.name < '009')) writeFileSync(join(dir, f.name), f.sql);
+    const client = await db.pool.connect();
+    const refused = async (constraint: string, sql: string) => {
+      await client.query('SAVEPOINT probe');
+      await expect(client.query(sql)).rejects.toMatchObject({ constraint });
+      await client.query('ROLLBACK TO SAVEPOINT probe');
+    };
+    try {
+      await client.query('CREATE SCHEMA before_009');
+      await client.query('SET search_path TO before_009, public');
+      await migrate(client, pathToFileURL(`${dir}/`));
+      await client.query(`INSERT INTO barbers (id, name) VALUES ('flowxbori', 'Flowxbori')`);
+      await client.query(
+        `INSERT INTO appointments (id, offering_id, service_id, barber_id, service_name, barber_name, price_label, price_cents,
+           price_kind, start_at, end_at, status, booked_by, customer_name, created_at, updated_at)
+         VALUES ('34000000-0000-4000-8000-000000000001', 'x', 'haircut', 'flowxbori', 'Haircut', 'Flowxbori', '$35', 3500, 'fixed',
+           '2026-11-02T18:00:00Z', '2026-11-02T18:45:00Z', 'booked', 'shop', 'Walk-in', now(), now())`,
+      );
+      const file = all.find((f) => f.name === '009_fee_receipt.sql');
+      if (!file) throw new Error('009_fee_receipt.sql is missing');
+      writeFileSync(join(dir, file.name), file.sql);
+      expect((await migrate(client, pathToFileURL(`${dir}/`))).applied).toEqual(['009_fee_receipt.sql']);
+      // Rows from before it: nothing known about a receipt.
+      expect((await client.query('SELECT no_show_fee_receipt FROM appointments')).rows).toEqual([{ no_show_fee_receipt: null }]);
+      await client.query('BEGIN');
+      for (const outcome of ['sent', 'no_email', 'failed']) {
+        await client.query(`UPDATE appointments SET no_show_fee_receipt = $1`, [outcome]);
+      }
+      // Only those three: never an address.
+      await refused('appointments_no_show_fee_receipt_check', `UPDATE appointments SET no_show_fee_receipt = 'client@example.com'`);
+      await client.query('ROLLBACK');
+      // The code already live still writes appointments without it.
+      await client.query(`UPDATE appointments SET status = 'completed' WHERE id = '34000000-0000-4000-8000-000000000001'`);
+    } finally {
+      await client.query('ROLLBACK').catch(() => undefined);
+      await client.query('SET search_path TO public').catch(() => undefined);
+      await client.query('DROP SCHEMA IF EXISTS before_009 CASCADE').catch(() => undefined);
       client.release();
     }
   });

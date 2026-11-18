@@ -43,8 +43,13 @@ export const Appointment = z.strictObject({
     .nullable(),
 });
 
-/** The owner's view of an appointment: the client's view plus its checkout (live sale), and when it was first completed (never cleared). */
+/**
+ * The owner's view of an appointment: the client's view plus its checkout (live sale), when it was
+ * first completed (never cleared), and what became of a charged fee's receipt.
+ */
 export const OwnerAppointment = Appointment.extend({
+  // The fee as the shop sees it: with what became of its receipt once it's charged (migrations/009).
+  noShowFee: Appointment.shape.noShowFee.unwrap().extend({ receipt: z.enum(['sent', 'noEmail', 'failed']).nullable() }).nullable(),
   sale: z.strictObject({ id, totalCents: int.min(0).max(1_000_000), method: z.enum(['card', 'cash', 'other']) }).nullable(),
   completedAt: instant.nullable(),
 });
@@ -378,6 +383,8 @@ export const RESPONSES = {
   'payments-with-fees': z.strictObject({ payments: z.array(Payment) }),
   'no-show-fee-charged': z.strictObject({ appointment: OwnerAppointment }),
   'no-show-fee-declined': z.strictObject({ appointment: OwnerAppointment }),
+  // A fee that went through with no receipt sent: Stripe had no email for the client.
+  'no-show-fee-charged-no-receipt': z.strictObject({ appointment: OwnerAppointment }),
   'appointment-cancelled-late': z.strictObject({ appointment: Appointment }),
   'late-cancel-fee-charged': z.strictObject({ appointment: OwnerAppointment }),
   // The shop's own Stripe account (STRIPE_CONNECT=on): GET /api/owner/stripe and the connect routes

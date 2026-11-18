@@ -16,7 +16,7 @@ import {
   type ShopStripe,
   type StripeErrorLike,
 } from './stripeaccount.js';
-import { appointmentJSON, type AppointmentRow, type NoShowFeeRowStatus } from './serialize.js';
+import { appointmentJSON, type AppointmentRow, type NoShowFeeReceiptRow, type NoShowFeeRowStatus } from './serialize.js';
 import { UUID_RE } from './validation.js';
 
 // Charging the fee to the card on file (POST /api/owner/appointments/:id/no-show-fee): for a
@@ -287,6 +287,9 @@ export async function recordFeeIntent(
   return current[0] ?? null;
 }
 
+/** What became of a fee's receipt, as the appointment keeps it (migrations/009). */
+export type FeeReceiptOutcome = NoShowFeeReceiptRow;
+
 /**
  * A fee just went through: Stripe emails the client a receipt, as the Cancellation & No-Show
  * Policy promises (and card networks expect for a charge to a saved card). The address is the one
@@ -295,35 +298,78 @@ export async function recordFeeIntent(
  * the receipt (live mode only), as for a receipt at the counter (payments.ts). Asked once per fee
  * (the same idempotency key, if the webhook and the charge both get here). It never fails the fee:
  * anything that goes wrong is logged, and a receipt can still be sent from the Stripe Dashboard.
+ *
+ * What became of it is kept with the appointment (`no_show_fee_receipt`: sent, no_email or failed,
+ * never the address), so Izzy Clipz Business and the website's Business area can say when no
+ * receipt went out. Returns the appointment as it is then (null if that couldn't be kept or read).
  */
-export async function emailFeeReceipt(deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log'>, appointmentId: string, paymentIntentId: string): Promise<void> {
+export async function emailFeeReceipt(
+  deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log' | 'now'>,
+  appointmentId: string,
+  paymentIntentId: string,
+): Promise<AppointmentRow | null> {
+  let outcome: FeeReceiptOutcome;
   try {
-    const { rows } = await deps.db.query<{ checkout_session_id: string; stripe_account_id: string | null }>(
+    const { rows } = await deps.db.query<{ checkout_session_id: string | null; stripe_account_id: string | null }>(
       `SELECT c.checkout_session_id, c.stripe_account_id
          FROM appointments a JOIN saved_cards c ON c.id = a.saved_card_id
         WHERE a.id = $1`,
       [appointmentId],
     );
     const card = rows[0];
-    if (!card) return;
-    // On the account the card (and so the fee) is on.
-    const shop = await shopStripe(deps, { account: card.stripe_account_id });
-    const session = await shop.stripe.checkout.sessions.retrieve(card.checkout_session_id, { expand: ['setup_intent.payment_method'] }, requestOptions(shop));
-    const setupIntent = typeof session.setup_intent === 'object' ? session.setup_intent : null;
-    const method = setupIntent && typeof setupIntent.payment_method === 'object' ? setupIntent.payment_method : null;
-    const email = session.customer_details?.email ?? method?.billing_details?.email ?? null;
-    if (!email) {
-      deps.log.warn("A fee went through, but Stripe has no email for its receipt: send one from the Stripe Dashboard", { appointmentId, paymentIntentId });
-      return;
+    if (!card?.checkout_session_id) {
+      // The card's Stripe details were deleted meanwhile (retention.ts): there's nothing to read the address from.
+      deps.log.warn("A fee went through, but its card's Stripe details are gone, so no receipt was sent: send one from the Stripe Dashboard", {
+        appointmentId,
+        paymentIntentId,
+      });
+      outcome = 'failed';
+    } else {
+      // On the account the card (and so the fee) is on.
+      const shop = await shopStripe(deps, { account: card.stripe_account_id });
+      const session = await shop.stripe.checkout.sessions.retrieve(card.checkout_session_id, { expand: ['setup_intent.payment_method'] }, requestOptions(shop));
+      const setupIntent = typeof session.setup_intent === 'object' ? session.setup_intent : null;
+      const method = setupIntent && typeof setupIntent.payment_method === 'object' ? setupIntent.payment_method : null;
+      const email = session.customer_details?.email ?? method?.billing_details?.email ?? null;
+      if (!email) {
+        deps.log.warn("A fee went through, but Stripe has no email for its receipt: send one from the Stripe Dashboard", { appointmentId, paymentIntentId });
+        outcome = 'no_email';
+      } else {
+        await shop.stripe.paymentIntents.update(
+          paymentIntentId,
+          { receipt_email: email },
+          requestOptions(shop, { idempotencyKey: `izzy-fee-receipt-${paymentIntentId}` }),
+        );
+        outcome = 'sent';
+      }
     }
-    await shop.stripe.paymentIntents.update(
-      paymentIntentId,
-      { receipt_email: email },
-      requestOptions(shop, { idempotencyKey: `izzy-fee-receipt-${paymentIntentId}` }),
-    );
   } catch (error) {
     // Logged (stripeFailure): the fee is charged either way.
     stripeFailure(deps, error, 'send fee receipt');
+    outcome = 'failed';
+  }
+  return recordReceipt(deps, appointmentId, outcome);
+}
+
+/**
+ * Keeps what became of a charged fee's receipt with its appointment, and returns the appointment. A
+ * receipt Stripe already has is never marked unsent again. A database error is logged, never thrown:
+ * the fee is charged either way.
+ */
+async function recordReceipt(deps: Pick<Deps, 'db' | 'log' | 'now'>, appointmentId: string, outcome: FeeReceiptOutcome): Promise<AppointmentRow | null> {
+  try {
+    const { rows } = await deps.db.query<AppointmentRow>(
+      `UPDATE appointments SET no_show_fee_receipt = $2, updated_at = $3
+        WHERE id = $1 AND no_show_fee_status = 'charged' AND no_show_fee_receipt IS DISTINCT FROM 'sent'
+        RETURNING *`,
+      [appointmentId, outcome, deps.now()],
+    );
+    if (rows[0]) return rows[0];
+    const { rows: current } = await deps.db.query<AppointmentRow>('SELECT * FROM appointments WHERE id = $1', [appointmentId]);
+    return current[0] ?? null;
+  } catch (error) {
+    deps.log.error("Couldn't keep what became of a fee's receipt", { appointmentId, outcome, error: error instanceof Error ? error.message : String(error) });
+    return null;
   }
 }
 
@@ -507,8 +553,9 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
         onCharged: () => (charged = true),
       }),
     );
-    if (charged) await emailFeeReceipt(deps, id, intent.id);
-    return json({ appointment: appointmentJSON(updated ?? claim.row) });
+    // With what became of its receipt, once it's charged.
+    const receipted = charged ? await emailFeeReceipt(deps, id, intent.id) : null;
+    return json({ appointment: appointmentJSON(receipted ?? updated ?? claim.row) });
   }
 
   const { row, attempt } = claim;
@@ -524,8 +571,8 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (found) {
       let charged = false;
       const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, found, attempt, deps.now(), { onCharged: () => (charged = true) }));
-      if (charged) await emailFeeReceipt(deps, id, found.id);
-      return json({ appointment: appointmentJSON(updated ?? row) });
+      const receipted = charged ? await emailFeeReceipt(deps, id, found.id) : null;
+      return json({ appointment: appointmentJSON(receipted ?? updated ?? row) });
     }
     // Nothing reached Stripe: send it again (same key), unless it can't be charged any more. Then
     // nothing was charged, so the try is settled as that instead of staying pending for good; but
@@ -586,8 +633,8 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
   }
   let charged = false;
   const updated = await deps.db.transaction((tx) => recordFeeIntent(tx, recordRow, intent, attempt, deps.now(), { onCharged: () => (charged = true) }));
-  if (charged) await emailFeeReceipt(deps, id, intent.id);
-  return json({ appointment: appointmentJSON(updated ?? row) });
+  const receipted = charged ? await emailFeeReceipt(deps, id, intent.id) : null;
+  return json({ appointment: appointmentJSON(receipted ?? updated ?? row) });
 }
 
 /**
