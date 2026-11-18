@@ -36,6 +36,19 @@ struct TakePaymentView: View {
                         }
                         .accessibilityIdentifier("recoveryNotice")
                     }
+                    if let cents = checkout.unconfirmedCardCents, checkout.phase == .editing {
+                        // Nothing else is taken or recorded until the last card is settled: it may have gone through.
+                        IssueCard(issue: TerminalIssue(
+                            title: "Check the last card payment",
+                            message: "We still don't know if the last \(Money.amount(cents)) card payment went through. Check it before taking another payment or recording a cash or other sale, so the client isn't charged twice."
+                        ), symbol: "questionmark.circle.fill") {
+                            Button("Check the payment") { checkout.checkUnconfirmedCard() }
+                                .buttonStyle(.borderedProminent)
+                                .accessibilityIdentifier("checkUnconfirmedCard")
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("unconfirmedCardNotice")
+                    }
                     Text("Ring up services, products or any amount, then choose how the client pays.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)

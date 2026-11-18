@@ -264,6 +264,9 @@ final class Workspace {
         return true
     }
 
+    /// What Check out says while a payment is running on Take payment.
+    static let paymentBusyMessage = "A payment is in progress on the Take payment tab. Finish or cancel it, then try again."
+
     /// Bumped by every checkout started from elsewhere, so Take payment shows its ticket (not a
     /// sale it had open).
     private(set) var checkoutsStarted = 0

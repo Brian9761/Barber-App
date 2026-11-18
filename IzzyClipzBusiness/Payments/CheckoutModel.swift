@@ -120,10 +120,18 @@ final class CheckoutModel {
         let title: String?
         /// The sale the server records with it (not for practice payments, which go nowhere).
         var sale: SaleReceipt?
+        /// The payment was for an appointment that had been checked out another way (or cancelled,
+        /// or marked a no-show) while the card went through: the server kept the money as a sale of
+        /// its own. The client may have paid twice, so the success screen says what to do.
+        var appointmentAlreadyCheckedOut = false
 
         /// "Email a receipt (optional)" is offered: a real payment Stripe can email a receipt for.
         var offersReceiptEmail: Bool { paymentIntentId != nil && !stripeTestMode }
     }
+
+    /// What the success screen says under a card payment whose appointment was already checked out.
+    static let alreadyCheckedOutMessage =
+        "This appointment was already checked out (or cancelled) before the card went through, so this payment is saved as a sale of its own. If the client paid twice, void one sale in Today's sales, and refund the card in your Stripe Dashboard or give the cash back."
 
     /// The PaymentIntent this checkout charges, kept across retries.
     struct ActivePayment: Equatable {
@@ -164,7 +172,12 @@ final class CheckoutModel {
     /// so the owner doesn't charge the customer again.
     var recoveryNotice: String?
 
-    @ObservationIgnored private(set) var active: ActivePayment?
+    @ObservationIgnored private(set) var active: ActivePayment? {
+        didSet { unconfirmedCardCents = active?.needsCheck == true ? active?.request.amountCents : nil }
+    }
+    /// The last card payment's amount while nobody knows whether it went through (`active.needsCheck`):
+    /// Take payment says so, and nothing else is taken or recorded until it's checked.
+    private(set) var unconfirmedCardCents: Int?
     @ObservationIgnored private var flowTask: Task<Void, Never>?
     /// Reloading today's payments after one went through. Separate from the
     /// payment itself, so the next payment can start while the list loads.
@@ -308,7 +321,7 @@ final class CheckoutModel {
     /// barber, with its service at its price. Ignored while a payment is running.
     @discardableResult
     func start(for appointment: IzzyAPI.Appointment) -> Bool {
-        guard phase == .editing || isFinished else { return false }
+        guard canStartCheckout else { return false }
         if isFinished { reset() }
         ticket = CheckoutTicket(appointment: appointment, catalog: catalog, shopTime: shopTime, now: clock())
         note = ""
@@ -320,7 +333,7 @@ final class CheckoutModel {
     /// ticket with their name, sold by their barber, not tied to the appointment.
     @discardableResult
     func startExtra(for appointment: IzzyAPI.Appointment) -> Bool {
-        guard phase == .editing || isFinished else { return false }
+        guard canStartCheckout else { return false }
         if isFinished { reset() }
         ticket = CheckoutTicket(barberId: appointment.barberId)
         ticket.walkInName = appointment.customer.name
@@ -328,6 +341,23 @@ final class CheckoutModel {
         validationMessage = nil
         return true
     }
+
+    /// Whether a checkout can start from elsewhere: no payment is running here.
+    var canStartCheckout: Bool { phase == .editing || isFinished }
+
+    /// What Check out (from the schedule or the Booked sheet) asks first when it would replace a
+    /// ticket being rung up here for someone else; `nil` when there's nothing to lose (an empty
+    /// ticket, this appointment's own, or a payment that's finished).
+    func replacedTicketMessage(forAppointment appointmentId: String?) -> String? {
+        guard phase == .editing, !ticket.isEmpty else { return nil }
+        if let appointmentId, ticket.appointmentId == appointmentId { return nil }
+        let count = ticket.items.reduce(0) { $0 + $1.quantity }
+        let items = count == 1 ? "1 item" : "\(count) items"
+        let whose = ticket.customerName.map { " for \($0)" } ?? ""
+        return "Take payment has a sale being rung up\(whose) (\(items), \(Money.amount(ticket.totalCents))). This checkout takes its place."
+    }
+
+    static let replaceTicketQuestion = "Replace the sale on Take payment?"
 
     /// "Not for this appointment": the ticket stays, for a walk-in with the same name.
     func forgetAppointment() {
@@ -362,10 +392,19 @@ final class CheckoutModel {
 
     // MARK: Cash and other
 
+    /// While the last card's outcome is unknown, a cash or other sale waits: if the card went through,
+    /// the client would have paid twice (and the appointment's card sale would land unlinked).
+    static let unconfirmedCardBeforeSaleMessage = "We still don't know if the last card was charged. Check it before recording a cash or other sale."
+
     /// Records the ticket as a sale paid in cash or another way, after the owner confirmed it.
     func record(_ method: IzzyAPI.SaleMethod) {
         guard phase == .editing, method != .card else { return }
         validationMessage = nil
+        if let active, active.needsCheck {
+            // Like a new card: settle the last one first.
+            phase = .outcomeUnknown(Self.unconfirmedCardBeforeSaleMessage)
+            return
+        }
         if let problem = ticket.problem(for: method) {
             validationMessage = problem
             return
@@ -381,6 +420,10 @@ final class CheckoutModel {
         switch phase {
         case .recordFailed, .recordUnknown:
             guard flowTask == nil else { return }
+            if let active, active.needsCheck {
+                phase = .outcomeUnknown(Self.unconfirmedCardBeforeSaleMessage)
+                return
+            }
             let sale = ticket.newSale(method: lastRecordedMethod ?? .cash)
             phase = .recording(sale.method)
             start { await self.save(sale) }
@@ -413,10 +456,16 @@ final class CheckoutModel {
         } catch is CancellationError {
             phase = .recordUnknown(Self.saleUnknownMessage)
         } catch {
-            if ScheduleStore.chargeOutcomeIsUnknown(error) {
+            // An answer the app couldn't read came after the server took the sale (a 2xx): it may
+            // well be saved, so it's unknown too, and Record again (same key) finds out.
+            let unreadable: Bool
+            if case .decoding? = error as? APIError { unreadable = true } else { unreadable = false }
+            if unreadable || ScheduleStore.chargeOutcomeIsUnknown(error) {
                 let reason: String
                 if case .offline? = error as? APIError {
                     reason = "We couldn't reach the server."
+                } else if unreadable {
+                    reason = "The server answered, but the app couldn't read the answer."
                 } else {
                     reason = ErrorText.message(for: error)
                 }
@@ -503,6 +552,13 @@ final class CheckoutModel {
                 break
             }
         }
+    }
+
+    /// "Check the payment" on Take payment's notice: asks the server whether the last card, still
+    /// unconfirmed, went through, before anything else is taken.
+    func checkUnconfirmedCard() {
+        guard phase == .editing, let active, active.needsCheck else { return }
+        start { await self.confirm(active) }
     }
 
     /// Asks the server again whether the last payment went through.
@@ -690,7 +746,9 @@ final class CheckoutModel {
                     amountCents: recorded.amountCents, paymentIntentId: recorded.id, isTestMode: mode.isTestMode,
                     stripeTestMode: stripeTestMode,
                     title: payment.request.description,
-                    sale: payment.request.sale != nil ? payment.ticket.map { SaleReceipt(ticket: $0, method: .card, barberName: barberName ?? "") } : nil
+                    sale: payment.request.sale != nil ? payment.ticket.map { SaleReceipt(ticket: $0, method: .card, barberName: barberName ?? "") } : nil,
+                    // The server let go of the appointment: another checkout (or a cancellation) got there first.
+                    appointmentAlreadyCheckedOut: payment.request.appointmentId != nil && payment.request.sale != nil && recorded.appointmentId == nil
                 ))
                 if let barberId = payment.request.sale?.barberId { defaults?.set(barberId, forKey: Self.lastBarberKey) }
                 if let appointmentId = recorded.appointmentId ?? payment.request.appointmentId {

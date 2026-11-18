@@ -287,6 +287,10 @@ private struct BookedSheet: View {
     let store: NewBookingStore
     let workspace: Workspace
     @Environment(\.dismiss) private var dismiss
+    /// Check out while a payment runs on Take payment.
+    @State private var showsPaymentBusy = false
+    /// Check out while Take payment has a ticket for someone else, while it asks.
+    @State private var replacedTicketMessage: String?
 
     var body: some View {
         NavigationStack {
@@ -305,9 +309,15 @@ private struct BookedSheet: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Check out") {
-                    let item = appointment
-                    dismiss()
-                    workspace.checkOut(item)
+                    guard workspace.checkout.canStartCheckout else {
+                        showsPaymentBusy = true
+                        return
+                    }
+                    if let message = workspace.checkout.replacedTicketMessage(forAppointment: appointment.id) {
+                        replacedTicketMessage = message
+                        return
+                    }
+                    checkOut()
                 }
                 .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("bookedTakePayment")
@@ -317,7 +327,32 @@ private struct BookedSheet: View {
             }
             .padding(24)
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Finish the current payment first", isPresented: $showsPaymentBusy) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(Workspace.paymentBusyMessage)
+            }
+            .confirmationDialog(
+                CheckoutModel.replaceTicketQuestion,
+                isPresented: Binding(get: { replacedTicketMessage != nil }, set: { if !$0 { replacedTicketMessage = nil } }),
+                titleVisibility: .visible
+            ) {
+                Button("Replace it", role: .destructive) { checkOut() }
+                    .accessibilityIdentifier("confirmReplaceTicket")
+                Button("Keep it", role: .cancel) {}
+            } message: {
+                Text(replacedTicketMessage ?? "")
+            }
         }
         .presentationDetents([.medium, .large])
+    }
+
+    private func checkOut() {
+        let item = appointment
+        dismiss()
+        if !workspace.checkOut(item) {
+            // A payment started meanwhile: Take payment shows it.
+            workspace.selectedTab = .payment
+        }
     }
 }

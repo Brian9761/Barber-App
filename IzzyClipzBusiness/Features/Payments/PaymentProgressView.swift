@@ -126,11 +126,16 @@ struct PaymentProgressView: View {
                 detail: successDetail(receipt),
                 id: "statusPaid"
             )
+            if receipt.appointmentAlreadyCheckedOut {
+                InlineMessage(text: CheckoutModel.alreadyCheckedOutMessage, systemImage: "exclamationmark.triangle.fill", color: .orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("alreadyCheckedOutNotice")
+            }
             if let sale = receipt.sale {
                 SaleReceiptCard(receipt: sale)
             }
             if receipt.offersReceiptEmail {
-                ReceiptEmailOffer(checkout: checkout, focus: $typingReceiptEmail)
+                ReceiptEmailOffer(checkout: checkout, focus: $typingReceiptEmail, isTestMode: receipt.isTestMode)
             }
         case .recording(let method):
             StatusBlock(symbol: method == .cash ? "banknote" : "ellipsis.circle", title: "Saving the sale", detail: Money.amount(amountCents), id: "statusRecording") {
