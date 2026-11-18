@@ -11,6 +11,7 @@ This file records what the Izzy Clipz website, web apps, iPhone apps and server 
   - The server is the same on both branches, with four exceptions: `server/src/website.ts` (web only), the website's build and headers in `server/vercel.json` (web only), the website's extra catalog content (barbers' bios, titles and Instagram handles) in `server/data/catalog.json` (web only), and one rounding detail when cancelling (int only).
   - The database migrations are identical on both branches.
 - **Re-checked after two independent reviews,** the same day: the new facts are marked in sections 2, 6, 8 and 9, and the gaps they added are G12 to G18 in section 11.
+- **Built since this check** (on `v5/int`, November 2026): the gaps the documents depend on (G1, G2, G3, G5, G12 to G18) and the November 14 legal check's code items (OWNER-CHECKLIST.md §3, items 19 to 22) are in the code. Sections 2 to 4 still describe the code as read on November 5, except where a line says "as built". Where they differ, the code wins.
 - **Keep it current:** check this file again whenever code that stores, sends or deletes data changes, and before changing the Privacy Policy.
 
 ## At a glance
@@ -208,11 +209,15 @@ This applies only once the owner has turned no-show protection on and Stripe is 
   - a description such as "No-show fee: Haircut with Flowxbori, Tue, Nov 3 at 10:00 AM" (`feeDescription`);
   - the appointment's id, the fee's kind and the attempt number, as metadata.
 
-  No name, number or receipt email is sent.
-- **Rules:** at most one fee per appointment; only after the start for a no-show; never for a booking the shop cancelled, or that the client cancelled online before the window (`feeCase` in `server/src/feecase.ts`). There's no time limit after the visit today (see G2).
-  - A booking with a card on file can be marked a no-show from its start time (`patchOwnerAppointment` in `server/src/appointments.ts`), and a completed one without a sale can be changed to a no-show. A client cancellation inside the window is late even right after booking a time that was already inside it (`cancelledLate` doesn't read `created_at`). The documents promise otherwise: see G13.
-- **Receipts:** Stripe may email the client a receipt, using the email on the Customer, if the shop turns on Stripe's receipt emails. That's a setting in the Stripe Dashboard, not in our code.
-- **How long:** forever.
+  No name or number is sent. The receipt email is added only after the fee has gone through (see Receipts).
+- **Rules (as built, November 18, 2026):**
+  - at most one fee per appointment, and only within 7 days after the appointment's start (`FEE_DEADLINE_DAYS` in `server/src/feecase.ts`, G2);
+  - never for a booking the shop cancelled, or that the client cancelled online before the window or within 15 minutes of booking (`feeCase` in `server/src/feecase.ts`, G13);
+  - a no-show only after the appointment's end, and never once it's marked completed (G13);
+  - no late-cancellation fee while another booked or completed appointment of the same barber overlaps that time (`timeTakenSince` in `server/src/noshowfee.ts`). A walk-in rung up at checkout without an appointment can't be seen, so the fee panel in Izzy Clipz Business and in the website's Business area says not to charge if another client, such as a walk-in, took the time;
+  - after a decline, or when the bank wants the client to approve the charge, the card isn't charged again, and the client pays another way (`server/src/noshowfee.ts`).
+- **Receipts (as built):** when a fee goes through, the server reads the email the client typed on Stripe's card page from the Checkout Session that saved the card, and sets it as the fee's `receipt_email`, which makes Stripe email the receipt (live mode only; `emailFeeReceipt` in `server/src/noshowfee.ts`). Our server doesn't store the address, but it stays on the fee's payment in the shop's Stripe account. If Stripe has no address, or the call fails, the fee still stands, and the server logs it so the shop can send the receipt from the Stripe Dashboard.
+- **How long (as built):** the fee stays with the appointment, whose name, number, email and note are removed 12 months after it (`server/src/retention.ts`). In the shop's Stripe account, with no set end date.
 
 ### 2.10 Card payments in the shop (Tap to Pay)
 
@@ -757,11 +762,10 @@ This is what the Privacy Policy states. In the last column, "now" means it's alr
 
 ## Other things noticed (for the other documents)
 
-- **"In the app":**
-  - The policy text stored with every protected booking says "Cancelling in the app…", including for bookings made on the website (`policyText` in `server/src/noshow.ts`).
+- **"In the app" and "online":**
+  - The policy text stored with new protected bookings says "Cancelling online is free…", and when the card may be charged: "within 7 days after your appointment time" (`policyText` in `server/src/noshow.ts`, OWNER-CHECKLIST.md §3 item 22). Bookings made before keep the text they agreed to, which says "Cancelling in the app…".
   - The website's fee notice adds "Cancelling on this website, under My appointments, works the same as cancelling in the app." (`server/web/src/booking/TimeStep.tsx` (web)), and the Cancellation & No-Show Policy says both count.
-  - Optionally, change the server's wording to "online" for new bookings. Existing bookings keep the text they agreed to.
-- **"Is charged" and "may charge":** the fee notice says "is charged" (`feeWarning`), while the agreed text says "may charge" (`policyText`). The documents follow the agreed text (the shop decides each time). Optionally, make the notice say "may be charged" too.
+- **"May be charged":** the fee notices (`feeWarning` in `server/src/noshow.ts`, and the website's) say "may be charged", like the agreed text's "may charge" (`policyText`): the shop decides each time. The notice's title is "Late Cancellation & No-Show Fee" whenever late cancellations can be charged, or "No-Show Fee".
 - **Only clients' own online cancellations can count as late:**
   - A booking the shop cancels (after a phone call, for example) is never charged.
   - A no-show can be charged only after the appointment's start, and only if the client never cancelled (`feeCase` in `server/src/feecase.ts`). The documents promise only after its end (G13).
