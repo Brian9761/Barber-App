@@ -208,7 +208,7 @@ A card you save on Stripe's page stays in the shop's Stripe account until the fi
 
 With "Remember me", that's so you can book again quickly. Without it, the card is used only for the booking you saved it for.
 
-Then we ask Stripe to delete the card, and the customer record it was saved under, as soon as none of your bookings still needs it (an upcoming appointment, or one that can still be charged a fee). After that, the card can't be charged again. The shop's Stripe account still keeps a record of the card page you filled in, including the email address you typed there, and of any fee charged, and Stripe keeps its own records, as its policies and the law require.
+Then we ask Stripe to delete the card, and the customer record it was saved under, as soon as none of your bookings still needs it (an upcoming appointment, or one that can still be charged a fee). After that, the card can't be charged again. If the shop has changed how it connects to Stripe since you saved the card, our server can't reach it there, so the shop deletes it in its Stripe account instead. The shop's Stripe account still keeps a record of the card page you filled in, including the email address you typed there, and of any fee charged, and Stripe keeps its own records, as its policies and the law require.
 
 We may keep information longer when the law requires it, or when we need it to resolve a dispute or a legal claim.
 
@@ -270,6 +270,7 @@ Izzy Clipz Business is for the shop's staff. Here's what it handles about them:
 - **Product photos.** The app uses the camera and photo library only for photos of the shop's products. Before a photo is uploaded, it's redrawn on the device, which removes its location and other camera details. Product photos are public, because the client app shows them.
 - **Tap to Pay on iPhone.** Stripe needs to know where card payments are taken, to reduce fraud and disputes, so its software checks the iPhone's location while a payment is taken; without it, Tap to Pay is turned off. Stripe's software also sends Stripe the iPhone's approximate location and information about how its payment features are used. The app declares Bluetooth only because Stripe's software supports Bluetooth card readers; it doesn't connect to Bluetooth devices.
 - **Sales by barber.** The sales credited to each barber can be seen by everyone who uses Izzy Clipz Business.
+- **The barber picked last at checkout** is remembered on that iPhone, or on that computer, until staff sign out.
 
 ## Changes to this policy
 

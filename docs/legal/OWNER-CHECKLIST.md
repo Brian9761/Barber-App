@@ -116,6 +116,7 @@ Your developer has the exact details (research.md §18 lists them). **Ship them 
 - A separate, lower cap for late-cancellation fees when the cutoff is long (or a shorter maximum cutoff), and a warning in Izzy Clipz Business before a late-cancellation fee is charged when another booking took that time (the policy promises not to charge then).
 - Turn on axe-core's WCAG 2.2 "target-size" rule in the website's automated checks (it's off by default).
 - Stripe's redaction (in public preview) could remove clients' details from the shop's Stripe records after 12 months; the Privacy Policy now says the Stripe records have no set end date.
+- Show the owner any saved card the server couldn't delete at Stripe (after the shop changed how it connects to Stripe), so it can be deleted in the right Stripe Dashboard; until then the server only logs it.
 
 ## 4. Accounts and settings
 
