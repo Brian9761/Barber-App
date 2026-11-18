@@ -109,13 +109,13 @@ for (const doc of DOCS) {
     await expect(page.locator('mark.legal__placeholder').first()).toHaveText(/^To be added by the shop: /);
     await view(page, testInfo, `legal-${doc.shot}-top`);
 
-    // "On this page": every section, a link to each; open on a computer, a tap away on a phone.
+    // "On this page": every section, a link to each. Opened at its address, it starts as its plain HTML
+    // had it, a tap away, at both sizes, so nothing moves when the site takes over (a policy opened in
+    // the site has it open on a computer: the takeover test below).
     const contents = page.getByRole('navigation', { name: 'On this page' });
     const details = contents.locator('details');
-    if (isPhone(testInfo)) {
-      await expect(details).not.toHaveAttribute('open');
-      await contents.locator('summary').click();
-    }
+    await expect(details).not.toHaveAttribute('open');
+    await contents.locator('summary').click();
     await expect(details).toHaveAttribute('open', '');
     const sections = page.getByTestId('legal-page').locator('h2');
     await expect(contents.getByRole('link')).toHaveCount(await sections.count());
@@ -651,6 +651,8 @@ test('with JavaScript, the site takes a legal page over from its plain HTML in o
     const seen: string[] = [];
     (window as unknown as { izzyRootSeen: string[] }).izzyRootSeen = seen;
     new MutationObserver(() => {
+      // Once the plain HTML is all there (the site's script runs only after that).
+      if (document.readyState === 'loading') return;
       const root = document.getElementById('root');
       if (!root) return;
       if (root.querySelector('.legal-loading') || (root.textContent ?? '').includes('Loading…')) seen.push('loading');
