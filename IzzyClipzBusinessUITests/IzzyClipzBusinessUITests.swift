@@ -1255,13 +1255,20 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// On screen and tappable. isHittable is only asked about an element whose middle is on the
-    /// screen: for one scrolled out of sight, XCUITest can fail the test ("Activation point
-    /// invalid") instead of answering no.
+    /// screen, and once it has stopped moving: for one scrolled out of sight, or one still moving
+    /// because a change just redrew the screen (Reopen, say), XCUITest can fail the test
+    /// ("Activation point invalid") instead of answering no.
     private func isOnScreen(_ target: XCUIElement) -> Bool {
-        guard target.exists else { return false }
-        let frame = target.frame
-        guard !frame.isEmpty, app.frame.contains(CGPoint(x: frame.midX, y: frame.midY)) else { return false }
+        guard target.exists, middleIsOnScreen(target) else { return false }
+        settle(target)
+        guard target.exists, middleIsOnScreen(target) else { return false }
         return target.isHittable
+    }
+
+    /// Whether the middle of the element is on the screen.
+    private func middleIsOnScreen(_ target: XCUIElement) -> Bool {
+        let frame = target.frame
+        return !frame.isEmpty && app.frame.contains(CGPoint(x: frame.midX, y: frame.midY))
     }
 
     /// Drags the page about a third of the screen and holds still before letting go, so it
