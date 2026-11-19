@@ -1,3 +1,4 @@
+import UIKit
 import XCTest
 
 /// Walks through every screen the way a client would: the five tabs, booking through to "You're
@@ -763,9 +764,7 @@ final class IzzyClipzUITests: XCTestCase {
         // Return puts the keyboard away, so the line under the fields is in view.
         type(" Jr\n", into: "detailsSheetName")
         XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "The keyboard stayed up")
-        let link = app.links["Privacy Policy"].firstMatch
-        XCTAssertTrue(link.waitForExistence(timeout: 10), "No Privacy Policy link under the name and number")
-        link.tap()
+        tapLink("Privacy Policy", inLine: "detailsSheetPrivacy", "No Privacy Policy link under the name and number")
         XCTAssertEqual(webPageURL(), "https://izzy-clipz.vercel.app/privacy")
         closeWebPage()
         let name = element("detailsSheetName")
@@ -1567,6 +1566,98 @@ final class IzzyClipzUITests: XCTestCase {
         XCTAssertTrue(target.waitForExistence(timeout: 10), "Missing \(identifier)", file: file, line: line)
         scroll(toReveal: target, file: file, line: line)
         target.tap()
+    }
+
+    /// Taps the link `title` in a line of text (`identifier`). iOS 26 makes a link inside text an
+    /// element of its own. Before iOS 26, XCUITest sees the whole line as one StaticText: VoiceOver
+    /// offers the line's links in its Links rotor, which XCUITest doesn't see. So there the line has
+    /// to say `title` and draw it as a link, the only words in color (the others are gray, on a dark
+    /// background), and it's tapped in the middle of where it's drawn, found in a screenshot of the
+    /// line. (On iOS 18.6 the Privacy Policy under Your details was drawn electric and underlined, but
+    /// `app.links` found nothing.)
+    private func tapLink(_ title: String, inLine identifier: String, _ message: String, file: StaticString = #filePath, line: UInt = #line) {
+        if #available(iOS 26.0, *) {
+            let link = app.links[title].firstMatch
+            XCTAssertTrue(link.waitForExistence(timeout: 10), message, file: file, line: line)
+            link.tap()
+            return
+        }
+        let text = element(identifier)
+        XCTAssertTrue(text.waitForExistence(timeout: 10), message, file: file, line: line)
+        XCTAssertTrue(text.label.contains(title), "\(message): \(text.label)", file: file, line: line)
+        waitUntilStill(text)
+        guard let middle = middleOfColor(in: text) else {
+            XCTFail("\(message): nothing in \"\(text.label)\" is drawn in color, as a link is", file: file, line: line)
+            return
+        }
+        text.coordinate(withNormalizedOffset: middle).tap()
+    }
+
+    /// Waits, up to two seconds, until an element stops moving (a page settling after the keyboard
+    /// goes, say).
+    private func waitUntilStill(_ target: XCUIElement) {
+        var last = target.frame
+        for _ in 0..<8 {
+            Thread.sleep(forTimeInterval: 0.25)
+            let now = target.frame
+            if now == last { return }
+            last = now
+        }
+    }
+
+    /// Where the part of an element that's in color is drawn, as an offset within the element (0 to 1
+    /// across and down), or nil when none of it is. A pixel is in color when one of its red, green and
+    /// blue is bright and well above another; gray words and dark backgrounds have all three about the
+    /// same. Of the lines with color in them (a link that wraps makes two), the one with the most, and
+    /// the middle of its colored pixels.
+    private func middleOfColor(in target: XCUIElement) -> CGVector? {
+        guard let image = target.screenshot().image.cgImage else { return nil }
+        let width = image.width, height = image.height
+        guard width > 0, height > 0 else { return nil }
+        // Red, green, blue and alpha, a byte each, top row first.
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let drawn = pixels.withUnsafeMutableBytes { buffer -> Bool in
+            guard let context = CGContext(
+                data: buffer.baseAddress, width: width, height: height, bitsPerComponent: 8, bytesPerRow: width * 4,
+                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ) else { return false }
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        guard drawn else { return nil }
+        // Each row of pixels with color in it: how many, and the leftmost and rightmost.
+        var rows: [(y: Int, count: Int, left: Int, right: Int)] = []
+        for y in 0..<height {
+            var count = 0, left = width, right = -1
+            for x in 0..<width {
+                let i = (y * width + x) * 4
+                let red = Int(pixels[i]), green = Int(pixels[i + 1]), blue = Int(pixels[i + 2])
+                let brightest = max(red, green, blue), dimmest = min(red, green, blue)
+                guard brightest >= 150, brightest - dimmest >= 80 else { continue }
+                count += 1
+                left = min(left, x)
+                right = max(right, x)
+            }
+            if count > 0 { rows.append((y, count, left, right)) }
+        }
+        // Rows at most a few pixels apart are one line: a link's letters and its underline.
+        var lines: [[(y: Int, count: Int, left: Int, right: Int)]] = []
+        for row in rows {
+            if let previous = lines.last?.last, row.y - previous.y <= 8 {
+                lines[lines.count - 1].append(row)
+            } else {
+                lines.append([row])
+            }
+        }
+        func colored(_ line: [(y: Int, count: Int, left: Int, right: Int)]) -> Int { line.reduce(0) { $0 + $1.count } }
+        guard let line = lines.max(by: { colored($0) < colored($1) }),
+              let top = line.first?.y, let bottom = line.last?.y,
+              let left = line.map({ $0.left }).min(), let right = line.map({ $0.right }).max()
+        else { return nil }
+        return CGVector(
+            dx: CGFloat(left + right + 1) / 2 / CGFloat(width),
+            dy: CGFloat(top + bottom + 1) / 2 / CGFloat(height)
+        )
     }
 
     /// Taps something pinned in place, where scrolling wouldn't move it: a sticky bar above the tab
