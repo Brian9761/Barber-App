@@ -13,6 +13,7 @@ import {
   isFeeKind,
   isFullPrice,
   LATE_CANCEL_GRACE_MINUTES,
+  LATE_CANCEL_NOT_ENDED_MESSAGE,
   lateCancelWarning,
   MARK_NO_SHOW_MESSAGE,
   money,
@@ -20,6 +21,7 @@ import {
   nothingCharged,
   pastFeeDeadline,
   reasonOfKind,
+  SHOP_CANCELLED_MESSAGE,
   windowLabel,
 } from '../src/feecase.js';
 import type { AppointmentRow } from '../src/serialize.js';
@@ -51,8 +53,11 @@ const booking = (changes: Partial<Terms> = {}): Terms => ({
   no_show_fee_cents: 3500,
   late_cancel_window_minutes: 60,
   customer_cancelled_at: null,
+  shop_cancelled_at: null,
   ...changes,
 });
+/** The shop cancelled it the day before (and kept that: `shop_cancelled_at`, never cleared). */
+const SHOP_CANCELLED_AT = minutesBefore(DAY_MINUTES);
 /** Booked `bookedBefore` minutes before the start (inside the window when that's less than 60), cancelled `after` minutes later. */
 const bookedLate = (bookedBefore: number, after: number, changes: Partial<Terms> = {}) =>
   booking({
@@ -180,6 +185,39 @@ const CASES: { name: string; row: Terms; reason: AppointmentRow['no_show_fee_rea
     reason: null,
     refusal: "The client cancelled this booking in the app, so there's no fee.",
   },
+  // A booking the shop cancelled is never charged, even once it's reopened: the agreement ended then
+  // (`shop_cancelled_at`, set the first time the shop cancels and never cleared).
+  {
+    name: 'cancelled by the shop, kept as such',
+    row: booking({ status: 'cancelled', cancelled_by: 'shop', shop_cancelled_at: SHOP_CANCELLED_AT }),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
+  },
+  { name: 'cancelled by the shop, then reopened', row: booking({ shop_cancelled_at: SHOP_CANCELLED_AT }), reason: null, refusal: SHOP_CANCELLED_MESSAGE },
+  {
+    name: 'cancelled by the shop, reopened, then marked a no-show',
+    row: booking({ status: 'no_show', shop_cancelled_at: SHOP_CANCELLED_AT }),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
+  },
+  {
+    name: 'cancelled by the shop, reopened, then cancelled late by the client',
+    row: byClient(30, { shop_cancelled_at: SHOP_CANCELLED_AT }),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
+  },
+  {
+    name: 'cancelled by the shop, reopened, then cancelled in time by the client',
+    row: byClient(120, { shop_cancelled_at: SHOP_CANCELLED_AT }),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
+  },
+  {
+    name: 'cancelled by the shop, reopened, then completed',
+    row: booking({ status: 'completed', shop_cancelled_at: SHOP_CANCELLED_AT }),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
+  },
 ];
 
 /** Which fee can be charged at a given moment: the end of the appointment and the 7-day deadline. */
@@ -204,7 +242,12 @@ const CLOCK_CASES: { name: string; row: Terms; now: Date; reason: AppointmentRow
     reason: null,
     refusal: FEE_DEADLINE_MESSAGE,
   },
-  { name: 'a late cancellation, before the start', row: byClient(30), now: minutesBefore(29), reason: 'late_cancel', refusal: null },
+  // A late cancellation waits for the end too: until then another client may still take the time.
+  { name: 'a late cancellation, before the start', row: byClient(30), now: minutesBefore(29), reason: null, refusal: LATE_CANCEL_NOT_ENDED_MESSAGE },
+  { name: 'a late cancellation, right at the start', row: byClient(30), now: START, reason: null, refusal: LATE_CANCEL_NOT_ENDED_MESSAGE },
+  { name: 'a late cancellation, 1 minute before the end', row: byClient(30), now: minutesAfter(END, -1), reason: null, refusal: LATE_CANCEL_NOT_ENDED_MESSAGE },
+  { name: 'a late cancellation, at the end', row: byClient(30), now: END, reason: 'late_cancel', refusal: null },
+  { name: 'a late cancellation, 1 minute after the end', row: byClient(30), now: minutesAfter(END, 1), reason: 'late_cancel', refusal: null },
   {
     name: 'a late cancellation, 7 days after the start less 1 minute',
     row: byClient(30),
@@ -242,11 +285,39 @@ const CLOCK_CASES: { name: string; row: Terms; now: Date; reason: AppointmentRow
     refusal: COMPLETED_MESSAGE,
   },
   {
-    name: 'booked inside the window, cancelled 16 minutes later, after the start',
+    name: 'booked inside the window, cancelled 16 minutes later, after the end',
     row: bookedLate(30, 16),
     now: minutesAfter(END, 5),
     reason: 'late_cancel',
     refusal: null,
+  },
+  {
+    name: 'booked inside the window, cancelled 16 minutes later, before the end',
+    row: bookedLate(30, 16),
+    now: minutesAfter(START, 5),
+    reason: null,
+    refusal: LATE_CANCEL_NOT_ENDED_MESSAGE,
+  },
+  {
+    name: 'cancelled by the shop, reopened, marked a no-show, after the end',
+    row: booking({ status: 'no_show', shop_cancelled_at: SHOP_CANCELLED_AT }),
+    now: minutesAfter(END, 5),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
+  },
+  {
+    name: 'cancelled by the shop, reopened, cancelled late by the client, after the end',
+    row: byClient(30, { shop_cancelled_at: SHOP_CANCELLED_AT }),
+    now: minutesAfter(END, 5),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
+  },
+  {
+    name: 'cancelled by the shop, reopened, after the deadline',
+    row: booking({ shop_cancelled_at: SHOP_CANCELLED_AT }),
+    now: minutesAfter(START, DEADLINE_MINUTES + 1),
+    reason: null,
+    refusal: SHOP_CANCELLED_MESSAGE,
   },
 ];
 
@@ -303,12 +374,25 @@ describe('which fee a booking can be charged', () => {
   });
 });
 
-describe('which fee can be charged now: the end of the appointment and the 7-day deadline', () => {
+describe('which fee can be charged now: the end of the appointment (for either fee) and the 7-day deadline', () => {
   for (const c of CLOCK_CASES) {
     it(c.name, () => {
       expect(feeCaseAt(c.row, c.now)).toEqual({ reason: c.reason, refusal: c.refusal });
     });
   }
+
+  it('a late cancellation is charged only once the appointment has ended, and says so before', () => {
+    expect(LATE_CANCEL_NOT_ENDED_MESSAGE).toBe(
+      "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time.",
+    );
+    const late = byClient(30);
+    // Every moment from the cancellation to the end is refused; the end itself counts.
+    for (let m = -30; m < 45; m += 1) expect(feeCaseAt(late, minutesAfter(START, m)).refusal, `${m} minutes after the start`).toBe(LATE_CANCEL_NOT_ENDED_MESSAGE);
+    expect(feeCaseAt(late, new Date(END.getTime() - 1))).toEqual({ reason: null, refusal: LATE_CANCEL_NOT_ENDED_MESSAGE });
+    expect(feeCaseAt(late, END)).toEqual({ reason: 'late_cancel', refusal: null });
+    // Without a clock it's still a late cancellation (the JSON's reason, the badge "Cancelled late").
+    expect(feeCase(late)).toEqual({ reason: 'late_cancel', refusal: null });
+  });
 
   it('the deadline is 7 days of 24 hours after the start, and exactly then still counts', () => {
     expect(feeDeadline(START)).toEqual(new Date('2026-11-10T18:00:00Z'));
@@ -343,6 +427,17 @@ describe('cancelling now', () => {
     expect(cancellingIsLate(booking({ saved_card_id: null, no_show_fee_cents: null, late_cancel_window_minutes: null }), minutesBefore(5))).toBe(false);
     // A longer window agreed at booking.
     expect(cancellingIsLate(booking({ late_cancel_window_minutes: 180 }), minutesBefore(120))).toBe(true);
+  });
+
+  it('is never late for a booking the shop cancelled before reopening it: no fee, so no warning', () => {
+    const reopened = booking({ shop_cancelled_at: SHOP_CANCELLED_AT });
+    expect(cancellingIsLate(booking(), minutesBefore(5))).toBe(true);
+    expect(cancellingIsLate(reopened, minutesBefore(5))).toBe(false);
+    expect(cancellingIsLate(reopened, minutesBefore(59))).toBe(false);
+    expect(cancellingIsLate({ ...reopened, customer_cancelled_at: minutesBefore(30) }, minutesBefore(20))).toBe(false);
+    // The time the client cancelled is still kept as it was (the analytics count it), but there's no fee.
+    expect(cancelledLate(byClient(30, { shop_cancelled_at: SHOP_CANCELLED_AT }))).toBe(true);
+    expect(feeCase(byClient(30, { shop_cancelled_at: SHOP_CANCELLED_AT }))).toEqual({ reason: null, refusal: SHOP_CANCELLED_MESSAGE });
   });
 
   it('warns with the agreed fee, and says when it is the full service price', () => {
@@ -390,6 +485,7 @@ describe('test/fixtures/fee-cases.json (read by the Kit)', () => {
         createdAt: iso(c.row.created_at),
         customerCancelledAt: iso(c.row.customer_cancelled_at),
         lateCancelWindowMinutes: c.row.late_cancel_window_minutes,
+        shopCancelledAt: iso(c.row.shop_cancelled_at),
         reason: c.reason ? REASON[c.reason] : null,
         refusal: c.refusal,
         // Whether the client's cancel time (if any) was inside the agreed window and after the grace period, whatever happened since.
@@ -405,11 +501,14 @@ describe('test/fixtures/fee-cases.json (read by the Kit)', () => {
         createdAt: iso(c.row.created_at),
         customerCancelledAt: iso(c.row.customer_cancelled_at),
         lateCancelWindowMinutes: c.row.late_cancel_window_minutes,
+        shopCancelledAt: iso(c.row.shop_cancelled_at),
         now: iso(c.now),
         reason: c.reason ? REASON[c.reason] : null,
         refusal: c.refusal,
       })),
       notEnded: NOT_ENDED_MESSAGE,
+      lateCancelNotEnded: LATE_CANCEL_NOT_ENDED_MESSAGE,
+      shopCancelled: SHOP_CANCELLED_MESSAGE,
       deadline: { days: FEE_DEADLINE_DAYS, message: FEE_DEADLINE_MESSAGE },
       graceMinutes: LATE_CANCEL_GRACE_MINUTES,
       nothingCharged: { refusal: CASES[0]!.refusal, message: nothingCharged(CASES[0]!.refusal ?? '') },

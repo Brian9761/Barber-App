@@ -9,6 +9,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "Mark the appointment as a no-show first.",
       "cancelledLate": false
@@ -22,6 +23,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The appointment is marked completed, so there's no fee to charge.",
       "cancelledLate": false
@@ -35,6 +37,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": "noShow",
       "refusal": null,
       "cancelledLate": false
@@ -48,6 +51,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": null,
+      "shopCancelledAt": null,
       "reason": "noShow",
       "refusal": null,
       "cancelledLate": false
@@ -61,6 +65,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:30:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": "lateCancel",
       "refusal": null,
       "cancelledLate": true
@@ -74,6 +79,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:59:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": "lateCancel",
       "refusal": null,
       "cancelledLate": true
@@ -87,6 +93,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:01:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": "lateCancel",
       "refusal": null,
       "cancelledLate": true
@@ -100,6 +107,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:00:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled at least 1 hour before, so there's no fee.",
       "cancelledLate": false
@@ -113,6 +121,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:00:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled at least 1 hour before, so there's no fee.",
       "cancelledLate": false
@@ -126,6 +135,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:00:01Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": "lateCancel",
       "refusal": null,
       "cancelledLate": true
@@ -139,6 +149,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T16:00:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled at least 1 hour before, so there's no fee.",
       "cancelledLate": false
@@ -152,6 +163,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T16:00:00Z",
       "lateCancelWindowMinutes": 180,
+      "shopCancelledAt": null,
       "reason": "lateCancel",
       "refusal": null,
       "cancelledLate": true
@@ -165,6 +177,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:15:00Z",
       "lateCancelWindowMinutes": 30,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled at least 30 minutes before, so there's no fee.",
       "cancelledLate": false
@@ -178,6 +191,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T16:30:00Z",
       "lateCancelWindowMinutes": 90,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled at least 90 minutes before, so there's no fee.",
       "cancelledLate": false
@@ -191,6 +205,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:55:00Z",
       "lateCancelWindowMinutes": null,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled this booking in the app, so there's no fee.",
       "cancelledLate": false
@@ -204,6 +219,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:50:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled this booking in the app, so there's no fee.",
       "cancelledLate": true
@@ -217,6 +233,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:50:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled this booking in the app, so there's no fee.",
       "cancelledLate": true
@@ -230,6 +247,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T08:00:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled this booking in the app, so there's no fee.",
       "cancelledLate": false
@@ -243,6 +261,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The shop cancelled this booking, so there's no fee.",
       "cancelledLate": false
@@ -256,6 +275,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:50:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The shop cancelled this booking, so there's no fee.",
       "cancelledLate": true
@@ -269,6 +289,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled this booking in the app, so there's no fee.",
       "cancelledLate": false
@@ -282,6 +303,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:55:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled this booking in the app, so there's no fee.",
       "cancelledLate": true
@@ -295,6 +317,7 @@
       "createdAt": "2026-11-03T17:30:00Z",
       "customerCancelledAt": "2026-11-03T17:44:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled within 15 minutes of booking, so there's no fee.",
       "cancelledLate": false
@@ -308,6 +331,7 @@
       "createdAt": "2026-11-03T17:30:00Z",
       "customerCancelledAt": "2026-11-03T17:45:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled within 15 minutes of booking, so there's no fee.",
       "cancelledLate": false
@@ -321,6 +345,7 @@
       "createdAt": "2026-11-03T17:30:00Z",
       "customerCancelledAt": "2026-11-03T17:46:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": "lateCancel",
       "refusal": null,
       "cancelledLate": true
@@ -334,6 +359,7 @@
       "createdAt": "2026-11-02T18:00:00Z",
       "customerCancelledAt": "2026-11-02T18:16:00Z",
       "lateCancelWindowMinutes": 2880,
+      "shopCancelledAt": null,
       "reason": "lateCancel",
       "refusal": null,
       "cancelledLate": true
@@ -347,6 +373,7 @@
       "createdAt": "2026-11-03T16:55:00Z",
       "customerCancelledAt": "2026-11-03T17:05:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled within 15 minutes of booking, so there's no fee.",
       "cancelledLate": false
@@ -360,8 +387,93 @@
       "createdAt": "2026-11-03T17:30:00Z",
       "customerCancelledAt": "2026-11-03T17:35:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "reason": null,
       "refusal": "The client cancelled this booking in the app, so there's no fee.",
+      "cancelledLate": false
+    },
+    {
+      "name": "cancelled by the shop, kept as such",
+      "status": "cancelled",
+      "cancelledBy": "shop",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee.",
+      "cancelledLate": false
+    },
+    {
+      "name": "cancelled by the shop, then reopened",
+      "status": "booked",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee.",
+      "cancelledLate": false
+    },
+    {
+      "name": "cancelled by the shop, reopened, then marked a no-show",
+      "status": "noShow",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee.",
+      "cancelledLate": false
+    },
+    {
+      "name": "cancelled by the shop, reopened, then cancelled late by the client",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee.",
+      "cancelledLate": true
+    },
+    {
+      "name": "cancelled by the shop, reopened, then cancelled in time by the client",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T16:00:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee.",
+      "cancelledLate": false
+    },
+    {
+      "name": "cancelled by the shop, reopened, then completed",
+      "status": "completed",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee.",
       "cancelledLate": false
     }
   ],
@@ -375,6 +487,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-03T18:44:00Z",
       "reason": null,
       "refusal": "The appointment hasn't ended yet, so it can't be a no-show."
@@ -388,6 +501,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-03T18:00:00Z",
       "reason": null,
       "refusal": "The appointment hasn't ended yet, so it can't be a no-show."
@@ -401,6 +515,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-03T18:45:00Z",
       "reason": "noShow",
       "refusal": null
@@ -414,6 +529,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-03T18:46:00Z",
       "reason": "noShow",
       "refusal": null
@@ -427,6 +543,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T17:59:00Z",
       "reason": "noShow",
       "refusal": null
@@ -440,6 +557,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T18:00:00Z",
       "reason": "noShow",
       "refusal": null
@@ -453,6 +571,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T18:01:00Z",
       "reason": null,
       "refusal": "It's more than 7 days after the appointment, so the fee can't be charged."
@@ -466,7 +585,64 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:30:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-03T17:31:00Z",
+      "reason": null,
+      "refusal": "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time."
+    },
+    {
+      "name": "a late cancellation, right at the start",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
+      "now": "2026-11-03T18:00:00Z",
+      "reason": null,
+      "refusal": "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time."
+    },
+    {
+      "name": "a late cancellation, 1 minute before the end",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
+      "now": "2026-11-03T18:44:00Z",
+      "reason": null,
+      "refusal": "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time."
+    },
+    {
+      "name": "a late cancellation, at the end",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
+      "now": "2026-11-03T18:45:00Z",
+      "reason": "lateCancel",
+      "refusal": null
+    },
+    {
+      "name": "a late cancellation, 1 minute after the end",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
+      "now": "2026-11-03T18:46:00Z",
       "reason": "lateCancel",
       "refusal": null
     },
@@ -479,6 +655,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:30:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T17:59:00Z",
       "reason": "lateCancel",
       "refusal": null
@@ -492,6 +669,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": "2026-11-03T17:30:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T18:01:00Z",
       "reason": null,
       "refusal": "It's more than 7 days after the appointment, so the fee can't be charged."
@@ -505,6 +683,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-03T18:46:00Z",
       "reason": null,
       "refusal": "Mark the appointment as a no-show first."
@@ -518,6 +697,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T18:01:00Z",
       "reason": null,
       "refusal": "It's more than 7 days after the appointment, so the fee can't be charged."
@@ -531,6 +711,7 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T18:01:00Z",
       "reason": null,
       "refusal": "The shop cancelled this booking, so there's no fee."
@@ -544,12 +725,13 @@
       "createdAt": "2026-11-01T18:00:00Z",
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-10T18:01:00Z",
       "reason": null,
       "refusal": "The appointment is marked completed, so there's no fee to charge."
     },
     {
-      "name": "booked inside the window, cancelled 16 minutes later, after the start",
+      "name": "booked inside the window, cancelled 16 minutes later, after the end",
       "status": "cancelled",
       "cancelledBy": "customer",
       "start": "2026-11-03T18:00:00Z",
@@ -557,12 +739,71 @@
       "createdAt": "2026-11-03T17:30:00Z",
       "customerCancelledAt": "2026-11-03T17:46:00Z",
       "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
       "now": "2026-11-03T18:50:00Z",
       "reason": "lateCancel",
       "refusal": null
+    },
+    {
+      "name": "booked inside the window, cancelled 16 minutes later, before the end",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-03T17:30:00Z",
+      "customerCancelledAt": "2026-11-03T17:46:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": null,
+      "now": "2026-11-03T18:05:00Z",
+      "reason": null,
+      "refusal": "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time."
+    },
+    {
+      "name": "cancelled by the shop, reopened, marked a no-show, after the end",
+      "status": "noShow",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "now": "2026-11-03T18:50:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee."
+    },
+    {
+      "name": "cancelled by the shop, reopened, cancelled late by the client, after the end",
+      "status": "cancelled",
+      "cancelledBy": "customer",
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": "2026-11-03T17:30:00Z",
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "now": "2026-11-03T18:50:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee."
+    },
+    {
+      "name": "cancelled by the shop, reopened, after the deadline",
+      "status": "booked",
+      "cancelledBy": null,
+      "start": "2026-11-03T18:00:00Z",
+      "end": "2026-11-03T18:45:00Z",
+      "createdAt": "2026-11-01T18:00:00Z",
+      "customerCancelledAt": null,
+      "lateCancelWindowMinutes": 60,
+      "shopCancelledAt": "2026-11-02T18:00:00Z",
+      "now": "2026-11-10T18:01:00Z",
+      "reason": null,
+      "refusal": "The shop cancelled this booking, so there's no fee."
     }
   ],
   "notEnded": "The appointment hasn't ended yet, so it can't be a no-show.",
+  "lateCancelNotEnded": "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time.",
+  "shopCancelled": "The shop cancelled this booking, so there's no fee.",
   "deadline": {
     "days": 7,
     "message": "It's more than 7 days after the appointment, so the fee can't be charged."

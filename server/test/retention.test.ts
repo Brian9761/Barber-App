@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
-import { anonymizeExpired, bookingNeedsCard, NAME_REMOVED, retentionCutoff, RETENTION_MONTHS } from '../src/retention.js';
+import { anonymizeExpired, bookingNeedsCard, detailsStillNeeded, NAME_REMOVED, retentionCutoff, RETENTION_MONTHS } from '../src/retention.js';
 import { RESPONSES } from './helpers/contract.js';
 import { CRON_SECRET, connectedShop, protectionOn, stripeError, useHarness } from './helpers/harness.js';
 import { seedWeek } from './helpers/week.js';
 
 // What the Privacy Policy promises about how long things are kept (src/retention.ts): clients'
-// details removed 12 months after the appointment (not while a fee is pending), names on sales and
-// card payments' descriptions after 12 months, receipt emails not kept, and saved cards deleted at
-// Stripe once they're due and no booking needs them, by the daily job or when the client removes one.
+// details removed 12 months after the appointment (a fee still pending holds them only until 14 days
+// after the start, never past the 12 months), names on sales and card payments' descriptions after 12
+// months, receipt emails not kept, and saved cards deleted at Stripe once they're due and no booking
+// needs them, by the daily job or when the client removes one.
 
 // Monday Nov 2 2026, 9:00 AM PST.
 const h = useHarness({ now: '2026-11-02T17:00:00Z' });
@@ -227,6 +228,7 @@ describe('a booking still needs its card…', () => {
     no_show_fee_cents: 3500,
     late_cancel_window_minutes: 60,
     customer_cancelled_at: null,
+    shop_cancelled_at: null as Date | null,
     no_show_fee_status: 'none' as const,
   };
   const at = (iso: string) => new Date(iso);
@@ -253,6 +255,22 @@ describe('a booking still needs its card…', () => {
     expect(bookingNeedsCard({ ...base, status: 'completed' }, at('2026-11-04T00:00:00Z'))).toBe(false);
     expect(bookingNeedsCard({ ...base, status: 'cancelled', cancelled_by: 'shop' }, at('2026-11-02T18:00:00Z'))).toBe(false);
     expect(bookingNeedsCard({ ...base, saved_card_id: null, no_show_fee_cents: null }, at('2026-11-02T17:00:00Z'))).toBe(false);
+  });
+
+  it('never once the shop cancelled it, even reopened since: it can’t be charged a fee any more', () => {
+    const shopCancelled = at('2026-11-02T18:00:00Z');
+    const reopened = { ...base, shop_cancelled_at: shopCancelled };
+    expect(bookingNeedsCard(base, at('2026-11-02T19:00:00Z')), 'booked, never cancelled by the shop').toBe(true);
+    expect(bookingNeedsCard(reopened, at('2026-11-02T19:00:00Z')), 'reopened, upcoming').toBe(false);
+    expect(bookingNeedsCard({ ...reopened, status: 'cancelled', cancelled_by: 'shop' }, at('2026-11-02T19:00:00Z')), 'cancelled by the shop').toBe(false);
+    const lateAfter = { ...reopened, status: 'cancelled' as const, cancelled_by: 'customer' as const, customer_cancelled_at: at('2026-11-03T17:30:00Z') };
+    expect(bookingNeedsCard(lateAfter, at('2026-11-04T17:00:00Z')), 'then cancelled late by the client').toBe(false);
+    expect(bookingNeedsCard({ ...reopened, status: 'no_show' }, at('2026-11-04T17:00:00Z')), 'a no-show marked by code from before the rule').toBe(false);
+    // A try already pending is still looked up at Stripe, on the card's own Customer, so it keeps the card a while.
+    expect(bookingNeedsCard({ ...reopened, status: 'no_show', no_show_fee_status: 'pending' }, at('2026-11-04T17:00:00Z'))).toBe(true);
+    // Upcoming, its details still are needed (the shop needs to know who's coming), only not its card.
+    expect(detailsStillNeeded(reopened, at('2026-11-02T19:00:00Z'))).toBe('upcoming');
+    expect(detailsStillNeeded({ ...reopened, status: 'cancelled', cancelled_by: 'shop' }, at('2026-11-02T19:00:00Z'))).toBeNull();
   });
 });
 
@@ -351,6 +369,18 @@ describe('DELETE /api/cards: the client removes their saved card', () => {
     expect((await h.call('POST', `/api/appointments/${cancelled.id}/cancel`, { headers: { 'x-manage-token': cancelled.manageToken } })).status).toBe(200);
     await setStatus(shop.id, 'cancelled');
     expect((await cron()).body.savedCards).toEqual({ deleted: 1, stillNeeded: 0, failed: 0 });
+  });
+
+  it('a booking the shop cancelled doesn’t need it, even once it’s reopened: deleted at once', async () => {
+    const token = await saveCard();
+    const booking = await book(token);
+    h.setNow('2026-11-02T18:00:00Z');
+    expect((await setStatus(booking.id, 'cancelled')).body.appointment.shopCancelledAt).toBe('2026-11-02T18:00:00Z');
+    expect((await setStatus(booking.id, 'booked')).body.appointment).toMatchObject({ status: 'booked', shopCancelledAt: '2026-11-02T18:00:00Z' });
+    // Upcoming and booked again, but it can't be charged a fee: the client's Remove card deletes the card now.
+    expect((await removeCard(token)).body.cardDeletion.status).toBe('deleted');
+    expect((await cardRow()).removed_at).not.toBeNull();
+    expect(stripeDeletes().map((c) => c.method)).toEqual(['paymentMethods.detach', 'customers.del']);
   });
 
   it('a pending fee keeps it past the 7 days while Stripe may still answer, but not for good', async () => {

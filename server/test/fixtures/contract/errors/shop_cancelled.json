@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "shop_cancelled",
+    "message": "The shop cancelled this booking, so it can't become a no-show."
+  }
+}

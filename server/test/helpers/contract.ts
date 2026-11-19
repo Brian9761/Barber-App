@@ -45,13 +45,15 @@ export const Appointment = z.strictObject({
 
 /**
  * The owner's view of an appointment: the client's view plus its checkout (live sale), when it was
- * first completed (never cleared), and what became of a charged fee's receipt.
+ * first completed and first cancelled by the shop (neither ever cleared), and what became of a
+ * charged fee's receipt.
  */
 export const OwnerAppointment = Appointment.extend({
   // The fee as the shop sees it: with what became of its receipt once it's charged (migrations/009).
   noShowFee: Appointment.shape.noShowFee.unwrap().extend({ receipt: z.enum(['sent', 'noEmail', 'failed']).nullable() }).nullable(),
   sale: z.strictObject({ id, totalCents: int.min(0).max(1_000_000), method: z.enum(['card', 'cash', 'other']) }).nullable(),
   completedAt: instant.nullable(),
+  shopCancelledAt: instant.nullable(),
 });
 
 export const Slot = z.strictObject({ start: instant, barberIds: z.array(id) });
@@ -253,6 +255,7 @@ export const ErrorBody = z.strictObject({
       'not_chargeable',
       'not_started',
       'already_completed',
+      'shop_cancelled',
       'late_cancel_fee',
       'not_checkoutable',
       'already_checked_out',

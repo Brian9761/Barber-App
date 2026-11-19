@@ -27,6 +27,7 @@
     "card": null,
     "noShowFee": null,
     "sale": null,
-    "completedAt": "2026-11-02T19:05:00Z"
+    "completedAt": "2026-11-02T19:05:00Z",
+    "shopCancelledAt": null
   }
 }

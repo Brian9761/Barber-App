@@ -32,7 +32,8 @@
         "totalCents": 9600,
         "method": "cash"
       },
-      "completedAt": "2026-11-02T19:05:00Z"
+      "completedAt": "2026-11-02T19:05:00Z",
+      "shopCancelledAt": null
     },
     {
       "id": "00000000-0000-4000-8000-000000000003",
@@ -62,7 +63,8 @@
       "card": null,
       "noShowFee": null,
       "sale": null,
-      "completedAt": null
+      "completedAt": null,
+      "shopCancelledAt": null
     }
   ]
 }

@@ -2,9 +2,11 @@ import type { AppointmentRow } from './serialize.js';
 
 // Which fee a protected booking can be charged, in one place: a no-show, or a
 // late cancellation (the client cancelled less than the agreed window before the
-// start). Both use the fee agreed at booking, and the owner decides each time.
-// The rules only read the booking's own terms (what the client agreed to), never
-// today's settings. No imports at run time, so serialize.ts can use it too.
+// start). Both use the fee agreed at booking, and the owner decides each time,
+// once the appointment's end has passed. A booking the shop cancelled is never
+// charged, even once it's reopened. The rules only read the booking's own terms
+// (what the client agreed to), never today's settings. No imports at run time, so
+// serialize.ts can use it too.
 
 /** What a fee is for. */
 export type FeeReason = 'no_show' | 'late_cancel';
@@ -56,6 +58,15 @@ const FEE_DEADLINE_MS = FEE_DEADLINE_DAYS * 24 * 60 * 60 * 1000;
 export const FEE_DEADLINE_MESSAGE = `It's more than ${FEE_DEADLINE_DAYS} days after the appointment, so the fee can't be charged.`;
 /** A no-show fee before the appointment's end: a client who comes before the end isn't a no-show. */
 export const NOT_ENDED_MESSAGE = "The appointment hasn't ended yet, so it can't be a no-show.";
+/**
+ * A late-cancellation fee before the appointment's end: until then another client may still take the
+ * time (a new booking, or a walk-in booked in the app), and then the Cancellation & No-Show Policy
+ * promises no late-cancellation fee (`timeTakenSince` in noshowfee.ts looks once the end has passed).
+ */
+export const LATE_CANCEL_NOT_ENDED_MESSAGE =
+  "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time.";
+/** A booking the shop cancelled, now or before it was reopened: the policy promises no fee then, ever. */
+export const SHOP_CANCELLED_MESSAGE = "The shop cancelled this booking, so there's no fee.";
 
 /** The last moment a fee for an appointment starting at `start` can be charged: 7 days (of 24 hours) later. */
 export function feeDeadline(start: Date): Date {
@@ -77,15 +88,17 @@ type FeeTerms = Pick<
   | 'no_show_fee_cents'
   | 'late_cancel_window_minutes'
   | 'customer_cancelled_at'
+  | 'shop_cancelled_at'
 >;
 
 /**
  * Whether the client cancelled in the app less than the agreed window before the
  * start (cancelling exactly that long before is still free), and more than 15
  * minutes after booking (the grace period: exactly 15 minutes after is still free).
- * Only for a booking whose agreed policy had late cancellations in it.
+ * Only for a booking whose agreed policy had late cancellations in it. Only about
+ * when the client cancelled: whether a fee can be charged for it is `feeCase`.
  */
-export function cancelledLate(row: FeeTerms): boolean {
+export function cancelledLate(row: Omit<FeeTerms, 'shop_cancelled_at'>): boolean {
   if (row.saved_card_id === null || row.no_show_fee_cents === null) return false;
   return cancelledInsideWindow(row) && !withinGrace(row);
 }
@@ -104,9 +117,12 @@ function withinGrace(row: Pick<FeeTerms, 'created_at' | 'customer_cancelled_at'>
 /**
  * Whether the client cancelling at `now` would be a late cancellation. The time that
  * counts is the first one the client cancelled (or asked to) before the start, if
- * there was one: a booking cancelled early and reopened by the shop stays free.
+ * there was one: a booking cancelled early and reopened by the shop stays free. So
+ * does one the shop cancelled before reopening it: the agreement ended when the shop
+ * cancelled, so there's no fee to warn of.
  */
 export function cancellingIsLate(row: FeeTerms, now: Date): boolean {
+  if (row.shop_cancelled_at !== null) return false;
   return cancelledLate({ ...row, customer_cancelled_at: row.customer_cancelled_at ?? now });
 }
 
@@ -146,14 +162,17 @@ export const COMPLETED_MESSAGE = "The appointment is marked completed, so there'
  * - a late cancellation: it ended cancelled by the client, who cancelled inside the agreed
  *   window, more than 15 minutes after booking;
  * - a no-show: it's marked a no-show and the client never cancelled (nor asked to).
- * Cancelling earlier than the window (or within 15 minutes of booking) is free, so is any
- * booking the shop cancelled, and a booking the client cancelled that the shop reopened is
- * never charged. The clock decides the rest (`feeCaseAt`): a no-show also needs its end to
- * have passed, and nothing can be charged more than 7 days after the start.
+ * Cancelling earlier than the window (or within 15 minutes of booking) is free, and a booking
+ * the client cancelled that the shop reopened is never charged. Nor, first of all, is any
+ * booking the shop cancelled, even once it's reopened (`shop_cancelled_at`, never cleared):
+ * the agreement ended then, so a no-show or a client's late cancellation after it isn't
+ * charged either. The clock decides the rest (`feeCaseAt`): either case needs the
+ * appointment's end to have passed, and nothing can be charged more than 7 days after the start.
  */
 export function feeCase(row: FeeTerms): FeeCase {
+  if (row.shop_cancelled_at !== null) return refuse(SHOP_CANCELLED_MESSAGE);
   if (row.status === 'cancelled') {
-    if (row.cancelled_by !== 'customer') return refuse("The shop cancelled this booking, so there's no fee.");
+    if (row.cancelled_by !== 'customer') return refuse(SHOP_CANCELLED_MESSAGE);
     if (cancelledLate(row)) return { reason: 'late_cancel', refusal: null };
     if (row.late_cancel_window_minutes !== null && row.customer_cancelled_at !== null) {
       if (cancelledInsideWindow(row)) {
@@ -173,14 +192,17 @@ export function feeCase(row: FeeTerms): FeeCase {
 /**
  * Which fee this booking (with a card on file) can be charged at `now`, or why not: `feeCase`,
  * then the clock. Nothing more than 7 days after the start (a booking still marked booked then
- * hears that too, rather than to mark a no-show first), and a no-show only once the appointment
- * has ended (a client who comes before the end isn't a no-show).
+ * hears that too, rather than to mark a no-show first), and either fee only once the appointment
+ * has ended (exactly at the end counts): a client who comes before the end isn't a no-show, and
+ * until the end another client may still take a late cancellation's time, which the charge then
+ * checks (`timeTakenSince` in noshowfee.ts), so every booking and walk-in booked in the app for
+ * that time is seen.
  */
 export function feeCaseAt(row: FeeTerms & Pick<AppointmentRow, 'end_at'>, now: Date): FeeCase {
   const found = feeCase(row);
   const tooLate = pastFeeDeadline(row.start_at, now);
   if (found.reason === null) return found.refusal === MARK_NO_SHOW_MESSAGE && tooLate ? refuse(FEE_DEADLINE_MESSAGE) : found;
   if (tooLate) return refuse(FEE_DEADLINE_MESSAGE);
-  if (found.reason === 'no_show' && row.end_at.getTime() > now.getTime()) return refuse(NOT_ENDED_MESSAGE);
+  if (row.end_at.getTime() > now.getTime()) return refuse(found.reason === 'no_show' ? NOT_ENDED_MESSAGE : LATE_CANCEL_NOT_ENDED_MESSAGE);
   return found;
 }

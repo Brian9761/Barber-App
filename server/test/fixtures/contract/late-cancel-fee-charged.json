@@ -32,7 +32,7 @@
       "amountCents": 2500,
       "fullPrice": false,
       "status": "charged",
-      "chargedAt": "2026-11-03T20:32:00Z",
+      "chargedAt": "2026-11-03T21:47:00Z",
       "message": null,
       "customerCancelledAt": "2026-11-03T20:30:00Z",
       "lateCancelWindowMinutes": 60,
@@ -40,6 +40,7 @@
       "receipt": "sent"
     },
     "sale": null,
-    "completedAt": null
+    "completedAt": null,
+    "shopCancelledAt": null
   }
 }

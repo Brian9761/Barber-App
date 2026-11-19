@@ -38,8 +38,12 @@ import { UUID_RE } from './validation.js';
 // A client who cancelled in the app before the start (or asked to) is never
 // charged a no-show fee, even if the shop reopened the booking since; only a
 // cancellation inside the agreed late-cancellation window, which stayed
-// cancelled by the client, can be charged (as a late cancellation). That's the
-// policy they agreed to.
+// cancelled by the client, can be charged (as a late cancellation), and only once
+// the appointment's end has passed, as for a no-show: by then every booking and
+// walk-in booked in the app for that time is there to see, and a late
+// cancellation whose time another client took isn't charged (`timeTakenSince`).
+// A booking the shop cancelled is never charged, even once it's reopened
+// (`shop_cancelled_at`). That's the policy they agreed to.
 //
 // With Stripe Connect, the fee is charged on the account the card was saved on
 // (and looked up there), so a card saved before the shop connected another
@@ -426,9 +430,9 @@ async function settleUnsent(deps: Deps, id: string, attempt: number, refusal: Ap
 
 /**
  * What this booking (it has a card on file) can be charged for now, or why it can't be
- * (`feeCaseAt`): a no-show only once the appointment has ended, and nothing more than 7 days
- * after its start. A try already pending is still looked up after that (see `chargeNoShowFee`):
- * only a new request to Stripe is refused.
+ * (`feeCaseAt`): a no-show or a late cancellation only once the appointment has ended, and nothing
+ * more than 7 days after its start. A try already pending is still looked up after that (see
+ * `chargeNoShowFee`): only a new request to Stripe is refused.
  */
 function chargeCase(row: AppointmentRow, now: Date): { reason: FeeReason; refusal: null } | { reason: null; refusal: ApiError } {
   const found = feeCaseAt(row, now);
@@ -439,8 +443,9 @@ function chargeCase(row: AppointmentRow, now: Date): { reason: FeeReason; refusa
 /**
  * Whether someone else has this cancelled booking's time now: another booked or completed
  * appointment of the same barber that overlaps it. Then a late-cancellation fee isn't charged
- * (the policy's promise). A walk-in rung up without an appointment can't be seen here, which is
- * why the owner's confirmation reminds them of it.
+ * (the policy's promise). It's asked only once the appointment's end has passed (`feeCaseAt`), so
+ * every booking and walk-in booked in the app for that time is there by then. A walk-in rung up
+ * without an appointment can't be seen here, which is why the owner's confirmation reminds them of it.
  */
 export async function timeTakenSince(db: Queryable, row: Pick<AppointmentRow, 'id' | 'barber_id' | 'start_at' | 'end_at'>): Promise<boolean> {
   const { rows } = await db.query(
@@ -485,7 +490,8 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (row.no_show_fee_status === 'declined') throw notChargeable(DECLINED_AGAIN_MESSAGE);
     if (row.no_show_fee_status === 'needs_action') throw notChargeable(NEEDS_CLIENT_AGAIN_MESSAGE);
     let chargeable = chargeCase(row, now);
-    // A late cancellation whose time another client has now isn't charged (the policy's promise).
+    // A late cancellation whose time another client took isn't charged (the policy's promise). It's
+    // chargeable only once the appointment has ended, so every booking for that time is in by now.
     if (chargeable.reason === 'late_cancel' && (await timeTakenSince(tx, row))) {
       chargeable = { reason: null, refusal: notChargeable(TIME_TAKEN_MESSAGE) };
     }

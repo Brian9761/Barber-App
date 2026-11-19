@@ -60,6 +60,11 @@ export interface AppointmentRow {
    * booking with a card on file that was completed can't become a no-show, even after it's reopened.
    */
   completed_at: Date | null;
+  /**
+   * When the shop first cancelled it (migrations/010); never cleared, so a booking the shop cancelled
+   * can't be charged a fee, even after it's reopened (feecase.ts).
+   */
+  shop_cancelled_at: Date | null;
   /** When the client's details were removed, 12 months on or on request (migrations/008, retention.ts). */
   anonymized_at: Date | null;
   /** The appointment's live sale (migrations/006), copied from `sales`: all three set, or all null. */
@@ -151,13 +156,19 @@ export interface Appointment {
    * `patchOwnerAppointment`). Only the shop sees it.
    */
   completedAt: string | null;
+  /**
+   * When the shop first cancelled it, or null; never cleared, so a booking the shop cancelled can't be
+   * charged a fee, even after it's reopened (feecase.ts), nor marked a no-show (see
+   * `patchOwnerAppointment`). Only the shop sees it.
+   */
+  shopCancelledAt: string | null;
 }
 
 /**
  * What a client sees of their own appointment: everything but the shop's checkout, when it was first
- * completed, and what became of a fee's receipt.
+ * completed or cancelled by the shop, and what became of a fee's receipt.
  */
-export type CustomerAppointment = Omit<Appointment, 'sale' | 'completedAt' | 'noShowFee'> & {
+export type CustomerAppointment = Omit<Appointment, 'sale' | 'completedAt' | 'shopCancelledAt' | 'noShowFee'> & {
   noShowFee: Omit<NonNullable<Appointment['noShowFee']>, 'receipt'> | null;
 };
 
@@ -218,15 +229,16 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
         ? { id: row.sale_id, totalCents: row.sale_total_cents, method: row.sale_method }
         : null,
     completedAt: row.completed_at ? formatInstant(row.completed_at) : null,
+    shopCancelledAt: row.shop_cancelled_at ? formatInstant(row.shop_cancelled_at) : null,
   };
 }
 
 /**
  * The appointment as its client sees it (the customer endpoints): without the shop's checkout, when it
- * was first completed, or what became of a fee's receipt.
+ * was first completed or cancelled by the shop, or what became of a fee's receipt.
  */
 export function customerAppointmentJSON(row: AppointmentRow): CustomerAppointment {
-  const { sale: _sale, completedAt: _completedAt, ...appointment } = appointmentJSON(row);
+  const { sale: _sale, completedAt: _completedAt, shopCancelledAt: _shopCancelledAt, ...appointment } = appointmentJSON(row);
   // Replacing noShowFee keeps it where it was among the keys.
   if (!appointment.noShowFee) return { ...appointment, noShowFee: null };
   const { receipt: _receipt, ...fee } = appointment.noShowFee;

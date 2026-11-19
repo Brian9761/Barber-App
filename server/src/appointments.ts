@@ -437,6 +437,8 @@ const statusPatch = z.object({
 
 export const NO_SHOW_BEFORE_END_MESSAGE = 'You can mark a no-show once the appointment has ended.';
 export const COMPLETED_NO_SHOW_MESSAGE = "This appointment was marked completed, so it can't become a no-show.";
+/** A booking with a card on file the shop cancelled, now or before it was reopened: there's no fee, so no no-show either. */
+export const SHOP_CANCELLED_NO_SHOW_MESSAGE = "The shop cancelled this booking, so it can't become a no-show.";
 
 export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
   await requireOwner(ctx);
@@ -449,32 +451,42 @@ export async function patchOwnerAppointment(ctx: Context): Promise<Response> {
     // A booking with a card on file can be marked a no-show only once it has ended: a client who
     // comes before the end isn't a no-show (and a no-show is what can be charged). Once it was
     // marked completed (or checked out), it never becomes one, even after it's reopened: the
-    // client came. A checked-out appointment stays completed until its sale is voided (sales.ts).
+    // client came. Nor once the shop cancelled it, even after it's reopened: the agreement ended
+    // then, and the Cancellation & No-Show Policy promises no fee for a booking the shop cancels.
+    // `shop_cancelled_at` keeps the shop's first cancellation for good (one made by code from before
+    // it, still cancelled_by 'shop', is kept from its last change); a booking the client cancelled
+    // stays theirs. A checked-out appointment stays completed until its sale is voided (sales.ts).
     const { rows } = await ctx.deps.db.query<AppointmentRow>(
       `UPDATE appointments
           SET status = $2,
               cancelled_by = CASE WHEN $2 = 'cancelled' THEN COALESCE(cancelled_by, 'shop') ELSE NULL END,
               completed_at = CASE WHEN $2 = 'completed' THEN COALESCE(completed_at, $3) ELSE completed_at END,
+              shop_cancelled_at = COALESCE(shop_cancelled_at,
+                CASE WHEN status = 'cancelled' AND cancelled_by = 'shop' THEN updated_at
+                     WHEN $2 = 'cancelled' AND cancelled_by IS NULL THEN $3::timestamptz END),
               updated_at = CASE WHEN status = $2 THEN updated_at ELSE $3 END
         WHERE id = $1
           AND NOT ($2 = 'no_show' AND saved_card_id IS NOT NULL AND status <> 'no_show'
-                   AND (end_at > $3 OR status = 'completed' OR completed_at IS NOT NULL))
+                   AND (end_at > $3 OR status = 'completed' OR completed_at IS NOT NULL
+                        OR shop_cancelled_at IS NOT NULL OR (status = 'cancelled' AND cancelled_by = 'shop')))
           AND (sale_id IS NULL OR $2 = 'completed')
         RETURNING *`,
       [id, dbStatus, now],
     );
     const row = rows[0];
     if (!row) {
-      const { rows: found } = await ctx.deps.db.query<Pick<AppointmentRow, 'sale_id' | 'status' | 'completed_at'>>(
-        'SELECT sale_id, status, completed_at FROM appointments WHERE id = $1',
-        [id],
-      );
+      const { rows: found } = await ctx.deps.db.query<
+        Pick<AppointmentRow, 'sale_id' | 'status' | 'completed_at' | 'cancelled_by' | 'shop_cancelled_at'>
+      >('SELECT sale_id, status, completed_at, cancelled_by, shop_cancelled_at FROM appointments WHERE id = $1', [id]);
       const current = found[0];
       if (!current) throw notFound();
       if (current.sale_id !== null) {
         throw new ApiError('already_checked_out', 'This appointment was checked out. Void its sale first, then change it.');
       }
       if (current.status === 'completed' || current.completed_at !== null) throw new ApiError('already_completed', COMPLETED_NO_SHOW_MESSAGE);
+      if (current.shop_cancelled_at !== null || (current.status === 'cancelled' && current.cancelled_by === 'shop')) {
+        throw new ApiError('shop_cancelled', SHOP_CANCELLED_NO_SHOW_MESSAGE);
+      }
       // The code keeps the name it had when the rule was the start, so the apps' handling stays the same.
       throw new ApiError('not_started', NO_SHOW_BEFORE_END_MESSAGE);
     }

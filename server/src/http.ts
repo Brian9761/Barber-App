@@ -20,6 +20,8 @@ export const ERROR_STATUS = {
   not_started: 409,
   /** A booking with a card on file that was marked completed (or checked out) can't become a no-show. */
   already_completed: 409,
+  /** Nor one the shop cancelled, even after it's reopened (there's no fee for it). */
+  shop_cancelled: 409,
   /**
    * Cancelling now, inside the agreed late-cancellation window, may be charged: the message is the
    * warning to show the client, and they cancel again with `acceptLateCancelFee: true`.

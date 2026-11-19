@@ -231,7 +231,8 @@ describe('contract fixtures (API v1)', () => {
         body: { acceptLateCancelFee: true },
       }),
     );
-    h.advance(2);
+    // Once the 1 PM's end (1:45 PM) has passed, with no other client in that time, the owner charges it.
+    h.setNow('2026-11-03T21:47:00Z');
     check('late-cancel-fee-charged', await h.call('POST', `/api/owner/appointments/${lateBooking.body.appointment.id}/no-show-fee`, owner));
     check('payments-with-fees', await h.call('GET', '/api/owner/payments?date=2026-11-03', owner));
     // The client books Wednesday's 11 AM with the card too, then removes the card: that booking still needs it, so it waits.
@@ -379,6 +380,25 @@ describe('contract fixtures (API v1)', () => {
       owner: true,
       body: { status: 'noShow' },
     });
+    // The shop cancelled a booking with a card on file (say the barber was ill), then reopened it: it
+    // can't be charged a fee any more, so it can't become a no-show either, even after its end.
+    const shopCancelled = await h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': CARD_TOKEN },
+      body: {
+        offeringId: FLOW45,
+        start: '2026-11-10T19:00:00Z',
+        customer: { name: 'Fixture Client', phone: '4425550126' },
+        noShowPolicy: (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText,
+      },
+      ip: '203.0.113.10',
+    });
+    await h.call('PATCH', `/api/owner/appointments/${shopCancelled.body.appointment.id}`, { owner: true, body: { status: 'cancelled' } });
+    await h.call('PATCH', `/api/owner/appointments/${shopCancelled.body.appointment.id}`, { owner: true, body: { status: 'booked' } });
+    h.setNow('2026-11-10T20:00:00Z');
+    examples.shop_cancelled = await h.call('PATCH', `/api/owner/appointments/${shopCancelled.body.appointment.id}`, {
+      owner: true,
+      body: { status: 'noShow' },
+    });
     // The shop's own Stripe account and computer sign-in.
     examples.stripe_connect_off = await h.call('POST', '/api/owner/stripe/connect', { owner: true, body: { returnTo: 'app' } });
     await h.call('POST', '/api/owner/computer-codes', { owner: true });
@@ -420,6 +440,7 @@ describe('contract fixtures (API v1)', () => {
       not_chargeable: 409,
       not_started: 409,
       already_completed: 409,
+      shop_cancelled: 409,
       late_cancel_fee: 409,
       stripe_not_configured: 503,
       owner_not_configured: 503,

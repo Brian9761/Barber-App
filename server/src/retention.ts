@@ -36,8 +36,8 @@ export const RETENTION_BUDGET_MS = 20_000;
  * How long after the 7-day fee deadline a fee try still marked pending keeps the card and the
  * client's details. Stripe answers an off-session card charge at once, so a try still pending then
  * is one whose answer was lost and that nobody checked again (Check again still settles it any
- * time). After that it holds nothing: the Privacy Policy keeps them only while a fee "is still
- * being processed".
+ * time). After that it holds nothing. The Privacy Policy says details are removed 12 months after
+ * the appointment, and a pending fee never holds them that long: only until 14 days after its start.
  */
 export const PENDING_FEE_HOLD_DAYS = 7;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -114,8 +114,8 @@ export interface Anonymized {
 /**
  * The daily job's part: everything older than 12 months, in batches of 1,000, oldest first, until
  * nothing's left or the budget runs out (the next run carries on). Appointments count from their
- * end, and wait while a fee for them is pending; sales from when they were sold; payments from when
- * they were made.
+ * end (a fee still pending holds them only until 14 days after the start, so never past the 12
+ * months); sales from when they were sold; payments from when they were made.
  */
 export async function anonymizeExpired(db: Queryable, now: Date, budget: Budget): Promise<Anonymized> {
   const cutoff = retentionCutoff(now);
@@ -189,23 +189,26 @@ type NeedRow = Pick<
   | 'no_show_fee_cents'
   | 'late_cancel_window_minutes'
   | 'customer_cancelled_at'
+  | 'shop_cancelled_at'
   | 'no_show_fee_status'
 >;
 
 const NEED_COLUMNS =
-  'id, status, cancelled_by, start_at, end_at, created_at, saved_card_id, no_show_fee_cents, late_cancel_window_minutes, customer_cancelled_at, no_show_fee_status';
+  'id, status, cancelled_by, start_at, end_at, created_at, saved_card_id, no_show_fee_cents, late_cancel_window_minutes, customer_cancelled_at, shop_cancelled_at, no_show_fee_status';
 
 /**
  * Whether a booking still needs its card on file: a fee try for it is pending (for a couple of
  * weeks at most: `pendingFeeHolds`), or it can still be charged one before the 7-day deadline (it's
  * still booked, upcoming or not marked yet; it's a no-show; or the client cancelled late). A fee
- * already charged, one the bank turned down (the card isn't charged again), or a booking that can't
+ * already charged, one the bank turned down (the card isn't charged again), a booking the shop
+ * cancelled (even once it's reopened: it can't be charged a fee any more), or a booking that can't
  * be charged any more, doesn't.
  */
 export function bookingNeedsCard(row: NeedRow, now: Date): boolean {
   if (row.saved_card_id === null) return false;
   if (row.no_show_fee_status === 'pending') return pendingFeeHolds(row.start_at, now);
   if (row.no_show_fee_status === 'charged' || row.no_show_fee_status === 'declined' || row.no_show_fee_status === 'needs_action') return false;
+  if (row.shop_cancelled_at !== null) return false;
   if (pastFeeDeadline(row.start_at, now)) return false;
   if (row.status === 'booked') return true;
   return feeCase(row).reason !== null;

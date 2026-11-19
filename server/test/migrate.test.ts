@@ -29,6 +29,7 @@ describe('npm run migrate', () => {
       '007_payment_succeeded_at.sql',
       '008_retention.sql',
       '009_fee_receipt.sql',
+      '010_shop_cancelled.sql',
     ]);
   });
 
@@ -611,6 +612,56 @@ describe('npm run migrate', () => {
       await client.query('ROLLBACK').catch(() => undefined);
       await client.query('SET search_path TO public').catch(() => undefined);
       await client.query('DROP SCHEMA IF EXISTS before_009 CASCADE').catch(() => undefined);
+      client.release();
+    }
+  });
+
+  it('010 keeps when the shop first cancelled a booking (the ones it cancelled before count from their last change), and every row stays valid', async () => {
+    const { rows: columns } = await db.pool.query(
+      `SELECT data_type, is_nullable FROM information_schema.columns WHERE table_name = 'appointments' AND column_name = 'shop_cancelled_at'`,
+    );
+    expect(columns).toEqual([{ data_type: 'timestamp with time zone', is_nullable: 'YES' }]);
+    // 001–009 into a schema of its own, rows the way the server wrote them, then 010 on top.
+    const dir = mkdtempSync(join(tmpdir(), 'izzy-migrations-before-010-'));
+    const all = migrationFiles();
+    for (const f of all.filter((f) => f.name < '010')) writeFileSync(join(dir, f.name), f.sql);
+    const client = await db.pool.connect();
+    try {
+      await client.query('CREATE SCHEMA before_010');
+      await client.query('SET search_path TO before_010, public');
+      await migrate(client, pathToFileURL(`${dir}/`));
+      await client.query(`INSERT INTO barbers (id, name) VALUES ('flowxbori', 'Flowxbori')`);
+      const appointment = (id: number, status: string, cancelledBy: string | null, updated: string) =>
+        client.query(
+          `INSERT INTO appointments (id, offering_id, service_id, barber_id, service_name, barber_name, price_label, price_cents,
+             price_kind, start_at, end_at, status, cancelled_by, booked_by, customer_name, created_at, updated_at)
+           VALUES ($1, 'x', 'haircut', 'flowxbori', 'Haircut', 'Flowxbori', '$35', 3500, 'fixed', $2, $3, $4, $5, 'shop', 'Walk-in', $2, $6)`,
+          [`35000000-0000-4000-8000-00000000000${id}`, `2026-11-0${id}T18:00:00Z`, `2026-11-0${id}T18:45:00Z`, status, cancelledBy, updated],
+        );
+      await appointment(1, 'cancelled', 'shop', '2026-11-01T17:00:00Z');
+      await appointment(2, 'cancelled', 'customer', '2026-11-01T17:10:00Z');
+      await appointment(3, 'booked', null, '2026-11-01T17:20:00Z');
+      await appointment(4, 'completed', null, '2026-11-01T17:30:00Z');
+      const file = all.find((f) => f.name === '010_shop_cancelled.sql');
+      if (!file) throw new Error('010_shop_cancelled.sql is missing');
+      writeFileSync(join(dir, file.name), file.sql);
+      expect((await migrate(client, pathToFileURL(`${dir}/`))).applied).toEqual(['010_shop_cancelled.sql']);
+      // Only the booking the shop cancelled, from its last change; the client's cancellation stays theirs.
+      expect((await client.query('SELECT status, cancelled_by, shop_cancelled_at FROM appointments ORDER BY id')).rows).toEqual([
+        { status: 'cancelled', cancelled_by: 'shop', shop_cancelled_at: new Date('2026-11-01T17:00:00Z') },
+        { status: 'cancelled', cancelled_by: 'customer', shop_cancelled_at: null },
+        { status: 'booked', cancelled_by: null, shop_cancelled_at: null },
+        { status: 'completed', cancelled_by: null, shop_cancelled_at: null },
+      ]);
+      // The code already live still cancels and reopens bookings without it.
+      await client.query(`UPDATE appointments SET status = 'cancelled', cancelled_by = 'shop' WHERE id = '35000000-0000-4000-8000-000000000003'`);
+      await client.query(`UPDATE appointments SET status = 'booked', cancelled_by = NULL WHERE id = '35000000-0000-4000-8000-000000000001'`);
+      expect((await client.query(`SELECT shop_cancelled_at FROM appointments WHERE id = '35000000-0000-4000-8000-000000000001'`)).rows).toEqual([
+        { shop_cancelled_at: new Date('2026-11-01T17:00:00Z') },
+      ]);
+    } finally {
+      await client.query('SET search_path TO public').catch(() => undefined);
+      await client.query('DROP SCHEMA IF EXISTS before_010 CASCADE').catch(() => undefined);
       client.release();
     }
   });

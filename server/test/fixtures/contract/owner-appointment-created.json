@@ -27,6 +27,7 @@
     "card": null,
     "noShowFee": null,
     "sale": null,
-    "completedAt": null
+    "completedAt": null,
+    "shopCancelledAt": null
   }
 }

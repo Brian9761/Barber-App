@@ -23,7 +23,7 @@
       "email": null
     },
     "note": null,
-    "createdAt": "2026-11-03T20:32:00Z",
+    "createdAt": "2026-11-03T21:47:00Z",
     "card": {
       "brand": "visa",
       "last4": "4242"
@@ -40,6 +40,7 @@
       "receipt": "noEmail"
     },
     "sale": null,
-    "completedAt": null
+    "completedAt": null,
+    "shopCancelledAt": null
   }
 }
