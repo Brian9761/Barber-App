@@ -60,7 +60,8 @@ jobs:
 
       - name: Pick an iPhone simulator
         env:
-          # macos-15 tests on the newest iOS 18, the oldest iOS both apps support; macos-26 on the newest iOS.
+          # macos-15 tests on the newest iOS 18. The client app supports iOS 17 and the Business app iOS 18,
+          # but the CI images have no iOS 17 simulator, so iOS 18 is the oldest tested. macos-26: the newest iOS.
           IOS_MAJOR: ${{ startsWith(matrix.runner, 'macos-15') && '18' || '' }}
         run: |
           SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
@@ -270,7 +271,8 @@ jobs:
 
       - name: Pick an iPhone simulator
         env:
-          # macos-15 tests on the newest iOS 18, the oldest iOS both apps support; macos-26 on the newest iOS.
+          # macos-15 tests on the newest iOS 18. The client app supports iOS 17 and the Business app iOS 18,
+          # but the CI images have no iOS 17 simulator, so iOS 18 is the oldest tested. macos-26: the newest iOS.
           IOS_MAJOR: ${{ startsWith(matrix.runner, 'macos-15') && '18' || '' }}
         run: |
           SIMULATOR=$(xcrun simctl list devices available --json | python3 -c '
