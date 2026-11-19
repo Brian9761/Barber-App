@@ -165,17 +165,32 @@ time:
   a no-show."
 - **A late cancellation**: the client cancelled in the app less than the
   window before the start (1 hour to begin with), and more than 15
-  minutes after booking. Cancelling earlier, or within 15 minutes of
-  booking, is free. The shop cancelling is never charged, and neither is
+  minutes after booking. Like a no-show, it can be charged only once the
+  appointment has ended: until then another client may still take the
+  time, and the details say "The appointment hasn't ended yet. You can
+  charge the late-cancellation fee once it has, if no other client took
+  the time." Cancelling earlier, or within 15 minutes of booking, is
+  free. The shop cancelling is never charged, and neither is
   a booking the client cancelled that you reopened: once it's reopened,
   it can't be charged a no-show fee either (Reopen says so first). To
   keep a fee for a client who wants their time back, ask them to book
-  again in the app. If another client was booked into that time since
-  (a new booking, or a walk-in you booked in the app), there's no
+  again in the app. If another client was booked into that time (a new
+  booking, or a walk-in you booked in the app), there's no
   late-cancellation fee: the Cancellation & No-Show Policy promises it,
   so the details say so instead of offering the charge. A walk-in you
   only rang up at checkout can't be seen there, so the charge's question
   reminds you not to charge it then either.
+
+**A booking the shop cancelled is never charged**, even once it's
+reopened: the policy promises no fee once the shop cancels. The server
+keeps when the shop first cancelled it (`shopCancelledAt`), so a
+reopened one offers no **Mark no-show** ("The shop cancelled this
+booking, so it can't become a no-show.") and no fee ("The shop cancelled
+this booking, so there's no fee."), and **Reopen** says so first ("The
+shop cancelled this booking, so once it's reopened, it can't be charged
+a fee. To keep a fee, ask the client to book again in the app
+instead."). A client who cancels it late after that isn't warned of a
+fee either.
 
 A fee is never more than the booked service's price (the settings'
 example says so, with the cheap service a flat fee is capped for), and it
@@ -185,7 +200,7 @@ after the appointment, so the fee can't be charged."). Each booking keeps the fe
 booked with, so a change in Settings only affects new bookings. Turning
 protection off works the same way: new online bookings don't need a
 card, and bookings already made with one keep their fee, which you can
-still charge.
+still charge (a late cancellation once its appointment has ended).
 
 **Charging.** Open the appointment. The **Card on file** section shows the
 card, the fee agreed at booking and what it covers. **Charge no-show fee
@@ -387,10 +402,11 @@ and nothing is sent to Stripe or recorded.
   the 8 weeks before today (`FakeSampleHistory`), so Analytics has
   history; `-fake-empty` starts with nothing at all. `AnalyticsUITests`
   covers the Analytics tab. For no-show protection, `-fake-cards-on-file`
-  adds three clients who booked online with Visa 4242 for a $35 haircut
-  with Flowxbori: Kim Sample (10 AM, a no-show), Lee Sample (11:30 AM,
-  cancelled in the app at 10:50 AM: a late cancellation) and Nia Sample
-  (2:30 PM, not started). `-fake-no-show-declined` and
+  adds three clients who booked online with Visa 4242 for a $35 haircut:
+  Kim Sample (10 AM with Flowxbori, a no-show), Lee Sample (10 AM with
+  Julian, cancelled in the app at 9:20 AM: a late cancellation, which can
+  be charged since the haircut ended at 10:45 AM) and Nia Sample (2:30 PM
+  with Flowxbori, not started). `-fake-no-show-declined` and
   `-fake-no-show-needs-action` make Stripe say no to the next fee,
   `-fake-no-show-unreachable` keeps the next fee from reaching Stripe (it
   waits, and Check again then charges it), and `-fake-no-show-answer-lost`
