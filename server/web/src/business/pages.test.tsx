@@ -252,6 +252,38 @@ describe('Today', () => {
     expect(api.calls.find((c) => c.method === 'POST')).toMatchObject({ path: `/api/owner/appointments/${noShow.id}/no-show-fee` });
   });
 
+  it('offers Call and Text for the client’s number, named alike, beside each other, and neither without a number', async () => {
+    signedIn();
+    // A fee just charged: the shop texts or calls the client (owner checklist §6), as in the iPhone app.
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const walkIn = { ...ownerAppointments.appointments[0]!, id: '00000000-0000-4000-8000-0000000000aa', start: '2026-11-02T19:00:00Z', end: '2026-11-02T19:45:00Z' };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [{ ...feeCharged.appointment, ...when }, walkIn] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    const cards = await screen.findAllByTestId('appointment');
+    await userEvent.click(cards.find((card) => card.textContent?.includes('Fixture Client'))!);
+    const panel = screen.getByTestId('side-panel');
+    const call = within(panel).getByRole('link', { name: 'Call (442) 555-0123' });
+    const text = within(panel).getByRole('link', { name: 'Text (442) 555-0123' });
+    expect([call.getAttribute('href'), text.getAttribute('href')]).toEqual(['tel:+14425550123', 'sms:+14425550123']);
+    // Side by side in the Phone row, Text after Call; the number shows once, in Call.
+    expect(call.parentElement).toBe(text.parentElement);
+    expect(call.nextElementSibling).toBe(text);
+    expect(call.closest('.biz-row')?.querySelector('dt')?.textContent).toBe('Phone');
+    expect(text.textContent).toBe('Text (442) 555-0123');
+    expect(text.querySelector('.visually-hidden')?.textContent).toBe('(442) 555-0123');
+
+    // Booked at the shop with no number: neither link, and why.
+    await userEvent.click(within(panel).getByRole('button', { name: 'Close' }));
+    await userEvent.click(screen.getAllByTestId('appointment').find((card) => card.textContent?.includes('Andre'))!);
+    const other = screen.getByTestId('side-panel');
+    expect(within(other).queryByRole('link', { name: /^(Call|Text) / })).toBeNull();
+    expect(within(other).getByText('No phone number (booked at the shop).')).toBeTruthy();
+  });
+
   it('says when a charged fee’s receipt didn’t go out, and how to send one, under what was charged', async () => {
     signedIn();
     // The server's own answer for a fee whose card page kept no email (no receipt went out).

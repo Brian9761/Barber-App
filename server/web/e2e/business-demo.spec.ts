@@ -89,6 +89,15 @@ test('one button opens the demo; checking out, voiding, statuses and the no-show
   // Check out Ruben's $45 haircut with Carlos, and a $18 sample pomade, paid another way.
   await appointment(page, 'Ruben Sample').click();
   const panel = page.getByTestId('side-panel');
+  // Call and Text, side by side, named alike, as in the iPhone app.
+  const call = panel.getByRole('link', { name: 'Call (442) 555-0110' });
+  const text = panel.getByRole('link', { name: 'Text (442) 555-0110' });
+  await expect(call).toHaveAttribute('href', 'tel:+14425550110');
+  await expect(text).toHaveAttribute('href', 'sms:+14425550110');
+  await expect(text).toBeVisible();
+  const [callBox, textBox] = [await call.boundingBox(), await text.boundingBox()];
+  expect(Math.round(textBox!.height), 'as easy to tap as Call').toBeGreaterThanOrEqual(44);
+  expect(textBox!.x > callBox!.x + callBox!.width || textBox!.y >= callBox!.y + callBox!.height, 'beside or under Call, never over it').toBe(true);
   await expectAccessible(page, 'an appointment in the demo');
   await shot(page, testInfo, 'b03-appointment', { panel: true });
   await panel.getByRole('button', { name: 'Check out' }).click();

@@ -59,6 +59,12 @@ const PATHS = {
   external: (
     <path d="M8 6h10v10M18 6L6.5 17.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
   ),
+  message: (
+    <path
+      d="M12 3.5c-5 0-9 3.4-9 7.6 0 2.3 1.2 4.4 3.2 5.8-.2 1.4-.9 2.7-2 3.6 2.1 0 3.9-.7 5.2-1.7.8.2 1.7.3 2.6.3 5 0 9-3.4 9-7.6s-4-8-9-8z"
+      fill="currentColor"
+    />
+  ),
   menu: <path d="M4 8h16M4 16h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
   close: <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
   clock: (

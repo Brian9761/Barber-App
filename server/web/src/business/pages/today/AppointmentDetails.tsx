@@ -1,4 +1,4 @@
-// One appointment, as the owner app's details show it: the client (tap to call), what and
+// One appointment, as the owner app's details show it: the client (Call and Text), what and
 // when, the note, the card on file and its fee, the payment or sale, and what the owner
 // can do now: Check out (cash or other), Mark done, No-show (once it has ended with a card
 // on file, once it has started without), Cancel or Reopen as the app allows, and charge the
@@ -241,12 +241,23 @@ export function AppointmentDetails({
         <Row label="Client">{appointment.customer.name}</Row>
         <Row label="Phone">
           {phone ? (
-            <a className="biz-call" href={`tel:${phone}`}>
-              <Icon name="phone" className="biz-call__icon" />
-              <span>
-                Call <span className="nowrap">{displayPhone(phone)}</span>
-              </span>
-            </a>
+            // Call and Text, as in the iPhone app (a fee charged is followed by a text or a call to the
+            // client, owner checklist §6). Text opens Messages on a phone, or on a Mac that has it; it's
+            // named like Call, with the number, which it shows once, in Call.
+            <span className="biz-contact">
+              <a className="biz-call" href={`tel:${phone}`}>
+                <Icon name="phone" className="biz-call__icon" />
+                <span>
+                  Call <span className="nowrap">{displayPhone(phone)}</span>
+                </span>
+              </a>
+              <a className="biz-call" href={`sms:${phone}`}>
+                <Icon name="message" className="biz-call__icon" />
+                <span>
+                  Text <span className="visually-hidden">{displayPhone(phone)}</span>
+                </span>
+              </a>
+            </span>
           ) : (
             <span className="secondary">No phone number (booked at the shop).</span>
           )}

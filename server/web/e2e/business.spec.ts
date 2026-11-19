@@ -120,6 +120,8 @@ test('a code from the app signs in; a cash checkout with a product turns the app
   const panel = page.getByTestId('side-panel');
   await expect(panel.getByRole('heading', { name: client })).toBeVisible();
   await expect(panel.getByRole('link', { name: /Call \(760\) 555-0142/ })).toHaveAttribute('href', 'tel:+17605550142');
+  // Text beside it, named alike (a fee charged is followed by a text or a call, owner checklist §6).
+  await expect(panel.getByRole('link', { name: 'Text (760) 555-0142' })).toHaveAttribute('href', 'sms:+17605550142');
   await expectAccessible(page, 'an appointment');
   await shot(page, testInfo, 'b03-appointment', { panel: true });
   await panel.getByRole('button', { name: 'Check out' }).click();

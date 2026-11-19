@@ -999,6 +999,13 @@
   overflow-wrap: anywhere;
 }
 
+/* Call and Text, side by side, one under the other where there isn't room. */
+.biz-contact {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-5);
+}
+
 .biz-call {
   display: inline-flex;
   align-items: center;
