@@ -1736,6 +1736,49 @@ describe('a receipt for every fee', () => {
     expect((await feeRow(id)).no_show_fee_status).toBe('charged');
   });
 
+  it('Stripe’s answer quoting the address never reaches the log: what failed is logged without its message', async () => {
+    // Three no-shows on Tuesday: 10 AM, 12 PM and 1 PM.
+    const other = (await protectedBooking({ start: '2026-11-03T20:00:00Z' })).id;
+    const third = (await protectedBooking({ start: '2026-11-03T21:00:00Z' })).id;
+    const id = await noShow();
+    const realUpdate = h.stripe.paymentIntents.update;
+    h.stripe.paymentIntents.update = async () => {
+      h.stripe.paymentIntents.update = realUpdate;
+      throw stripeError(
+        'StripeInvalidRequestError',
+        { code: 'email_invalid', param: 'receipt_email', statusCode: 400, requestId: 'req_fixture_receipt' },
+        "Invalid email address: 'client@example.com'",
+      );
+    };
+    const charged = await charge(id);
+    expect(charged.body.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'failed' });
+    expect(JSON.stringify(h.logs)).not.toContain('client@example.com');
+    expect(h.logs.at(-1)).toEqual({
+      level: 'error',
+      message: 'Stripe send fee receipt failed',
+      details: { type: 'StripeInvalidRequestError', code: 'email_invalid', param: 'receipt_email', status: 400, requestId: 'req_fixture_receipt', message: undefined },
+    });
+    // Any other failure of that call keeps Stripe's message, which never carries what was sent.
+    h.setNow('2026-11-03T20:50:00Z');
+    await markNoShow(other);
+    h.stripe.paymentIntents.update = async () => {
+      h.stripe.paymentIntents.update = realUpdate;
+      throw stripeError('StripeAPIError', { statusCode: 500, requestId: 'req_fixture_500' }, 'An unknown error occurred');
+    };
+    expect((await charge(other)).body.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'failed' });
+    expect(h.logs.at(-1)).toMatchObject({ details: { type: 'StripeAPIError', status: 500, message: 'An unknown error occurred' } });
+    // Reading the card page (which carries no address) keeps Stripe's own words in the log.
+    h.setNow('2026-11-03T21:50:00Z');
+    await markNoShow(third);
+    const realRetrieve = h.stripe.checkout.sessions.retrieve;
+    h.stripe.checkout.sessions.retrieve = async () => {
+      h.stripe.checkout.sessions.retrieve = realRetrieve;
+      throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'session', statusCode: 404 }, "No such checkout.session: 'cs_test_x'");
+    };
+    expect((await charge(third)).body.appointment.noShowFee.receipt).toBe('failed');
+    expect(h.logs.at(-1)).toMatchObject({ message: 'Stripe send fee receipt failed', details: { code: 'resource_missing', message: "No such checkout.session: 'cs_test_x'" } });
+  });
+
   it('a card removed meanwhile but kept for the shop (on a Stripe account this server can’t use): no receipt, and the log says so', async () => {
     const id = await noShow();
     const realCreate = h.stripe.paymentIntents.create;

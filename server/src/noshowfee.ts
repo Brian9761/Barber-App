@@ -338,11 +338,16 @@ export async function emailFeeReceipt(
         deps.log.warn("A fee went through, but Stripe has no email for its receipt: send one from the Stripe Dashboard", { appointmentId, paymentIntentId });
         outcome = 'no_email';
       } else {
-        await shop.stripe.paymentIntents.update(
-          paymentIntentId,
-          { receipt_email: email },
-          requestOptions(shop, { idempotencyKey: `izzy-fee-receipt-${paymentIntentId}` }),
-        );
+        try {
+          await shop.stripe.paymentIntents.update(
+            paymentIntentId,
+            { receipt_email: email },
+            requestOptions(shop, { idempotencyKey: `izzy-fee-receipt-${paymentIntentId}` }),
+          );
+        } catch (error) {
+          // Stripe's answer to a request carrying the address can quote it: logged without it.
+          throw withoutAddress(error);
+        }
         outcome = 'sent';
       }
     }
@@ -352,6 +357,23 @@ export async function emailFeeReceipt(
     outcome = 'failed';
   }
   return recordReceipt(deps, appointmentId, outcome);
+}
+
+/**
+ * A Stripe error from a request that carried a client's email address, as it can be logged: its type,
+ * code, param, status and request id, and its message only when it isn't a request Stripe turned down
+ * (whose message may quote the address), as for a receipt at the counter (payments.ts).
+ */
+export function withoutAddress(error: unknown): StripeErrorLike {
+  const e = (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
+  return {
+    type: e.type,
+    code: e.code,
+    param: e.param,
+    statusCode: e.statusCode,
+    requestId: e.requestId,
+    message: e.type === 'StripeInvalidRequestError' ? undefined : e.message,
+  };
 }
 
 /**
