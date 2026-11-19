@@ -190,8 +190,10 @@ describe('booking, one question at a time', () => {
     const warning = await screen.findByTestId('fee-warning');
     expect(warning.textContent).toContain(policy35.warning!.title);
     expect(warning.textContent).toContain(policy35.warning!.message);
-    // The shop's words say "in the app": the website says its own cancelling counts the same.
-    expect(warning.textContent).toContain('Cancelling on this website, under My appointments, works the same as cancelling in the app.');
+    // The shop's words say "Cancelling online", for the website and the app alike: nothing is added about "the app".
+    expect(policy35.warning!.message).toContain('Cancelling online');
+    expect(warning.textContent).not.toContain('works the same as cancelling in the app');
+    expect(warning.textContent).not.toMatch(/in the app/);
     // The whole policy is a click away, in a new tab, so the booking stays where it is.
     const policyLink = within(warning).getByRole('link', { name: /^Read the Cancellation & No-Show Policy\s*\(opens in a new tab\)$/ });
     expect([policyLink.getAttribute('href'), policyLink.getAttribute('target')]).toEqual(['/cancellation-policy', '_blank']);

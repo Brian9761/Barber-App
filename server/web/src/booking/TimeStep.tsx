@@ -218,9 +218,8 @@ export function FeeWarning({ policy, start, now }: { policy: NoShowPolicy; start
   const inside = start ? lateCancelNotice(policy, new Date(start), now) : null;
   return (
     <Notice tone="warning" title={policy.warning.title} testId="fee-warning">
+      {/* The shop's own words ("Cancelling online ..."), for the website and the app alike. */}
       <p>{policy.warning.message}</p>
-      {/* The shop's words are written for the app too; the website's own cancelling is the same thing. */}
-      <p>Cancelling on this website, under My appointments, works the same as cancelling in the app.</p>
       {inside ? <p className="notice__strong">{inside}</p> : null}
       {/* The whole policy, in a new tab: the booking stays where it is. */}
       <p>

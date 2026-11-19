@@ -63,7 +63,9 @@ async function toReview(page: Page, testInfo: TestInfo, client: { name: string; 
   const notice = page.getByTestId('fee-warning');
   await expect(notice).toContainText('Late Cancellation & No-Show Fee');
   await expect(notice).toContainText('charged the full service price');
-  await expect(notice).toContainText('Cancelling on this website, under My appointments, works the same as cancelling in the app.');
+  // The shop's own words say "Cancelling online", for the website and the app alike: nothing is added about "the app".
+  await expect(notice).toContainText('Cancelling online');
+  await expect(notice).not.toContainText('in the app');
 
   const month = page.getByTestId('calendar-month');
   const thisMonth = await month.innerText();

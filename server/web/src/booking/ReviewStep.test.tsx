@@ -519,8 +519,9 @@ describe('the line under Book appointment', () => {
     expect(screen.getAllByText(/No payment now/).filter((el) => !el.closest('[data-testid="card-section"]'))).toHaveLength(1);
     const header = screen.getByRole('heading', { level: 1, name: 'Review and book' }).closest('.step-header') as HTMLElement;
     expect(within(header).getByRole('link', { name: '(442) 341-3053' }).getAttribute('href')).toBe('tel:+14423413053');
-    // The shop's words are written for the app too: the website says its own cancelling is the same.
-    expect(screen.getByTestId('fee-warning').textContent).toContain('Cancelling on this website, under My appointments, works the same as cancelling in the app.');
+    // The shop's own words ("Cancelling online ..."), for the website and the app alike: nothing is added about "the app".
+    expect(screen.getByTestId('fee-warning').textContent).toContain(policy35.warning!.message);
+    expect(screen.getByTestId('fee-warning').textContent).not.toMatch(/in the app/);
     // The whole policy, from the notice, in a new tab.
     expect(within(screen.getByTestId('fee-warning')).getByRole('link', { name: /^Read the Cancellation & No-Show Policy/ }).getAttribute('href')).toBe('/cancellation-policy');
   });
