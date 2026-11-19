@@ -124,6 +124,14 @@ extension IzzyAPI {
         /// Whether the server's answer had `completedAt` at all (the shop's view from a server that
         /// sends it), so it's written back exactly as it was read. Not part of the value.
         var completedAtField = FieldPresence(false)
+        /// When the shop first cancelled it (owner calls only), or `nil`. The server never clears it: a
+        /// booking the shop cancelled can't be charged a fee, even after it's reopened, so it can't be
+        /// marked a no-show either (`shopCancelledBefore`). Always `nil` in the client's own view, which
+        /// doesn't have it.
+        public var shopCancelledAt: Date?
+        /// Whether the server's answer had `shopCancelledAt` at all (the shop's view from a server that
+        /// sends it), so it's written back exactly as it was read. Not part of the value.
+        var shopCancelledAtField = FieldPresence(false)
 
         public init(
             id: String,
@@ -145,7 +153,8 @@ extension IzzyAPI {
             card: CardOnFile? = nil,
             noShowFee: NoShowFee? = nil,
             sale: AppointmentSale? = nil,
-            completedAt: Date? = nil
+            completedAt: Date? = nil,
+            shopCancelledAt: Date? = nil
         ) {
             self.id = id
             self.offeringId = offeringId
@@ -167,6 +176,7 @@ extension IzzyAPI {
             self.noShowFee = noShowFee
             self.sale = sale
             self.completedAt = completedAt
+            self.shopCancelledAt = shopCancelledAt
         }
 
         /// Hasn't finished yet: it's later, or happening right now.
@@ -188,7 +198,7 @@ extension IzzyAPI {
             case id, offeringId, serviceId, serviceName, barberId, barberName, start, end, durationMinutes, priceLabel
             case status, cancelledBy, payment, customer, note, createdAt
             case card, noShowFee
-            case sale, completedAt
+            case sale, completedAt, shopCancelledAt
         }
 
         public init(from decoder: Decoder) throws {
@@ -221,10 +231,13 @@ extension IzzyAPI {
                 // Only in the shop's view, from a server with sales.
                 sale: try container.decodeIfPresent(AppointmentSale.self, forKey: .sale),
                 // Only in the shop's view, from a server that says when it was first completed.
-                completedAt: try container.decodeIfPresent(Date.self, forKey: .completedAt)
+                completedAt: try container.decodeIfPresent(Date.self, forKey: .completedAt),
+                // Only in the shop's view, from a server that says when the shop first cancelled it.
+                shopCancelledAt: try container.decodeIfPresent(Date.self, forKey: .shopCancelledAt)
             )
             saleField = FieldPresence(container.contains(.sale))
             completedAtField = FieldPresence(container.contains(.completedAt))
+            shopCancelledAtField = FieldPresence(container.contains(.shopCancelledAt))
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -253,6 +266,9 @@ extension IzzyAPI {
             }
             if completedAt != nil || completedAtField.isPresent {
                 try container.encode(completedAt, forKey: .completedAt)
+            }
+            if shopCancelledAt != nil || shopCancelledAtField.isPresent {
+                try container.encode(shopCancelledAt, forKey: .shopCancelledAt)
             }
         }
     }
@@ -862,6 +878,8 @@ extension IzzyAPI {
         /// 409: a booking with a card on file that was marked completed (or checked out) can't
         /// become a no-show, even after it's reopened.
         public static let alreadyCompleted = "already_completed"
+        /// 409: nor one the shop cancelled, even after it's reopened: there's no fee for it.
+        public static let shopCancelled = "shop_cancelled"
         /// 409: cancelling now, inside the agreed late-cancellation window, may be charged the fee.
         /// The message is the warning to show; cancel again with `acceptLateCancelFee` to go ahead.
         public static let lateCancelFee = "late_cancel_fee"

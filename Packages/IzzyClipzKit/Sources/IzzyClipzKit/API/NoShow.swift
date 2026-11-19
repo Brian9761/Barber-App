@@ -2,7 +2,8 @@ import Foundation
 
 // No-show protection: a card saved before booking (Stripe Checkout in setup
 // mode), charged only if the client doesn't come or cancels late (less than the
-// agreed window before the start), and only when the owner decides to. Models
+// agreed window before the start), only once the appointment has ended, never
+// for a booking the shop cancelled, and only when the owner decides to. Models
 // field for field as the server writes them (server/README.md, "No-show
 // protection").
 
@@ -71,7 +72,8 @@ extension IzzyAPI {
     public enum NoShowFeeReason: String, Codable, CaseIterable, Hashable, Sendable {
         /// The client didn't come.
         case noShow
-        /// The client cancelled in the app less than the agreed window before the start.
+        /// The client cancelled in the app less than the agreed window before the start. Charged, like
+        /// a no-show, only once the appointment has ended.
         case lateCancel
 
         /// "No-show fee", "Late cancellation fee".
@@ -224,15 +226,17 @@ extension IzzyAPI {
 extension IzzyAPI.Appointment {
     /// Which fee the server lets the owner charge now, or why not, mirroring the server
     /// (`feeCaseAt` in `server/src/feecase.ts`, checked against `server/test/fixtures/fee-cases.json`):
-    /// a no-show only once the appointment has ended, a late cancellation (more than 15 minutes after
-    /// booking) right away, and nothing more than 7 days after the start. It doesn't look at whether
-    /// the fee is charged already: the server answers that as it is.
+    /// a no-show or a late cancellation (more than 15 minutes after booking) only once the appointment
+    /// has ended (until then another client may still take a late cancellation's time, and then
+    /// there's no fee), never for a booking the shop cancelled, even reopened since (the shop's
+    /// view's `shopCancelledAt`), and nothing more than 7 days after the start. It doesn't look at
+    /// whether the fee is charged already: the server answers that as it is.
     public func feeCase(at now: Date) -> IzzyAPI.NoShowRule.FeeCase {
         guard card != nil, let noShowFee else { return .refused(IzzyAPI.NoShowRule.noCardMessage) }
         return IzzyAPI.NoShowRule.feeCase(
             status: status, cancelledBy: cancelledBy, start: start, end: end, createdAt: createdAt,
             customerCancelledAt: noShowFee.customerCancelledAt, lateCancelWindowMinutes: noShowFee.lateCancelWindowMinutes,
-            at: now
+            shopCancelledAt: shopCancelledAt, at: now
         )
     }
 
@@ -246,13 +250,17 @@ extension IzzyAPI.Appointment {
 
     /// Why the shop can't mark this appointment a no-show now, as the server answers
     /// (`PATCH /api/owner/appointments/:id`), or `nil` when it can: a booking with a card on file
-    /// only once it has ended (409 `not_started`), and never once it's been completed, even if it
+    /// only once it has ended (409 `not_started`), never once it's been completed, even if it
     /// was reopened since (409 `already_completed`, "This appointment was marked completed, so it
-    /// can't become a no-show.": `completedBefore`, from the shop's view's `completedAt`). One
-    /// without a card can always be marked. Ignores the checkout rule (a checked-out appointment
-    /// needs its sale voided first).
+    /// can't become a no-show.": `completedBefore`, from the shop's view's `completedAt`), and never
+    /// once the shop cancelled it, even if it was reopened since (409 `shop_cancelled`, "The shop
+    /// cancelled this booking, so it can't become a no-show.": `shopCancelledBefore`). One without
+    /// a card can always be marked. Ignores the checkout rule (a checked-out appointment needs its
+    /// sale voided first).
     public func noShowMarkRefusal(at now: Date) -> String? {
-        IzzyAPI.NoShowRule.noShowMarkRefusal(status: status, hasCard: card != nil, end: end, now: now, completedBefore: completedAt != nil)
+        IzzyAPI.NoShowRule.noShowMarkRefusal(
+            status: status, hasCard: card != nil, end: end, now: now, completedBefore: completedAt != nil, shopCancelledBefore: shopCancelledBefore
+        )
     }
 
     /// A booking with a card on file that the shop marked completed (or checked out), now or before
@@ -263,17 +271,27 @@ extension IzzyAPI.Appointment {
         card != nil && completedAt != nil
     }
 
+    /// A booking with a card on file that the shop cancelled, now or before it was reopened: it can't
+    /// be charged a fee, nor marked a no-show, since the agreement ended when the shop cancelled (the
+    /// server's `shopCancelledAt`, which it never clears; a booking still cancelled by the shop counts
+    /// too, as the server reads one cancelled before it kept the time). Always `false` in the client's
+    /// own view of a reopened booking, where only the server's answer says so.
+    public var shopCancelledBefore: Bool {
+        card != nil && (shopCancelledAt != nil || (status == .cancelled && cancelledBy == .shop))
+    }
+
     /// Whether the shop can mark this appointment a no-show now (`noShowMarkRefusal(at:)` is `nil`).
     public func canBeMarkedNoShow(at now: Date) -> Bool {
         status != .noShow && noShowMarkRefusal(at: now) == nil
     }
 
     /// The fee the owner can act on now, or `nil`:
-    /// - "Charge no-show fee" or "Charge late cancellation fee": a no-show whose end has passed,
-    ///   or a late cancellation by the client, with a card on file and a fee that hasn't been tried
-    ///   yet, up to 7 days after the start. Once the bank turned it down (declined, or it needs the
-    ///   client to approve it), the card isn't charged again, as the server answers: the client
-    ///   pays another way (`NoShowRule.declinedAgainMessage`);
+    /// - "Charge no-show fee" or "Charge late cancellation fee": a no-show or a late cancellation by
+    ///   the client whose end has passed, with a card on file and a fee that hasn't been tried yet,
+    ///   up to 7 days after the start, unless the shop cancelled the booking (`shopCancelledBefore`).
+    ///   Once the bank turned it down (declined, or it needs the client to approve it), the card
+    ///   isn't charged again, as the server answers: the client pays another way
+    ///   (`NoShowRule.declinedAgainMessage`);
     /// - a `pending` fee (an earlier try's answer never came), always, whatever happened since, as
     ///   "Check again" (`isFeePending`): the server only asks Stripe how that try went, never
     ///   charges twice, and settles it as not charged ("Nothing was charged. …", a 409) when Stripe
@@ -307,12 +325,13 @@ extension IzzyAPI.Appointment {
     ///
     /// Like the server, the time that counts is the first time the client cancelled (or asked to),
     /// if there was one: a booking they cancelled early, which the shop then reopened, stays free.
-    /// Cancelling within 15 minutes of booking is free too (the grace period), so there's no warning then.
+    /// Cancelling within 15 minutes of booking is free too (the grace period), so there's no warning then,
+    /// and so is a booking the shop cancelled before reopening it (`shopCancelledAt`, in the shop's view).
     /// Work it out again when the client taps the button, not only when the dialog opens. The
     /// server decides by its own clock, though: when the phone's is off (or the minute turned while
     /// the dialog was open), cancelling throws `APIError.lateCancelFee` with this same warning.
     public func lateCancelWarning(at now: Date) -> String? {
-        guard isCancellable(at: now), card != nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
+        guard isCancellable(at: now), card != nil, shopCancelledAt == nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
               IzzyAPI.NoShowRule.cancelledLate(
                   start: start, customerCancelledAt: noShowFee.customerCancelledAt ?? now, lateCancelWindowMinutes: window,
                   createdAt: createdAt
@@ -324,10 +343,10 @@ extension IzzyAPI.Appointment {
     /// What cancelling late may cost, for the appointment's reminders (`AppointmentPlanner`): a
     /// card on file under a policy that charges late cancellations, and the client hasn't cancelled
     /// or asked to before (after that, the first time decides, whenever they cancel again, so the
-    /// reminders leave it out). `nil` otherwise. It carries when it was booked, so the 15 minutes
-    /// after booking count as free too.
+    /// reminders leave it out), nor the shop (`shopCancelledAt`: then there's no fee). `nil`
+    /// otherwise. It carries when it was booked, so the 15 minutes after booking count as free too.
     public var lateCancelTerms: LateCancelTerms? {
-        guard card != nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
+        guard card != nil, shopCancelledAt == nil, let noShowFee, let window = noShowFee.lateCancelWindowMinutes,
               noShowFee.customerCancelledAt == nil
         else { return nil }
         return LateCancelTerms(windowMinutes: window, feeLabel: noShowFee.amountLabel, bookedAt: createdAt)
@@ -889,6 +908,10 @@ extension IzzyAPI {
         public static let noCardMessage = "This booking has no card on file, so there's no fee to charge."
         /// A no-show fee before the appointment's end: a client who comes before the end isn't a no-show.
         public static let notEndedMessage = "The appointment hasn't ended yet, so it can't be a no-show."
+        /// A late-cancellation fee before the appointment's end: until then another client may still
+        /// take the time, and then there's no late-cancellation fee (the server checks once it has ended).
+        public static let lateCancelNotEndedMessage =
+            "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time."
         /// Kept for older callers: a no-show now needs the end to have passed (`notEndedMessage`).
         public static let notStartedMessage = notEndedMessage
         /// Once the 7 days after the start are over.
@@ -897,6 +920,9 @@ extension IzzyAPI {
         public static let noShowBeforeEndMessage = "You can mark a no-show once the appointment has ended."
         /// The server's 409 `already_completed` when a booking with a card on file that was completed is marked a no-show.
         public static let completedNoShowMessage = "This appointment was marked completed, so it can't become a no-show."
+        /// The server's 409 `shop_cancelled` when a booking with a card on file that the shop cancelled
+        /// (now, or before it was reopened) is marked a no-show.
+        public static let shopCancelledNoShowMessage = "The shop cancelled this booking, so it can't become a no-show."
         /// Why a completed booking can't be charged: the client came.
         public static let completedMessage = "The appointment is marked completed, so there's no fee to charge."
         /// The server's 409 when a fee the bank declined is charged again: the card isn't charged a
@@ -919,7 +945,8 @@ extension IzzyAPI {
             "Nothing was charged. " + refusal
         }
         static let cancelledInAppMessage = "The client cancelled this booking in the app, so there's no fee."
-        static let shopCancelledMessage = "The shop cancelled this booking, so there's no fee."
+        /// Why a booking the shop cancelled (now, or before it was reopened) can't be charged a fee.
+        public static let shopCancelledMessage = "The shop cancelled this booking, so there's no fee."
         static let markNoShowMessage = "Mark the appointment as a no-show first."
 
         /// Whether the client cancelled less than the agreed window before the start (exactly that
@@ -960,12 +987,16 @@ extension IzzyAPI {
         }
 
         /// Why the server refuses to mark a booking a no-show now (`PATCH …/:id` with `noShow`), or
-        /// `nil`: a booking with a card on file only once it has ended, and never once it's completed,
+        /// `nil`: a booking with a card on file only once it has ended, never once it's completed,
         /// or was completed before it was reopened (`completedBefore`: the shop's view's
-        /// `completedAt` is set), whatever the time, as the server checks it first.
-        public static func noShowMarkRefusal(status: AppointmentStatus, hasCard: Bool, end: Date, now: Date, completedBefore: Bool = false) -> String? {
+        /// `completedAt` is set), and never once the shop cancelled it, now or before it was reopened
+        /// (`shopCancelledBefore`), whatever the time, as the server checks those first.
+        public static func noShowMarkRefusal(
+            status: AppointmentStatus, hasCard: Bool, end: Date, now: Date, completedBefore: Bool = false, shopCancelledBefore: Bool = false
+        ) -> String? {
             guard hasCard, status != .noShow else { return nil }
             if status == .completed || completedBefore { return completedNoShowMessage }
+            if shopCancelledBefore { return shopCancelledNoShowMessage }
             return end > now ? noShowBeforeEndMessage : nil
         }
 
@@ -980,15 +1011,19 @@ extension IzzyAPI {
         /// The server's rule, ignoring the clock: a late cancellation (cancelled by the client
         /// inside the agreed window, and, given `createdAt`, more than 15 minutes after booking;
         /// still cancelled), or a no-show (marked, and the client never cancelled nor asked to).
-        /// A completed booking has no fee. The clock decides the rest (the overload with `at:`).
+        /// A completed booking has no fee, and first of all none does a booking the shop cancelled,
+        /// even reopened since (`shopCancelledAt`, which the server never clears). The clock decides
+        /// the rest (the overload with `at:`).
         public static func feeCase(
             status: AppointmentStatus,
             cancelledBy: CancelledBy?,
             start: Date,
             customerCancelledAt: Date?,
             lateCancelWindowMinutes: Int?,
-            createdAt: Date? = nil
+            createdAt: Date? = nil,
+            shopCancelledAt: Date? = nil
         ) -> FeeCase {
+            if shopCancelledAt != nil { return .refused(shopCancelledMessage) }
             if status == .cancelled {
                 guard cancelledBy == .customer else { return .refused(shopCancelledMessage) }
                 if cancelledLate(start: start, customerCancelledAt: customerCancelledAt, lateCancelWindowMinutes: lateCancelWindowMinutes, createdAt: createdAt) {
@@ -1010,7 +1045,9 @@ extension IzzyAPI {
 
         /// The server's rule at `now` (its `feeCaseAt`): `feeCase`, then the clock. Nothing more than
         /// 7 days after the start (a booking still marked booked then hears that too, rather than to
-        /// mark a no-show first), and a no-show only once the appointment has ended.
+        /// mark a no-show first), and either fee only once the appointment has ended (exactly at the
+        /// end counts): a client who comes before the end isn't a no-show, and until the end another
+        /// client may still take a late cancellation's time (`notEndedMessage`, `lateCancelNotEndedMessage`).
         public static func feeCase(
             status: AppointmentStatus,
             cancelledBy: CancelledBy?,
@@ -1019,11 +1056,13 @@ extension IzzyAPI {
             createdAt: Date,
             customerCancelledAt: Date?,
             lateCancelWindowMinutes: Int?,
+            shopCancelledAt: Date? = nil,
             at now: Date
         ) -> FeeCase {
             let found = feeCase(
                 status: status, cancelledBy: cancelledBy, start: start,
-                customerCancelledAt: customerCancelledAt, lateCancelWindowMinutes: lateCancelWindowMinutes, createdAt: createdAt
+                customerCancelledAt: customerCancelledAt, lateCancelWindowMinutes: lateCancelWindowMinutes, createdAt: createdAt,
+                shopCancelledAt: shopCancelledAt
             )
             let tooLate = isPastFeeDeadline(start: start, now: now)
             switch found {
@@ -1031,7 +1070,7 @@ extension IzzyAPI {
                 return refusal == markNoShowMessage && tooLate ? .refused(feeDeadlineMessage) : found
             case .chargeable(let reason):
                 if tooLate { return .refused(feeDeadlineMessage) }
-                if reason == .noShow, end > now { return .refused(notEndedMessage) }
+                if end > now { return .refused(reason == .noShow ? notEndedMessage : lateCancelNotEndedMessage) }
                 return found
             }
         }

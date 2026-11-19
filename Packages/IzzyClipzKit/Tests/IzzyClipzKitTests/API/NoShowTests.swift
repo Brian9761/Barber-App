@@ -34,7 +34,10 @@ final class NoShowModelTests: XCTestCase {
             IzzyAPI.NoShowFee(amountCents: 3500, fullPrice: true, customerCancelledAt: utc(2026, 11, 2, 22, 30), lateCancelWindowMinutes: 60, reason: .lateCancel)
         )
         XCTAssertEqual(owner[3].noShowFee?.title, "Late cancellation fee")
-        XCTAssertEqual(owner[3].chargeableFee(at: utc(2026, 11, 2, 22, 31)), .lateCancel)
+        // Charged once the 3 PM appointment has ended (3:45 PM), not right after the cancellation.
+        XCTAssertNil(owner[3].chargeableFee(at: utc(2026, 11, 2, 22, 31)))
+        XCTAssertEqual(owner[3].feeCase(at: utc(2026, 11, 2, 22, 31)), .refused(IzzyAPI.NoShowRule.lateCancelNotEndedMessage))
+        XCTAssertEqual(owner[3].chargeableFee(at: utc(2026, 11, 2, 23, 45)), .lateCancel)
 
         let declined = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try kitFixture("no-show-fee-declined.json")).appointment
         XCTAssertEqual(declined.noShowFee?.status, .declined)
@@ -68,6 +71,38 @@ final class NoShowModelTests: XCTestCase {
         var made = withoutIt
         made.completedAt = utc(2026, 11, 2, 19, 5)
         XCTAssertEqual(try encodeAPI(made)["completedAt"], .string("2026-11-02T19:05:00Z"))
+    }
+
+    func testTheShopsViewSaysWhenTheShopFirstCancelledABooking() throws {
+        // The server's own answers carry it in the shop's view, null when the shop never cancelled.
+        let created = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("owner-appointment-created.json")).appointment
+        XCTAssertNil(created.shopCancelledAt)
+        XCTAssertEqual(try encodeAPI(created)["shopCancelledAt"], .null, "the shop's view has it, null or not")
+        XCTAssertFalse(created.shopCancelledBefore)
+
+        // The client's own view, and a server from before it, don't have it, and don't get it back either.
+        let mine = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try kitFixture("appointment.json")).appointment
+        XCTAssertNil(mine.shopCancelledAt)
+        XCTAssertNil(try encodeAPI(mine)["shopCancelledAt"])
+        let older = try decoder.decode(IzzyAPI.AppointmentsResponse.self, from: try kitFixture("owner-appointments.json")).appointments
+        XCTAssertEqual(older.map(\.shopCancelledAt), [nil, nil, nil, nil])
+        XCTAssertNil(try encodeAPI(older[0])["shopCancelledAt"])
+
+        // Set, it reads and writes back as the server wrote it.
+        var members = try XCTUnwrap(JSONSerialization.jsonObject(with: try IzzyAPI.makeEncoder().encode(created)) as? [String: Any])
+        members["shopCancelledAt"] = "2026-11-02T17:00:00Z"
+        let reopened = try decoder.decode(IzzyAPI.Appointment.self, from: try JSONSerialization.data(withJSONObject: members))
+        XCTAssertEqual(reopened.shopCancelledAt, utc(2026, 11, 2, 17))
+        XCTAssertEqual(try encodeAPI(reopened)["shopCancelledAt"], .string("2026-11-02T17:00:00Z"))
+        // Whether the field was there isn't part of the value.
+        XCTAssertNotNil(members.removeValue(forKey: "shopCancelledAt"))
+        let withoutIt = try decoder.decode(IzzyAPI.Appointment.self, from: try JSONSerialization.data(withJSONObject: members))
+        XCTAssertNil(try encodeAPI(withoutIt)["shopCancelledAt"])
+        XCTAssertEqual(withoutIt, created)
+        var made = withoutIt
+        made.shopCancelledAt = utc(2026, 11, 2, 17)
+        XCTAssertEqual(try encodeAPI(made)["shopCancelledAt"], .string("2026-11-02T17:00:00Z"))
+        XCTAssertEqual(IzzyAPI.ErrorCode.shopCancelled, "shop_cancelled")
     }
 
     /// The shop's view says what became of a charged fee's receipt (owner checklist §3 item 19): sent,
@@ -207,10 +242,12 @@ final class NoShowModelTests: XCTestCase {
         appointment.status = .booked
         XCTAssertEqual(appointment.feeCase(at: deadline.addingTimeInterval(60)), .refused(IzzyAPI.NoShowRule.feeDeadlineMessage))
         XCTAssertEqual(appointment.feeCase(at: deadline.addingTimeInterval(-60)), .refused("Mark the appointment as a no-show first."))
-        // A late cancellation too.
+        // A late cancellation too (from the end of the appointment, 7 days after its start).
         appointment.status = .cancelled
         appointment.cancelledBy = .customer
         appointment.noShowFee?.customerCancelledAt = start.addingTimeInterval(-30 * 60)
+        XCTAssertNil(appointment.chargeableFee(at: appointment.end.addingTimeInterval(-60)), "before the end")
+        XCTAssertEqual(appointment.chargeableFee(at: appointment.end), .lateCancel, "at the end")
         XCTAssertEqual(appointment.chargeableFee(at: deadline.addingTimeInterval(-60)), .lateCancel)
         XCTAssertNil(appointment.chargeableFee(at: deadline.addingTimeInterval(60)))
         // A pending try is still checked (the server only asks Stripe how it went).
@@ -279,6 +316,90 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertNil(IzzyAPI.NoShowRule.noShowMarkRefusal(status: .noShow, hasCard: true, end: end, now: end, completedBefore: true))
     }
 
+    /// A booking with a card on file the shop cancelled (the shop's view's `shopCancelledAt`, or still
+    /// cancelled by the shop) never becomes a no-show, cancelled or reopened, before or after its end,
+    /// in the server's own words (409 `shop_cancelled`).
+    func testABookingTheShopCancelledNeverBecomesANoShow() throws {
+        var appointment = try decoder.decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
+        let end = appointment.end
+        XCTAssertFalse(appointment.shopCancelledBefore)
+        XCTAssertEqual(IzzyAPI.NoShowRule.shopCancelledNoShowMessage, "The shop cancelled this booking, so it can't become a no-show.")
+        // Cancelled by the shop: cancelled straight to a no-show is refused, whatever the time.
+        appointment.status = .cancelled
+        appointment.cancelledBy = .shop
+        XCTAssertTrue(appointment.shopCancelledBefore, "still cancelled by the shop")
+        appointment.shopCancelledAt = appointment.start.addingTimeInterval(-86_400)
+        for moment in [end.addingTimeInterval(-3_600), end, end.addingTimeInterval(60)] {
+            XCTAssertEqual(appointment.noShowMarkRefusal(at: moment), IzzyAPI.NoShowRule.shopCancelledNoShowMessage, "\(moment)")
+        }
+        // Reopened: still refused, before and after the end.
+        appointment.status = .booked
+        appointment.cancelledBy = nil
+        XCTAssertTrue(appointment.shopCancelledBefore)
+        for moment in [end.addingTimeInterval(-3_600), end, end.addingTimeInterval(60), end.addingTimeInterval(86_400)] {
+            XCTAssertEqual(appointment.noShowMarkRefusal(at: moment), IzzyAPI.NoShowRule.shopCancelledNoShowMessage, "\(moment)")
+            XCTAssertFalse(appointment.canBeMarkedNoShow(at: moment), "\(moment)")
+        }
+        // Completed before too: the server says that first.
+        appointment.completedAt = end
+        XCTAssertEqual(appointment.noShowMarkRefusal(at: end.addingTimeInterval(60)), IzzyAPI.NoShowRule.completedNoShowMessage)
+        appointment.completedAt = nil
+        // Without a card there's no fee, so it can still be marked, as before.
+        appointment.card = nil
+        XCTAssertFalse(appointment.shopCancelledBefore)
+        XCTAssertNil(appointment.noShowMarkRefusal(at: end.addingTimeInterval(60)))
+        // The rule on its own: the shop's cancellation comes before the end.
+        XCTAssertEqual(
+            IzzyAPI.NoShowRule.noShowMarkRefusal(status: .booked, hasCard: true, end: end, now: end.addingTimeInterval(-60), shopCancelledBefore: true),
+            IzzyAPI.NoShowRule.shopCancelledNoShowMessage
+        )
+        XCTAssertNil(IzzyAPI.NoShowRule.noShowMarkRefusal(status: .booked, hasCard: false, end: end, now: end, shopCancelledBefore: true))
+        XCTAssertNil(IzzyAPI.NoShowRule.noShowMarkRefusal(status: .noShow, hasCard: true, end: end, now: end, shopCancelledBefore: true))
+    }
+
+    /// A booking the shop cancelled is never charged a fee, even once it's reopened: not as a no-show,
+    /// not as the client's late cancellation after that, and the client isn't warned of a fee either.
+    func testABookingTheShopCancelledIsNeverCharged() throws {
+        var appointment = try decoder.decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
+        let start = appointment.start
+        let minutes = { (m: Double) in start.addingTimeInterval(m * 60) }
+        let shopMessage = "The shop cancelled this booking, so there's no fee."
+        XCTAssertEqual(IzzyAPI.NoShowRule.shopCancelledMessage, shopMessage)
+        appointment.shopCancelledAt = minutes(-24 * 60)
+        // Reopened, then no-show (as an older server might have let it be marked): no fee.
+        appointment.status = .noShow
+        XCTAssertEqual(appointment.feeCase(at: minutes(60)), .refused(shopMessage))
+        XCTAssertNil(appointment.chargeableFee(at: minutes(60)))
+        // Reopened, then cancelled late by the client: no warning, and no fee.
+        appointment.status = .booked
+        XCTAssertNil(appointment.lateCancelWarning(at: minutes(-30)))
+        XCTAssertNil(appointment.lateCancelTerms, "the reminders don't speak of a fee either")
+        appointment.status = .cancelled
+        appointment.cancelledBy = .customer
+        appointment.noShowFee?.customerCancelledAt = minutes(-30)
+        XCTAssertEqual(appointment.feeCase(at: minutes(60)), .refused(shopMessage))
+        XCTAssertNil(appointment.chargeableFee(at: minutes(60)))
+        XCTAssertTrue(
+            IzzyAPI.NoShowRule.cancelledLate(start: start, customerCancelledAt: minutes(-30), lateCancelWindowMinutes: 60, createdAt: appointment.createdAt),
+            "when the client cancelled is still what it was"
+        )
+        // Even after the deadline, the shop's cancellation is the reason.
+        XCTAssertEqual(appointment.feeCase(at: minutes(8 * 24 * 60)), .refused(shopMessage))
+        // A try already pending can still be checked (the server only asks Stripe how it went).
+        appointment.noShowFee?.status = .pending
+        appointment.noShowFee?.reason = .lateCancel
+        XCTAssertEqual(appointment.chargeableFee(at: minutes(60)), .lateCancel)
+        // The rule on its own.
+        XCTAssertEqual(
+            IzzyAPI.NoShowRule.feeCase(status: .noShow, cancelledBy: nil, start: start, customerCancelledAt: nil, lateCancelWindowMinutes: 60, shopCancelledAt: minutes(-60)),
+            .refused(shopMessage)
+        )
+        XCTAssertEqual(
+            IzzyAPI.NoShowRule.feeCase(status: .noShow, cancelledBy: nil, start: start, customerCancelledAt: nil, lateCancelWindowMinutes: 60),
+            .chargeable(.noShow)
+        )
+    }
+
     /// An earlier try with no final answer: "Check again" is always there, whatever happened since,
     /// because the server then only asks Stripe how that try went.
     func testAPendingFeeCanAlwaysBeCheckedAgain() throws {
@@ -325,18 +446,26 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertNil(appointment.chargeableFee(at: minutes(20)), "it started, but a client who comes before the end isn't a no-show")
         XCTAssertEqual(appointment.chargeableFee(at: minutes(46)), .noShow)
 
-        // The client cancels in the app 30 minutes before: a late cancellation, chargeable right away.
+        // The client cancels in the app 30 minutes before: a late cancellation, chargeable once the
+        // appointment has ended (until then another client may still take the time).
         appointment.status = .cancelled
         appointment.cancelledBy = .customer
         appointment.noShowFee?.customerCancelledAt = minutes(-30)
-        XCTAssertEqual(appointment.chargeableFee(at: minutes(-29)), .lateCancel)
-        XCTAssertTrue(appointment.canChargeNoShowFee(at: minutes(-29)))
+        let lateNotEnded = IzzyAPI.NoShowRule.FeeCase.refused(
+            "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time."
+        )
+        XCTAssertEqual(appointment.feeCase(at: minutes(-29)), lateNotEnded)
+        XCTAssertEqual(appointment.feeCase(at: minutes(44)), lateNotEnded)
+        XCTAssertNil(appointment.chargeableFee(at: minutes(-29)))
+        XCTAssertFalse(appointment.canChargeNoShowFee(at: minutes(-29)))
+        XCTAssertEqual(appointment.chargeableFee(at: minutes(45)), .lateCancel, "at the end")
+        XCTAssertTrue(appointment.canChargeNoShowFee(at: minutes(46)))
         appointment.noShowFee?.status = .charged
-        XCTAssertNil(appointment.chargeableFee(at: minutes(-29)), "charged once")
+        XCTAssertNil(appointment.chargeableFee(at: minutes(46)), "charged once")
         appointment.noShowFee?.status = .declined
-        XCTAssertNil(appointment.chargeableFee(at: minutes(-29)), "a declined card isn't charged again: the client pays another way")
+        XCTAssertNil(appointment.chargeableFee(at: minutes(46)), "a declined card isn't charged again: the client pays another way")
         appointment.noShowFee?.status = .needsAction
-        XCTAssertNil(appointment.chargeableFee(at: minutes(-29)), "nor one the bank wants the client to approve")
+        XCTAssertNil(appointment.chargeableFee(at: minutes(46)), "nor one the bank wants the client to approve")
         appointment.noShowFee?.status = .none
         // Exactly an hour before is free.
         appointment.noShowFee?.customerCancelledAt = minutes(-60)
@@ -386,6 +515,10 @@ final class NoShowModelTests: XCTestCase {
         appointment.status = .cancelled
         XCTAssertNil(appointment.lateCancelWarning(at: minutes(-10)), "already cancelled")
         appointment.status = .booked
+        appointment.shopCancelledAt = minutes(-24 * 60)
+        XCTAssertNil(appointment.lateCancelWarning(at: minutes(-10)), "the shop cancelled it before reopening it: no fee")
+        appointment.shopCancelledAt = nil
+        XCTAssertNotNil(appointment.lateCancelWarning(at: minutes(-10)))
         appointment.card = nil
         XCTAssertNil(appointment.lateCancelWarning(at: minutes(-10)), "no card on file")
     }
@@ -454,9 +587,11 @@ final class NoShowModelTests: XCTestCase {
         appointment.cancelledBy = .customer
         appointment.noShowFee?.customerCancelledAt = minutes(-21)
         XCTAssertEqual(appointment.feeCase(at: minutes(1)), .refused("The client cancelled within 15 minutes of booking, so there's no fee."))
-        XCTAssertNil(appointment.chargeableFee(at: minutes(1)))
+        XCTAssertNil(appointment.chargeableFee(at: minutes(46)))
         appointment.noShowFee?.customerCancelledAt = minutes(-19)
-        XCTAssertEqual(appointment.chargeableFee(at: minutes(1)), .lateCancel)
+        // Charged once the appointment has ended (it's 45 minutes long).
+        XCTAssertEqual(appointment.feeCase(at: minutes(1)), .refused(IzzyAPI.NoShowRule.lateCancelNotEndedMessage))
+        XCTAssertEqual(appointment.chargeableFee(at: minutes(46)), .lateCancel)
         // The rule itself, with and without the booking time.
         XCTAssertFalse(IzzyAPI.NoShowRule.cancelledLate(start: start, customerCancelledAt: minutes(-21), lateCancelWindowMinutes: 60, createdAt: minutes(-35)))
         XCTAssertTrue(IzzyAPI.NoShowRule.cancelledLate(start: start, customerCancelledAt: minutes(-19), lateCancelWindowMinutes: 60, createdAt: minutes(-35)))
@@ -686,6 +821,10 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertEqual(completed, .server(code: IzzyAPI.ErrorCode.alreadyCompleted, message: IzzyAPI.NoShowRule.completedNoShowMessage, status: 409))
         XCTAssertEqual(completed.userMessage, "This appointment was marked completed, so it can't become a no-show.")
         XCTAssertFalse(completed.isRetryable)
+        let shopCancelled = APIError(code: "shop_cancelled", message: "The shop cancelled this booking, so it can't become a no-show.", status: 409)
+        XCTAssertEqual(shopCancelled, .server(code: IzzyAPI.ErrorCode.shopCancelled, message: IzzyAPI.NoShowRule.shopCancelledNoShowMessage, status: 409))
+        XCTAssertEqual(shopCancelled.userMessage, "The shop cancelled this booking, so it can't become a no-show.")
+        XCTAssertFalse(shopCancelled.isRetryable)
 
         let warning = "Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price."
         let lateFee = APIError.fromResponse(status: 409, body: Data(#"{"error":{"code":"late_cancel_fee","message":"\#(warning)"}}"#.utf8))
@@ -805,6 +944,7 @@ final class NoShowRuleTests: XCTestCase {
             let createdAt: Date
             let customerCancelledAt: Date?
             let lateCancelWindowMinutes: Int?
+            let shopCancelledAt: Date?
             let reason: IzzyAPI.NoShowFeeReason?
             let refusal: String?
             let cancelledLate: Bool
@@ -820,6 +960,7 @@ final class NoShowRuleTests: XCTestCase {
             let createdAt: Date
             let customerCancelledAt: Date?
             let lateCancelWindowMinutes: Int?
+            let shopCancelledAt: Date?
             let now: Date
             let reason: IzzyAPI.NoShowFeeReason?
             let refusal: String?
@@ -845,6 +986,8 @@ final class NoShowRuleTests: XCTestCase {
         let cases: [Case]
         let clock: [ClockCase]
         let notEnded: String
+        let lateCancelNotEnded: String
+        let shopCancelled: String
         let deadline: Deadline
         let graceMinutes: Int
         let nothingCharged: NothingCharged
@@ -861,6 +1004,8 @@ final class NoShowRuleTests: XCTestCase {
         let document = try IzzyAPI.makeDecoder().decode(FeeCasesDocument.self, from: data)
         XCTAssertGreaterThan(document.cases.count, 10)
         XCTAssertEqual(document.notEnded, IzzyAPI.NoShowRule.notEndedMessage)
+        XCTAssertEqual(document.lateCancelNotEnded, IzzyAPI.NoShowRule.lateCancelNotEndedMessage)
+        XCTAssertEqual(document.shopCancelled, IzzyAPI.NoShowRule.shopCancelledMessage)
         XCTAssertEqual(document.deadline.days, IzzyAPI.NoShowRule.feeDeadlineDays)
         XCTAssertEqual(document.deadline.message, IzzyAPI.NoShowRule.feeDeadlineMessage)
         XCTAssertEqual(document.graceMinutes, IzzyAPI.NoShowRule.lateCancelGraceMinutes)
@@ -868,7 +1013,7 @@ final class NoShowRuleTests: XCTestCase {
         let template = try IzzyAPI.makeDecoder().decode(IzzyAPI.BookingConfirmation.self, from: try kitFixture("booking-confirmation.json")).appointment
         func appointment(
             status: IzzyAPI.AppointmentStatus, cancelledBy: IzzyAPI.CancelledBy?, start: Date, end: Date, createdAt: Date,
-            customerCancelledAt: Date?, lateCancelWindowMinutes: Int?
+            customerCancelledAt: Date?, lateCancelWindowMinutes: Int?, shopCancelledAt: Date?
         ) -> IzzyAPI.Appointment {
             var appointment = template
             appointment.status = status
@@ -878,6 +1023,7 @@ final class NoShowRuleTests: XCTestCase {
             appointment.createdAt = createdAt
             appointment.noShowFee?.customerCancelledAt = customerCancelledAt
             appointment.noShowFee?.lateCancelWindowMinutes = lateCancelWindowMinutes
+            appointment.shopCancelledAt = shopCancelledAt
             return appointment
         }
         for c in document.cases {
@@ -885,20 +1031,29 @@ final class NoShowRuleTests: XCTestCase {
             XCTAssertEqual(
                 IzzyAPI.NoShowRule.feeCase(
                     status: c.status, cancelledBy: c.cancelledBy, start: c.start,
-                    customerCancelledAt: c.customerCancelledAt, lateCancelWindowMinutes: c.lateCancelWindowMinutes, createdAt: c.createdAt
+                    customerCancelledAt: c.customerCancelledAt, lateCancelWindowMinutes: c.lateCancelWindowMinutes, createdAt: c.createdAt,
+                    shopCancelledAt: c.shopCancelledAt
                 ),
                 expected,
                 c.name
             )
-            // The same through an appointment, after its end (a no-show needs that).
+            // The same through an appointment, after its end (either fee needs that).
             let booking = appointment(
                 status: c.status, cancelledBy: c.cancelledBy, start: c.start, end: c.end, createdAt: c.createdAt,
-                customerCancelledAt: c.customerCancelledAt, lateCancelWindowMinutes: c.lateCancelWindowMinutes
+                customerCancelledAt: c.customerCancelledAt, lateCancelWindowMinutes: c.lateCancelWindowMinutes, shopCancelledAt: c.shopCancelledAt
             )
             XCTAssertEqual(booking.feeCase(at: c.end.addingTimeInterval(600)), expected, c.name)
             XCTAssertEqual(booking.chargeableFee(at: c.end.addingTimeInterval(600)), c.reason, c.name)
             if c.reason == .noShow {
                 XCTAssertEqual(booking.feeCase(at: c.end.addingTimeInterval(-60)), .refused(document.notEnded), c.name)
+            }
+            if c.reason == .lateCancel {
+                XCTAssertEqual(booking.feeCase(at: c.end.addingTimeInterval(-60)), .refused(document.lateCancelNotEnded), c.name)
+                XCTAssertNil(booking.chargeableFee(at: c.end.addingTimeInterval(-60)), c.name)
+            }
+            // A booking the shop cancelled can't become a no-show, as the server refuses it.
+            if c.shopCancelledAt != nil, c.status != .noShow, c.status != .completed {
+                XCTAssertEqual(booking.noShowMarkRefusal(at: c.end.addingTimeInterval(600)), IzzyAPI.NoShowRule.shopCancelledNoShowMessage, c.name)
             }
             XCTAssertEqual(
                 IzzyAPI.NoShowRule.cancelledLate(
@@ -924,7 +1079,7 @@ final class NoShowRuleTests: XCTestCase {
             let expected: IzzyAPI.NoShowRule.FeeCase = c.reason.map { .chargeable($0) } ?? .refused(c.refusal ?? "")
             let booking = appointment(
                 status: c.status, cancelledBy: c.cancelledBy, start: c.start, end: c.end, createdAt: c.createdAt,
-                customerCancelledAt: c.customerCancelledAt, lateCancelWindowMinutes: c.lateCancelWindowMinutes
+                customerCancelledAt: c.customerCancelledAt, lateCancelWindowMinutes: c.lateCancelWindowMinutes, shopCancelledAt: c.shopCancelledAt
             )
             XCTAssertEqual(booking.feeCase(at: c.now), expected, c.name)
             XCTAssertEqual(booking.chargeableFee(at: c.now), c.reason, c.name)
