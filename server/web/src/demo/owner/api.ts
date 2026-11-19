@@ -10,8 +10,10 @@
 // - Checking out, voiding, marking and fees follow the server's rules (server/src/sales.ts,
 //   appointments.ts, noshowfee.ts): a checked-out appointment can't be reopened, cancelled
 //   or marked a no-show until its sale is voided; a booking with a card on file becomes a
-//   no-show only once it has ended, and never once it was completed; a fee is charged
-//   within 7 days of the appointment, never more than the service's price, and not for a
+//   no-show only once it has ended, and never once it was completed or cancelled by the
+//   shop; a fee is charged only once the appointment has ended (a no-show or a late
+//   cancellation alike), within 7 days of the appointment, never more than the service's
+//   price, never for a booking the shop cancelled (even reopened), and not for a
 //   cancellation within 15 minutes of booking; an Idempotency-Key sent again gets the same
 //   sale back.
 // - Analytics are worked out from the demo's own data with the server's own definitions
@@ -36,6 +38,8 @@ import {
   NO_SHOW_BEFORE_END_MESSAGE,
   ruleFeeCase,
   ruleFeeCaseAt,
+  SHOP_CANCELLED_NO_SHOW_MESSAGE,
+  shopCancelledBefore,
   TIME_TAKEN_MESSAGE,
   timeTaken,
   type FeeReason,
@@ -157,11 +161,11 @@ function pause(ms: number, signal?: AbortSignal): Promise<void> {
 
 /**
  * An appointment as the API answers it: without what only the demo keeps, with when it was first
- * completed (null in what an older demo kept), and with its fee's reason now.
+ * completed and first cancelled by the shop (null in what an older demo kept), and with its fee's reason now.
  */
 function answered(appointment: DemoAppointment): OwnerAppointment {
   const { priceCents: _price, cardPayment: _card, ...kept } = appointment;
-  const rest: OwnerAppointment = { ...kept, completedAt: kept.completedAt ?? null };
+  const rest: OwnerAppointment = { ...kept, completedAt: kept.completedAt ?? null, shopCancelledAt: kept.shopCancelledAt ?? null };
   const fee = rest.noShowFee;
   if (!fee) return structuredClone(rest);
   let reason: FeeReason | null = fee.status !== 'none' && fee.reason ? fee.reason : null;
@@ -173,6 +177,7 @@ function answered(appointment: DemoAppointment): OwnerAppointment {
       fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null,
       fee.lateCancelWindowMinutes,
       new Date(rest.createdAt),
+      rest.shopCancelledAt ? new Date(rest.shopCancelledAt) : null,
     );
     reason = found.kind === 'chargeable' ? found.reason : null;
   }
@@ -465,10 +470,12 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       if (current.sale !== null && status !== 'completed') {
         throw fail('already_checked_out', 'This appointment was checked out. Void its sale first, then change it.', 409);
       }
-      // A booking with a card on file becomes a no-show only once it has ended, and never once it was
-      // completed (even reopened since): the client came.
+      // A booking with a card on file becomes a no-show only once it has ended, never once it was
+      // completed (even reopened since: the client came), and never once the shop cancelled it (even
+      // reopened since: there's no fee for it).
       if (status === 'noShow' && current.card && current.status !== 'noShow') {
         if (current.status === 'completed' || current.completedAt) throw fail('already_completed', COMPLETED_NO_SHOW_MESSAGE, 409);
+        if (shopCancelledBefore(current)) throw fail('shop_cancelled', SHOP_CANCELLED_NO_SHOW_MESSAGE, 409);
         if (Date.parse(current.end) > now.getTime()) throw fail('not_started', NO_SHOW_BEFORE_END_MESSAGE, 409);
       }
       const kept = keep(store, found.date);
@@ -489,6 +496,11 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
           throw fail('slot_taken', 'Another appointment is booked at that time now, so this one can’t be restored.', 409);
         }
       }
+      // When the shop first cancelled it, as the server keeps it: set once, kept when it's reopened (one
+      // still cancelled by the shop without it counts from now). A booking the client cancelled stays theirs.
+      const shopCancels = status === 'cancelled' && appointment.status !== 'cancelled';
+      const cancelledByTheShop = appointment.status === 'cancelled' && appointment.cancelledBy === 'shop';
+      if (shopCancels || cancelledByTheShop) appointment.shopCancelledAt ??= iso(now);
       appointment.status = status;
       appointment.cancelledBy = status === 'cancelled' ? (appointment.cancelledBy ?? 'shop') : null;
       if (status === 'completed') appointment.completedAt ??= iso(now);
@@ -509,8 +521,9 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       // Turned down by the bank: the card isn't charged again; the client pays another way (the server's answer).
       if (fee.status === 'declined') throw fail('not_chargeable', DECLINED_AGAIN_MESSAGE, 409);
       if (fee.status === 'needsAction') throw fail('not_chargeable', NEEDS_CLIENT_AGAIN_MESSAGE, 409);
-      // The server's rule at this moment: a no-show once it has ended, a late cancellation more than
-      // 15 minutes after booking, never a completed visit, and nothing after the 7 days.
+      // The server's rule at this moment: a no-show or a late cancellation (more than 15 minutes after
+      // booking) once it has ended, never a completed visit or a booking the shop cancelled, and
+      // nothing after the 7 days.
       const rule = ruleFeeCaseAt(feeTerms(found.appointment, fee), clock());
       if (rule.kind === 'refused') throw fail('not_chargeable', rule.message, 409);
       // A late cancellation whose time another client was booked into isn't charged (the policy's promise).

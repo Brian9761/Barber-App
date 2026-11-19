@@ -6,9 +6,10 @@
 // the server's own examples (server/test/fixtures/fee-cases.json) and its contract
 // fixtures, in the server's words.
 //
-// The rules the shop's Cancellation & No-Show Policy promises: a no-show only once the
-// appointment has ended (for a booking with a card on file), never for a booking that was
-// completed (even reopened since: the server's `completedAt` says so), a late cancellation
+// The rules the shop's Cancellation & No-Show Policy promises: a no-show or a late
+// cancellation only once the appointment has ended (for a booking with a card on file), never
+// for a booking that was completed (even reopened since: the server's `completedAt` says so)
+// or that the shop cancelled (even reopened since: its `shopCancelledAt`), a late cancellation
 // only more than 15 minutes after booking, and nothing charged more than 7 days after the
 // appointment.
 
@@ -37,6 +38,12 @@ export const NEEDS_CLIENT_AGAIN_MESSAGE =
   "The client's bank wants them to approve this charge, so the card isn't charged again. Ask them to pay the fee another way, for example at the shop.";
 /** A no-show fee before the appointment's end: a client who comes before the end isn't a no-show. */
 export const NOT_ENDED_MESSAGE = "The appointment hasn't ended yet, so it can't be a no-show.";
+/**
+ * A late-cancellation fee before the appointment's end: until then another client may still take the
+ * time, and then there's no fee (the server checks once it has ended).
+ */
+export const LATE_CANCEL_NOT_ENDED_MESSAGE =
+  "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time.";
 /** Once the 7 days after the start are over. */
 export const FEE_DEADLINE_MESSAGE = `It's more than ${FEE_DEADLINE_DAYS} days after the appointment, so the fee can't be charged.`;
 /** Why a completed booking can't be charged: the client came. */
@@ -45,9 +52,12 @@ export const COMPLETED_MESSAGE = "The appointment is marked completed, so there'
 export const NO_SHOW_BEFORE_END_MESSAGE = 'You can mark a no-show once the appointment has ended.';
 /** The server's 409 `already_completed`: a booking with a card on file that was completed, marked a no-show. */
 export const COMPLETED_NO_SHOW_MESSAGE = "This appointment was marked completed, so it can't become a no-show.";
+/** The server's 409 `shop_cancelled`: a booking with a card on file the shop cancelled (even reopened since), marked a no-show. */
+export const SHOP_CANCELLED_NO_SHOW_MESSAGE = "The shop cancelled this booking, so it can't become a no-show.";
+/** Why a booking the shop cancelled, now or before it was reopened, can't be charged a fee. */
+export const SHOP_CANCELLED_MESSAGE = "The shop cancelled this booking, so there's no fee.";
 const WITHIN_GRACE = `The client cancelled within ${LATE_CANCEL_GRACE_MINUTES} minutes of booking, so there's no fee.`;
 const CANCELLED_IN_APP = "The client cancelled this booking in the app, so there's no fee.";
-const SHOP_CANCELLED = "The shop cancelled this booking, so there's no fee.";
 const MARK_NO_SHOW = 'Mark the appointment as a no-show first.';
 
 /** "No-show fee", "Late cancellation fee". */
@@ -60,14 +70,16 @@ export function feeTitle(fee: NoShowFee): string {
   return reasonTitle(fee.reason);
 }
 
-/** What these rules read of an appointment. */
-type Booking = Pick<OwnerAppointment, 'status' | 'cancelledBy' | 'start' | 'end' | 'createdAt' | 'card' | 'noShowFee'>;
+/** What these rules read of an appointment (`shopCancelledAt` is missing from a server from before it). */
+type Booking = Pick<OwnerAppointment, 'status' | 'cancelledBy' | 'start' | 'end' | 'createdAt' | 'card' | 'noShowFee'> &
+  Partial<Pick<OwnerAppointment, 'shopCancelledAt'>>;
 
 /**
  * The server's rule, ignoring the clock (its `feeCase`, the Kit's `NoShowRule.feeCase`): a late
  * cancellation (cancelled by the client inside the agreed window and, given `createdAt`, more
  * than 15 minutes after booking; still cancelled), or a no-show (marked, and the client never
- * cancelled nor asked to). A completed booking has no fee.
+ * cancelled nor asked to). A completed booking has no fee, and first of all none does a booking
+ * the shop cancelled, even reopened since (`shopCancelledAt`, which the server never clears).
  */
 export function ruleFeeCase(
   status: OwnerAppointment['status'],
@@ -76,9 +88,11 @@ export function ruleFeeCase(
   customerCancelledAt: Date | null,
   lateCancelWindowMinutes: number | null,
   createdAt: Date | null = null,
+  shopCancelledAt: Date | null = null,
 ): FeeCase {
+  if (shopCancelledAt !== null) return { kind: 'refused', message: SHOP_CANCELLED_MESSAGE };
   if (status === 'cancelled') {
-    if (cancelledBy !== 'customer') return { kind: 'refused', message: SHOP_CANCELLED };
+    if (cancelledBy !== 'customer') return { kind: 'refused', message: SHOP_CANCELLED_MESSAGE };
     if (cancelledLate(start, customerCancelledAt, lateCancelWindowMinutes, createdAt)) return { kind: 'chargeable', reason: 'lateCancel' };
     if (lateCancelWindowMinutes !== null && customerCancelledAt !== null) {
       // Inside the window, but within 15 minutes of booking: the grace period.
@@ -114,19 +128,33 @@ export interface FeeTerms {
   createdAt: Date;
   customerCancelledAt: Date | null;
   lateCancelWindowMinutes: number | null;
+  /** When the shop first cancelled it (null if it never did): then there's never a fee. */
+  shopCancelledAt?: Date | null;
 }
 
 /**
  * The server's rule at `now` (its `feeCaseAt`): the rule above, then the clock. Nothing more than
  * 7 days after the start (a booking still marked booked then hears that too, rather than to mark a
- * no-show first), and a no-show only once the appointment has ended.
+ * no-show first), and either fee only once the appointment has ended (exactly at the end counts): a
+ * client who comes before the end isn't a no-show, and until the end another client may still take
+ * a late cancellation's time.
  */
 export function ruleFeeCaseAt(terms: FeeTerms, now: Date): FeeCase {
-  const found = ruleFeeCase(terms.status, terms.cancelledBy, terms.start, terms.customerCancelledAt, terms.lateCancelWindowMinutes, terms.createdAt);
+  const found = ruleFeeCase(
+    terms.status,
+    terms.cancelledBy,
+    terms.start,
+    terms.customerCancelledAt,
+    terms.lateCancelWindowMinutes,
+    terms.createdAt,
+    terms.shopCancelledAt ?? null,
+  );
   const tooLate = pastFeeDeadline(terms.start, now);
   if (found.kind === 'refused') return found.message === MARK_NO_SHOW && tooLate ? { kind: 'refused', message: FEE_DEADLINE_MESSAGE } : found;
   if (tooLate) return { kind: 'refused', message: FEE_DEADLINE_MESSAGE };
-  if (found.reason === 'noShow' && terms.end.getTime() > now.getTime()) return { kind: 'refused', message: NOT_ENDED_MESSAGE };
+  if (terms.end.getTime() > now.getTime()) {
+    return { kind: 'refused', message: found.reason === 'noShow' ? NOT_ENDED_MESSAGE : LATE_CANCEL_NOT_ENDED_MESSAGE };
+  }
   return found;
 }
 
@@ -140,6 +168,7 @@ export function feeTerms(appointment: Booking, fee: NoShowFee): FeeTerms {
     createdAt: new Date(appointment.createdAt),
     customerCancelledAt: fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : null,
     lateCancelWindowMinutes: fee.lateCancelWindowMinutes,
+    shopCancelledAt: appointment.shopCancelledAt ? new Date(appointment.shopCancelledAt) : null,
   };
 }
 
@@ -225,11 +254,32 @@ export function completedBefore(appointment: Pick<OwnerAppointment, 'card' | 'co
 }
 
 /**
- * Whether "Mark no-show" is offered: a booked appointment, from `noShowFrom`, unless it has a card on
- * file and was completed before (`completedBefore`): then never, as the server refuses it.
+ * A booking with a card on file the shop cancelled, now or before it was reopened: it can't be charged
+ * a fee, nor marked a no-show, since the agreement ended when the shop cancelled (the server's
+ * `shopCancelledAt`, which it never clears; its 409 `shop_cancelled`, `SHOP_CANCELLED_NO_SHOW_MESSAGE`).
+ * A booking still cancelled by the shop counts too, as the server reads one cancelled before it kept the time.
  */
-export function canMarkNoShow(appointment: Pick<OwnerAppointment, 'status' | 'start' | 'end' | 'card' | 'completedAt'>, now: Date): boolean {
-  return appointment.status === 'booked' && !completedBefore(appointment) && noShowFrom(appointment).getTime() <= now.getTime();
+export function shopCancelledBefore(
+  appointment: Pick<OwnerAppointment, 'card' | 'status' | 'cancelledBy'> & Partial<Pick<OwnerAppointment, 'shopCancelledAt'>>,
+): boolean {
+  return Boolean(appointment.card) && (Boolean(appointment.shopCancelledAt) || (appointment.status === 'cancelled' && appointment.cancelledBy === 'shop'));
+}
+
+/**
+ * Whether "Mark no-show" is offered: a booked appointment, from `noShowFrom`, unless it has a card on
+ * file and was completed before (`completedBefore`) or cancelled by the shop before (`shopCancelledBefore`):
+ * then never, as the server refuses it.
+ */
+export function canMarkNoShow(
+  appointment: Pick<OwnerAppointment, 'status' | 'start' | 'end' | 'card' | 'completedAt' | 'cancelledBy'> & Partial<Pick<OwnerAppointment, 'shopCancelledAt'>>,
+  now: Date,
+): boolean {
+  return (
+    appointment.status === 'booked' &&
+    !completedBefore(appointment) &&
+    !shopCancelledBefore(appointment) &&
+    noShowFrom(appointment).getTime() <= now.getTime()
+  );
 }
 
 /** The client cancelled in the app less than the agreed window before the start, more than 15 minutes after booking: a late cancellation. */
@@ -328,6 +378,8 @@ function feeNote(appointment: OwnerAppointment, now: Date): string | null {
     case 'booked':
       // Completed before and reopened: it can't become a no-show, so there's no fee to charge.
       if (completedBefore(appointment)) return COMPLETED_NO_SHOW_MESSAGE;
+      // Cancelled by the shop before and reopened: there's never a fee (the server's words).
+      if (shopCancelledBefore(appointment)) return found.message;
       return new Date(appointment.end).getTime() > now.getTime()
         ? "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee."
         : "If the client didn't come, mark a no-show. Then you can charge the fee.";
@@ -436,11 +488,16 @@ export function feePanel(
 
 // --------------------------------------------------------- Status changes
 
+/** What Reopen says first for a booking with a card on file the shop cancelled: there's never a fee for it. */
+export const REOPEN_SHOP_CANCELLED_WARNING =
+  "The shop cancelled this booking, so once it's reopened, it can't be charged a fee. To keep a fee, ask the client to book again in the app instead.";
+
 /**
  * What Reopen says first, when reopening changes something about the fee: a charged fee isn't
- * refunded, one Stripe hasn't confirmed may have gone through, a late cancellation that's reopened
- * can't be charged any more, and a booking the client cancelled in the app can't be charged a
- * no-show fee once it's reopened. Null when there's nothing to say.
+ * refunded, one Stripe hasn't confirmed may have gone through, a booking the shop cancelled can't
+ * be charged a fee once it's reopened, a late cancellation that's reopened can't be charged any more
+ * (also before the appointment has ended, when it couldn't be charged yet), and a booking the client
+ * cancelled in the app can't be charged a no-show fee once it's reopened. Null when there's nothing to say.
  */
 export function reopenWarning(appointment: OwnerAppointment, now: Date): string | null {
   const fee = appointment.noShowFee;
@@ -452,7 +509,10 @@ export function reopenWarning(appointment: OwnerAppointment, now: Date): string 
     case 'pending':
       return `Stripe hasn't confirmed the ${what} yet. If it went through, reopening doesn't refund it. Refunds are made in the Stripe Dashboard.`;
     default:
-      if (chargeableFee(appointment, now) === 'lateCancel') {
+      // The shop cancelled it: once it's reopened, no fee can ever be charged for it.
+      if (shopCancelledBefore(appointment) && appointment.status !== 'completed') return REOPEN_SHOP_CANCELLED_WARNING;
+      // A late cancellation that can be charged once the appointment has ended (or now, if it has).
+      if (chargeableFee(appointment, new Date(Math.max(now.getTime(), Date.parse(appointment.end)))) === 'lateCancel') {
         return `Once it's reopened, the ${moneyWithCommas(fee.amountCents)} late cancellation fee can't be charged any more. The client cancelled in the app, so a no-show fee can't be charged either.`;
       }
       if (appointment.status === 'cancelled' && appointment.card && fee.customerCancelledAt) {
@@ -469,11 +529,13 @@ export function reopenWarning(appointment: OwnerAppointment, now: Date): string 
  * Under the status buttons of a booked appointment that can't be marked a no-show yet: when "Mark
  * no-show" shows. With a card on file, once it ends (until the start the client can still cancel
  * in the app, and a client who comes before the end isn't a no-show); without, once it starts. One
- * with a card on file that was completed before never can, and says so in the server's words.
+ * with a card on file that was completed, or cancelled by the shop, before never can, and says so in
+ * the server's words.
  */
 export function noShowHint(appointment: OwnerAppointment, now: Date, zone: string): string | null {
   if (appointment.status !== 'booked') return null;
   if (completedBefore(appointment)) return COMPLETED_NO_SHOW_MESSAGE;
+  if (shopCancelledBefore(appointment)) return SHOP_CANCELLED_NO_SHOW_MESSAGE;
   if (canMarkNoShow(appointment, now)) return null;
   const from = noShowFrom(appointment);
   const today = localDate(now, zone) === localDate(from, zone);

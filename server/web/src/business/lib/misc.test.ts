@@ -156,6 +156,19 @@ describe('No-show protection', () => {
     expect(noShow.windowChoices(90)).toEqual([30, 60, 90, 120, 180, 240, 360, 720, 1440, 2880]);
   });
 
+  it('says under Late cancellations that one is charged only once the appointment has ended, as the server does', () => {
+    const draft = noShow.draftFrom(saved);
+    expect(noShow.lateCancellationFooter({ ...draft, lateCancelEnabled: true, lateCancelWindowMinutes: 60 })).toBe(
+      "A client who cancels in the app less than 1 hour before the start can be charged the fee once the appointment has ended. Cancelling earlier, or within 15 minutes of booking, is free, and there's never a fee when the shop cancels.",
+    );
+    expect(noShow.lateCancellationFooter({ ...draft, lateCancelEnabled: true, lateCancelWindowMinutes: 1440 })).toMatch(
+      /^A client who cancels in the app less than 24 hours before the start can be charged the fee once the appointment has ended\./,
+    );
+    expect(noShow.lateCancellationFooter({ ...draft, lateCancelEnabled: false })).toBe(
+      'Off: new bookings can be cancelled in the app for free until the start, and only no-shows can be charged. Bookings already made keep the window they were booked with.',
+    );
+  });
+
   it('says when Stripe stands in the way', () => {
     expect(noShow.stripeNote(stripeNotConnected as StripeConnection, true)).toContain("Stripe isn't connected yet");
     expect(noShow.stripeNote(stripeOff as StripeConnection, true)).toContain("Stripe isn't set up on the server yet");

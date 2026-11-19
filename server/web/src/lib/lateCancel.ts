@@ -47,8 +47,11 @@ export function lateCancelWarningText(windowMinutes: number, feeCents: number, f
   return `Cancelling now, less than ${windowLabel(windowMinutes)} before your appointment, may be charged ${amount}.`;
 }
 
-/** What these rules read: never the client's own details. */
-type Booked = Omit<Appointment, 'customer' | 'note'>;
+/**
+ * What these rules read: never the client's own details. The shop's view also says when the shop first
+ * cancelled it (`shopCancelledAt`; the client's view doesn't have it).
+ */
+type Booked = Omit<Appointment, 'customer' | 'note'> & { shopCancelledAt?: string | null };
 
 /** Whether the agreed fee is the whole price: the server says so; an older server is judged by the label. */
 function isFullPrice(appointment: Booked): boolean {
@@ -61,11 +64,13 @@ function isFullPrice(appointment: Booked): boolean {
  * The warning before cancelling, when cancelling now would be a late cancellation under the
  * policy the client agreed to; null when it's free. Like the server, the first time the client
  * cancelled (or asked to) counts, if there was one, and cancelling within 15 minutes of booking
- * is free (so there's no warning then).
+ * is free (so there's no warning then), as is a booking the shop cancelled before reopening it
+ * (where that's known: the shop's view says so).
  */
 export function lateCancelWarning(appointment: Booked, now: Date): string | null {
   const fee = appointment.noShowFee;
   if (!isCancellable(appointment, now) || !appointment.card || !fee || fee.lateCancelWindowMinutes === null) return null;
+  if (appointment.shopCancelledAt) return null;
   const firstAsked = fee.customerCancelledAt ? new Date(fee.customerCancelledAt) : wholeSecond(now);
   if (!cancelledLate(new Date(appointment.start), firstAsked, fee.lateCancelWindowMinutes, new Date(appointment.createdAt))) return null;
   return lateCancelWarningText(fee.lateCancelWindowMinutes, fee.amountCents, isFullPrice(appointment));

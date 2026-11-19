@@ -388,6 +388,46 @@ describe('Today', () => {
     );
   });
 
+  it('says first that reopening a booking the shop cancelled won’t let it be charged a fee, and once reopened offers neither a no-show nor a fee', async () => {
+    signedIn();
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const fee = { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null, reason: null };
+    const cancelled = { ...feeCharged.appointment, ...when, status: 'cancelled', cancelledBy: 'shop', shopCancelledAt: '2026-11-01T18:00:00Z', noShowFee: fee };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [cancelled] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const panel = screen.getByTestId('side-panel');
+    expect(within(panel).getByTestId('fee-status').textContent).toBe("The shop cancelled this booking, so there's no fee.");
+    await userEvent.click(within(panel).getByRole('button', { name: 'Reopen' }));
+    expect(screen.getByTestId('confirm-reopen').textContent).toContain(
+      "The shop cancelled this booking, so once it's reopened, it can't be charged a fee. To keep a fee, ask the client to book again in the app instead.",
+    );
+  });
+
+  it('a reopened booking the shop cancelled says it can’t become a no-show, after its end too', async () => {
+    signedIn();
+    // Its 9 AM haircut ended at 9:45; the shop had cancelled it, then reopened it.
+    const when = { start: '2026-11-02T17:00:00Z', end: '2026-11-02T17:45:00Z' };
+    const fee = { ...feeCharged.appointment.noShowFee, status: 'none', chargedAt: null, reason: null };
+    const reopened = { ...feeCharged.appointment, ...when, status: 'booked', cancelledBy: null, shopCancelledAt: '2026-11-01T18:00:00Z', noShowFee: fee };
+    mockApi([
+      ['GET /api/owner/appointments', { body: { appointments: [reopened] } }],
+      ['GET /api/owner/time-off', { body: { timeOff: [] } }],
+      ['GET /api/owner/sales', { body: { date: '2026-11-02', sales: [], totals: { totalCents: 0, count: 0 } } }],
+    ]);
+    renderApp('/business/today');
+    await userEvent.click(await screen.findByTestId('appointment'));
+    const panel = screen.getByTestId('side-panel');
+    expect(within(panel).queryByRole('button', { name: 'Mark no-show' })).toBeNull();
+    expect(within(panel).getByTestId('status-hint').textContent).toContain("The shop cancelled this booking, so it can't become a no-show.");
+    expect(within(panel).getByTestId('fee-status').textContent).toBe("The shop cancelled this booking, so there's no fee.");
+    expect(within(panel).queryByRole('button', { name: /^Charge/ })).toBeNull();
+  });
+
   it('says what a status change did, and gives it the focus the pressed button had', async () => {
     signedIn();
     const chris = ownerAppointments.appointments.find((a) => a.customer.name === 'Chris')!;

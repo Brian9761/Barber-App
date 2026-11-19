@@ -67,6 +67,14 @@ describe('the warning before cancelling', () => {
     expect(lateCancelWarning(withFee({ lateCancelWindowMinutes: null }), at('2026-11-03T17:30:00Z'))).toBeNull();
   });
 
+  it('says nothing for a booking the shop cancelled before reopening it, where that’s known (the shop’s view)', () => {
+    // The client's own view doesn't say, so it warns as the agreed policy reads, and the server decides.
+    expect(lateCancelWarning(fixtureAppointment, at('2026-11-03T17:30:00Z'))).toBe(lateCancelFee.error.message);
+    expect(lateCancelWarning({ ...fixtureAppointment, shopCancelledAt: null }, at('2026-11-03T17:30:00Z'))).toBe(lateCancelFee.error.message);
+    // The shop's view says when the shop cancelled it: then cancelling is free (no fee to warn of).
+    expect(lateCancelWarning({ ...fixtureAppointment, shopCancelledAt: '2026-11-02T18:00:00Z' }, at('2026-11-03T17:30:00Z'))).toBeNull();
+  });
+
   it('says nothing within 15 minutes of booking, even inside the window', () => {
     // Booked at 9:30 for 10 AM (inside the 1-hour window).
     const late = { ...fixtureAppointment, createdAt: '2026-11-03T17:30:00Z' };

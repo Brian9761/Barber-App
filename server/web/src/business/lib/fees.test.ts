@@ -7,6 +7,7 @@ import unsentFixture from '../../../../test/fixtures/contract/no-show-fee-charge
 import ownerAppointments from '../../../../test/fixtures/contract/owner-appointments-with-sale.json';
 import alreadyCompleted from '../../../../test/fixtures/contract/errors/already_completed.json';
 import notStarted from '../../../../test/fixtures/contract/errors/not_started.json';
+import shopCancelledError from '../../../../test/fixtures/contract/errors/shop_cancelled.json';
 import { times } from '../../test/text';
 import type { OwnerAppointment } from '../types';
 import {
@@ -20,6 +21,7 @@ import {
   feeCase,
   feeDeadline,
   feePanel,
+  LATE_CANCEL_NOT_ENDED_MESSAGE,
   NO_SHOW_BEFORE_END_MESSAGE,
   noShowHint,
   NOT_ENDED_MESSAGE,
@@ -27,9 +29,13 @@ import {
   pastFeeDeadline,
   paymentSummary,
   receiptNote,
+  REOPEN_SHOP_CANCELLED_WARNING,
   reopenWarning,
   ruleFeeCase,
   ruleFeeCaseAt,
+  SHOP_CANCELLED_MESSAGE,
+  SHOP_CANCELLED_NO_SHOW_MESSAGE,
+  shopCancelledBefore,
   shopCancelNote,
   TIME_TAKEN_MESSAGE,
   timeTaken,
@@ -57,7 +63,7 @@ function booked(overrides: Partial<OwnerAppointment> = {}): OwnerAppointment {
 
 type FeeCaseFixture = (typeof feeCases.cases)[number];
 
-/** A fixture case as the rule reads it, with its booking time. */
+/** A fixture case as the rule reads it, with its booking time and when the shop cancelled it, if it did. */
 const ruleOf = (c: FeeCaseFixture) =>
   [
     c.status as OwnerAppointment['status'],
@@ -66,6 +72,7 @@ const ruleOf = (c: FeeCaseFixture) =>
     c.customerCancelledAt ? new Date(c.customerCancelledAt) : null,
     c.lateCancelWindowMinutes,
     new Date(c.createdAt),
+    c.shopCancelledAt ? new Date(c.shopCancelledAt) : null,
   ] as const;
 
 describe('which fee can be charged', () => {
@@ -81,6 +88,8 @@ describe('which fee can be charged', () => {
     expect(FEE_DEADLINE_DAYS).toBe(feeCases.deadline.days);
     expect(FEE_DEADLINE_MESSAGE).toBe(feeCases.deadline.message);
     expect(NOT_ENDED_MESSAGE).toBe(feeCases.notEnded);
+    expect(LATE_CANCEL_NOT_ENDED_MESSAGE).toBe(feeCases.lateCancelNotEnded);
+    expect(SHOP_CANCELLED_MESSAGE).toBe(feeCases.shopCancelled);
     for (const c of feeCases.clock) {
       const found = ruleFeeCaseAt(
         {
@@ -91,6 +100,7 @@ describe('which fee can be charged', () => {
           createdAt: new Date(c.createdAt),
           customerCancelledAt: c.customerCancelledAt ? new Date(c.customerCancelledAt) : null,
           lateCancelWindowMinutes: c.lateCancelWindowMinutes,
+          shopCancelledAt: c.shopCancelledAt ? new Date(c.shopCancelledAt) : null,
         },
         new Date(c.now),
       );
@@ -116,6 +126,63 @@ describe('which fee can be charged', () => {
     expect(chargeableFee({ ...noShow, card: null }, new Date('2026-11-03T19:00:00Z'))).toBeNull();
     // Charged already: nothing more to charge.
     expect(chargeableFee(charged, new Date('2026-11-03T19:00:00Z'))).toBeNull();
+  });
+
+  it('charges a late cancellation only once the appointment has ended too, saying so before', () => {
+    const late = { ...lateCharged, noShowFee: { ...lateCharged.noShowFee!, status: 'none' as const, chargedAt: null } };
+    // The server's own late cancellation: the 1 PM haircut, cancelled at 12:30 PM, ends at 1:45 PM.
+    expect(late.end).toBe('2026-11-03T21:45:00Z');
+    for (const now of ['2026-11-03T20:31:00Z', '2026-11-03T21:00:00Z', '2026-11-03T21:44:59Z']) {
+      expect(feeCase(late, new Date(now)), now).toEqual({ kind: 'refused', message: LATE_CANCEL_NOT_ENDED_MESSAGE });
+      expect(chargeableFee(late, new Date(now)), now).toBeNull();
+      const panel = feePanel(late, new Date(now), ZONE)!;
+      expect(panel.status, now).toEqual({ kind: 'notCharged', note: LATE_CANCEL_NOT_ENDED_MESSAGE });
+      expect(panel.action, now).toBeNull();
+      expect(panel.footer, now).toBeNull();
+    }
+    expect(LATE_CANCEL_NOT_ENDED_MESSAGE).toBe(
+      "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time.",
+    );
+    expect(chargeableFee(late, new Date('2026-11-03T21:45:00Z'))).toBe('lateCancel');
+    expect(feePanel(late, new Date('2026-11-03T21:45:00Z'), ZONE)!.action?.title).toBe('Charge late cancellation fee ($25)');
+    // Still the case it is ("Cancelled late"), whatever the time.
+    expect(appointmentBadges(late)[0]!.text).toBe('Cancelled late');
+  });
+
+  it('never charges a booking the shop cancelled, even reopened, and never makes it a no-show, as the server answers', () => {
+    expect(SHOP_CANCELLED_NO_SHOW_MESSAGE).toBe(shopCancelledError.error.message);
+    expect(shopCancelledError.error.code).toBe('shop_cancelled');
+    // Cancelled by the shop the day before, then reopened.
+    const reopened = booked({ shopCancelledAt: '2026-11-02T18:00:00Z' });
+    expect(shopCancelledBefore(reopened)).toBe(true);
+    for (const now of ['2026-11-03T17:00:00Z', '2026-11-03T18:50:00Z', '2026-11-11T18:00:00Z']) {
+      expect(feeCase(reopened, new Date(now)), now).toEqual({ kind: 'refused', message: SHOP_CANCELLED_MESSAGE });
+      expect(canMarkNoShow(reopened, new Date(now)), now).toBe(false);
+      expect(noShowHint(reopened, new Date(now), ZONE), now).toBe(SHOP_CANCELLED_NO_SHOW_MESSAGE);
+      const panel = feePanel(reopened, new Date(now), ZONE)!;
+      expect(panel.status, now).toEqual({ kind: 'notCharged', note: SHOP_CANCELLED_MESSAGE });
+      expect(panel.action, now).toBeNull();
+    }
+    // Then a no-show (an older server let it be marked), or cancelled late by the client: no fee either.
+    expect(chargeableFee({ ...reopened, status: 'noShow' }, new Date('2026-11-03T18:50:00Z'))).toBeNull();
+    const lateAfter = {
+      ...reopened,
+      status: 'cancelled' as const,
+      cancelledBy: 'customer' as const,
+      noShowFee: { ...reopened.noShowFee!, customerCancelledAt: '2026-11-03T17:30:00Z' },
+    };
+    expect(feeCase(lateAfter, new Date('2026-11-03T18:50:00Z'))).toEqual({ kind: 'refused', message: SHOP_CANCELLED_MESSAGE });
+    expect(feePanel(lateAfter, new Date('2026-11-03T18:50:00Z'), ZONE)!.status).toEqual({ kind: 'notCharged', note: SHOP_CANCELLED_MESSAGE });
+    // Still cancelled by the shop (also from a server from before `shopCancelledAt`).
+    const cancelled = booked({ status: 'cancelled', cancelledBy: 'shop', shopCancelledAt: null });
+    expect(shopCancelledBefore(cancelled)).toBe(true);
+    expect(feeCase(cancelled, new Date('2026-11-03T18:50:00Z'))).toEqual({ kind: 'refused', message: SHOP_CANCELLED_MESSAGE });
+    // Without a card there's no fee, so nothing changes; a booking the client cancelled isn't the shop's.
+    expect(shopCancelledBefore(booked({ card: null, noShowFee: null, shopCancelledAt: '2026-11-02T18:00:00Z' }))).toBe(false);
+    expect(canMarkNoShow(booked({ card: null, noShowFee: null, shopCancelledAt: '2026-11-02T18:00:00Z' }), new Date('2026-11-03T18:50:00Z'))).toBe(true);
+    expect(shopCancelledBefore({ ...lateAfter, shopCancelledAt: null })).toBe(false);
+    // Never cancelled by the shop: as before.
+    expect(canMarkNoShow(booked({ shopCancelledAt: null }), new Date('2026-11-03T18:50:00Z'))).toBe(true);
   });
 
   it('charges nothing more than 7 days after the appointment, but still checks a try that was sent', () => {
@@ -339,9 +406,30 @@ describe('what Reopen and Cancel say first', () => {
     );
   });
 
-  it("says a late cancellation can't be charged once it's reopened", () => {
+  it("says a late cancellation can't be charged once it's reopened, before the end too", () => {
     const late = { ...lateCharged, noShowFee: { ...lateCharged.noShowFee!, status: 'none' as const, chargedAt: null } };
     expect(reopenWarning(late, new Date('2026-11-03T22:00:00Z'))).toContain("the $25 late cancellation fee can't be charged any more");
+    // Before the 1:45 PM end it can't be charged yet, but reopening still loses it.
+    expect(reopenWarning(late, new Date('2026-11-03T20:40:00Z'))).toBe(reopenWarning(late, new Date('2026-11-03T22:00:00Z')));
+  });
+
+  it('says first that a booking the shop cancelled can’t be charged a fee once it’s reopened', () => {
+    expect(REOPEN_SHOP_CANCELLED_WARNING).toBe(
+      "The shop cancelled this booking, so once it's reopened, it can't be charged a fee. To keep a fee, ask the client to book again in the app instead.",
+    );
+    const cancelled = booked({ status: 'cancelled', cancelledBy: 'shop', shopCancelledAt: '2026-11-02T18:00:00Z' });
+    expect(reopenWarning(cancelled, new Date('2026-11-03T17:00:00Z'))).toBe(REOPEN_SHOP_CANCELLED_WARNING);
+    // Also once the client cancelled it after the shop had reopened it.
+    const clientAfter = booked({
+      status: 'cancelled',
+      cancelledBy: 'customer',
+      shopCancelledAt: '2026-11-02T18:00:00Z',
+      noShowFee: { ...charged.noShowFee!, status: 'none', chargedAt: null, reason: null, customerCancelledAt: '2026-11-03T17:30:00Z' },
+    });
+    expect(reopenWarning(clientAfter, new Date('2026-11-03T18:00:00Z'))).toBe(REOPEN_SHOP_CANCELLED_WARNING);
+    // A fee already charged says that first; one with no card says nothing.
+    expect(reopenWarning({ ...cancelled, noShowFee: { ...charged.noShowFee! } }, new Date('2026-11-03T19:00:00Z'))).toContain('stays charged');
+    expect(reopenWarning({ ...cancelled, card: null, noShowFee: null }, new Date('2026-11-03T19:00:00Z'))).toBeNull();
   });
 
   it('says a completed visit can’t become a no-show, even reopened', () => {

@@ -8,6 +8,7 @@ import { newToken } from '../../lib/tokens';
 import feeCases from '../../../../test/fixtures/fee-cases.json';
 import alreadyCompleted from '../../../../test/fixtures/contract/errors/already_completed.json';
 import notStarted from '../../../../test/fixtures/contract/errors/not_started.json';
+import shopCancelledError from '../../../../test/fixtures/contract/errors/shop_cancelled.json';
 import { createDemoOwnerApi } from './api';
 import { dayId, dayOfId, sampleDay, SAMPLE_PRODUCTS } from './samples';
 
@@ -259,6 +260,8 @@ describe('statuses and fees, like the server', () => {
       Object.assign(kept, {
         createdAt: '2026-11-04T19:30:00Z',
         cancelledBy: 'customer',
+        // Kim cancelled it, not the shop.
+        shopCancelledAt: null,
         noShowFee: { ...kept.noShowFee!, customerCancelledAt: cancelledAt, reason: null },
       });
       localStorage.setItem(DEMO_BUSINESS_KEY, JSON.stringify(store));
@@ -280,6 +283,11 @@ describe('statuses and fees, like the server', () => {
       const grace = feeCases.cases.find((c) => c.refusal?.startsWith('The client cancelled within 15 minutes'))!;
       expect(await rejects(api.chargeFee(kim.id)), cancelledAt).toEqual({ code: 'not_chargeable', status: 409, message: grace.refusal });
     }
+    // The late cancellation is charged only once Kim's 12 PM haircut has ended (12:45 PM), as the server rules.
+    expect(await rejects(api.chargeFee(kim.id))).toEqual({ code: 'not_chargeable', status: 409, message: feeCases.lateCancelNotEnded });
+    now = new Date('2026-11-04T20:44:59Z');
+    expect(await rejects(api.chargeFee(kim.id))).toEqual({ code: 'not_chargeable', status: 409, message: feeCases.lateCancelNotEnded });
+    now = new Date('2026-11-04T20:45:00Z');
     expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
   });
 
@@ -333,8 +341,41 @@ describe('statuses and fees, like the server', () => {
 
   it('cancels as the shop and reopens, unless another booking took the time', async () => {
     const brandon = byName(await api.appointments('2026-11-04'), 'Brandon Sample');
-    expect(await api.setStatus(brandon.id, 'cancelled')).toMatchObject({ status: 'cancelled', cancelledBy: 'shop' });
-    expect(await api.setStatus(brandon.id, 'booked')).toMatchObject({ status: 'booked', cancelledBy: null });
+    expect(brandon.shopCancelledAt).toBeNull();
+    expect(await api.setStatus(brandon.id, 'cancelled')).toMatchObject({ status: 'cancelled', cancelledBy: 'shop', shopCancelledAt: '2026-11-04T16:00:00Z' });
+    expect(await api.setStatus(brandon.id, 'booked')).toMatchObject({ status: 'booked', cancelledBy: null, shopCancelledAt: '2026-11-04T16:00:00Z' });
+  });
+
+  it('never charges a booking with a card on file the shop cancelled, nor makes it a no-show, even once it’s reopened, as the server does', async () => {
+    await api.connectStripe();
+    // The shop cancels Kim's 12 PM at 8 AM, then reopens it: the shop's cancellation is kept for good.
+    const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+    expect(kim.card).not.toBeNull();
+    expect(await api.setStatus(kim.id, 'cancelled')).toMatchObject({ cancelledBy: 'shop', shopCancelledAt: '2026-11-04T16:00:00Z', noShowFee: { reason: null } });
+    now = new Date('2026-11-04T21:00:00Z'); // after the 12:45 PM end
+    const shop = { code: shopCancelledError.error.code, status: 409, message: shopCancelledError.error.message };
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toEqual(shop);
+    now = new Date('2026-11-04T16:30:00Z');
+    expect(await api.setStatus(kim.id, 'booked')).toMatchObject({ status: 'booked', shopCancelledAt: '2026-11-04T16:00:00Z' });
+    now = new Date('2026-11-04T21:00:00Z');
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toEqual(shop);
+    expect(await rejects(api.chargeFee(kim.id))).toEqual({ code: 'not_chargeable', status: 409, message: feeCases.shopCancelled });
+    // Cancelled again and reopened: still the first time, in the day's list too.
+    await api.setStatus(kim.id, 'cancelled');
+    expect(byName(await api.appointments('2026-11-04'), 'Kim Sample').shopCancelledAt).toBe('2026-11-04T16:00:00Z');
+    // What an older demo kept has no shopCancelledAt: it answers null, as a server does for one never cancelled by the shop.
+    const store = JSON.parse(localStorage.getItem(DEMO_BUSINESS_KEY)!) as { days: Record<string, { appointments: Record<string, unknown>[] }> };
+    for (const kept of store.days['2026-11-04']!.appointments) delete kept.shopCancelledAt;
+    localStorage.setItem(DEMO_BUSINESS_KEY, JSON.stringify(store));
+    expect((await api.appointments('2026-11-04')).every((a) => a.shopCancelledAt === null)).toBe(true);
+    // Still cancelled by the shop, it's the shop's cancellation: kept from now when it's reopened.
+    expect(await rejects(api.setStatus(kim.id, 'noShow'))).toEqual(shop);
+    expect(await api.setStatus(kim.id, 'booked')).toMatchObject({ shopCancelledAt: '2026-11-04T21:00:00Z' });
+    // Without a card on file, marking is the shop's call.
+    const nate = byName(await api.appointments('2026-11-04'), 'Nate Sample');
+    await api.setStatus(nate.id, 'cancelled');
+    await api.setStatus(nate.id, 'booked');
+    expect(await api.setStatus(nate.id, 'noShow')).toMatchObject({ status: 'noShow' });
   });
 });
 

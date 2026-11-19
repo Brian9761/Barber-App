@@ -131,7 +131,7 @@ export function lateCancellationFooter(draft: NoShowDraft): string {
     return 'Off: new bookings can be cancelled in the app for free until the start, and only no-shows can be charged. Bookings already made keep the window they were booked with.';
   }
   const window = windowLabel(draft.lateCancelWindowMinutes);
-  return `A client who cancels in the app less than ${window} before the start can be charged the fee. Cancelling earlier, or within ${LATE_CANCEL_GRACE_MINUTES} minutes of booking, is free, and there's never a fee when the shop cancels.`;
+  return `A client who cancels in the app less than ${window} before the start can be charged the fee once the appointment has ended. Cancelling earlier, or within ${LATE_CANCEL_GRACE_MINUTES} minutes of booking, is free, and there's never a fee when the shop cancels.`;
 }
 
 /** The windows to pick from, with the one on screen among them. */

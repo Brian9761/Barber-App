@@ -8,7 +8,10 @@ import type { Appointment } from '../api/types';
 /** How a sale was paid: Tap to Pay on the iPhone, cash, or another way the shop only records (Zelle, Cash App…). */
 export type SaleMethod = 'card' | 'cash' | 'other';
 
-/** An appointment as the shop sees it: with its checkout (its live sale), if any, and when it was first completed. */
+/**
+ * An appointment as the shop sees it: with its checkout (its live sale), if any, and when it was first
+ * completed and first cancelled by the shop.
+ */
 export interface OwnerAppointment extends Appointment {
   sale: { id: string; totalCents: number; method: SaleMethod } | null;
   /**
@@ -17,6 +20,12 @@ export interface OwnerAppointment extends Appointment {
    * (`completed_at`). Missing from a server from before it.
    */
   completedAt: string | null;
+  /**
+   * When the shop first cancelled it, or null. The server never clears it: a booking the shop cancelled
+   * can't be charged a fee, even after it's reopened, nor marked a no-show (`shop_cancelled_at`).
+   * Missing from a server from before it.
+   */
+  shopCancelledAt: string | null;
 }
 
 export type SaleItemKind = 'service' | 'product' | 'custom';

@@ -279,6 +279,7 @@ function bookedAppointment(catalog: Catalog, date: string, barberId: string, sta
     priceCents: offering.priceCents,
     cardPayment: null,
     completedAt: null,
+    shopCancelledAt: null,
   };
 }
 
@@ -341,7 +342,8 @@ function outcome(appointment: DemoAppointment, random: () => number, ctx: Sample
     const cancelledAt = start - minutesBefore * 60_000;
     if (fee) {
       const late = minutesBefore < (fee.lateCancelWindowMinutes ?? 0);
-      const chargedAt = start + 15 * 60_000;
+      // Like a no-show's, a late cancellation's fee is charged only once the appointment has ended.
+      const chargedAt = Date.parse(appointment.end) + 10 * 60_000;
       const charged = late && appointment.card?.last4 !== '0002' && random() < 0.5 && chargedAt <= ctx.historyBefore;
       appointment.noShowFee = {
         ...fee,
@@ -351,6 +353,8 @@ function outcome(appointment: DemoAppointment, random: () => number, ctx: Sample
     }
   } else {
     appointment.cancelledBy = 'shop';
+    // When the shop cancelled it, as the server keeps it (a couple of hours before, days after it was booked).
+    appointment.shopCancelledAt = iso(start - 2 * 3_600_000);
   }
   return null;
 }
