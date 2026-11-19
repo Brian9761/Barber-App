@@ -1183,11 +1183,17 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         return waitUntil(field, toMatch: NSPredicate(format: "hasKeyboardFocus == true"), timeout: timeout)
     }
 
-    /// Replaces a text field's text: taps its trailing end (so the cursor goes after the text),
+    /// Replaces a text field's text: taps near its trailing end (so the cursor goes after the text),
     /// deletes what's there and types `text`.
+    ///
+    /// The tap is 44 points in from the end of the field's frame, not a share of the frame's width:
+    /// iOS 18 gives a form row's text field the whole row's frame, whose last 20 points are the row's
+    /// margin, outside the field. 95% of the way along the flat fee's row (iPhone 16 Pro, iOS 18.6)
+    /// was 18 points from its end, 2 points past the field: both taps there went to the row, and the
+    /// field never got the keyboard.
     private func replaceText(in identifier: String, with text: String, file: StaticString = #filePath, line: UInt = #line) {
         let field = reveal(identifier, file: file, line: line)
-        let trailingEnd = field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5))
+        let trailingEnd = field.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -44, dy: 0))
         trailingEnd.tap()
         if !waitForKeyboardFocus(on: field, timeout: 10) {
             trailingEnd.tap()
