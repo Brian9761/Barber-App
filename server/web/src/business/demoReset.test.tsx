@@ -35,6 +35,32 @@ describe('Reset the demo', () => {
     expect((await screen.findAllByTestId('demo-reset')).length).toBeGreaterThan(0);
     expect(localStorage.getItem('izzy.business.lastBarber.v1')).toBeNull();
   });
+
+  it('brings back the sample computer signed out in Settings, as its message says the demo is back as it started', async () => {
+    renderApp('/business');
+    await userEvent.click(await screen.findByRole('button', { name: 'Open the Business demo' }));
+    await screen.findByTestId('today-page');
+    renderApp('/business/settings');
+    const others = async () => {
+      const lists = await screen.findAllByTestId('other-computers');
+      return lists[lists.length - 1]!;
+    };
+    const sampleButton = { name: 'Sign out Safari on iPad (sample)' };
+    await userEvent.click(await within(await others()).findByRole('button', sampleButton));
+    const confirms = screen.getAllByTestId('confirm-sign-out-computer');
+    await userEvent.click(within(confirms[confirms.length - 1]!).getByRole('button', { name: 'Sign out', exact: true }));
+    expect(await within(await others()).findByText('Signed out Safari on iPad (sample).')).toBeTruthy();
+    expect(within(await others()).queryByRole('button', sampleButton)).toBeNull();
+
+    const demo = screen.getAllByTestId('demo-settings');
+    await userEvent.click(within(demo[demo.length - 1]!).getByRole('button', { name: 'Reset the demo' }));
+    const dialogs = screen.getAllByTestId('confirm-reset-demo');
+    await userEvent.click(within(dialogs[dialogs.length - 1]!).getByRole('button', { name: 'Reset the demo' }));
+    const done = await screen.findAllByTestId('demo-reset');
+    expect(done[done.length - 1]!.textContent).toBe('The demo is back as it started: the sample shop, Stripe not connected.');
+    // Back in the list, once, with its own Sign out.
+    expect(await within(await others()).findAllByRole('button', sampleButton)).toHaveLength(1);
+  });
 });
 
 describe('No-show protection in the demo', () => {

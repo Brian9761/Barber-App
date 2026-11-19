@@ -73,6 +73,8 @@ const STORE_VERSION = 1;
 const SESSION_DAYS = 30;
 /** The pretend step of connecting Stripe. */
 const CONNECT_STEP_MS = 1200;
+/** The sample of another computer signed in, in Settings' list of computers. */
+export const SAMPLE_COMPUTER_NAME = 'Safari on iPad (sample)';
 
 export const DEMO_CATALOG = catalogData as unknown as Catalog;
 
@@ -285,6 +287,23 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
     return store.products ?? SAMPLE_PRODUCTS.map((p) => ({ ...p }));
   }
 
+  /**
+   * The sample of another computer signed in ("Safari on iPad (sample)"), signed in 3 days before
+   * `now` and last used the day before: what signing in first puts in Settings' list of computers,
+   * and what "Reset the demo" puts back. It has no token: nothing can sign in as it.
+   */
+  function sampleComputer(now: Date): DemoSession {
+    return {
+      id: dayId('session|sample-ipad', addDays(today(), -3)),
+      name: SAMPLE_COMPUTER_NAME,
+      createdAt: iso(now.getTime() - 3 * 86_400_000),
+      lastUsedAt: iso(now.getTime() - 26 * 3_600_000),
+      expiresAt: iso(now.getTime() + 27 * 86_400_000),
+      current: false,
+      token: null,
+    };
+  }
+
   /** The session asking: the computer signed in here. Anyone else gets the server's 401. */
   function signedIn(store: Store): DemoSession {
     const token = session.token();
@@ -408,20 +427,7 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
         token: newToken(),
       };
       // A sample of another computer signed in, so the list in Settings shows how it looks.
-      const others =
-        store.sessions.length === 0
-          ? [
-              {
-                id: dayId('session|sample-ipad', addDays(today(), -3)),
-                name: 'Safari on iPad (sample)',
-                createdAt: iso(now.getTime() - 3 * 86_400_000),
-                lastUsedAt: iso(now.getTime() - 26 * 3_600_000),
-                expiresAt: iso(now.getTime() + 27 * 86_400_000),
-                current: false,
-                token: null,
-              },
-            ]
-          : [];
+      const others = store.sessions.length === 0 ? [sampleComputer(now)] : [];
       store.sessions = [...store.sessions.filter((s) => Date.parse(s.expiresAt) > now.getTime()), ...others, created];
       save(store);
       return { token: created.token!, session: sessionJSON(created, created) };
@@ -862,12 +868,16 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       save(store);
     },
 
-    /** "Reset the demo": the sample shop back as it started, this computer still signed in. */
+    /**
+     * "Reset the demo": the sample shop back as it started, this computer still signed in, and the
+     * sample of another computer signed in back in Settings, as signing in first put it there.
+     */
     async resetDemo(): Promise<void> {
       await pause(latency);
       const store = load();
       const current = signedIn(store);
-      const reset = fresh(clock(), [current]);
+      const now = clock();
+      const reset = fresh(now, [sampleComputer(now), current]);
       if (inMemoryOnly) memory = reset;
       else {
         removeKey('local', DEMO_BUSINESS_KEY);

@@ -637,4 +637,28 @@ describe('products, settings and computers', () => {
     // Still signed in after the reset.
     expect(session.current().session).not.toBeNull();
   });
+
+  it('brings the sample computer back with Reset, as signing in first put it there, this computer still signed in', async () => {
+    const signedIn = await api.computerSessions();
+    const sample = signedIn.find((c) => c.name === 'Safari on iPad (sample)')!;
+    // As signing in put it there: signed in 3 days before, last used the day before, 27 days left.
+    expect(sample).toMatchObject({ current: false, createdAt: '2026-11-01T16:00:00Z', lastUsedAt: '2026-11-03T14:00:00Z', expiresAt: '2026-12-01T16:00:00Z' });
+    await api.signOutComputer(sample.id);
+    expect((await api.computerSessions()).map((c) => c.name)).toEqual(['Chrome on Mac']);
+
+    // The next day, Reset: the sample shop as it started, the sample computer with it.
+    now = new Date('2026-11-05T17:00:00Z');
+    await api.resetDemo();
+    const after = await api.computerSessions();
+    expect(after.map((c) => [c.name, c.current])).toEqual([
+      ['Chrome on Mac', true],
+      ['Safari on iPad (sample)', false],
+    ]);
+    expect(after[1]).toMatchObject({ createdAt: '2026-11-02T17:00:00Z', lastUsedAt: '2026-11-04T15:00:00Z', expiresAt: '2026-12-02T17:00:00Z' });
+    // Only one of it, and nothing can sign in as it: this computer's own sign-in is the one that works.
+    await api.resetDemo();
+    expect((await api.computerSessions()).filter((c) => c.name === 'Safari on iPad (sample)')).toHaveLength(1);
+    expect(session.current().session?.name).toBe('Chrome on Mac');
+    expect(await api.products()).toHaveLength(SAMPLE_PRODUCTS.length);
+  });
 });

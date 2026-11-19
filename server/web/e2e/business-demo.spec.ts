@@ -293,6 +293,9 @@ test('products, no-show settings and computers work in the demo, and Reset bring
   await page.getByTestId('confirm-reset-demo').getByRole('button', { name: 'Reset the demo' }).click();
   await expect(page.getByTestId('demo-reset')).toBeVisible();
   await expect(page.getByTestId('no-show-settings').getByRole('checkbox', { name: 'No-show protection' })).not.toBeChecked();
+  // The sample computer is back too, as signing in first put it there.
+  await expect(page.getByTestId('other-computers').getByRole('button', { name: 'Sign out Safari on iPad (sample)' })).toBeVisible();
+  await expect(page.getByTestId('other-computers')).not.toContainText('No other computers are signed in.');
   await navLink(page, 'Products').click();
   await expect(page.getByTestId('product')).toHaveCount(5);
   await navLink(page, 'Today').click();
