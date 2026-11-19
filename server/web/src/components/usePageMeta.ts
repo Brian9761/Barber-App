@@ -19,16 +19,25 @@ export function fullTitle(title: string): string {
 }
 
 /**
+ * A page's own address, as the site names it: without a trailing slash ("/privacy/" opens
+ * "/privacy", and names it), Home's "/" as it is.
+ */
+export function canonicalPath(pathname: string): string {
+  const path = pathname.replace(/\/+$/, '');
+  return path === '' ? '/' : path;
+}
+
+/**
  * The canonical link, on the page the reader is on. Only a policy's plain HTML has one
  * (tools/prerender.ts, with the site's public address): once the site has taken that page over,
  * each page opened in it names its own address there, at the same public address, never the
- * policy's ("/privacy" on Home).
+ * policy's ("/privacy" on Home), and never with a trailing slash ("/privacy/" names "/privacy").
  */
 export function keepCanonicalOnThisPage(): void {
   const link = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
   if (!link) return;
   try {
-    link.href = new URL(window.location.pathname, link.href).href;
+    link.href = new URL(canonicalPath(window.location.pathname), link.href).href;
   } catch {
     link.remove();
   }
@@ -42,7 +51,7 @@ export function usePageMeta(title: string, description: string): void {
     setMeta('name', 'description', description);
     setMeta('property', 'og:title', full);
     setMeta('property', 'og:description', description);
-    setMeta('property', 'og:url', window.location.origin + window.location.pathname);
+    setMeta('property', 'og:url', window.location.origin + canonicalPath(window.location.pathname));
     keepCanonicalOnThisPage();
   }, [title, description]);
 }
