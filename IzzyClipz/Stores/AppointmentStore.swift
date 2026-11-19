@@ -1,3 +1,6 @@
+#if canImport(CryptoKit)
+import CryptoKit
+#endif
 import Foundation
 import Observation
 import UserNotifications
@@ -150,7 +153,10 @@ enum AppointmentActionError: Error, Equatable {
 
 /// A booking this iPhone has sent and not yet seen confirmed, with the manage token it was sent
 /// with. Kept (in the Keychain) so every try of that same booking sends the same token.
-struct PendingBooking: Codable, Equatable {
+///
+/// That Keychain item moves to a new iPhone with an encrypted backup, like the manage tokens, so it
+/// never holds a card's key: that stays on this iPhone only (`SavedCardStore`).
+struct PendingBooking: Equatable {
     /// What tells a retry of it from a new booking: what the server compares
     /// (`IzzyAPI.NewAppointment.retryKey`, the target, start and number).
     let request: String
@@ -158,9 +164,85 @@ struct PendingBooking: Codable, Equatable {
     /// When the appointment would start. After that there's nothing left to retry.
     let start: Date
     /// The card the first try booked with and said not to keep (`keepCard: false`, Remember me
-    /// off): the server marked it for deletion with that booking, and a retry that finds it keeps
-    /// that choice, whatever the retry says. `nil` for one with Remember me on, or saved before.
-    var cardNotKept: IzzyAPI.CardToken?
+    /// off), as its key's digest (`IzzyAPI.CardToken.digest`), never the key: the server marked
+    /// that card for deletion with that booking, and a retry that finds it keeps that choice,
+    /// whatever the retry says. `nil` for one with Remember me on, or saved before.
+    var cardNotKeptDigest: String?
+}
+
+extension PendingBooking: Codable {
+    fileprivate enum CodingKeys: String, CodingKey {
+        case request, token, start, cardNotKeptDigest
+        /// What earlier versions saved instead of the digest: the card's key itself. It's read, as
+        /// its digest, and never written.
+        case cardNotKept
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        request = try container.decode(String.self, forKey: .request)
+        token = try container.decode(IzzyAPI.ManageToken.self, forKey: .token)
+        start = try container.decode(Date.self, forKey: .start)
+        if let digest = try container.decodeIfPresent(String.self, forKey: .cardNotKeptDigest) {
+            cardNotKeptDigest = digest
+        } else {
+            cardNotKeptDigest = try container.decodeIfPresent(String.self, forKey: .cardNotKept).map(IzzyAPI.CardToken.digest(ofKey:))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(request, forKey: .request)
+        try container.encode(token, forKey: .token)
+        try container.encode(start, forKey: .start)
+        try container.encodeIfPresent(cardNotKeptDigest, forKey: .cardNotKeptDigest)
+    }
+
+    /// Reads the list `AppointmentStore` keeps, as this version or an earlier one saved it.
+    /// `heldCardKeys` says an entry held a card's key itself (an earlier version's `cardNotKept`),
+    /// read as its digest: the list is to be saved again straight away, so the key leaves the
+    /// Keychain item.
+    static func decodeList(from data: Data) throws -> (bookings: [PendingBooking], heldCardKeys: Bool) {
+        let entries = try IzzyAPI.makeDecoder().decode([Entry].self, from: data)
+        return (entries.map(\.booking), entries.contains(where: \.heldCardKey))
+    }
+
+    /// One saved entry, and whether it held a card's key.
+    private struct Entry: Decodable {
+        let booking: PendingBooking
+        let heldCardKey: Bool
+
+        init(from decoder: Decoder) throws {
+            booking = try PendingBooking(from: decoder)
+            heldCardKey = try decoder.container(keyedBy: CodingKeys.self).contains(.cardNotKept)
+        }
+    }
+}
+
+extension IzzyAPI.CardToken {
+    /// The key's SHA-256, as 64 lowercase hex digits: what an unconfirmed booking keeps instead of
+    /// the key (`PendingBooking.cardNotKeptDigest`). It tells one card's key from another's, but the
+    /// key can't be worked out from it, so it can't book with the card or delete it (the shop's
+    /// server asks for the key itself).
+    var digest: String { Self.digest(ofKey: rawValue) }
+
+    /// `digest` for a key kept as text (as earlier versions saved it in `PendingBooking`).
+    static func digest(ofKey key: String) -> String {
+        let hex = Array("0123456789abcdef")
+        return String(sha256(Data(key.utf8)).flatMap { [hex[Int($0 >> 4)], hex[Int($0 & 0x0f)]] })
+    }
+
+    #if canImport(CryptoKit)
+    private static func sha256(_ data: Data) -> [UInt8] {
+        Array(SHA256.hash(data: data))
+    }
+    #else
+    /// Only where CryptoKit isn't available: the Linux build of the app's logic and its unit tests
+    /// (`PortableSHA256`). The app itself always uses CryptoKit.
+    private static func sha256(_ data: Data) -> [UInt8] {
+        PortableSHA256.hash(Array(data))
+    }
+    #endif
 }
 
 /// The client's appointments: kept on this iPhone with their manage tokens (in the Keychain),
@@ -334,17 +416,19 @@ final class AppointmentStore {
             return known.token
         }
         let token = IzzyAPI.ManageToken.generate()
-        let cardNotKept = request.keepCard == false ? request.noShow?.cardToken : nil
-        pending.append(PendingBooking(request: key, token: token, start: request.start, cardNotKept: cardNotKept))
+        // The card's digest, not its key: this list goes into backups, and the key stays on this iPhone.
+        let cardNotKept = request.keepCard == false ? request.noShow?.cardToken.digest : nil
+        pending.append(PendingBooking(request: key, token: token, start: request.start, cardNotKeptDigest: cardNotKept))
         savePendingBookings(Array(pending.suffix(Self.maxPendingBookings)))
         return token
     }
 
-    /// The card the first try of `request` said not to keep, while it's still unconfirmed (see
-    /// `PendingBooking.cardNotKept`): a retry that finds that booking can't keep it for next time.
-    func cardNotKept(by request: IzzyAPI.NewAppointment) -> IzzyAPI.CardToken? {
+    /// The card the first try of `request` said not to keep, while it's still unconfirmed, as its
+    /// key's digest (`PendingBooking.cardNotKeptDigest`, to compare with `IzzyAPI.CardToken.digest`):
+    /// a retry that finds that booking can't keep that card for next time.
+    func cardNotKept(by request: IzzyAPI.NewAppointment) -> String? {
         let key = Self.bookingKey(for: request)
-        return currentPendingBookings().first(where: { $0.request == key })?.cardNotKept
+        return currentPendingBookings().first(where: { $0.request == key })?.cardNotKeptDigest
     }
 
     /// The server has answered `request` with its appointment (saved with `add`): its token is
@@ -550,27 +634,38 @@ final class AppointmentStore {
 
     /// The bookings not yet confirmed whose time hasn't come, dropping the ones whose has.
     private func currentPendingBookings() -> [PendingBooking] {
+        var heldCardKeys = false
         if pendingBookings == nil {
             // Unreadable (the iPhone hasn't been unlocked since it restarted) counts as none.
             let stored = try? tokens.secret(for: Self.pendingBookingsAccount)
-            pendingBookings = stored.flatMap { try? IzzyAPI.makeDecoder().decode([PendingBooking].self, from: Data($0.utf8)) } ?? []
+            let read = stored.flatMap { try? PendingBooking.decodeList(from: Data($0.utf8)) }
+            pendingBookings = read?.bookings ?? []
+            // Saved by an earlier version, with a card's key in it: saved again now, with only the
+            // key's digest, so the key leaves this Keychain item.
+            heldCardKeys = read?.heldCardKeys ?? false
         }
         let all = pendingBookings ?? []
         let current = now()
         let live = all.filter { $0.start > current }
-        if live.count != all.count {
-            savePendingBookings(live)
+        if heldCardKeys || live.count != all.count {
+            if !savePendingBookings(live), heldCardKeys {
+                // The Keychain wouldn't take the list without the key, and the one with it mustn't
+                // stay. This launch still has the list (`pendingBookings`).
+                try? tokens.removeSecret(for: Self.pendingBookingsAccount)
+            }
         }
         return live
     }
 
-    private func savePendingBookings(_ pending: [PendingBooking]) {
+    /// Keeps `pending` for this launch, and in the Keychain. Returns whether the Keychain took it.
+    @discardableResult
+    private func savePendingBookings(_ pending: [PendingBooking]) -> Bool {
         pendingBookings = pending
         if pending.isEmpty {
-            try? tokens.removeSecret(for: Self.pendingBookingsAccount)
-        } else if let data = try? IzzyAPI.makeEncoder().encode(pending) {
-            try? tokens.setSecret(String(decoding: data, as: UTF8.self), for: Self.pendingBookingsAccount)
+            return (try? tokens.removeSecret(for: Self.pendingBookingsAccount)) != nil
         }
+        guard let data = try? IzzyAPI.makeEncoder().encode(pending) else { return false }
+        return (try? tokens.setSecret(String(decoding: data, as: UTF8.self), for: Self.pendingBookingsAccount)) != nil
     }
 
     /// Saves a token, trying twice: the Keychain can fail once and work the next time.
@@ -752,3 +847,60 @@ final class AlwaysAllowedNotificationScheduler: NotificationScheduling {
     func add(_ request: UNNotificationRequest) async throws {}
     func removePendingRequests(withIdentifiers identifiers: [String]) {}
 }
+
+#if !canImport(CryptoKit)
+/// SHA-256 (FIPS 180-4) for `IzzyAPI.CardToken.digest` where CryptoKit isn't available: only the
+/// Linux build that runs the app's logic and its unit tests. Every build of the app uses CryptoKit,
+/// and the unit tests check both against the same published digests.
+private enum PortableSHA256 {
+    private static let roundConstants: [UInt32] = [
+        0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+        0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+        0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+        0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+        0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+        0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+        0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+        0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    ]
+
+    static func hash(_ message: [UInt8]) -> [UInt8] {
+        var state: [UInt32] = [0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19]
+        // The message, a 1 bit, zeros up to 8 bytes short of a whole block, and its length in bits.
+        var padded = message + [0x80]
+        while padded.count % 64 != 56 { padded.append(0) }
+        let bitCount = UInt64(message.count) * 8
+        padded += (0..<8).reversed().map { UInt8(truncatingIfNeeded: bitCount >> (8 * UInt64($0))) }
+
+        var schedule = [UInt32](repeating: 0, count: 64)
+        for block in stride(from: 0, to: padded.count, by: 64) {
+            for i in 0..<16 {
+                schedule[i] = padded[(block + 4 * i)..<(block + 4 * i + 4)].reduce(UInt32(0)) { $0 << 8 | UInt32($1) }
+            }
+            for i in 16..<64 {
+                let s0 = rotateRight(schedule[i - 15], 7) ^ rotateRight(schedule[i - 15], 18) ^ (schedule[i - 15] >> 3)
+                let s1 = rotateRight(schedule[i - 2], 17) ^ rotateRight(schedule[i - 2], 19) ^ (schedule[i - 2] >> 10)
+                schedule[i] = schedule[i - 16] &+ s0 &+ schedule[i - 7] &+ s1
+            }
+            var (a, b, c, d, e, f, g, h) = (state[0], state[1], state[2], state[3], state[4], state[5], state[6], state[7])
+            for i in 0..<64 {
+                let sum1 = rotateRight(e, 6) ^ rotateRight(e, 11) ^ rotateRight(e, 25)
+                let choice = (e & f) ^ (~e & g)
+                let temp1 = h &+ sum1 &+ choice &+ roundConstants[i] &+ schedule[i]
+                let sum0 = rotateRight(a, 2) ^ rotateRight(a, 13) ^ rotateRight(a, 22)
+                let majority = (a & b) ^ (a & c) ^ (b & c)
+                let temp2 = sum0 &+ majority
+                (h, g, f, e, d, c, b, a) = (g, f, e, d &+ temp1, c, b, a, temp1 &+ temp2)
+            }
+            for (i, word) in [a, b, c, d, e, f, g, h].enumerated() {
+                state[i] = state[i] &+ word
+            }
+        }
+        return state.flatMap { word in (0..<4).reversed().map { UInt8(truncatingIfNeeded: word >> (8 * UInt32($0))) } }
+    }
+
+    private static func rotateRight(_ word: UInt32, _ count: UInt32) -> UInt32 {
+        word >> count | word << (32 - count)
+    }
+}
+#endif

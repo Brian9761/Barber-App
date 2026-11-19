@@ -342,11 +342,12 @@ final class BookingSubmitter {
     /// for a card the booking didn't go with too.
     ///
     /// A retry that found the booking an earlier try made with "Remember me" off keeps that try's
-    /// choice for its card (`notKeptByFirstTry`): the server marked that card for deletion with the
-    /// booking, so it's forgotten here too even if Remember me was turned on since.
-    private func keepOrForgetCard(after draft: BookingDraft, notKeptByFirstTry: IzzyAPI.CardToken? = nil) {
+    /// choice for its card (`notKeptByFirstTry`, the digest of that card's key): the server marked
+    /// that card for deletion with the booking, so it's forgotten here too even if Remember me was
+    /// turned on since.
+    private func keepOrForgetCard(after draft: BookingDraft, notKeptByFirstTry: String? = nil) {
         guard let cards else { return }
-        let markedForDeletion = notKeptByFirstTry != nil && cards.saved?.token == notKeptByFirstTry
+        let markedForDeletion = notKeptByFirstTry != nil && cards.saved?.token.digest == notKeptByFirstTry
         if draft.remember, !markedForDeletion {
             cards.setRemembered(true)
         } else {
