@@ -61,10 +61,19 @@ function forgetSignIn(): void {
   removeKey('local', BUSINESS_LAST_BARBER_KEY);
 }
 
-/** The session kept here, or null; `expired` when one was kept but its 30 days have run out. */
+/**
+ * The session kept here, or null; `expired` when one was kept but its 30 days have run out. With
+ * no sign-in left (none kept, or something kept that isn't one), whatever is left goes: a barber
+ * picked last at checkout left over, and the unreadable value, as the Privacy Policy says ("Both
+ * when staff sign out") and the data inventory ("a page that opens with no sign-in left also
+ * removes one left over").
+ */
 function load(): { session: StoredSession | null; expired: boolean } {
   const stored = readJSON('local', key());
-  if (!isStoredSession(stored)) return { session: null, expired: false };
+  if (!isStoredSession(stored)) {
+    forgetSignIn();
+    return { session: null, expired: false };
+  }
   // One that ran out is gone (the server would say so on the first call anyway), and the
   // sign-in page says why, as it does when the server turns a session down.
   if (Date.parse(stored.expiresAt) <= Date.now()) {
