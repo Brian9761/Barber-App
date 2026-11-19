@@ -764,8 +764,10 @@ final class IzzyClipzUITests: XCTestCase {
         // Return puts the keyboard away, so the line under the fields is in view.
         type(" Jr\n", into: "detailsSheetName")
         XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "The keyboard stayed up")
+        screenshot("60-Your-Details-Privacy-Policy")
         tapLink("Privacy Policy", inLine: "detailsSheetPrivacy", "No Privacy Policy link under the name and number")
         XCTAssertEqual(webPageURL(), "https://izzy-clipz.vercel.app/privacy")
+        screenshot("60b-Privacy-Policy-Over-Your-Details")
         closeWebPage()
         let name = element("detailsSheetName")
         XCTAssertTrue(name.waitForExistence(timeout: 10), "Your details closed with the page")
