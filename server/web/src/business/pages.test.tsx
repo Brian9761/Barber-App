@@ -78,6 +78,21 @@ describe('signing in', () => {
     expect(within(nav).getByRole('button', { name: 'Sign out' })).toBeTruthy();
   });
 
+  it('opens sign-in at /business/ for its page’s own file, /business/index.html, never “This page isn’t here.”', async () => {
+    mockApi([]);
+    renderApp('/business/index.html?source=app');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeTruthy();
+    expect(screen.queryByText("This page isn't here.")).toBeNull();
+  });
+
+  it('opens Today at its own address for /business/index.html once signed in', async () => {
+    signedIn();
+    mockApi(TODAY_ROUTES);
+    renderApp('/business/index.html');
+    expect(await screen.findByText(times("Your shop's day: appointments, checkout and today's sales."))).toBeTruthy();
+    expect(screen.queryByText("This page isn't here.")).toBeNull();
+  });
+
   it('says what to do when the code is wrong, and checks the code has 6 digits first', async () => {
     const api = mockApi([['POST /api/computer-sessions', apiError('wrong_code', "That code isn't right or has run out.", 400)]]);
     renderApp('/business');

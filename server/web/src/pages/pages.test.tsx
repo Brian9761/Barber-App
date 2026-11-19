@@ -1,5 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App, ROUTER_FUTURE } from '../App';
@@ -34,6 +34,25 @@ describe('every page', () => {
     renderApp(path);
     expect(h1()).toBe(heading);
     await waitFor(() => expect(document.title).toBe(title));
+  });
+
+  it('opens Home at its own address for the page’s file, /index.html, never “This page isn’t here.”', async () => {
+    mockApi([]);
+    function Where() {
+      const { pathname, search, hash } = useLocation();
+      return <output data-testid="where">{pathname + search + hash}</output>;
+    }
+    render(
+      <MemoryRouter initialEntries={['/index.html?source=app#top']} future={ROUTER_FUTURE}>
+        <CatalogProvider initial={catalog}>
+          <App />
+          <Where />
+        </CatalogProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Fresh cuts. Booked in seconds.' })).toBeTruthy();
+    expect(screen.getByTestId('where').textContent).toBe('/?source=app#top');
+    expect(screen.queryByText("This page isn't here.")).toBeNull();
   });
 
   it('has the global nav, with the page it’s on marked and Book always there', () => {

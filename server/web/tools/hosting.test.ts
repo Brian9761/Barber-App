@@ -63,7 +63,17 @@ describe.each([
       expect(redirectFor(redirects, path), path).toBeNull();
       expect(redirectFor(redirects, `${path}/`), `${path}/`).toBeNull();
     }
-    for (const path of ['/', '/index.html', '/book/time', '/business/index.html']) expect(redirectFor(redirects, path), path).toBeNull();
+    for (const path of ['/', '/book/time', '/business', '/business/', '/business/today']) expect(redirectFor(redirects, path), path).toBeNull();
+  });
+
+  // The site's and Business's own pages are files too ("/index.html", "/business/index.html"): those
+  // addresses go to the page's own, for good, so they never open "This page isn't here.".
+  it('send the site’s and Business’s page files to their own addresses, for good', () => {
+    const redirects = redirectsOf(hosting);
+    expect(redirectFor(redirects, '/index.html')).toEqual({ destination: '/', status: 308 });
+    expect(redirectFor(redirects, '/business/index.html')).toEqual({ destination: '/business/', status: 308 });
+    // Nothing else that ends that way.
+    for (const path of ['/book/index.html', '/assets/index.html', '/index.htm']) expect(redirectFor(redirects, path), path).toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
-import { Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { BookingRoutes } from './booking/BookingRoutes';
 import { BusinessLoadFailed, BusinessLoading } from './business/BusinessLoading';
 import { Layout } from './components/Layout';
@@ -91,6 +91,15 @@ function Business() {
 }
 
 /**
+ * The site's page's own file, /index.html: Home, at its own address (the hosting redirects it too,
+ * but the service worker opens it from its copy without asking), never "This page isn't here.".
+ */
+function HomeAddress() {
+  const { search, hash } = useLocation();
+  return <Navigate to={{ pathname: '/', search, hash }} replace />;
+}
+
+/**
  * The site's pages (the legal ones too), all under the global nav and footer, where a page that
  * can't be drawn says so (components/PageError.tsx); and Izzy Clipz Business, under its own.
  */
@@ -98,6 +107,7 @@ export function App() {
   return (
     <Routes>
       <Route path="business/*" element={<Business />} />
+      <Route path="index.html" element={<HomeAddress />} />
       <Route element={<Layout />}>
         <Route index element={<HomePage />} />
         <Route path="services" element={<ServicesPage />} />

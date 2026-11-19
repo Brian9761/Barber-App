@@ -101,6 +101,54 @@ test('the service worker controls the whole site from the first visit, and keeps
   expect(fromApi).toEqual(isDemo(testInfo) ? [] : ['/api/catalog']);
 });
 
+test('the pages’ own files (“/index.html”, “/business/index.html”) go to their pages, and the app still keeps both pages', async ({ page, request }) => {
+  // The hosting sends each file's address to its page's own, for good, before anything else.
+  for (const [file, home] of [
+    ['/index.html', '/'],
+    ['/business/index.html', '/business/'],
+  ] as const) {
+    const response = await request.get(file, { maxRedirects: 0 });
+    expect(response.status(), file).toBe(308);
+    expect(response.headers().location, file).toBe(home);
+  }
+  await page.goto('/index.html');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Fresh cuts. Booked in seconds.' })).toBeVisible();
+  // The service worker keeps both pages all the same: it follows the redirect, and keeps the page itself.
+  await controlledByWorker(page);
+  await page.waitForFunction(async () => (await caches.keys()).some((name) => name.startsWith('izzy-app-')));
+  const kept = await page.evaluate(async () => {
+    const name = (await caches.keys()).find((key) => key.startsWith('izzy-app-'))!;
+    const cache = await caches.open(name);
+    const out: Record<string, { status: number; redirected: boolean; root: boolean; business: boolean }> = {};
+    for (const request of await cache.keys()) {
+      const path = new URL(request.url).pathname;
+      if (path !== '/index.html' && path !== '/business/index.html') continue;
+      const response = (await cache.match(request))!;
+      const html = await response.text();
+      out[path] = {
+        status: response.status,
+        redirected: response.redirected,
+        root: html.includes('<div id="root"></div>'),
+        business: html.includes('<title>Izzy Clipz Business</title>'),
+      };
+    }
+    return out;
+  });
+  expect(kept).toEqual({
+    '/index.html': { status: 200, redirected: false, root: true, business: false },
+    '/business/index.html': { status: 200, redirected: false, root: true, business: true },
+  });
+  // Opened from the app's own copy (the service worker doesn't ask the server), they're the pages too.
+  await page.goto('/index.html');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Fresh cuts. Booked in seconds.' })).toBeVisible();
+  await page.goto('/business/index.html');
+  await expect(page).toHaveURL(/\/business\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeVisible();
+  await expect(page.getByText("This page isn't here.")).toHaveCount(0);
+});
+
 test('after one visit the app opens offline, and a page it doesn’t keep shows the offline page', async ({ page, context }, testInfo) => {
   await page.goto('/');
   await controlledByWorker(page);

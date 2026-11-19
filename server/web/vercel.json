@@ -5,7 +5,9 @@
     { "source": "/privacy/index.html", "destination": "/privacy", "permanent": true },
     { "source": "/terms/index.html", "destination": "/terms", "permanent": true },
     { "source": "/cancellation-policy/index.html", "destination": "/cancellation-policy", "permanent": true },
-    { "source": "/accessibility/index.html", "destination": "/accessibility", "permanent": true }
+    { "source": "/accessibility/index.html", "destination": "/accessibility", "permanent": true },
+    { "source": "/index.html", "destination": "/", "permanent": true },
+    { "source": "/business/index.html", "destination": "/business/", "permanent": true }
   ],
   "rewrites": [
     { "source": "/business", "destination": "/business/index.html" },

@@ -7,7 +7,9 @@
 // The installed app's scope is /business/ (public/business/manifest.webmanifest), and
 // /business without the slash is outside it: typed in, or opened from the service worker's
 // copy, it becomes /business/ at once, so an app added to the Home Screen from sign-in, or a
-// window of the installed app, stays inside its own scope.
+// window of the installed app, stays inside its own scope. So does its page's own file,
+// /business/index.html (the hosting redirects it too, but the service worker opens it from its
+// copy without asking), rather than opening "This page isn't here.".
 
 import type { ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
@@ -27,7 +29,7 @@ export default function BusinessApp() {
   const { pathname, search, hash } = useLocation();
   const { session } = useSession();
   const signedIn = session !== null;
-  if (pathname === '/business') return <Navigate to={{ pathname: '/business/', search, hash }} replace />;
+  if (pathname === '/business' || pathname === '/business/index.html') return <Navigate to={{ pathname: '/business/', search, hash }} replace />;
   const gate = (page: ReactElement) => (signedIn ? page : <SignInPage />);
   return (
     <Frame signedIn={signedIn}>
