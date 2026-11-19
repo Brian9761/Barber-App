@@ -795,22 +795,23 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         screenshot("O26-Payments-Today-Fee")
     }
 
-    /// Lee Sample cancelled in the app at 10:50 AM, less than 1 hour before an 11:30 AM haircut
-    /// booked with a card on file: a late cancellation the owner may charge.
+    /// Lee Sample cancelled in the app at 9:20 AM, less than 1 hour before a 10 AM haircut with
+    /// Julian booked with a card on file: a late cancellation the owner may charge now that the
+    /// haircut has ended (10:45 AM), as nobody else was booked into its time.
     func testChargeALateCancellationFee() {
         launch("-fake-cards-on-file")
         let row = reveal("appointment-Lee Sample")
         XCTAssertTrue(row.label.contains("Cancelled late"), "Got: \(row.label)")
         row.tap()
         XCTAssertTrue(statusShows("Cancelled late"))
-        XCTAssertTrue(waitForLabel(reveal("detailCustomerCancelled"), containing: "10:50 AM"))
+        XCTAssertTrue(waitForLabel(reveal("detailCustomerCancelled"), containing: "9:20 AM"))
         let charge = reveal("chargeFee")
         XCTAssertTrue(waitForLabel(charge, containing: "Charge late cancellation fee ($35)"), "Got: \(charge.label)")
         screenshot("O27-Late-Cancellation-Fee")
 
         charge.tap()
         XCTAssertTrue(text(containing: "Charge $35 to Lee Sample's Visa •••• 4242?").waitForExistence(timeout: 10))
-        XCTAssertTrue(text(containing: "the client cancelled at 10:50 AM, less than 1 hour before").exists, "The question says why")
+        XCTAssertTrue(text(containing: "the client cancelled at 9:20 AM, less than 1 hour before").exists, "The question says why")
         tapDialogButton("Charge $35", identifier: "confirmChargeFee")
         XCTAssertTrue(waitForLabel(reveal("feeStatus"), containing: "Late cancellation fee charged"))
         XCTAssertFalse(element("chargeFee").exists, "A fee is charged once")

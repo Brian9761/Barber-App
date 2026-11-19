@@ -1020,18 +1020,20 @@ final class SampleServerNoShowTests: XCTestCase {
         }
     }
 
-    func testChargingALateCancellationRightAwayOnceAndLabelled() async throws {
+    func testChargingALateCancellationOnceTheAppointmentHasEndedOnceAndLabelled() async throws {
         var options = FakeServer.Options()
         options.lateCancelWithCard = true
         let harness = Harness(options: options)
-        // Lee cancelled in the app at 10:50, 40 minutes before the 11:30 haircut.
+        // Lee cancelled in the app at 9:20, 40 minutes before the 10 AM haircut with Julian.
         let lee = try XCTUnwrap(harness.appointment(named: "Lee Sample"))
         XCTAssertEqual(lee.status, .cancelled)
         XCTAssertEqual(lee.cancelledBy, .customer)
         XCTAssertEqual(lee.noShowFee, IzzyAPI.NoShowFee(
-            amountCents: 3_500, fullPrice: true, customerCancelledAt: TestClock.at(10, 50), lateCancelWindowMinutes: 60, reason: .lateCancel
+            amountCents: 3_500, fullPrice: true, customerCancelledAt: TestClock.at(9, 20), lateCancelWindowMinutes: 60, reason: .lateCancel
         ))
-        // 11:05: before the start, and already chargeable.
+        // Not before the haircut's 10:45 end (another client may still take the time)…
+        XCTAssertNil(lee.chargeableFee(at: TestClock.at(10, 44)))
+        // …but at 11:05 it has ended, and it's chargeable.
         XCTAssertEqual(lee.chargeableFee(at: TestClock.now), .lateCancel)
 
         let charged = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
@@ -1042,7 +1044,7 @@ final class SampleServerNoShowTests: XCTestCase {
         let payments = try await harness.api.payments(on: TestClock.today)
         let fee = try XCTUnwrap(payments.first { $0.kind == .lateCancelFee })
         XCTAssertEqual(fee.amountCents, 3_500)
-        XCTAssertEqual(fee.description, "Late cancellation fee: Haircut with Flowxbori, Mon, Nov 2 at 11:30 AM", "as the server words it")
+        XCTAssertEqual(fee.description, "Late cancellation fee: Haircut with Julian, Mon, Nov 2 at 10:00 AM", "as the server words it")
         XCTAssertEqual(fee.kind.title, "Late cancellation fee")
         XCTAssertEqual(payments.filter(\.kind.isFee).count, 1)
         // Again: the same answer, no second charge; reopening doesn't refund.
@@ -1070,10 +1072,15 @@ final class SampleServerNoShowTests: XCTestCase {
         }
         let reopened = try await harness.api.setStatus(.booked, ofAppointment: lee.id)
         XCTAssertNil(reopened.noShowFee?.reason)
-        XCTAssertEqual(reopened.noShowFee?.customerCancelledAt, TestClock.at(10, 50), "when the client cancelled is kept")
+        XCTAssertEqual(reopened.noShowFee?.customerCancelledAt, TestClock.at(9, 20), "when the client cancelled is kept")
         await expect("The client cancelled this booking in the app, so there's no fee.")
         let cancelled = try await harness.api.setStatus(.cancelled, ofAppointment: lee.id)
         XCTAssertEqual(cancelled.cancelledBy, .shop)
+        XCTAssertEqual(cancelled.shopCancelledAt, TestClock.now)
+        await expect("The shop cancelled this booking, so there's no fee.")
+        // Reopened again, it stays the shop's cancellation: still no fee, and no no-show.
+        let again = try await harness.api.setStatus(.booked, ofAppointment: lee.id)
+        XCTAssertEqual(again.shopCancelledAt, TestClock.now)
         await expect("The shop cancelled this booking, so there's no fee.")
         let payments = try await harness.api.payments(on: TestClock.today)
         XCTAssertTrue(payments.allSatisfy { !$0.kind.isFee })

@@ -557,7 +557,8 @@ final class NoShowSettingsStoreTests: XCTestCase {
         )
         XCTAssertEqual(
             store.lateCancellationFooter,
-            "A client who cancels in the app less than 1 hour before the start can be charged the fee. Cancelling earlier is free, and there's never a fee when the shop cancels."
+            "A client who cancels in the app less than 1 hour before the start can be charged the fee once the appointment has ended. "
+                + "Cancelling earlier is free, and there's never a fee when the shop cancels."
         )
         store.draft.lateCancelWindowMinutes = 1_440
         XCTAssertTrue(store.lateCancellationFooter.hasPrefix("A client who cancels in the app less than 24 hours before the start"))

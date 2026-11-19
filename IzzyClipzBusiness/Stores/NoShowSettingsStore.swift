@@ -195,15 +195,16 @@ final class NoShowSettingsStore {
     static let feeFooter = "The same fee for a no-show and a late cancellation. Each booking keeps the fee and late-cancellation window it was booked with, so a change only affects new bookings."
 
     /// Under the Late cancellations switch: "A client who cancels in the app less than 1 hour before
-    /// the start can be charged the fee. Cancelling earlier is free, and there's never a fee when the
-    /// shop cancels." Off, only for new bookings: those made before keep their window.
+    /// the start can be charged the fee once the appointment has ended. Cancelling earlier is free,
+    /// and there's never a fee when the shop cancels." Off, only for new bookings: those made before
+    /// keep their window.
     var lateCancellationFooter: String {
         guard draft.lateCancelEnabled else {
             return "Off: new bookings can be cancelled in the app for free until the start, and only no-shows can be charged. "
                 + "Bookings already made keep the window they were booked with."
         }
         let window = IzzyAPI.NoShowRule.windowLabel(minutes: draft.lateCancelWindowMinutes)
-        return "A client who cancels in the app less than \(window) before the start can be charged the fee. "
+        return "A client who cancels in the app less than \(window) before the start can be charged the fee once the appointment has ended. "
             + "Cancelling earlier is free, and there's never a fee when the shop cancels."
     }
 

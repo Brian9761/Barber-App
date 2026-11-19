@@ -45,8 +45,9 @@ final class FakeServer {
         /// With any of these three, no-show protection starts on: those clients booked with it on.
         var noShowWithCard = false
         /// Also start with a client who booked online with a card on file (Visa 4242) and cancelled
-        /// in the app at 10:50 AM, less than 1 hour before their 11:30 AM haircut with Flowxbori:
-        /// a late cancellation the owner may charge.
+        /// in the app at 9:20 AM, less than 1 hour before their 10 AM haircut with Julian: a late
+        /// cancellation the owner may charge, since that haircut has ended (10:45 AM) and nobody else
+        /// was booked into its time.
         var lateCancelWithCard = false
         /// Also start with a client who booked online with a card on file (Visa 4242) for later
         /// today: a 2:30 PM haircut with Flowxbori that hasn't ended, so it can't be a no-show yet.
@@ -375,10 +376,14 @@ final class FakeServer {
         }
         // Like the server: a booking with a card on file is a no-show only once it has ended (a client
         // who comes before the end isn't one), and never once it was marked completed, even after
-        // it's reopened (the client came): `completedAt`, which is never cleared.
+        // it's reopened (the client came): `completedAt`, which is never cleared. Nor once the shop
+        // cancelled it, even after it's reopened (there's no fee for it): `shopCancelledAt`.
         if status == .noShow, appointment.card != nil, appointment.status != .noShow {
             if appointment.status == .completed || appointment.completedAt != nil {
                 throw APIError.server(code: IzzyAPI.ErrorCode.alreadyCompleted, message: IzzyAPI.NoShowRule.completedNoShowMessage, status: 409)
+            }
+            if appointment.shopCancelledBefore {
+                throw APIError.server(code: IzzyAPI.ErrorCode.shopCancelled, message: IzzyAPI.NoShowRule.shopCancelledNoShowMessage, status: 409)
             }
             if appointment.end > now() {
                 throw APIError.server(code: IzzyAPI.ErrorCode.notStarted, message: IzzyAPI.NoShowRule.noShowBeforeEndMessage, status: 409)
@@ -391,6 +396,14 @@ final class FakeServer {
             appointment.completedAt = appointment.completedAt ?? now()
         }
         let previous = appointment.status
+        // When the shop first cancelled it, as the server keeps it: set once, kept when it's reopened
+        // (one still cancelled by the shop without it counts as cancelled now). A booking the client
+        // cancelled stays theirs.
+        let shopCancels = status == .cancelled && previous != .cancelled
+        let cancelledByTheShop = previous == .cancelled && appointment.cancelledBy == .shop
+        if shopCancels || cancelledByTheShop {
+            appointment.shopCancelledAt = appointment.shopCancelledAt ?? now()
+        }
         appointment.status = status
         if status == .cancelled {
             // Cancelling here is the shop cancelling; an earlier cancellation keeps who did it.
@@ -410,7 +423,7 @@ final class FakeServer {
         let found = IzzyAPI.NoShowRule.feeCase(
             status: appointment.status, cancelledBy: appointment.cancelledBy, start: appointment.start,
             customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes,
-            createdAt: appointment.createdAt
+            createdAt: appointment.createdAt, shopCancelledAt: appointment.shopCancelledAt
         )
         if case .chargeable(let reason) = found { fee.reason = reason } else { fee.reason = nil }
         appointment.noShowFee = fee
@@ -808,11 +821,13 @@ final class FakeServer {
                 offering: haircut, start: at(10), customer: IzzyAPI.Customer(name: "Kim Sample", phone: "+14425550108"), status: .noShow
             ), price: haircut.price))
         }
-        if options.lateCancelWithCard, let haircut = offering("haircut", "flowxbori") {
+        // Lee's 10 AM has ended, and nobody else took its time, so its late cancellation can be charged
+        // (a late cancellation can be only once the appointment has ended, as for a no-show).
+        if options.lateCancelWithCard, let haircut = offering("haircut", "julian-ramos") {
             appointments.append(protected(makeAppointment(
-                offering: haircut, start: at(11, 30), customer: IzzyAPI.Customer(name: "Lee Sample", phone: "+14425550109"),
+                offering: haircut, start: at(10), customer: IzzyAPI.Customer(name: "Lee Sample", phone: "+14425550109"),
                 status: .cancelled, cancelledBy: .customer
-            ), price: haircut.price, customerCancelledAt: at(10, 50)))
+            ), price: haircut.price, customerCancelledAt: at(9, 20)))
         }
         if options.upcomingWithCard, let haircut = offering("haircut", "flowxbori") {
             appointments.append(protected(makeAppointment(

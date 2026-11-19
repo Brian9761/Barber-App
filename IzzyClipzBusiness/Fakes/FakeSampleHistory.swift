@@ -8,9 +8,10 @@ import IzzyClipzKit
 ///
 /// What happened follows the server's rules: a checked-out appointment is completed and paid with
 /// its sale; a no-show or late-cancellation fee is charged only to a card on file, after the
-/// appointment ended (a no-show) or the client cancelled inside the agreed hour (a late
-/// cancellation). Clients are "Malik Sample" and so on, with numbers in the 555-01xx range kept for
-/// examples, so nothing reads as a real client; and the analytics never look at them anyway.
+/// appointment ended, for a no-show or for a client who cancelled inside the agreed hour (a late
+/// cancellation); a booking the shop cancelled is never charged. Clients are "Malik Sample" and so
+/// on, with numbers in the 555-01xx range kept for examples, so nothing reads as a real client; and
+/// the analytics never look at them anyway.
 ///
 /// Each barber has his own way of working, so the leaderboard's order changes with what it ranks:
 /// Izzy sells the most (the owner, with the VIP and Haircut & Beard), Cristian does the most cuts
@@ -194,16 +195,19 @@ enum FakeSampleHistory {
                     let minutesBefore = random.chance(0.35) ? random.int(10...54) : random.int(90...1_290)
                     if var fee = appointment.noShowFee {
                         fee.customerCancelledAt = start.addingTimeInterval(-TimeInterval(minutesBefore * 60))
-                        // Less than the hour before (and days after booking): a late cancellation.
+                        // Less than the hour before (and days after booking): a late cancellation,
+                        // charged once the appointment has ended, like a no-show.
                         if minutesBefore < 60, random.chance(0.5) {
                             fee.status = .charged
-                            fee.chargedAt = start.addingTimeInterval(900)
+                            fee.chargedAt = end.addingTimeInterval(600)
                             fee.reason = .lateCancel
                         }
                         appointment.noShowFee = fee
                     }
                 } else {
                     appointment.cancelledBy = .shop
+                    // As the server keeps it (a couple of hours before, days after it was booked).
+                    appointment.shopCancelledAt = start.addingTimeInterval(-2 * 3_600)
                 }
             }
             Self.refreshFeeReason(&appointment)
@@ -217,7 +221,7 @@ enum FakeSampleHistory {
             let found = IzzyAPI.NoShowRule.feeCase(
                 status: appointment.status, cancelledBy: appointment.cancelledBy, start: appointment.start,
                 customerCancelledAt: fee.customerCancelledAt, lateCancelWindowMinutes: fee.lateCancelWindowMinutes,
-                createdAt: appointment.createdAt
+                createdAt: appointment.createdAt, shopCancelledAt: appointment.shopCancelledAt
             )
             if case .chargeable(let reason) = found { fee.reason = reason } else { fee.reason = nil }
             appointment.noShowFee = fee

@@ -7,9 +7,10 @@ import IzzyClipzKit
 /// read the same when they're opened again later.
 ///
 /// Which fee can be charged is the server's rule, through the Kit (`Appointment.chargeableFee(at:)`):
-/// a no-show whose end has passed, or a cancellation by the client less than the agreed window
-/// before the start (and more than 15 minutes after booking), up to 7 days after the start. Only a
-/// fee Stripe reported as succeeded shows as charged.
+/// a no-show, or a cancellation by the client less than the agreed window before the start (and
+/// more than 15 minutes after booking), once the appointment's end has passed, up to 7 days after
+/// the start, and never for a booking the shop cancelled, even reopened since. Only a fee Stripe
+/// reported as succeeded shows as charged.
 struct FeePanel: Equatable {
     /// "Visa •••• 4242".
     let cardLabel: String
@@ -76,7 +77,8 @@ struct FeePanel: Equatable {
 
     /// `nil` when the appointment has no card on file (booked at the shop, by phone, or before
     /// no-show protection was on). `others` are the day's appointments: a late cancellation whose
-    /// time another client was booked into isn't charged (the policy's promise, and the server's rule).
+    /// time another client was booked into isn't charged (the policy's promise, and the server's
+    /// rule, checked once the appointment has ended: before that, the note says when it can be).
     init?(appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime, others: [IzzyAPI.Appointment] = []) {
         guard let fee = appointment.noShowFee else { return nil }
         let card = appointment.card?.label ?? "the card on file"
@@ -142,6 +144,9 @@ struct FeePanel: Equatable {
             if refusal == IzzyAPI.NoShowRule.feeDeadlineMessage { return refusal }
             // Completed before and reopened: it can't become a no-show, so there's no fee to charge.
             if appointment.completedBefore { return IzzyAPI.NoShowRule.completedNoShowMessage }
+            // Cancelled by the shop before and reopened: there's never a fee ("The shop cancelled this
+            // booking, so there's no fee.").
+            if appointment.shopCancelledBefore { return refusal }
             return appointment.end > now
                 ? "If the client doesn't come, you can mark a no-show once the appointment has ended. Then you can charge the fee."
                 : "If the client didn't come, mark a no-show. Then you can charge the fee."
@@ -190,9 +195,11 @@ struct FeePanel: Equatable {
 
     /// What Reopen says first, when reopening changes something about the fee: a charged fee isn't
     /// refunded (refunds are made in the Stripe Dashboard), one Stripe hasn't confirmed yet may
-    /// have gone through, a late cancellation that's reopened can't be charged any more, and a
-    /// booking the client cancelled in the app can't be charged a no-show fee once it's reopened
-    /// (the server keeps that they cancelled). `nil` when there's nothing to say.
+    /// have gone through, a booking the shop cancelled can't be charged a fee once it's reopened
+    /// (the server keeps that the shop cancelled it), a late cancellation that's reopened can't be
+    /// charged any more (also before the appointment has ended, when it couldn't be charged yet),
+    /// and a booking the client cancelled in the app can't be charged a no-show fee once it's
+    /// reopened (the server keeps that they cancelled). `nil` when there's nothing to say.
     static func reopenWarning(for appointment: IzzyAPI.Appointment, now: Date) -> String? {
         guard let fee = appointment.noShowFee else { return nil }
         switch fee.status {
@@ -201,7 +208,12 @@ struct FeePanel: Equatable {
         case .pending:
             return "Stripe hasn't confirmed the \(fee.amountLabel) \(fee.title.lowercased()) yet. If it went through, reopening doesn't refund it. Refunds are made in the Stripe Dashboard."
         case .none, .declined, .needsAction:
-            if appointment.chargeableFee(at: now) == .lateCancel {
+            // The shop cancelled it: once it's reopened, no fee can ever be charged for it.
+            if appointment.shopCancelledBefore, appointment.status != .completed {
+                return Self.reopenShopCancelledWarning
+            }
+            // A late cancellation that can be charged once the appointment has ended (or now, if it has).
+            if appointment.chargeableFee(at: max(now, appointment.end)) == .lateCancel {
                 return "Once it's reopened, the \(fee.amountLabel) late cancellation fee can't be charged any more. "
                     + "The client cancelled in the app, so a no-show fee can't be charged either."
             }
@@ -222,14 +234,22 @@ struct FeePanel: Equatable {
     static let reopenCompletedWarning =
         "It was marked done, so even once it's reopened, it can't be marked a no-show or charged a no-show fee: the client came."
 
+    /// What Reopen says first for a booking with a card on file the shop cancelled (the server's
+    /// `shopCancelledAt`): the Cancellation & No-Show Policy promises no fee once the shop cancels.
+    static let reopenShopCancelledWarning =
+        "The shop cancelled this booking, so once it's reopened, it can't be charged a fee. To keep a fee, ask the client to book again in the app instead."
+
     /// Under the status buttons of a booking with a card on file that hasn't ended: "Mark no-show"
     /// isn't offered yet, because until the start the client can still cancel in the app, and a
     /// client who comes before the end isn't a no-show. One that was completed before and reopened
     /// is never offered it, and says so in the server's words ("This appointment was marked
-    /// completed, so it can't become a no-show."). Worded as the website's Business area does.
+    /// completed, so it can't become a no-show."), nor is one the shop cancelled before it was
+    /// reopened ("The shop cancelled this booking, so it can't become a no-show."). Worded as the
+    /// website's Business area does.
     static func noShowHint(for appointment: IzzyAPI.Appointment, now: Date, shopTime: ShopTime) -> String? {
         guard appointment.status == .booked, !appointment.canMarkNoShow(at: now) else { return nil }
         if appointment.completedBefore { return IzzyAPI.NoShowRule.completedNoShowMessage }
+        if appointment.shopCancelledBefore { return IzzyAPI.NoShowRule.shopCancelledNoShowMessage }
         let today = shopTime.day(containing: now) == shopTime.day(containing: appointment.end)
         let when = today ? "at \(shopTime.time(appointment.end))" : "on \(shopTime.dayAndTime(appointment.end))"
         let why = appointment.start > now
@@ -262,8 +282,9 @@ extension IzzyAPI.Appointment {
     /// Whether "Mark no-show" is offered for a booked appointment, by the server's rule (the Kit's
     /// `canBeMarkedNoShow(at:)`): for a booking with a card on file only once it has ended (the
     /// server answers `not_started` before, so the client may still come) and never once it was
-    /// completed, even if it was reopened since (`completedAt`; the server answers
-    /// `already_completed`), for others whenever it's booked, as before.
+    /// completed or cancelled by the shop, even if it was reopened since (`completedAt`,
+    /// `shopCancelledAt`; the server answers `already_completed` or `shop_cancelled`), for others
+    /// whenever it's booked, as before.
     func canMarkNoShow(at now: Date) -> Bool {
         status == .booked && canBeMarkedNoShow(at: now)
     }
@@ -271,7 +292,8 @@ extension IzzyAPI.Appointment {
     /// Whether another client has this appointment's time now: another booked or completed
     /// appointment of the same barber that overlaps it, among `others` (the day's). Then a late
     /// cancellation isn't charged: the Cancellation & No-Show Policy promises it, and the server
-    /// refuses it (`timeTakenSince` in server/src/noshowfee.ts).
+    /// refuses it (`timeTakenSince` in server/src/noshowfee.ts), asked once the appointment has
+    /// ended, when every booking for that time is in.
     func timeTaken(among others: [IzzyAPI.Appointment]) -> Bool {
         others.contains { other in
             other.id != id && other.barberId == barberId
