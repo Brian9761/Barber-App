@@ -1190,9 +1190,9 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     /// iOS 18 gives a form row's text field the whole row's frame, whose last 20 points are the row's
     /// margin, outside the field. 95% of the way along the flat fee's row (iPhone 16 Pro, iOS 18.6)
     /// was 18 points from its end, 2 points past the field: both taps there went to the row, and the
-    /// field never got the keyboard.
+    /// field never got the keyboard. The field is brought out from under the navigation bar first.
     private func replaceText(in identifier: String, with text: String, file: StaticString = #filePath, line: UInt = #line) {
-        let field = reveal(identifier, file: file, line: line)
+        let field = revealBelowNavigationBar(identifier, file: file, line: line)
         let trailingEnd = field.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -44, dy: 0))
         trailingEnd.tap()
         if !waitForKeyboardFocus(on: field, timeout: 10) {
@@ -1302,6 +1302,28 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             settle(target)
         }
         XCTAssertTrue(!bar.exists || target.frame.maxY <= bar.frame.minY, "\(identifier) is behind the tab bar", file: file, line: line)
+        return target
+    }
+
+    /// Reveals an element in the page and, if it has gone up under the navigation bar, drags the page
+    /// down just far enough to bring it out below the bar. Under the bar an element still reads as on
+    /// the screen and hittable, but a tap there lands on the bar: on iOS 18.6 the flat fee's row
+    /// stopped at y 64 to 130, under the bar (56 to 100), and two taps at its middle (y 97) never
+    /// reached the field. (The Analytics tests' revealBelowBar does the same on their screen.)
+    @discardableResult
+    private func revealBelowNavigationBar(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let target = reveal(identifier, file: file, line: line)
+        let bar = app.navigationBars.firstMatch
+        for _ in 0..<3 {
+            guard target.exists, bar.exists, target.frame.minY < bar.frame.maxY else { break }
+            // 20 points below the bar; a drag loses about 10 points before the page starts to move.
+            drag(.up, by: bar.frame.maxY - target.frame.minY + 20 + 10)
+            settle(target)
+        }
+        XCTAssertFalse(
+            target.exists && bar.exists && target.frame.minY < bar.frame.maxY,
+            "\(identifier) is still under the navigation bar", file: file, line: line
+        )
         return target
     }
 
