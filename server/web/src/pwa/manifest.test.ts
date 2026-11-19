@@ -24,11 +24,13 @@ describe('the web app manifest', () => {
       start_url: '/?source=app',
       scope: '/',
       display: 'standalone',
-      orientation: 'portrait',
       background_color: '#000000',
       theme_color: '#000000',
     });
     expect(manifest.description).toMatch(/^Book .{40,}\.$/);
+    // It turns with the screen, like the Business app: a phone held sideways (on a stand, say) keeps
+    // working (WCAG 2.2 SC 1.3.4 Orientation, the Accessibility Statement's AA goal).
+    expect(manifest).not.toHaveProperty('orientation');
     // Android would send people to an app store instead of installing this.
     expect(manifest).not.toHaveProperty('prefer_related_applications');
   });

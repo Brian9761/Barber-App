@@ -39,10 +39,11 @@ test('the manifest is linked and valid, its icons load, and Chrome finds nothing
     start_url: '/?source=app',
     scope: '/',
     display: 'standalone',
-    orientation: 'portrait',
     background_color: '#000000',
     theme_color: '#000000',
   });
+  // Not locked to portrait: the installed app turns with the screen (WCAG 2.2 SC 1.3.4 Orientation).
+  expect(manifest).not.toHaveProperty('orientation');
   expect(manifest.icons.map((icon) => `${icon.sizes} ${icon.purpose}`)).toEqual(['192x192 any', '512x512 any', '512x512 maskable']);
 
   // Every icon, the iPhone's included, is a PNG of the size it says.
