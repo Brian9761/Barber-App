@@ -241,6 +241,10 @@ public struct IzzyAPIClient: ShopAPI, OwnerAPI, Sendable, CustomStringConvertibl
         try await send(IzzyAPI.Endpoints.disconnectStripe())
     }
 
+    public func cardDeletedInStripe(id: String) async throws -> IzzyAPI.StripeConnection {
+        try await send(IzzyAPI.Endpoints.cardDeletedInStripe(id: id))
+    }
+
     public func createComputerCode() async throws -> IzzyAPI.ComputerCode {
         try await send(IzzyAPI.Endpoints.createComputerCode())
     }

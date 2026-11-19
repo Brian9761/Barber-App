@@ -358,6 +358,12 @@ extension IzzyAPI {
             Endpoint(.delete, "/api/owner/stripe/connect", credential: .ownerKey)
         }
 
+        /// `POST /api/owner/stripe/cards-to-delete/:id/deleted` → the connection, without that card in
+        /// `cardsToDelete`.
+        public static func cardDeletedInStripe(id: String) -> Endpoint<StripeConnection> {
+            Endpoint(.post, "/api/owner/stripe/cards-to-delete/" + segment(id) + "/deleted", credential: .ownerKey)
+        }
+
         // MARK: Computers
 
         /// `POST /api/owner/computer-codes` → 201 `{ code, expiresAt, expiresInSeconds }` (the owner key only).

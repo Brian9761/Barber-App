@@ -388,6 +388,11 @@ final class ClientTests: XCTestCase {
             OwnerCall(name: "disconnect stripe", reply: .fixture("stripe-connection.json"), method: "DELETE", path: "/api/owner/stripe/connect") {
                 _ = try await $0.disconnectStripe()
             },
+            OwnerCall(name: "deleted in stripe", reply: .fixture("stripe-connection.json"), method: "POST",
+                      path: "/api/owner/stripe/cards-to-delete/cs_test_1/deleted", body: .object([:])) {
+                let connection = try await $0.cardDeletedInStripe(id: "cs_test_1")
+                XCTAssertEqual(connection.cardsToDelete, [])
+            },
             // Computers
             OwnerCall(name: "computer code", reply: .fixture("computer-code.json", status: 201), method: "POST", path: "/api/owner/computer-codes",
                       body: .object([:])) {

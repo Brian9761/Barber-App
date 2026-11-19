@@ -211,6 +211,13 @@ public protocol OwnerAPI: Sendable {
     /// and cards clients saved with the old account can't be used.
     func disconnectStripe() async throws -> IzzyAPI.StripeConnection
 
+    /// `POST /api/owner/stripe/cards-to-delete/:id/deleted` ("Deleted in
+    /// Stripe"): the shop deleted that card's customer in the Stripe account
+    /// the server can't use any more, so the server forgets its ids. Returns
+    /// the connection without it in `cardsToDelete`. Safe to call again; 404
+    /// for an id the server doesn't have.
+    func cardDeletedInStripe(id: String) async throws -> IzzyAPI.StripeConnection
+
     // MARK: Computers
 
     /// `POST /api/owner/computer-codes`: a new 6-digit code for signing in on
@@ -266,6 +273,8 @@ extension OwnerAPI {
     public func connectStripe() async throws -> IzzyAPI.StripeConnectLink { throw unavailable() }
 
     public func disconnectStripe() async throws -> IzzyAPI.StripeConnection { throw unavailable() }
+
+    public func cardDeletedInStripe(id: String) async throws -> IzzyAPI.StripeConnection { throw unavailable() }
 
     public func createComputerCode() async throws -> IzzyAPI.ComputerCode { throw unavailable() }
 

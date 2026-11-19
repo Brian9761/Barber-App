@@ -609,6 +609,7 @@ final class OwnerAPIDefaultsTests: XCTestCase {
             ("stripe", { _ = try await api.stripeConnection() }),
             ("connect", { _ = try await api.connectStripe() }),
             ("disconnect", { _ = try await api.disconnectStripe() }),
+            ("deleted in stripe", { _ = try await api.cardDeletedInStripe(id: "c1") }),
             ("code", { _ = try await api.createComputerCode() }),
             ("computers", { _ = try await api.computerSessions() }),
             ("sign out", { try await api.signOutComputer(id: "c1") }),

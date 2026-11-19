@@ -107,6 +107,10 @@ extension IzzyAPI {
         public var dashboardUrl: URL
         /// When the server last asked Stripe; `nil` when it never has.
         public var checkedAt: Date?
+        /// Saved cards and unfinished card pages on a Stripe account the server can't use any more,
+        /// for the shop to delete there ("Cards to delete in Stripe"); empty almost always, and from
+        /// a server from before the list.
+        public var cardsToDelete: [StripeCardToDelete]
 
         /// `message` defaults to what the server says for `status` (`message(for:payoutsEnabled:)`), so a
         /// fake answers in the server's words.
@@ -122,7 +126,8 @@ extension IzzyAPI {
             requirementsDue: Int = 0,
             message: String? = nil,
             dashboardUrl: URL = StripeConnection.dashboard,
-            checkedAt: Date? = nil
+            checkedAt: Date? = nil,
+            cardsToDelete: [StripeCardToDelete] = []
         ) {
             self.mode = mode
             self.status = status
@@ -136,6 +141,7 @@ extension IzzyAPI {
             self.message = message ?? StripeConnection.message(for: status, payoutsEnabled: payoutsEnabled)
             self.dashboardUrl = dashboardUrl
             self.checkedAt = checkedAt
+            self.cardsToDelete = cardsToDelete
         }
 
         /// What `GET /api/owner/me` keeps of it: `{ mode, status, businessName }`.
@@ -168,7 +174,7 @@ extension IzzyAPI {
 
         private enum CodingKeys: String, CodingKey {
             case mode, status, accountId, businessName, livemode, chargesEnabled, payoutsEnabled, detailsSubmitted, requirementsDue
-            case message, dashboardUrl, checkedAt
+            case message, dashboardUrl, checkedAt, cardsToDelete
         }
 
         public init(from decoder: Decoder) throws {
@@ -186,6 +192,8 @@ extension IzzyAPI {
             // Only ever Stripe's own https page; anything else falls back to it.
             dashboardUrl = container.decodeWebURLIfPossible(forKey: .dashboardUrl) ?? StripeConnection.dashboard
             checkedAt = try container.decodeIfPresent(Date.self, forKey: .checkedAt)
+            // A server from before the list says nothing: nothing to delete.
+            cardsToDelete = try container.decodeIfPresent([StripeCardToDelete].self, forKey: .cardsToDelete) ?? []
         }
 
         public func encode(to encoder: Encoder) throws {
@@ -202,6 +210,118 @@ extension IzzyAPI {
             try container.encode(message, forKey: .message)
             try container.encode(dashboardUrl.absoluteString, forKey: .dashboardUrl)
             try container.encode(checkedAt, forKey: .checkedAt)
+            try container.encode(cardsToDelete, forKey: .cardsToDelete)
+        }
+    }
+
+    /// A saved card, or a card page a client didn't finish, on a Stripe account the server can't use
+    /// any more because the shop changed how it connects to Stripe (`GET /api/owner/stripe`'s
+    /// `cardsToDelete`). The server can't delete it there, so the shop does: in that account's
+    /// Dashboard, Customers, then a search for `customerId`. Then "Deleted in Stripe"
+    /// (`cardDeletedInStripe(id:)`) takes it off the list, and the server forgets its ids.
+    public struct StripeCardToDelete: Codable, Hashable, Identifiable, Sendable {
+        public enum Kind: String, Codable, CaseIterable, Hashable, Sendable {
+            /// A card a client saved.
+            case savedCard
+            /// A card page whose card was never saved here (the page or the app closed first): there
+            /// may be a card on its customer, or none.
+            case cardPage
+            /// A kind this version doesn't know: shown like a card page.
+            case unknown
+
+            /// A kind this version doesn't know reads as `unknown`.
+            public init(from decoder: Decoder) throws {
+                let raw = try decoder.singleValueContainer().decode(String.self)
+                self = Kind(rawValue: raw) ?? .unknown
+            }
+        }
+
+        /// The saved card's id, or the card page's id ("cs_…"): what `cardDeletedInStripe(id:)` takes.
+        public var id: String
+        public var kind: Kind
+        /// The connected account it's on, "acct_…"; `nil` when it was saved with the shop's own Stripe key.
+        public var stripeAccountId: String?
+        /// Live (true) or test mode (false): where in that account to look.
+        public var livemode: Bool
+        /// What to search for in that account's Customers, "cus_…".
+        public var customerId: String
+        /// The saved card's type, last 4 and expiry; `nil` for a card page.
+        public var card: SavedCard?
+
+        public init(id: String, kind: Kind, stripeAccountId: String? = nil, livemode: Bool, customerId: String, card: SavedCard? = nil) {
+            self.id = id
+            self.kind = kind
+            self.stripeAccountId = stripeAccountId
+            self.livemode = livemode
+            self.customerId = customerId
+            self.card = card
+        }
+
+        /// "Visa •••• 4242", or "A card page that wasn't finished".
+        public var title: String {
+            card?.label ?? Self.cardPageTitle
+        }
+
+        /// `title` as VoiceOver says it: "Visa ending in 4242" (it would read each dot).
+        public var spokenTitle: String {
+            guard let card else { return Self.cardPageTitle }
+            return "\(card.cardOnFile.brandName) ending in \(card.last4)"
+        }
+
+        /// "Expires 12/30"; `nil` for a card page.
+        public var expiryLabel: String? {
+            card?.expiryLabel
+        }
+
+        /// "Customer: cus_123": what to search for in Stripe.
+        public var customerLabel: String {
+            "Customer: \(customerId)"
+        }
+
+        /// "Stripe account: acct_123", or "Stripe account: the shop's own Stripe key", with " (test mode)"
+        /// for one saved in test mode.
+        public var accountLabel: String {
+            "Stripe account: \(stripeAccountId ?? Self.ownKey)" + (livemode ? "" : " (test mode)")
+        }
+
+        /// What VoiceOver reads for the row: the card, its expiry, the customer and the account.
+        public var spoken: String {
+            [spokenTitle, expiryLabel, customerLabel, accountLabel].compactMap { $0 }.joined(separator: ", ")
+        }
+
+        public static let cardPageTitle = "A card page that wasn't finished"
+        static let ownKey = "the shop's own Stripe key"
+
+        /// The list's title in Settings.
+        public static let listTitle = "Cards to delete in Stripe"
+        /// What the list asks of the shop (the button is "Deleted in Stripe").
+        public static let instructions =
+            "The server can't reach these in Stripe any more, because the shop changed how it connects to Stripe. Delete these in your old Stripe account: Customers, then search for the customer id. Then tap Deleted in Stripe."
+        /// The button on each row.
+        public static let deletedButtonTitle = "Deleted in Stripe"
+        /// What it asks first: the server then forgets the customer id.
+        public static let confirmQuestion = "Did you delete it in Stripe?"
+        public static let confirmButtonTitle = "It's deleted"
+        public static let keepButtonTitle = "Not yet"
+
+        /// "Only tap It's deleted once customer cus_123 is deleted in your old Stripe account. …"
+        public var confirmMessage: String {
+            "Only tap It's deleted once customer \(customerId) is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here."
+        }
+
+        private enum CodingKeys: String, CodingKey {
+            case id, kind, stripeAccountId, livemode, customerId, card
+        }
+
+        /// Written back with every field, null when empty, as the server writes it.
+        public func encode(to encoder: Encoder) throws {
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(id, forKey: .id)
+            try container.encode(kind, forKey: .kind)
+            try container.encode(stripeAccountId, forKey: .stripeAccountId)
+            try container.encode(livemode, forKey: .livemode)
+            try container.encode(customerId, forKey: .customerId)
+            try container.encode(card, forKey: .card)
         }
     }
 

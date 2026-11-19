@@ -36,7 +36,67 @@ final class StripeConnectionTests: XCTestCase {
             "mode": .string("off"), "status": .string("off"), "accountId": .null, "businessName": .null, "livemode": .null,
             "chargesEnabled": .bool(false), "payoutsEnabled": .bool(false), "detailsSubmitted": .bool(false), "requirementsDue": .number(0),
             "message": .string("Stripe isn't set up on the server."), "dashboardUrl": .string("https://dashboard.stripe.com/"), "checkedAt": .null,
+            "cardsToDelete": .array([]),
         ]))
+        XCTAssertEqual(connection.cardsToDelete, [])
+    }
+
+    /// Saved cards and unfinished card pages on a Stripe account the server can't use any more: what
+    /// Settings lists for the shop to delete there, in the server's own fixture.
+    func testTheCardsToDeleteInAnOldStripeAccount() throws {
+        let connection = try decoder.decode(IzzyAPI.StripeConnection.self, from: try serverFixture("stripe-connection-cards-to-delete.json"))
+        XCTAssertEqual(connection.status, .active)
+        XCTAssertEqual(connection.cardsToDelete, [
+            IzzyAPI.StripeCardToDelete(
+                id: "00000000-0000-4000-8000-000000000001", kind: .savedCard, livemode: false, customerId: "cus_TestFixture000001",
+                card: IzzyAPI.SavedCard(brand: "visa", last4: "4242", expMonth: 12, expYear: 2030)
+            ),
+            IzzyAPI.StripeCardToDelete(id: "cs_test_Fixture000005", kind: .cardPage, livemode: false, customerId: "cus_TestFixture000004"),
+        ])
+        let card = connection.cardsToDelete[0]
+        XCTAssertEqual(card.title, "Visa •••• 4242")
+        XCTAssertEqual(card.spokenTitle, "Visa ending in 4242")
+        XCTAssertEqual(card.expiryLabel, "Expires 12/30")
+        XCTAssertEqual(card.customerLabel, "Customer: cus_TestFixture000001")
+        XCTAssertEqual(card.accountLabel, "Stripe account: the shop's own Stripe key (test mode)")
+        XCTAssertEqual(card.spoken, "Visa ending in 4242, Expires 12/30, Customer: cus_TestFixture000001, Stripe account: the shop's own Stripe key (test mode)")
+        let page = connection.cardsToDelete[1]
+        XCTAssertEqual(page.title, "A card page that wasn't finished")
+        XCTAssertEqual(page.spokenTitle, "A card page that wasn't finished")
+        XCTAssertNil(page.expiryLabel)
+        XCTAssertEqual(page.spoken, "A card page that wasn't finished, Customer: cus_TestFixture000004, Stripe account: the shop's own Stripe key (test mode)")
+        // After "Deleted in Stripe" on the card, the page is left.
+        let after = try decoder.decode(IzzyAPI.StripeConnection.self, from: try serverFixture("stripe-connection-card-deleted.json"))
+        XCTAssertEqual(after.cardsToDelete.map(\.id), ["cs_test_Fixture000005"])
+    }
+
+    func testACardToDeleteInWords() throws {
+        let live = IzzyAPI.StripeCardToDelete(
+            id: "c1", kind: .savedCard, stripeAccountId: "acct_1OldShop", livemode: true, customerId: "cus_1",
+            card: IzzyAPI.SavedCard(brand: "amex", last4: "0005", expMonth: 3, expYear: 2029)
+        )
+        XCTAssertEqual(live.accountLabel, "Stripe account: acct_1OldShop")
+        XCTAssertEqual(live.title, "American Express •••• 0005")
+        XCTAssertEqual(live.spokenTitle, "American Express ending in 0005")
+        XCTAssertEqual(live.confirmMessage,
+                       "Only tap It's deleted once customer cus_1 is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here.")
+        XCTAssertEqual(IzzyAPI.StripeCardToDelete.listTitle, "Cards to delete in Stripe")
+        XCTAssertEqual(IzzyAPI.StripeCardToDelete.deletedButtonTitle, "Deleted in Stripe")
+        XCTAssertTrue(IzzyAPI.StripeCardToDelete.instructions.contains("Delete these in your old Stripe account: Customers, then search for the customer id."))
+        // Written back with every field, null when empty.
+        XCTAssertEqual(try encodeAPI(IzzyAPI.StripeCardToDelete(id: "cs_test_1", kind: .cardPage, livemode: true, customerId: "cus_2")), .object([
+            "id": .string("cs_test_1"), "kind": .string("cardPage"), "stripeAccountId": .null, "livemode": .bool(true),
+            "customerId": .string("cus_2"), "card": .null,
+        ]))
+        // A kind a newer server adds is shown like a card page; a server from before the list has nothing to delete.
+        let future = try decodeAPI(IzzyAPI.StripeCardToDelete.self,
+                                   #"{ "id": "x1", "kind": "terminalReader", "stripeAccountId": null, "livemode": true, "customerId": "cus_3", "card": null }"#)
+        XCTAssertEqual(future.kind, .unknown)
+        XCTAssertEqual(future.title, "A card page that wasn't finished")
+        let older = String(decoding: try kitFixture("stripe-connection.json"), as: UTF8.self)
+            .replacingOccurrences(of: #","# + "\n" + #"  "cardsToDelete": []"#, with: "")
+        XCTAssertFalse(older.contains("cardsToDelete"))
+        XCTAssertEqual(try decodeAPI(IzzyAPI.StripeConnection.self, older).cardsToDelete, [])
     }
 
     func testEveryStatusInSettingsWords() {
@@ -233,6 +293,17 @@ final class StripeAndComputerClientTests: XCTestCase {
         XCTAssertEqual(sent.header("Content-Type"), "application/json")
         XCTAssertEqual(sent.json, .object(["returnTo": .string("app")]))
         XCTAssertNil(sent.header("Idempotency-Key"))
+    }
+
+    func testDeletedInStripeAnswersWithTheList() async throws {
+        let body = try serverFixtureOrKit("stripe-connection-card-deleted.json", fallback: "stripe-connection.json")
+        StubURLProtocol.reply { _ in Reply(status: 200, body: body) }
+        let connection = try await client.cardDeletedInStripe(id: "00000000-0000-4000-8000-000000000001")
+        XCTAssertFalse(connection.cardsToDelete.contains { $0.id == "00000000-0000-4000-8000-000000000001" })
+        let sent = try only()
+        XCTAssertEqual(sent.method, "POST")
+        XCTAssertEqual(sent.path, "/api/owner/stripe/cards-to-delete/00000000-0000-4000-8000-000000000001/deleted")
+        XCTAssertEqual(sent.header("Authorization"), "Bearer " + ownerKey)
     }
 
     func testDisconnectingAnswersWithTheConnection() async throws {
