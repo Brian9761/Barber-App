@@ -507,6 +507,15 @@ test.describe('in the demo', () => {
     await view(page, testInfo, '06-business-after-7-days');
     await panel.getByRole('button', { name: 'Close' }).click();
 
+    // The demo always has a late cancellation two days before today whose fee can still be charged:
+    // Eli Sample cancelled his 1 PM with Carlos on Monday, November 2 at 12:30 PM.
+    await page.goto('/business/today?date=2026-11-02');
+    await page.getByTestId('appointment').filter({ hasText: 'Eli Sample' }).filter({ hasText: 'Cancelled late' }).click();
+    await expect(panel.getByRole('button', { name: 'Charge late cancellation fee ($60)' })).toBeVisible();
+    await expect(panel.getByTestId('fee-panel')).toContainText('It can be charged until Mon, Nov 9 at 1 PM, 7 days after the appointment.');
+    await expectAccessible(page, 'the demo: a late cancellation whose fee can be charged');
+    await panel.getByRole('button', { name: 'Close' }).click();
+
     // Settings: a $25 flat fee is $5 on a $5 shave.
     await navLink(page, 'Settings').click();
     const section = page.getByTestId('no-show-settings');

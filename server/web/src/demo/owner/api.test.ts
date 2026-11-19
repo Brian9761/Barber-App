@@ -1,15 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { isApiError } from '../../api/errors';
 import type { OwnerApi } from '../../business/api/http';
+import { chargeableFee, feePanel, timeTaken } from '../../business/lib/fees';
 import { session } from '../../business/session';
 import type { OwnerAppointment } from '../../business/types';
+import { addDays, localDate, zonedInstant } from '../../lib/shopTime';
 import { DEMO_BUSINESS_KEY } from '../../lib/storage';
 import { newToken } from '../../lib/tokens';
 import feeCases from '../../../../test/fixtures/fee-cases.json';
 import alreadyCompleted from '../../../../test/fixtures/contract/errors/already_completed.json';
 import notStarted from '../../../../test/fixtures/contract/errors/not_started.json';
-import { createDemoOwnerApi } from './api';
-import { dayId, dayOfId, sampleDay, SAMPLE_PRODUCTS } from './samples';
+import { createDemoOwnerApi, DEMO_CATALOG } from './api';
+import { dayId, dayOfId, LATE_CANCEL_MINUTES_BEFORE, lateCancelDay, sampleDay, SAMPLE_PRODUCTS } from './samples';
 
 // The Business demo's stand-in for the shop's server: its sample shop, the server's rules
 // for checking out, voiding, statuses and fees, and analytics with the definitions of
@@ -281,6 +283,71 @@ describe('statuses and fees, like the server', () => {
       expect(await rejects(api.chargeFee(kim.id)), cancelledAt).toEqual({ code: 'not_chargeable', status: 409, message: grace.refusal });
     }
     expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
+  it('always has a late cancellation whose fee can be charged on a recent day, whatever today is: within the last 7 days, already over', async () => {
+    const zone = DEMO_CATALOG.timeZone;
+    /** The appointments of the last 7 days (and today) that have ended and offer a late-cancellation fee at `at`, as the fee panel offers it. */
+    function offered(days: { date: string; appointments: OwnerAppointment[] }[], at: Date): string[] {
+      return days.flatMap(({ date, appointments }) =>
+        appointments
+          .filter((a) => Date.parse(a.end) <= at.getTime() && chargeableFee(a, at) === 'lateCancel' && !timeTaken(a, appointments))
+          .map(() => date),
+      );
+    }
+    const lastWeek = (today: string) => Array.from({ length: 8 }, (_, back) => addDays(today, -back));
+
+    // Every day of a year from today (every weekday, both changes of the clocks), at the first and the
+    // last minute of the shop's day, with the sample shop as a demo opened then has it (the days before
+    // today are the same at either minute: their history is all there).
+    for (let offset = 0; offset < 366; offset += 1) {
+      const today = addDays('2026-11-04', offset);
+      expect(lateCancelDay(DEMO_CATALOG, today), today).toBe(addDays(today, -2));
+      const [first, last] = [1, 24 * 60 - 1].map((minute) => zonedInstant(today, minute, zone)!) as [Date, Date];
+      expect([localDate(first, zone), localDate(last, zone)]).toEqual([today, today]);
+      const ctx = { catalog: DEMO_CATALOG, today, historyBefore: first.getTime() };
+      const days = lastWeek(today).map((date) => ({ date, appointments: sampleDay(ctx, date).appointments }));
+      // Two days before today (the shop is open every day).
+      for (const at of [first, last]) expect(offered(days, at), `${today} at ${at.toISOString()}`).toContain(addDays(today, -2));
+    }
+
+    // And as the demo's API answers it, two weeks of days in a row.
+    for (let offset = 0; offset < 14; offset += 1) {
+      const today = addDays('2026-11-04', offset);
+      for (const minute of [1, 24 * 60 - 1]) {
+        localStorage.clear();
+        session.reset();
+        now = zonedInstant(today, minute, zone)!;
+        const demo = createDemoOwnerApi({ now: () => now, latencyMs: 0 });
+        session.signIn(await demo.signIn('', 'Chrome on Mac'));
+        const days = [];
+        for (const date of lastWeek(today)) days.push({ date, appointments: await demo.appointments(date) });
+        expect(offered(days, now), `${today} at ${minute} minutes into the day`).toContain(addDays(today, -2));
+      }
+    }
+  }, 30_000);
+
+  it('makes that late cancellation one the owner can charge: a card that goes through, cancelled 30 minutes before, the fee not charged yet', async () => {
+    // Wednesday, November 4 at 8 AM: Monday, November 2 is two days before.
+    const day = await api.appointments('2026-11-02');
+    const late = day.filter((a) => a.noShowFee?.reason === 'lateCancel' && a.noShowFee.status === 'none' && chargeableFee(a, now) === 'lateCancel');
+    expect(late).toHaveLength(1);
+    const eli = late[0]!;
+    expect(eli).toMatchObject({ status: 'cancelled', cancelledBy: 'customer', barberName: 'Carlos', start: '2026-11-02T21:00:00Z', sale: null });
+    expect(eli.card?.last4).not.toBe('0002');
+    expect(eli.customer).toMatchObject({ name: 'Eli Sample', phone: expect.stringMatching(/^\+144255501\d{2}$/) });
+    expect(Date.parse(eli.start) - Date.parse(eli.noShowFee!.customerCancelledAt!)).toBe(LATE_CANCEL_MINUTES_BEFORE * 60_000);
+    // Booked days before, so cancelling wasn't within 15 minutes of booking.
+    expect(Date.parse(eli.noShowFee!.customerCancelledAt!) - Date.parse(eli.createdAt)).toBeGreaterThan(15 * 60_000);
+    expect(eli.noShowFee).toMatchObject({ status: 'none', chargedAt: null, lateCancelWindowMinutes: 60, amountCents: 6000 });
+    // The fee panel offers it, and the demo charges it once Stripe is connected.
+    expect(feePanel(eli, now, DEMO_CATALOG.timeZone, day)?.action?.title).toBe('Charge late cancellation fee ($60)');
+    await api.connectStripe();
+    expect((await api.chargeFee(eli.id)).noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel', chargedAt: '2026-11-04T16:00:00Z' });
+    // The same every time the day is shown (and, charged, kept so).
+    const ctx = { catalog: DEMO_CATALOG, today: '2026-11-04', historyBefore: Date.parse('2026-11-04T16:00:00Z') };
+    expect(sampleDay(ctx, '2026-11-02')).toEqual(sampleDay(ctx, '2026-11-02'));
+    expect(byName(await api.appointments('2026-11-02'), 'Eli Sample', 'carlos-rafael').noShowFee?.status).toBe('charged');
   });
 
   it('never makes a completed visit with a card on file a no-show, even once it’s reopened, and says when it was first completed, as the server does', async () => {

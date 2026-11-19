@@ -12,6 +12,10 @@
 //   come (or not marked yet) is booked, for the owner to check out, mark or cancel.
 // - Only the last 8 weeks have history (so analytics has something to show), and the next
 //   two weeks have bookings.
+// - Two days before today there's always a late cancellation whose fee the owner can charge
+//   (lateCancelDay): a card on file, cancelled by the client 30 minutes before, the fee not
+//   charged yet. It has ended and it's within the 7 days, so it can be charged whether the rule
+//   is "once cancelled" or "once the appointment's time is over".
 
 import type { Catalog, NoShowFee, Offering } from '../../api/types';
 import { addDays, clockMinutes, daysBetween, localDate, weekdayOf, zonedInstant } from '../../lib/shopTime';
@@ -406,16 +410,69 @@ function walkIns(catalog: Catalog, date: string, historyBefore: number): Sale[] 
   return sales;
 }
 
+/** How long before the start the client cancels the sample late cancellation (inside the hour the fee is for). */
+export const LATE_CANCEL_MINUTES_BEFORE = 30;
+
+/**
+ * The day whose sample late cancellation the owner can charge: two days before today. Had the shop
+ * been closed then, the open day before it, up to six days before today, so it's always over and
+ * within the 7 days. Null only when the shop was closed all of those days.
+ */
+export function lateCancelDay(catalog: Catalog, today: string): string | null {
+  for (let back = 2; back <= 6; back += 1) {
+    const date = addDays(today, -back);
+    if (sampleBookings(catalog, date).length > 0) return date;
+  }
+  return null;
+}
+
+/**
+ * The sample late cancellation whose fee can be charged: a card on file (never one ending in 0002,
+ * which the demo declines like Stripe's test card), cancelled by the client 30 minutes before (inside
+ * the hour, and days after booking, so not within 15 minutes of it), and the fee not charged yet.
+ */
+function lateCancellation(appointment: DemoAppointment, random: () => number): void {
+  const start = Date.parse(appointment.start);
+  if (appointment.customer.phone === null) {
+    appointment.customer = { ...appointment.customer, phone: `+144255501${String(Math.floor(random() * 100)).padStart(2, '0')}` };
+  }
+  if (!appointment.card || appointment.card.last4 === '0002') {
+    appointment.card = { brand: random() < 0.6 ? 'visa' : 'mastercard', last4: String(1000 + Math.floor(random() * 9000)) };
+  }
+  appointment.status = 'cancelled';
+  appointment.cancelledBy = 'customer';
+  appointment.noShowFee = {
+    amountCents: appointment.priceCents,
+    fullPrice: true,
+    status: 'none',
+    chargedAt: null,
+    message: null,
+    customerCancelledAt: iso(start - LATE_CANCEL_MINUTES_BEFORE * 60_000),
+    lateCancelWindowMinutes: 60,
+    reason: null,
+  };
+}
+
 /** A day of the sample shop: its appointments (soonest first) and its sales (newest first). */
 export function sampleDay(ctx: SampleContext, date: string): DayData {
   if (!hasSamples(date, ctx.today)) return { appointments: [], sales: [] };
-  const appointments: DemoAppointment[] = [];
-  const sales: Sale[] = [];
+  const booked: { appointment: DemoAppointment; random: () => number }[] = [];
   for (const slot of sampleBookings(ctx.catalog, date)) {
     const random = seeded(`biz|${date}|${slot.barberId}|${slot.start}`);
     const appointment = bookedAppointment(ctx.catalog, date, slot.barberId, slot.start, random);
-    if (!appointment) continue;
-    if (Date.parse(appointment.end) <= ctx.historyBefore) {
+    if (appointment) booked.push({ appointment, random });
+  }
+  // On lateCancelDay, one of the day's appointments (the same one every time) is the late
+  // cancellation the owner can charge; the others have their outcome as on any day.
+  const over = booked.filter((b) => Date.parse(b.appointment.end) <= ctx.historyBefore);
+  const late =
+    over.length > 0 && date === lateCancelDay(ctx.catalog, ctx.today) ? over[Math.floor(seeded(`late-cancel|${date}`)() * over.length)]! : null;
+  const appointments: DemoAppointment[] = [];
+  const sales: Sale[] = [];
+  for (const entry of booked) {
+    const { appointment, random } = entry;
+    if (entry === late) lateCancellation(appointment, random);
+    else if (Date.parse(appointment.end) <= ctx.historyBefore) {
       const sale = outcome(appointment, random, ctx);
       if (sale) sales.push(sale);
     }

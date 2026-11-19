@@ -48,7 +48,7 @@ describe('Reset the demo', () => {
     const sampleButton = { name: 'Sign out Safari on iPad (sample)' };
     await userEvent.click(await within(await others()).findByRole('button', sampleButton));
     const confirms = screen.getAllByTestId('confirm-sign-out-computer');
-    await userEvent.click(within(confirms[confirms.length - 1]!).getByRole('button', { name: 'Sign out', exact: true }));
+    await userEvent.click(within(confirms[confirms.length - 1]!).getByRole('button', { name: 'Sign out' }));
     expect(await within(await others()).findByText('Signed out Safari on iPad (sample).')).toBeTruthy();
     expect(within(await others()).queryByRole('button', sampleButton)).toBeNull();
 
