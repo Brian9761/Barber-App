@@ -127,6 +127,11 @@ final class FakeServer {
     var computerSessions: [IzzyAPI.ComputerSession] = []
     /// How many codes were made, so the sample codes come in the same order on every run.
     var computerCodesMade = 0
+    /// Saved cards and unfinished card pages on a Stripe account the server can't use any more
+    /// (`FakeServerAccounts.swift`): none, as on almost every server, unless a test adds some.
+    var cardsToDelete: [IzzyAPI.StripeCardToDelete] = []
+    /// The ones the shop said it deleted in Stripe, so saying it again answers the same.
+    var cardsDeletedInStripe: Set<String> = []
     /// Numbers the ids of sales, codes and computers.
     var shopCounter = 0
 

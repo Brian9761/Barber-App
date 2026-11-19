@@ -156,6 +156,65 @@ final class StripeConnectionTests: XCTestCase {
         XCTAssertTrue(StripeConnectionStore.disconnectExplanation.contains("cards clients saved stay with it"))
     }
 
+    // MARK: Cards to delete in Stripe
+
+    func testNothingToDeleteInStripeMostOfTheTime() async {
+        let harness = harness(.active)
+        let store = StripeConnectionStore(api: harness.api, connector: FakeStripeConnector(server: harness.server))
+        await store.refresh()
+        XCTAssertEqual(harness.server.cardsToDelete, [], "The sample server has none to begin with")
+        XCTAssertEqual(store.cardsToDelete, [])
+        XCTAssertNil(store.cardsError)
+    }
+
+    func testDeletedInStripeTakesACardOffTheList() async {
+        let harness = harness(.active)
+        harness.server.cardsToDelete = FakeServer.sampleCardsToDelete
+        let store = StripeConnectionStore(api: harness.api, connector: FakeStripeConnector(server: harness.server))
+        await store.refresh()
+        XCTAssertEqual(store.cardsToDelete.map(\.id), ["00000000-0000-4000-8000-0000000000c1", "cs_live_sample_old_page"])
+        let card = store.cardsToDelete[0]
+        XCTAssertEqual(card.title, "Visa •••• 4242")
+        XCTAssertEqual(card.customerLabel, "Customer: cus_sample_old_card")
+        XCTAssertEqual(card.accountLabel, "Stripe account: the shop's own Stripe key")
+        XCTAssertEqual(store.cardsToDelete[1].title, "A card page that wasn't finished")
+
+        await store.markDeletedInStripe(card)
+        XCTAssertEqual(harness.server.calls.filter { $0 == "cardDeletedInStripe" }.count, 1)
+        XCTAssertEqual(store.cardsToDelete.map(\.id), ["cs_live_sample_old_page"], "Off the list, the rest stays")
+        XCTAssertEqual(store.result, StripeConnectionStore.Result(message: "It's off the list. Thanks for deleting it in Stripe.", isGoodNews: true))
+        XCTAssertNil(store.deletingCardId)
+        XCTAssertNil(store.cardsError)
+        XCTAssertEqual(store.connection?.status, .active, "The status is the server's answer")
+
+        // Saying it again (a lost answer) is harmless; the last one empties the list.
+        await store.markDeletedInStripe(card)
+        XCTAssertNil(store.cardsError)
+        await store.markDeletedInStripe(store.cardsToDelete[0])
+        XCTAssertEqual(store.cardsToDelete, [])
+    }
+
+    func testDeletedInStripeOfflineOrUnknownSaysSoWithTheList() async {
+        let harness = harness(.active)
+        harness.server.cardsToDelete = FakeServer.sampleCardsToDelete
+        let store = StripeConnectionStore(api: harness.api, connector: FakeStripeConnector(server: harness.server))
+        await store.refresh()
+        harness.server.options.offline = true
+        await store.markDeletedInStripe(store.cardsToDelete[0])
+        XCTAssertEqual(store.cardsError, "We couldn't reach the server. Check your internet connection and try again.")
+        XCTAssertNil(store.result)
+        XCTAssertEqual(store.cardsToDelete.count, 2, "Nothing changes on screen")
+        harness.server.options.offline = false
+        let unknown = IzzyAPI.StripeCardToDelete(id: "cs_live_never_listed", kind: .cardPage, livemode: true, customerId: "cus_x")
+        await store.markDeletedInStripe(unknown)
+        XCTAssertEqual(store.cardsError, "We couldn't find that card.")
+        XCTAssertEqual(store.cardsToDelete.count, 2)
+        // The next try clears the error.
+        await store.markDeletedInStripe(store.cardsToDelete[0])
+        XCTAssertNil(store.cardsError)
+        XCTAssertEqual(store.cardsToDelete.count, 1)
+    }
+
     func testAServerFromBeforeStripeConnectShowsWhatItHad() async {
         // ScriptedAPI doesn't pass `stripeConnection()` on: it answers 404, like an older server.
         let harness = Harness()

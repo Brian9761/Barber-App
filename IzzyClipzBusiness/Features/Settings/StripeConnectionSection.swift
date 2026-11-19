@@ -8,14 +8,27 @@ import SwiftUI
 /// Dashboard and Disconnect Stripe (which asks first).
 ///
 /// On a server from before Stripe Connect, it shows what `GET /api/owner/me` says, as before.
+///
+/// Below it, only when there are some: Cards to delete in Stripe, saved cards (and unfinished card
+/// pages) on a Stripe account the server can't use any more, each with what to search for there and
+/// Deleted in Stripe (which asks first).
 struct StripeConnectionSection: View {
     let workspace: Workspace
     @State private var confirmsDisconnect = false
+    /// The card whose "Deleted in Stripe" is being confirmed.
+    @State private var cardToConfirm: IzzyAPI.StripeCardToDelete?
     @Environment(\.openURL) private var openURL
 
     private var store: StripeConnectionStore { workspace.stripeConnection }
 
     var body: some View {
+        statusSection
+        if !store.cardsToDelete.isEmpty {
+            cardsToDeleteSection
+        }
+    }
+
+    private var statusSection: some View {
         Section {
             if store.loadState == .notOnThisServer {
                 serverStatusRows
@@ -146,6 +159,82 @@ struct StripeConnectionSection: View {
             .accessibilityIdentifier("stripeMode")
         LabeledContent("Terminal location", value: stripe.locationId ?? "Missing")
             .accessibilityIdentifier("stripeLocation")
+    }
+
+    // MARK: Cards to delete in Stripe
+
+    private var cardsToDeleteSection: some View {
+        Section {
+            Text(IzzyAPI.StripeCardToDelete.instructions)
+                .font(.subheadline)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("cardsToDeleteInstructions")
+            if let error = store.cardsError {
+                InlineMessage(text: error, systemImage: "exclamationmark.octagon.fill", color: .red)
+                    .accessibilityIdentifier("cardsToDeleteError")
+            }
+            ForEach(store.cardsToDelete) { card in
+                cardToDeleteRow(card)
+            }
+        } header: {
+            Text(IzzyAPI.StripeCardToDelete.listTitle)
+        }
+        .confirmationDialog(
+            IzzyAPI.StripeCardToDelete.confirmQuestion,
+            isPresented: Binding(get: { cardToConfirm != nil }, set: { if !$0 { cardToConfirm = nil } }),
+            titleVisibility: .visible,
+            presenting: cardToConfirm
+        ) { card in
+            Button(IzzyAPI.StripeCardToDelete.confirmButtonTitle) {
+                Task { await store.markDeletedInStripe(card) }
+            }
+            .accessibilityIdentifier("confirmDeletedInStripe")
+            Button(IzzyAPI.StripeCardToDelete.keepButtonTitle, role: .cancel) {}
+        } message: { card in
+            Text(card.confirmMessage)
+        }
+    }
+
+    /// The card (or card page), its expiry, the customer id to search for (which can be copied), the
+    /// account it's on, and Deleted in Stripe.
+    @ViewBuilder
+    private func cardToDeleteRow(_ card: IzzyAPI.StripeCardToDelete) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(card.title)
+                    .font(.headline)
+                if let expiry = card.expiryLabel {
+                    Text(expiry)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Text(card.customerLabel)
+                    .font(.subheadline)
+                    .textSelection(.enabled)
+                Text(card.accountLabel)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(card.spoken)
+            .accessibilityIdentifier("cardToDelete")
+            Button {
+                cardToConfirm = card
+            } label: {
+                HStack(spacing: 8) {
+                    Text(IzzyAPI.StripeCardToDelete.deletedButtonTitle)
+                    if store.deletingCardId == card.id { ProgressView() }
+                }
+                .frame(minHeight: BusinessTheme.minimumTapSize)
+            }
+            .buttonStyle(.bordered)
+            .disabled(store.deletingCardId != nil)
+            .accessibilityLabel("\(IzzyAPI.StripeCardToDelete.deletedButtonTitle): \(card.spokenTitle)")
+            .accessibilityHint("Asks first. Only once you've deleted this customer in Stripe.")
+            .accessibilityIdentifier("deletedInStripe")
+        }
+        .padding(.vertical, 4)
     }
 
     // MARK: A server from before Stripe Connect

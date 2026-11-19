@@ -23,25 +23,48 @@ extension FakeServer {
 
     // MARK: Stripe
 
-    /// `GET /api/owner/stripe`, in the server's words.
+    /// `GET /api/owner/stripe`, in the server's words, with what the shop has to delete in an old
+    /// Stripe account (`cardsToDelete`: none, unless a test adds some).
     func stripeConnection() -> IzzyAPI.StripeConnection {
-        guard options.stripeConfigured else { return IzzyAPI.StripeConnection(mode: .off, status: .off) }
+        guard options.stripeConfigured else { return IzzyAPI.StripeConnection(mode: .off, status: .off, cardsToDelete: cardsToDelete) }
         switch options.stripeAccount {
         case .none:
-            return IzzyAPI.StripeConnection(mode: .connect, status: .notConnected)
+            return IzzyAPI.StripeConnection(mode: .connect, status: .notConnected, cardsToDelete: cardsToDelete)
         case .needsInfo:
             return IzzyAPI.StripeConnection(
                 mode: .connect, status: .needsInfo, accountId: Self.sampleAccountId, businessName: Self.sampleBusinessName,
-                livemode: options.stripeMode == .live, requirementsDue: 3, checkedAt: now()
+                livemode: options.stripeMode == .live, requirementsDue: 3, checkedAt: now(), cardsToDelete: cardsToDelete
             )
         case .active:
             return IzzyAPI.StripeConnection(
                 mode: .connect, status: .active, accountId: Self.sampleAccountId, businessName: Self.sampleBusinessName,
                 livemode: options.stripeMode == .live, chargesEnabled: true, payoutsEnabled: true, detailsSubmitted: true,
-                checkedAt: now()
+                checkedAt: now(), cardsToDelete: cardsToDelete
             )
         }
     }
+
+    /// `POST /api/owner/stripe/cards-to-delete/:id/deleted`: the shop deleted that customer in its old
+    /// Stripe account, so it's off the list. Like the server, doing it again answers the same; an id
+    /// it never had is a 404.
+    func cardDeletedInStripe(id: String) throws -> IzzyAPI.StripeConnection {
+        guard cardsToDelete.contains(where: { $0.id == id }) || cardsDeletedInStripe.contains(id) else {
+            throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "We couldn't find that card.", status: 404)
+        }
+        cardsToDelete.removeAll { $0.id == id }
+        cardsDeletedInStripe.insert(id)
+        return stripeConnection()
+    }
+
+    /// Two to delete in the shop's old Stripe account, for tests: a card saved with the shop's own
+    /// key before Stripe was connected, and a card page from then that wasn't finished.
+    static let sampleCardsToDelete = [
+        IzzyAPI.StripeCardToDelete(
+            id: "00000000-0000-4000-8000-0000000000c1", kind: .savedCard, livemode: true, customerId: "cus_sample_old_card",
+            card: IzzyAPI.SavedCard(brand: "visa", last4: "4242", expMonth: 12, expYear: 2030)
+        ),
+        IzzyAPI.StripeCardToDelete(id: "cs_live_sample_old_page", kind: .cardPage, livemode: true, customerId: "cus_sample_old_page"),
+    ]
 
     /// `POST /api/owner/stripe/connect`: makes the shop's account the first time (Stripe then needs
     /// its details), and a link to Stripe's pages, which works for 5 minutes.

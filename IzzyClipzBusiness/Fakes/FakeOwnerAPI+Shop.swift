@@ -23,6 +23,11 @@ extension FakeOwnerAPI {
         return try await server.disconnectStripe()
     }
 
+    func cardDeletedInStripe(id: String) async throws -> IzzyAPI.StripeConnection {
+        try await server.begin("cardDeletedInStripe", key: ownerKey)
+        return try await server.cardDeletedInStripe(id: id)
+    }
+
     // MARK: Computers
 
     func createComputerCode() async throws -> IzzyAPI.ComputerCode {

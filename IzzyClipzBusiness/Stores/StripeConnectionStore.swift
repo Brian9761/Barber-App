@@ -10,6 +10,10 @@ import Observation
 /// in Stripe's window (`StripeConnector`), and on the way back loads the status again and says
 /// what happened: "You're connected. You can take card payments now." or "Stripe still needs a few
 /// details: tap Finish setting up." Closing the window changes nothing.
+///
+/// Cards to delete in Stripe: saved cards (and unfinished card pages) on a Stripe account the server
+/// can't use any more, which the shop deletes there itself; "Deleted in Stripe" takes one off the
+/// list (`POST /api/owner/stripe/cards-to-delete/:id/deleted`).
 @MainActor
 @Observable
 final class StripeConnectionStore {
@@ -26,6 +30,10 @@ final class StripeConnectionStore {
     private(set) var loadState: LoadState = .idle
     private(set) var isConnecting = false
     private(set) var isDisconnecting = false
+    /// The card being taken off "Cards to delete in Stripe", while the server is asked.
+    private(set) var deletingCardId: String?
+    /// Why the last "Deleted in Stripe" didn't work, shown with the list.
+    private(set) var cardsError: String?
     /// What happened after Stripe's window or Disconnect, in plain words, until the next action.
     private(set) var result: Result?
     /// Why the last Connect or Disconnect didn't work, with what to do.
@@ -144,6 +152,40 @@ final class StripeConnectionStore {
             actionError = Self.message(for: error)
         }
     }
+
+    // MARK: Cards to delete in Stripe
+
+    /// The cards (and unfinished card pages) the shop deletes in a Stripe account the server can't use
+    /// any more; empty almost always.
+    var cardsToDelete: [IzzyAPI.StripeCardToDelete] {
+        connection?.cardsToDelete ?? []
+    }
+
+    /// "Deleted in Stripe", once the owner confirmed: the server forgets the card's ids and answers
+    /// with the list without it. Doing it again is harmless; an error is said in the server's words.
+    func markDeletedInStripe(_ card: IzzyAPI.StripeCardToDelete) async {
+        guard deletingCardId == nil else { return }
+        deletingCardId = card.id
+        defer { deletingCardId = nil }
+        cardsError = nil
+        actionError = nil
+        result = nil
+        do {
+            let answer = try await api.cardDeletedInStripe(id: card.id)
+            generation += 1
+            connection = answer
+            loadState = .loaded
+            // Said with the status, which stays when the list goes.
+            result = Result(message: Self.offTheListMessage, isGoodNews: true)
+        } catch is CancellationError {
+            return
+        } catch {
+            cardsError = Self.message(for: error)
+        }
+    }
+
+    /// What Settings says once a card is off the list.
+    static let offTheListMessage = "It's off the list. Thanks for deleting it in Stripe."
 
     /// The server's words when it has them; the owner key only for Disconnect, which the app has.
     static func message(for error: Error) -> String {
