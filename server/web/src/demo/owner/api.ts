@@ -54,6 +54,7 @@ import type {
   SaleItem,
   SalesDay,
   SignedIn,
+  StripeCardToDelete,
   StripeConnection,
   StripeConnectLink,
   TimeOff,
@@ -205,6 +206,11 @@ export interface DemoOwnerOptions {
   catalog?: Catalog;
   /** How long "Connect Stripe" pretends to take. */
   connectStepMs?: number;
+  /**
+   * Saved cards and unfinished card pages on a Stripe account the server can't use any more ("Cards
+   * to delete in Stripe"): none, as on almost every server, unless a test gives some. Kept in memory.
+   */
+  cardsToDelete?: StripeCardToDelete[];
 }
 
 /** The Business demo's stand-in for the shop's server, with the owner API client's own interface. */
@@ -214,6 +220,9 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
   const latency = options.latencyMs ?? 120;
   const connectStep = options.connectStepMs ?? CONNECT_STEP_MS;
   const zone = catalog.timeZone;
+  /** What the shop has to delete in an old Stripe account, and what it said it deleted (asking again answers the same). */
+  let cardsToDelete: StripeCardToDelete[] = structuredClone(options.cardsToDelete ?? []);
+  const deletedInStripe = new Set<string>();
 
   let memory: Store | null = null;
   let inMemoryOnly = false;
@@ -337,6 +346,7 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
           message: 'Connected. Card payments are on. Payouts to your bank are on.',
           dashboardUrl: 'https://dashboard.stripe.com/',
           checkedAt: store.stripe.connectedAt,
+          cardsToDelete: structuredClone(cardsToDelete),
         }
       : {
           mode: 'connect',
@@ -351,6 +361,7 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
           message: 'Connect your Stripe account to take card payments in the app.',
           dashboardUrl: 'https://dashboard.stripe.com/',
           checkedAt: null,
+          cardsToDelete: structuredClone(cardsToDelete),
         };
   }
 
@@ -795,6 +806,17 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
       store.stripe = { connectedAt: iso(now) };
       save(store);
       return { url: '/business/settings?stripe=active', expiresAt: iso(now.getTime() + 5 * 60_000) };
+    },
+
+    async cardDeletedInStripe(id: string): Promise<StripeConnection> {
+      await pause(latency);
+      const store = load();
+      signedIn(store);
+      // Like the server: saying it again answers the same; an id it never had is a 404.
+      if (!cardsToDelete.some((c) => c.id === id) && !deletedInStripe.has(id)) throw fail('not_found', "We couldn't find that card.", 404);
+      cardsToDelete = cardsToDelete.filter((c) => c.id !== id);
+      deletedInStripe.add(id);
+      return stripeJSON(store);
     },
 
     async noShowSettings(signal?: AbortSignal): Promise<NoShowSettings> {

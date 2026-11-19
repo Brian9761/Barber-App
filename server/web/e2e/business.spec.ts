@@ -266,6 +266,27 @@ test('a product is added, given a photo, edited and deleted', async ({ page, req
   await expect(card).toHaveCount(0);
 });
 
+test('Settings lists a card to delete in an old Stripe account, and Deleted in Stripe takes it off', async ({ page, request }) => {
+  const { customerId } = (await (await request.post('/__e2e/card-to-delete')).json()) as { customerId: string };
+  await signInWithCode(page, request);
+  await navLink(page, 'Settings').click();
+  const list = page.getByTestId('cards-to-delete');
+  await expect(list.getByRole('heading', { level: 3, name: 'Cards to delete in Stripe' })).toBeVisible();
+  await expect(list.getByTestId('card-to-delete')).toHaveCount(1);
+  await expect(list.getByTestId('card-to-delete')).toContainText(`Customer: ${customerId}`);
+  await expect(list.getByTestId('card-to-delete')).toContainText("Stripe account: the shop's own Stripe key (test mode)");
+  await expectAccessible(page, 'Settings with a card to delete in Stripe');
+  await list.getByRole('button', { name: 'Deleted in Stripe: Visa ending in 4242' }).click();
+  const dialog = page.getByTestId('confirm-deleted-in-stripe');
+  await expect(dialog).toContainText(`Only click It's deleted once customer ${customerId} is deleted in your old Stripe account.`);
+  await expectAccessible(page, 'the Deleted in Stripe question');
+  await dialog.getByRole('button', { name: "It's deleted" }).click();
+  await expect(page.getByTestId('card-deleted-in-stripe')).toHaveText("It's off the list. Thanks for deleting it in Stripe.");
+  await expect(page.getByTestId('cards-to-delete')).toHaveCount(0);
+  const stripe = await ownerCall<{ cardsToDelete: unknown[] }>(request, 'GET', '/api/owner/stripe');
+  expect(stripe.cardsToDelete).toEqual([]);
+});
+
 test('no-show protection saves, and Settings shows Stripe, this computer and the others', async ({ page, request }, testInfo) => {
   const before = (await ownerCall<{ noShowSettings: Record<string, unknown> }>(request, 'GET', '/api/owner/no-show-settings')).noShowSettings;
   try {

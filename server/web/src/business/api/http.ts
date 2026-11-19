@@ -157,6 +157,9 @@ export const httpOwnerApi = {
   /** Stripe's page to connect (or finish setting up) the shop's account, coming back to Settings here. */
   connectStripe: () => ownerRequest<StripeConnectLink>('/api/owner/stripe/connect', { method: 'POST', body: { returnTo: 'web' } }),
 
+  /** "Deleted in Stripe": the shop deleted that card's customer in its old Stripe account. The connection, without it on the list. */
+  cardDeletedInStripe: (id: string) => ownerRequest<StripeConnection>(`/api/owner/stripe/cards-to-delete/${enc(id)}/deleted`, { method: 'POST', body: {} }),
+
   noShowSettings: (signal?: AbortSignal) =>
     ownerRequest<{ noShowSettings: NoShowSettings }>('/api/owner/no-show-settings', { signal }).then((r) => r.noShowSettings),
 

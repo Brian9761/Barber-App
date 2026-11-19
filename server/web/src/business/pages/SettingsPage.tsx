@@ -1,5 +1,6 @@
 // Settings: Card payments (Stripe), with the status as the app shows it and Connect Stripe
-// or Finish setting up, which opens Stripe's own page and comes back here; No-show
+// or Finish setting up, which opens Stripe's own page and comes back here (and, when there are
+// some, the cards to delete in an old Stripe account, each with Deleted in Stripe); No-show
 // protection, the same settings as the app; this computer, and the other computers signed
 // in; how to put Izzy Clipz Business on this phone or computer; and in the demo, Reset.
 
@@ -23,9 +24,17 @@ import { useSignOut } from '../components/Frame';
 import { APP_NAME, demo, useBusinessTitle, useLoad } from '../hooks';
 import * as noShow from '../lib/noShow';
 import { forgetLastBarber } from '../lib/ticket';
-import { stripeReturnLine, stripeView } from '../lib/stripe';
+import {
+  CARDS_TO_DELETE_INSTRUCTIONS,
+  CARDS_TO_DELETE_TITLE,
+  cardToDeleteView,
+  DELETED_IN_STRIPE,
+  OFF_THE_LIST,
+  stripeReturnLine,
+  stripeView,
+} from '../lib/stripe';
 import { session, useSession } from '../session';
-import type { ComputerSession, NoShowSettings, StripeConnection } from '../types';
+import type { ComputerSession, NoShowSettings, StripeCardToDelete, StripeConnection } from '../types';
 
 /** Izzy Clipz Business, called "IC Business" under its icon on a Home Screen (business/index.html's apple-mobile-web-app-title). */
 const BUSINESS_APP: AppIdentity = { name: APP_NAME, icon: '/business/icon-192.png', homeScreenName: 'IC Business' };
@@ -50,6 +59,8 @@ function StripeSection({ stripe, onChanged }: { stripe: ReturnType<typeof useLoa
   const navigate = useNavigate();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A card just came off "Cards to delete in Stripe". */
+  const [cardDeleted, setCardDeleted] = useState(false);
   /**
    * Back from Stripe: the status it came back with, and the status shown before (in the demo,
    * which comes back without leaving the page, the one from before connecting).
@@ -149,11 +160,119 @@ function StripeSection({ stripe, onChanged }: { stripe: ReturnType<typeof useLoa
             </p>
           ) : null}
           {connection.mode === 'connect' && connection.status !== 'notConnected' ? <p className="secondary small">To disconnect, use the iPhone app.</p> : null}
+          {/* Said here, so it stays once the last card is off the list. */}
+          {cardDeleted ? <SuccessLine testId="card-deleted-in-stripe">{OFF_THE_LIST}</SuccessLine> : null}
+          {(connection.cardsToDelete ?? []).length > 0 ? (
+            <CardsToDelete
+              cards={connection.cardsToDelete ?? []}
+              onAsk={() => setCardDeleted(false)}
+              onAnswer={(answer) => {
+                stripe.replace(answer);
+                setCardDeleted(true);
+              }}
+            />
+          ) : null}
         </>
       ) : stripe.status !== 'error' ? (
         <SkeletonCard lines={2} label="Loading the Stripe status…" />
       ) : null}
     </Section>
+  );
+}
+
+/**
+ * Cards to delete in Stripe: saved cards (and unfinished card pages) on a Stripe account the server
+ * can't use any more. The shop deletes each customer there, then says so here (Deleted in Stripe,
+ * which asks first): the server forgets it, and answers with the connection without it.
+ */
+function CardsToDelete({
+  cards,
+  onAsk,
+  onAnswer,
+}: {
+  cards: StripeCardToDelete[];
+  onAsk: () => void;
+  onAnswer: (connection: StripeConnection) => void;
+}) {
+  const [asking, setAsking] = useState<StripeCardToDelete | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const view = asking ? cardToDeleteView(asking) : null;
+
+  const confirm = async () => {
+    if (!asking) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const answer = await ownerApi.cardDeletedInStripe(asking.id);
+      setAsking(null);
+      onAnswer(answer);
+    } catch (caught) {
+      setError(errorMessage(caught));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="biz-cards-to-delete" data-testid="cards-to-delete">
+      <h3 className="biz-cards-to-delete__title">{CARDS_TO_DELETE_TITLE}</h3>
+      <p>{CARDS_TO_DELETE_INSTRUCTIONS}</p>
+      <ul className="biz-computers" role="list">
+        {cards.map((card) => {
+          const lines = cardToDeleteView(card);
+          return (
+            <li key={card.id} className="biz-computer" data-testid="card-to-delete">
+              <div>
+                <p className="biz-computer__name">
+                  <span aria-hidden="true">{lines.title}</span>
+                  <span className="visually-hidden">{lines.spokenTitle}</span>
+                </p>
+                {lines.expiry ? <p className="secondary small">{lines.expiry}</p> : null}
+                <p className="small biz-cards-to-delete__id">{lines.customer}</p>
+                <p className="secondary small">{lines.account}</p>
+              </div>
+              <button
+                type="button"
+                className="button button--secondary"
+                onClick={() => {
+                  setError(null);
+                  onAsk();
+                  setAsking(card);
+                }}
+                aria-label={`${DELETED_IN_STRIPE}: ${lines.spokenTitle}`}
+              >
+                {DELETED_IN_STRIPE}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <Dialog
+        open={asking !== null}
+        title="Did you delete it in Stripe?"
+        onClose={() => (busy ? undefined : setAsking(null))}
+        testId="confirm-deleted-in-stripe"
+        actions={
+          <>
+            <button type="button" className="button button--secondary" onClick={() => setAsking(null)} disabled={busy}>
+              Not yet
+            </button>
+            <button type="button" className="button button--primary" onClick={() => void confirm()} disabled={busy}>
+              {busy ? 'Saving…' : "It's deleted"}
+            </button>
+          </>
+        }
+      >
+        <p>{view?.confirm}</p>
+        {error ? (
+          <p className="field__error" role="alert">
+            <Icon name="error" />
+            <span>{error}</span>
+          </p>
+        ) : null}
+      </Dialog>
+    </div>
   );
 }
 

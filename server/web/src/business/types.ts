@@ -122,6 +122,28 @@ export interface StripeConnection {
   message: string;
   dashboardUrl: string;
   checkedAt: string | null;
+  /**
+   * Saved cards and unfinished card pages on a Stripe account the server can't use any more, for the
+   * shop to delete there ("Cards to delete in Stripe"); empty almost always (and from a server from
+   * before the list, absent).
+   */
+  cardsToDelete?: StripeCardToDelete[];
+}
+
+/** One of `StripeConnection.cardsToDelete`: "Deleted in Stripe" takes it off the list (POST …/cards-to-delete/:id/deleted). */
+export interface StripeCardToDelete {
+  /** The saved card's id, or the card page's id ("cs_…"). */
+  id: string;
+  /** A saved card, or a card page whose card was never saved here (a kind this version doesn't know reads like a page). */
+  kind: 'savedCard' | 'cardPage' | (string & {});
+  /** The connected account it's on; null when it was saved with the shop's own Stripe key. */
+  stripeAccountId: string | null;
+  /** Live (true) or test mode (false), where in that account to look. */
+  livemode: boolean;
+  /** What to search for in that account's Customers. */
+  customerId: string;
+  /** The saved card's type, last 4 and expiry; null for a card page. */
+  card: { brand: string; last4: string; expMonth: number; expYear: number } | null;
 }
 
 /** POST /api/owner/stripe/connect */

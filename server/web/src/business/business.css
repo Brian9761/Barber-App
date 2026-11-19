@@ -2543,6 +2543,25 @@
   font-weight: 700;
 }
 
+/* Settings → Card payments (Stripe): the cards to delete in an old Stripe account. */
+.biz-cards-to-delete {
+  display: grid;
+  gap: var(--space-3);
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-line);
+}
+
+.biz-cards-to-delete__title {
+  font-size: var(--text-h3);
+  font-weight: 700;
+}
+
+/* A customer id is one long word: it may break anywhere rather than run off a narrow screen. */
+.biz-cards-to-delete__id {
+  overflow-wrap: anywhere;
+}
+
 .biz-install {
   display: grid;
   gap: var(--space-5);

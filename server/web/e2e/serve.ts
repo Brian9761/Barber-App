@@ -17,8 +17,9 @@
 // (and for deleting a saved card), what became of a saved card, a booking moved
 // back in time (for the fee's rules after the end and within 7 days), a no-show's
 // fee recorded as charged with what became of its receipt (the stand-in takes no
-// payments), and a new version of the service worker (for the "A new version is
-// ready" bar). Like
+// payments), a saved card left on a Stripe account the server can't use any more
+// (for Settings' cards to delete in Stripe), and a new version of the service
+// worker (for the "A new version is ready" bar). Like
 // Stripe, the card page's Save and Back go to the success_url and cancel_url the
 // server gave the Checkout Session, so the server's own way back to the website
 // (/api/cards/return and /api/cards/cancel with to=web) is part of the test.
@@ -316,6 +317,19 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Pr
     const probe = await app.fetch(new Request(`${ORIGIN}/api/cards/cancel?to=web`));
     const location = probe.headers.get('location') ?? '';
     return send(res, 200, JSON.stringify({ web: probe.status >= 300 && probe.status < 400 && location.includes('/book/card-return') }));
+  }
+  if (parts[1] === 'card-to-delete' && req.method === 'POST') {
+    // A saved card on a Stripe account this server can't use any more, as the server leaves it for the
+    // shop to delete there itself: removed, with its Stripe ids kept (Settings → Cards to delete in Stripe).
+    const n = randomUUID().replaceAll('-', '');
+    const id = randomUUID();
+    await pool.query(
+      `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id, brand, last4,
+                                exp_month, exp_year, livemode, created_at, removed_at, stripe_unreachable_at)
+       VALUES ($1, $2, $3, $4, $5, 'visa', '4242', 12, 2030, false, now(), now(), now())`,
+      [id, `${n}${n}`, `cs_test_old${n}`, `cus_old${n.slice(0, 12)}`, `pm_old${n}`],
+    );
+    return send(res, 200, JSON.stringify({ id, customerId: `cus_old${n.slice(0, 12)}` }));
   }
   if (parts[1] === 'protection' && req.method === 'POST') {
     const { on } = await readBody(req);

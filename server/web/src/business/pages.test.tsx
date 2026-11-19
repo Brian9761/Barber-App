@@ -18,6 +18,8 @@ import stripeActive from '../../../test/fixtures/contract/stripe-connection-acti
 import stripeLink from '../../../test/fixtures/contract/stripe-connect-link.json';
 import stripeNotConnected from '../../../test/fixtures/contract/stripe-connection-not-connected.json';
 import stripeOff from '../../../test/fixtures/contract/stripe-connection-off.json';
+import stripeCardsToDelete from '../../../test/fixtures/contract/stripe-connection-cards-to-delete.json';
+import stripeCardDeleted from '../../../test/fixtures/contract/stripe-connection-card-deleted.json';
 import { leaveTo } from '../lib/leave';
 import { apiError, mockApi, renderApp, type ApiCall } from '../test/api';
 import { times } from '../test/text';
@@ -711,6 +713,8 @@ describe('Settings', () => {
     expect((await screen.findByTestId('stripe-status')).textContent).toContain('Connected · Izzy Clipz Barbershop');
     expect(screen.getByText('To disconnect, use the iPhone app.')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open Stripe Dashboard/ }).getAttribute('href')).toBe('https://dashboard.stripe.com/');
+    // Nothing to delete in an old Stripe account: no list.
+    expect(screen.queryByTestId('cards-to-delete')).toBeNull();
   });
 
   it('says where things stand once the status is checked again, never naming a button that isn’t there', async () => {
@@ -725,6 +729,62 @@ describe('Settings', () => {
     expect((await screen.findByTestId('stripe-status')).textContent).toContain('Not set up on the server');
     await waitFor(() => expect(screen.getByTestId('stripe-result').textContent).toBe("Stripe isn't set up on the server, so it can't be connected yet."));
     expect(screen.queryByRole('button', { name: /Connect Stripe|Finish setting up/ })).toBeNull();
+  });
+
+  it('lists the cards to delete in an old Stripe account, and takes one off once the shop says it deleted it there', async () => {
+    signedIn();
+    const api = mockApi([
+      ['GET /api/owner/stripe', { body: stripeCardsToDelete }],
+      ['POST /api/owner/stripe/cards-to-delete/00000000-0000-4000-8000-000000000001/deleted', { body: stripeCardDeleted }],
+      ['GET /api/owner/no-show-settings', { body: noShowSettings }],
+      ['GET /api/owner/computer-sessions', { body: computersFixture }],
+    ]);
+    renderApp('/business/settings');
+    const list = await screen.findByTestId('cards-to-delete');
+    expect(within(list).getByRole('heading', { level: 3, name: 'Cards to delete in Stripe' })).toBeTruthy();
+    expect(list.textContent).toContain(
+      "The server can't reach these in Stripe any more, because the shop changed how it connects to Stripe. Delete these in your old Stripe account: Customers, then search for the customer id. Then click Deleted in Stripe.",
+    );
+    const rows = within(list).getAllByTestId('card-to-delete');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      "Visa •••• 4242Visa ending in 4242Expires 12/30Customer: cus_TestFixture000001Stripe account: the shop's own Stripe key (test mode)Deleted in Stripe",
+      "A card page that wasn't finishedA card page that wasn't finishedCustomer: cus_TestFixture000004Stripe account: the shop's own Stripe key (test mode)Deleted in Stripe",
+    ]);
+    // It asks first; Not yet changes nothing.
+    await userEvent.click(within(list).getByRole('button', { name: 'Deleted in Stripe: Visa ending in 4242' }));
+    let dialog = screen.getByTestId('confirm-deleted-in-stripe');
+    expect(within(dialog).getByRole('heading', { name: 'Did you delete it in Stripe?' })).toBeTruthy();
+    expect(dialog.textContent).toContain(
+      "Only click It's deleted once customer cus_TestFixture000001 is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here.",
+    );
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Not yet' }));
+    expect(api.calls.some((c) => c.method === 'POST')).toBe(false);
+    await userEvent.click(within(list).getByRole('button', { name: 'Deleted in Stripe: Visa ending in 4242' }));
+    dialog = screen.getByTestId('confirm-deleted-in-stripe');
+    await userEvent.click(within(dialog).getByRole('button', { name: "It's deleted" }));
+    expect((await screen.findByTestId('card-deleted-in-stripe')).textContent).toBe("It's off the list. Thanks for deleting it in Stripe.");
+    expect(within(screen.getByTestId('cards-to-delete')).getAllByTestId('card-to-delete')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: "Deleted in Stripe: A card page that wasn't finished" })).toBeTruthy();
+    expect(api.calls.filter((c) => c.method === 'POST').map((c) => c.path)).toEqual([
+      '/api/owner/stripe/cards-to-delete/00000000-0000-4000-8000-000000000001/deleted',
+    ]);
+  });
+
+  it('says why Deleted in Stripe didn’t work, in the dialog, and shows no list when there’s nothing to delete', async () => {
+    signedIn();
+    mockApi([
+      ['GET /api/owner/stripe', { body: stripeCardsToDelete }],
+      ['POST /api/owner/stripe/cards-to-delete/cs_test_Fixture000005/deleted', { status: 404, body: { error: { code: 'not_found', message: "We couldn't find that card." } } }],
+      ['GET /api/owner/no-show-settings', { body: noShowSettings }],
+      ['GET /api/owner/computer-sessions', { body: computersFixture }],
+    ]);
+    renderApp('/business/settings');
+    await userEvent.click(await screen.findByRole('button', { name: "Deleted in Stripe: A card page that wasn't finished" }));
+    const dialog = screen.getByTestId('confirm-deleted-in-stripe');
+    await userEvent.click(within(dialog).getByRole('button', { name: "It's deleted" }));
+    expect((await within(dialog).findByRole('alert')).textContent).toBe("We couldn't find that card.");
+    expect(screen.getAllByTestId('card-to-delete')).toHaveLength(2);
+    expect(screen.queryByTestId('card-deleted-in-stripe')).toBeNull();
   });
 
   it('saves no-show protection, sending only what changed', async () => {

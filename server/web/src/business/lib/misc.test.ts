@@ -5,13 +5,14 @@ import noShowSettings from '../../../../test/fixtures/contract/no-show-settings.
 import stripeActive from '../../../../test/fixtures/contract/stripe-connection-active.json';
 import stripeOff from '../../../../test/fixtures/contract/stripe-connection-off.json';
 import stripeNotConnected from '../../../../test/fixtures/contract/stripe-connection-not-connected.json';
+import stripeCardsToDelete from '../../../../test/fixtures/contract/stripe-connection-cards-to-delete.json';
 import { catalog } from '../../test/api';
 import type { Analytics, NoShowSettings, StripeConnection } from '../types';
 import { computerName } from './computerName';
 import { metricLabel, rankBy } from './leaderboard';
 import { compactMoney, editableMoney, moneyWithCommas, parseMoney, percent, priceFromLabel } from './money';
 import * as noShow from './noShow';
-import { stripeReturnLine, stripeView } from './stripe';
+import { CARDS_TO_DELETE_INSTRUCTIONS, cardToDeleteView, stripeReturnLine, stripeView } from './stripe';
 import { blockTimeText } from '../pages/TodayPage';
 import { saleLine } from '../pages/today/SalesList';
 
@@ -102,6 +103,35 @@ describe('Card payments (Stripe)', () => {
       expect(stripeView({ status } as never).action).toBeNull();
       expect(stripeReturnLine(status).text).not.toMatch(/click/i);
     }
+  });
+});
+
+describe('Cards to delete in Stripe', () => {
+  it('words each one as the app does: the card or page, its expiry, the customer to search for and the account', () => {
+    const [card, page] = (stripeCardsToDelete as StripeConnection).cardsToDelete ?? [];
+    expect(cardToDeleteView(card!)).toEqual({
+      title: 'Visa •••• 4242',
+      spokenTitle: 'Visa ending in 4242',
+      expiry: 'Expires 12/30',
+      customer: 'Customer: cus_TestFixture000001',
+      account: "Stripe account: the shop's own Stripe key (test mode)",
+      confirm:
+        "Only click It's deleted once customer cus_TestFixture000001 is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here.",
+    });
+    expect(cardToDeleteView(page!)).toMatchObject({
+      title: "A card page that wasn't finished",
+      spokenTitle: "A card page that wasn't finished",
+      expiry: null,
+      customer: 'Customer: cus_TestFixture000004',
+    });
+    expect(cardToDeleteView({ ...card!, stripeAccountId: 'acct_1OldShop', livemode: true, card: { brand: 'amex', last4: '0005', expMonth: 3, expYear: 2029 } })).toMatchObject({
+      title: 'American Express •••• 0005',
+      expiry: 'Expires 3/29',
+      account: 'Stripe account: acct_1OldShop',
+    });
+    expect(CARDS_TO_DELETE_INSTRUCTIONS).toContain('Delete these in your old Stripe account: Customers, then search for the customer id.');
+    // A connection from a server from before the list has none.
+    expect((stripeActive as StripeConnection).cardsToDelete).toEqual([]);
   });
 });
 

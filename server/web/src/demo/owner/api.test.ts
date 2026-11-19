@@ -623,6 +623,24 @@ describe('products, settings and computers', () => {
     expect(session.current().reason).toBe('expired');
   });
 
+  it('has no cards to delete in an old Stripe account, unless a test gives some, and takes one off like the server', async () => {
+    expect((await api.stripe()).cardsToDelete).toEqual([]);
+    expect(await rejects(api.cardDeletedInStripe('cs_test_unknown'))).toMatchObject({ code: 'not_found', status: 404, message: "We couldn't find that card." });
+    const withCards = createDemoOwnerApi({
+      now: () => now,
+      latencyMs: 0,
+      cardsToDelete: [
+        { id: 'c1', kind: 'savedCard', stripeAccountId: null, livemode: true, customerId: 'cus_1', card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 } },
+        { id: 'cs_test_2', kind: 'cardPage', stripeAccountId: null, livemode: true, customerId: 'cus_2', card: null },
+      ],
+    });
+    expect((await withCards.stripe()).cardsToDelete?.map((c) => c.id)).toEqual(['c1', 'cs_test_2']);
+    expect((await withCards.cardDeletedInStripe('c1')).cardsToDelete?.map((c) => c.id)).toEqual(['cs_test_2']);
+    // Again (a lost answer): the same answer.
+    expect((await withCards.cardDeletedInStripe('c1')).cardsToDelete?.map((c) => c.id)).toEqual(['cs_test_2']);
+    expect((await withCards.stripe()).cardsToDelete?.map((c) => c.id)).toEqual(['cs_test_2']);
+  });
+
   it('keeps everything in this browser, and Reset brings the sample shop back', async () => {
     const nate = byName(await api.appointments('2026-11-04'), 'Nate Sample');
     await api.setStatus(nate.id, 'completed');
