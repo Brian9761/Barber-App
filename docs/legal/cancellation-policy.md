@@ -74,7 +74,7 @@ A **no-show** means you didn't come to your appointment and didn't cancel it bef
 
 ### When and how a fee is charged
 
-- **Only afterwards:** for a late cancellation, after you cancel; for a no-show, after your appointment's end time.
+- **Only afterwards:** once your appointment's end time has passed, for a late cancellation as for a no-show.
 - **We decide each time** whether to charge it. We may waive a fee, for example after an emergency, and we try to treat everyone the same way. If you missed your appointment or cancelled late for a reason related to a disability, tell us, and we'll waive the fee or work out another fair change with you.
 - **If someone else takes your time** after you cancel late (a new booking or a walk-in), we won't charge the late-cancellation fee.
 - **Within 7 days.** We charge a fee within 7 days after your appointment time, or not at all.
@@ -84,7 +84,7 @@ A **no-show** means you didn't come to your appointment and didn't cancel it bef
 
 ### Your card
 
-- **You add your card on Stripe's secure page.** The shop never sees your full card number. We keep only the card's type, last 4 digits and expiry date. Stripe keeps the card in the shop's Stripe account.
+- **You add your card on Stripe's secure page.** The shop never sees your full card number. We keep only the card's type, last 4 digits and expiry date, and Stripe's reference numbers for it. Stripe keeps the card in the shop's Stripe account.
 - **Nothing is charged when you add it.**
 - **The card can be charged only the fee for a booking made with it**, under the terms you agreed to for that booking.
 - **"Remember me"** is off unless you turn it on, or your phone or computer already remembers you. With it on, your phone or computer keeps a key to the card, so you can use it for later bookings. Each later booking shows its terms again, and you agree to them by booking. Without it, the card is used only for the booking you added it for.

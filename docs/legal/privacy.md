@@ -8,7 +8,7 @@ This policy explains what information Izzy Clipz Barbershop ("Izzy Clipz", "we",
 ## The short version
 
 - **We collect only what we need for your appointments:** your name, your mobile number, an optional note for your barber and, on our website, an optional email address.
-- **Your card number never reaches us.** If a booking needs a card on file, you enter it on Stripe's secure page. We keep only the card's type, last 4 digits and expiry date.
+- **Your card number never reaches us.** If a booking needs a card on file, you enter it on Stripe's secure page. We keep only the card's type, last 4 digits and expiry date, and Stripe's reference numbers for it.
 - **We don't sell your information or share it for advertising.** There are no ads, analytics or tracking tools on our website or in our client app.
 - **We don't send marketing texts or emails.** We may call or text you about your appointment.
 - **We don't keep your booking details forever.** We remove your name, number, email and note from an appointment 12 months after it. A few records last longer, such as the shop's payment records at Stripe: see "How long we keep it".
@@ -157,7 +157,7 @@ Our website also keeps a few things in your browser's storage, for your convenie
 | The key to your saved card, with its type, last 4 digits and expiry, and the number of the person who added it | With "Remember me", when you choose "Forget me"; without it, after you book or when you close the tab |
 | The booking you're in the middle of, including your details (and, while you add a card, what's needed to come back from Stripe's page) | When you book, close the tab or choose "Forget me" |
 | The last appointment you booked in this tab, so its confirmation can be shown again | When you close the tab or choose "Forget me" |
-| Whether the "Add to Home Screen" bar was closed, and a count of visits for that bar | When you clear your browser's data for our website |
+| Whether (and when) the "Add to Home Screen" bar was closed or this browser installed our app, and a count of visits for that bar | When you clear your browser's data for our website |
 | For shop staff only: the computer's sign-in to Izzy Clipz Business (never the owner key), and the barber last picked at checkout | Both when staff sign out. The sign-in also ends after 30 days (the next time our website is opened on that computer) |
 
 A browser that reopens a closed tab can bring back what that tab kept, so on a shared computer, use "Forget me" before you leave.
@@ -167,11 +167,11 @@ To work offline, our website also saves copies of its own pages, pictures and th
 ### In the Izzy Clipz iPhone app
 
 - **"Remember me on this iPhone"** is off unless you turn it on, or this iPhone already remembers you from an earlier booking. When it's on, the app keeps your name and number on this iPhone for your next booking and, if you add a card, the key to that card, so you can use it again.
-- **Your appointments.** The app keeps the appointments you booked on this iPhone, including your name, number and note and the card's type and last 4 digits, until 30 days after each appointment.
-- **Keys.** It keeps the key to manage each appointment in the iPhone's Keychain. These keys can move to a new iPhone with an encrypted backup. A booking that's still being sent is kept there too, with your number, until the shop's server confirms it or its time has passed. The key to your saved card stays on this iPhone only and isn't included in backups.
-- **Preferences.** It remembers your favorite barber and your reminder settings, including the date of your last haircut if you use haircut reminders.
+- **Your appointments.** The app keeps the appointments you booked on this iPhone, including your name, number and note and the card's type and last 4 digits, until 30 days after each appointment (the next time you open the app after that).
+- **Keys.** It keeps the key to manage each appointment in the iPhone's Keychain. These keys can move to a new iPhone with an encrypted backup. A booking that's still being sent is kept there too, with your number, until the shop's server confirms it or, once its time has passed, until the next time you open the app. The key to your saved card stays on this iPhone only and isn't included in backups.
+- **Preferences.** It remembers your favorite barber, your haircut reminder settings and the date of your last haircut (the date you set, or when your last appointment saved in the app started), which haircut reminders use. It can keep that date even if you never turn haircut reminders on.
 - **Permissions.** The app doesn't ask for your location, contacts, photos, camera or microphone. After you book, it may ask to send notifications, for that appointment's reminders: the day before, an hour before and, if cancelling late can be charged, before free cancelling ends. These reminders are on unless you turn them off on "You're booked". The app also asks when you turn on haircut reminders. "Add to Calendar" uses the iPhone's own calendar screen, so the app can't read your calendar.
-- **Clearing it.** "Forget my details" removes your remembered name and number, and your saved card, from this iPhone. Your appointments stay in the app, with your name, number and note, until 30 days after each one; "Remove from this list" takes a past or cancelled appointment off sooner, together with its key. Deleting the app deletes its list of appointments, but the iPhone's Keychain can keep the keys to your appointments and your saved card, and any booking still being sent. So before you delete the app, use "Forget my details" and remove your past appointments from the list.
+- **Clearing it.** "Forget my details" removes your remembered name and number, and your saved card, from this iPhone; it doesn't remove your preferences, which deleting the app does. Your appointments stay in the app, with your name, number and note, until 30 days after each one (the next time you open the app after that); "Remove from this list" takes a past or cancelled appointment off sooner, together with its key. Deleting the app deletes its list of appointments, but the iPhone's Keychain can keep the keys to your appointments and your saved card, and any booking still being sent. So before you delete the app, use "Forget my details" and remove your past appointments from the list.
 
 ## How we respond to Do Not Track and Global Privacy Control signals
 
@@ -185,9 +185,9 @@ To work offline, our website also saves copies of its own pages, pictures and th
 
 | Information | How long we keep it |
 |---|---|
-| Your name, mobile number, email and note on an appointment | 12 months after the appointment, then we remove them. If a fee for that appointment is still being processed, we wait until it's settled. |
+| Your name, mobile number, email and note on an appointment | 12 months after the appointment, then we remove them. |
 | Your name on a checkout record, and the description of a card payment taken at the shop | 12 months |
-| The rest of the appointment and checkout records: what was booked, when, the price, what happened, any fee and, for a booking with a card on file, the agreed terms and the card's type and last 4 digits | Kept for the shop's records, but no longer linked to your name, number, email or note after 12 months. The shop's Stripe account keeps its own payment records (see below). |
+| The rest of the appointment and checkout records: what was booked, when, the price, what happened, any fee and, for a booking with a card on file, the agreed terms and the card's type and last 4 digits | Kept for the shop's records, without your name, number, email or note after 12 months. If you book again with a card saved with "Remember me", your older appointments stay tied to that card, and so to your newer appointments, until 12 months after your last appointment with it. The shop's Stripe account keeps its own payment records (see below). |
 | Your saved card | See "Saved cards" below |
 | Payment records in the shop's Stripe account: card payments and fees, their descriptions, any receipt email address, and the card page you filled in, with the email address you typed there | In the shop's Stripe account, with no set end date. Stripe also keeps its own records, as its policies and the law require. |
 | The scrambled IP address used to stop abuse | About 2 days |
@@ -208,7 +208,7 @@ A card you save on Stripe's page stays in the shop's Stripe account until the fi
 
 With "Remember me", that's so you can book again quickly. Without it, the card is used only for the booking you saved it for.
 
-Then we ask Stripe to delete the card, and the customer record it was saved under, as soon as none of your bookings still needs it (an upcoming appointment, or one that can still be charged a fee). After that, the card can't be charged again. If the shop has changed how it connects to Stripe since you saved the card, our server can't reach it there, so the shop deletes it in its Stripe account instead. The shop's Stripe account still keeps a record of the card page you filled in, including the email address you typed there, and of any fee charged, and Stripe keeps its own records, as its policies and the law require.
+Then we ask Stripe to delete the card, and the customer record it was saved under, as soon as none of your bookings still needs it (an upcoming appointment, or one that can still be charged a fee). After that, the card can't be charged again. If adding your card doesn't finish with us (for example, the page or the app closes right after Stripe saves it), we ask Stripe to delete that card and its customer record within 2 days. If the shop has changed how it connects to Stripe since you saved the card, our server can't reach it there, so the shop deletes it in its Stripe account instead. The shop's Stripe account still keeps a record of the card page you filled in, including the email address you typed there, and of any fee charged, and Stripe keeps its own records, as its policies and the law require.
 
 We may keep information longer when the law requires it, or when we need it to resolve a dispute or a legal claim.
 

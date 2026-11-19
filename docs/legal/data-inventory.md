@@ -554,7 +554,7 @@ These are listed with the highest priority first. Each is either a change to the
 - **On November 5:** names, numbers, emails and notes stayed on appointments forever.
 - **As built:** the daily job removes them as below (`anonymizeExpired` in `server/src/retention.ts`, run from `server/src/cron.ts`; migration 008), with three differences. A fee try still pending holds them only until 14 days after the start (the 7-day fee deadline plus 7 days, `PENDING_FEE_HOLD_DAYS`), long before the 12 months are up. A payment's checkout ticket (`sale_draft`) loses only the client's name, and keeps its items and appointment. The owner's screens still show "Walk-in" for a sale whose name was removed.
 - **What the documents promise:**
-  - Remove them **12 months after the appointment**, except while a fee for it is still pending.
+  - Remove them **12 months after the appointment**.
   - Keep what was booked, when, the price, the status and the fee amounts, because the analytics use them.
   - The analytics never read names, numbers, emails or notes (`server/src/analytics.ts`, `docs/analytics.md`), so every number stays the same.
 - **Why there's no separate wait after a charged fee:** fees must be charged within 7 days of the appointment (G2), and card disputes are usually allowed for 120 days after the charge, so 12 months after the appointment always comes later. The evidence for a dispute (the agreed text, the consent time, the fee, the card's brand and last 4) stays on the anonymous record anyway.
@@ -756,7 +756,7 @@ This is what the Privacy Policy states. In the last column, "now" means it's alr
 
 | Data | Where | How long | How |
 |---|---|---|---|
-| Name, number, email and note on appointments | Server | 12 months after the appointment (later only while a fee is pending) | Now: the daily job, 12 months after the appointment's end (`server/src/retention.ts`). A fee still marked pending holds them only until 14 days after the start, so never past the 12 months. |
+| Name, number, email and note on appointments | Server | 12 months after the appointment | Now: the daily job, 12 months after the appointment's end (`server/src/retention.ts`). A fee still marked pending holds them only until 14 days after the start, so never past the 12 months. |
 | Client's name on sales; void reasons | Server | 12 months | Now: the daily job, 12 months after the sale |
 | Descriptions of card payments taken at the shop; the client's name on their checkout tickets | Server | 12 months | Now: the daily job, 12 months after the payment; a fee's description (only the kind of fee, the service, barber and time) and the ticket's items stay |
 | Receipt emails typed at the counter | Server | Not kept: passed to Stripe after the payment | Now (`server/src/payments.ts`); migration 008 clears the old ones, and the daily job clears any left |
