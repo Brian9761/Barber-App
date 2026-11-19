@@ -10,5 +10,6 @@
   "requirementsDue": 0,
   "message": "Connected. Card payments are on. Payouts to your bank are on.",
   "dashboardUrl": "https://dashboard.stripe.com/",
-  "checkedAt": "2026-11-02T17:10:00Z"
+  "checkedAt": "2026-11-02T17:10:00Z",
+  "cardsToDelete": []
 }

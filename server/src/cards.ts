@@ -8,9 +8,9 @@ import type { Deps } from './deps.js';
 import { ApiError, baseOf, httpUrl, json, readJsonObject, redirect } from './http.js';
 import { loadNoShowSettings, protectionFor } from './noshow.js';
 import { hit, ipKey } from './ratelimit.js';
-import { removeCard } from './retention.js';
+import { deleteAtStripe, removeCard } from './retention.js';
 import type { Context } from './router.js';
-import { accountMatch, requestOptions, shopAccount, shopStripe, stripeFailure } from './stripeaccount.js';
+import { accountMatch, requestOptions, shopAccount, shopStripe, stripeFailure, type ShopAccount } from './stripeaccount.js';
 import { localDate } from './time.js';
 import { parse, shortId } from './validation.js';
 
@@ -28,6 +28,12 @@ import { parse, shortId } from './validation.js';
 //    /book/card-return?status=saved&session_id=… (or status=cancelled).
 // 3. POST /api/cards { sessionId } with the same X-Card-Token → the card's brand,
 //    last 4 and expiry, stored under that token. Doing it again answers the same.
+//
+// Every card page is kept in card_checkouts (Stripe's ids only) from step 1, and closed once its
+// card is saved in step 3. One that never gets there (the page, the tab or the app closed right
+// after Stripe saved the card) is deleted at Stripe by the daily job, card and Customer, within 2
+// days of being made (retention.ts, `purgeUnfinishedCheckouts`); its card can't be saved after
+// that.
 //
 // With Stripe Connect, the Customer, the Checkout Session and so the card live on the
 // shop's connected account (stripe_account_id), and only work while the shop keeps it.
@@ -86,6 +92,29 @@ export interface SavedCardRow {
   removed_at: Date | null;
   /** When the client asked to delete it (DELETE /api/cards) while a booking still needed it. It can't book again. */
   delete_requested_at: Date | null;
+  /**
+   * When it was found on a Stripe account this server can't use any more (migrations/011): removed
+   * here, its Stripe ids kept until the shop says it deleted it in that account's Dashboard.
+   */
+  stripe_unreachable_at: Date | null;
+}
+
+/** A card page (migrations/011): Stripe's ids, and how far it got. */
+export interface CardCheckoutRow {
+  checkout_session_id: string;
+  /** Null once there's nothing left to delete with it (its card saved, or deleted at Stripe). */
+  stripe_customer_id: string | null;
+  stripe_account_id: string | null;
+  livemode: boolean;
+  created_at: Date;
+  /** Its card was saved (POST /api/cards). */
+  closed_at: Date | null;
+  /** The daily job took it up, its card never saved: it can't be saved any more. */
+  abandoned_at: Date | null;
+  /** Deleted at Stripe (or by the shop in its Dashboard). */
+  deleted_at: Date | null;
+  /** On a Stripe account this server can't use any more: waiting for the shop to delete it there. */
+  stripe_unreachable_at: Date | null;
 }
 
 /** Whether a saved card can still be used for a new booking: not removed, and the client hasn't asked to delete it. */
@@ -188,10 +217,42 @@ export async function createCardCheckout(ctx: Context): Promise<Response> {
       requestOptions(shop),
     );
   } catch (error) {
-    throw stripeFailure(deps, error, 'create card checkout');
+    const failure = stripeFailure(deps, error, 'create card checkout');
+    // No card page, so no card: the Customer just made would only be left behind.
+    await deleteUnusedCustomer(deps, shop, customer.id);
+    throw failure;
+  }
+  try {
+    // Kept so the daily job can delete its card and Customer at Stripe if the card is never saved here.
+    await deps.db.query(
+      `INSERT INTO card_checkouts (checkout_session_id, stripe_customer_id, stripe_account_id, livemode, created_at)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [session.id, customer.id, shop.stripeAccount ?? null, session.livemode, deps.now()],
+    );
+  } catch (error) {
+    // Without its row nothing could find this page again: its Customer goes now (no page is shown,
+    // and a card page whose Customer is gone can't save a card).
+    await deleteUnusedCustomer(deps, shop, customer.id);
+    throw error;
   }
   if (!session.url) throw stripeFailure(deps, new Error('Checkout Session has no url'), 'create card checkout');
   return json({ url: session.url, sessionId: session.id }, 201);
+}
+
+/** Deletes the Customer of a card page that couldn't be made (or kept); logged with its id when Stripe doesn't. */
+async function deleteUnusedCustomer(deps: Deps, shop: ShopAccount, customerId: string): Promise<void> {
+  const result = await deleteAtStripe(deps, {
+    stripe_account_id: shop.stripeAccount ?? null,
+    livemode: shop.livemode ?? false,
+    stripe_customer_id: customerId,
+    stripe_payment_method_id: null,
+  });
+  if (result !== 'deleted') {
+    deps.log.warn("A card page couldn't be made and Stripe didn't delete its empty customer record: delete it in the Stripe Dashboard", {
+      customerId,
+      stripeAccount: shop.stripeAccount ?? null,
+    });
+  }
 }
 
 // GET /api/cards/return?session_id=cs_…[&to=web] and GET /api/cards/cancel[?to=web]: Stripe's way
@@ -226,6 +287,9 @@ const saveBody = z.object({
 const tokenUsed = () => new ApiError('invalid_request', 'That card token was already used for another card.');
 const unknownSession = () => new ApiError('not_found', "We couldn't find that card. Add it again.");
 const notFinished = () => new ApiError('invalid_request', "The card wasn't added. Add it again.");
+/** A card page whose card wasn't saved in time: the daily job has deleted it at Stripe (or is about to). */
+export const CARD_PAGE_EXPIRED_MESSAGE = 'This card page has expired. Add your card again.';
+const pageExpired = () => new ApiError('not_found', CARD_PAGE_EXPIRED_MESSAGE);
 
 function idOf(value: string | { id: string } | null | undefined): string | null {
   if (!value) return null;
@@ -283,32 +347,48 @@ export async function saveCard(ctx: Context): Promise<Response> {
     throw new ApiError('invalid_request', 'That card has expired. Add another card.');
   }
 
-  const { rows } = await deps.db.query<SavedCardRow>(
-    `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id,
-                              brand, last4, exp_month, exp_year, livemode, created_at, stripe_account_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-     ON CONFLICT DO NOTHING
-     RETURNING *`,
-    [
-      deps.uuid(),
-      tokenHash,
-      session.id,
-      customerId,
-      paymentMethod.id,
-      normalizedBrand(card.brand),
-      card.last4,
-      card.exp_month,
-      card.exp_year,
-      session.livemode,
-      deps.now(),
-      shop.stripeAccount ?? null,
-    ],
-  );
-  const saved = rows[0];
+  const now = deps.now();
+  // The card and its page together: the daily job (`purgeUnfinishedCheckouts`) locks the page the
+  // same way before it deletes the card at Stripe, so a card is either saved here or deleted there.
+  const saved = await deps.db.transaction(async (tx) => {
+    const { rows: pages } = await tx.query<Pick<CardCheckoutRow, 'abandoned_at'>>(
+      'SELECT abandoned_at FROM card_checkouts WHERE checkout_session_id = $1 FOR UPDATE',
+      [session.id],
+    );
+    // The daily job took this page up: its card is being deleted at Stripe (or already is), so
+    // it isn't saved now. (A page made before migrations/011 has no row, and is saved as before.)
+    if (pages[0]?.abandoned_at) throw pageExpired();
+    const { rows } = await tx.query<SavedCardRow>(
+      `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id,
+                                brand, last4, exp_month, exp_year, livemode, created_at, stripe_account_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
+      [
+        deps.uuid(),
+        tokenHash,
+        session.id,
+        customerId,
+        paymentMethod.id,
+        normalizedBrand(card.brand),
+        card.last4,
+        card.exp_month,
+        card.exp_year,
+        session.livemode,
+        now,
+        shop.stripeAccount ?? null,
+      ],
+    );
+    // From now on saved_cards has its Stripe ids, and deletes them from there.
+    if (rows[0] && pages[0]) {
+      await tx.query('UPDATE card_checkouts SET closed_at = $2, stripe_customer_id = NULL WHERE checkout_session_id = $1', [session.id, now]);
+    }
+    return rows[0] ?? null;
+  });
   if (saved) return json({ card: savedCardJSON(saved) }, 201);
   // Another copy of this request saved it a moment ago (or the session is already saved): answer like a repeat.
-  const now = await findCardByToken(deps.db, token);
-  if (now) return repeat(now, sessionId);
+  const current = await findCardByToken(deps.db, token);
+  if (current) return repeat(current, sessionId);
   throw unknownSession();
 }
 

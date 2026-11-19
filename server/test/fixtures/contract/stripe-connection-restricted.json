@@ -10,5 +10,6 @@
   "requirementsDue": 0,
   "message": "Stripe paused card payments: open Stripe to fix it.",
   "dashboardUrl": "https://dashboard.stripe.com/",
-  "checkedAt": "2026-11-02T18:10:00Z"
+  "checkedAt": "2026-11-02T18:10:00Z",
+  "cardsToDelete": []
 }

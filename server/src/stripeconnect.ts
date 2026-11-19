@@ -7,6 +7,7 @@ import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
 import { ApiError, baseOf, htmlPage, httpUrl, json, readOptionalJsonObject, redirect } from './http.js';
 import { hit, ipKey } from './ratelimit.js';
+import { cardsToDelete, deletedInStripe, type CardToDeleteJSON } from './retention.js';
 import type { Context } from './router.js';
 import {
   accessRevoked,
@@ -34,7 +35,7 @@ import {
   type StripeSetup,
 } from './stripeaccount.js';
 import { formatInstant } from './time.js';
-import { parse } from './validation.js';
+import { parse, UUID_RE } from './validation.js';
 
 // Connecting the shop's own Stripe account from Settings (connect mode, STRIPE_CONNECT=on),
 // with Stripe Connect and Account Links onboarding:
@@ -54,6 +55,11 @@ import { parse } from './validation.js';
 //    webhook keeps the cache fresh too.
 //
 // From then on Tap to Pay, saved cards and fees go to that account (stripeaccount.ts).
+//
+// Settings also lists what the shop has to delete in a Stripe account this server can't use any
+// more (`cardsToDelete`, in every mode): saved cards and unfinished card pages from before the
+// shop changed how it connects to Stripe (retention.ts). "Deleted in Stripe" takes one off the
+// list: POST /api/owner/stripe/cards-to-delete/:id/deleted.
 
 export const SHOP_NAME = 'Izzy Clipz Barbershop';
 const SHOP_SUPPORT_PHONE = '+14423413053';
@@ -105,9 +111,16 @@ export interface StripeConnectionJSON {
   message: string;
   dashboardUrl: string;
   checkedAt: string | null;
+  /** What the shop has to delete in a Stripe account this server can't use any more (retention.ts). */
+  cardsToDelete: CardToDeleteJSON[];
 }
 
-export function connectionJSON(setup: StripeSetup, stored: StripeConnection | null, config: Config): StripeConnectionJSON {
+export function connectionJSON(
+  setup: StripeSetup,
+  stored: StripeConnection | null,
+  config: Config,
+  cards: CardToDeleteJSON[] = [],
+): StripeConnectionJSON {
   const connection = setup === 'connect' ? stored : null;
   const status: ConnectionStatus = setup === 'connect' ? connectionStatus(connection) : setup;
   return {
@@ -123,6 +136,7 @@ export function connectionJSON(setup: StripeSetup, stored: StripeConnection | nu
     message: connectionMessage(status, connection),
     dashboardUrl: DASHBOARD_URL,
     checkedAt: connection?.checkedAt ?? null,
+    cardsToDelete: cards,
   };
 }
 
@@ -488,8 +502,26 @@ export async function getOwnerStripe(ctx: Context): Promise<Response> {
   await requireOwner(ctx);
   const { config } = ctx.deps;
   const setup = stripeSetup(config);
-  if (setup !== 'connect') return json(connectionJSON(setup, null, config));
-  return json(connectionJSON(setup, await freshConnection(ctx.deps), config));
+  const connection = setup === 'connect' ? await freshConnection(ctx.deps) : null;
+  return json(connectionJSON(setup, connection, config, await cardsToDelete(ctx.deps.db)));
+}
+
+// POST /api/owner/stripe/cards-to-delete/:id/deleted: the shop deleted that customer in its old
+// Stripe account's Dashboard ("Deleted in Stripe"). Its Stripe ids are forgotten and it's off the
+// list; the answer is the connection as Settings shows it (from the cache, like the connect routes).
+// Doing it again answers the same.
+
+const CARD_PAGE_ID_RE = /^cs_(test|live)_[A-Za-z0-9]{1,200}$/;
+
+export async function postCardDeletedInStripe(ctx: Context): Promise<Response> {
+  await requireOwner(ctx);
+  const { deps } = ctx;
+  const id = ctx.params.id ?? '';
+  const notFound = () => new ApiError('not_found', "We couldn't find that card.");
+  if (!UUID_RE.test(id) && !CARD_PAGE_ID_RE.test(id)) throw notFound();
+  if (!(await deletedInStripe(deps.db, id, deps.now())).found) throw notFound();
+  const setup = stripeSetup(deps.config);
+  return json(connectionJSON(setup, await currentConnection(deps), deps.config, await cardsToDelete(deps.db)));
 }
 
 // POST /api/owner/stripe/connect { returnTo: "app" | "web" } (no body: the app)
@@ -520,7 +552,7 @@ export async function deleteStripeConnect(ctx: Context): Promise<Response> {
     const connection = connectionForKey(await loadConnections(tx), deps.config);
     if (connection) await forgetConnection(tx, deps.now(), connection.accountId);
   });
-  return json({ ...connectionJSON(setup, null, deps.config), message: DISCONNECTED_MESSAGE });
+  return json({ ...connectionJSON(setup, null, deps.config, await cardsToDelete(deps.db)), message: DISCONNECTED_MESSAGE });
 }
 
 // GET /api/stripe/connect/return?state=… and GET /api/stripe/connect/refresh?state=… (a browser lands here)

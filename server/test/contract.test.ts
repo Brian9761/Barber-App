@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { z } from 'zod';
 import { createApp } from '../src/app.js';
 import { ErrorBody, RESPONSES, type ResponseName } from './helpers/contract.js';
-import { protectionOn, useHarness, type CallResult } from './helpers/harness.js';
+import { CRON_SECRET, connectedShop, protectionOn, useHarness, type CallResult } from './helpers/harness.js';
 
 // Writes one example per §5 response type to test/fixtures/contract/, produced
 // by the real handlers, after checking it against strict schemas. The Swift Kit
@@ -317,6 +317,31 @@ describe('contract fixtures (API v1)', () => {
     expect(pc.status, pc.text).toBe(201);
     h.advance(15);
     check('computer-sessions', await h.call('GET', '/api/owner/computer-sessions', { headers: { authorization: `Bearer ${mac.token}` } }));
+  });
+
+  it('what the shop deletes itself in a Stripe account the server can’t use any more', async () => {
+    const owner = { owner: true } as const;
+    // With the shop's own key: a card saved, and a card page whose card Stripe saved but the app never did.
+    await protectionOn(h);
+    const savedToken = Buffer.alloc(32, 2).toString('base64url');
+    const saved = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': savedToken }, body: { offeringId: FLOW45 } });
+    h.stripe.completeSession(saved.body.sessionId, { brand: 'visa', last4: '4242', exp_month: 12, exp_year: 2030 });
+    expect((await h.call('POST', '/api/cards', { headers: { 'x-card-token': savedToken }, body: { sessionId: saved.body.sessionId } })).status).toBe(201);
+    const left = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': Buffer.alloc(32, 3).toString('base64url') }, body: { offeringId: FLOW45 } });
+    h.stripe.completeSession(left.body.sessionId, { brand: 'mastercard', last4: '4444', exp_month: 3, exp_year: 2029 });
+    // The shop connects its own Stripe account; the client removes the card, and the next day the job finds the page.
+    await connectedShop(h);
+    expect((await h.call('DELETE', '/api/cards', { headers: { 'x-card-token': savedToken } })).body.cardDeletion.status).toBe('deleted');
+    h.setNow('2026-11-03T19:17:00Z');
+    expect((await h.call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${CRON_SECRET}` } })).body.unfinishedCardPages).toEqual({
+      deleted: 0,
+      unreachable: 1,
+      failed: 0,
+    });
+    const listed = check('stripe-connection-cards-to-delete', await h.call('GET', '/api/owner/stripe', owner));
+    expect(listed.cardsToDelete.map((c) => c.kind)).toEqual(['savedCard', 'cardPage']);
+    const card = listed.cardsToDelete[0]!;
+    check('stripe-connection-card-deleted', await h.call('POST', `/api/owner/stripe/cards-to-delete/${card.id}/deleted`, owner));
   });
 
   it('one example error for every error code', async () => {

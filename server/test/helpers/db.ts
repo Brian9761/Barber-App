@@ -28,6 +28,7 @@ const TABLES = [
   'payments',
   'appointments',
   'saved_cards',
+  'card_checkouts',
   'settings',
   'time_off',
   'products',

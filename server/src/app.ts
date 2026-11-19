@@ -19,7 +19,7 @@ import { getReviews } from './reviews.js';
 import { getAnalytics } from './analytics.js';
 import { listSales, postSale, voidSale } from './sales.js';
 import { Router } from './router.js';
-import { deleteStripeConnect, getOwnerStripe, postStripeConnect, stripeConnectRefresh, stripeConnectReturn } from './stripeconnect.js';
+import { deleteStripeConnect, getOwnerStripe, postCardDeletedInStripe, postStripeConnect, stripeConnectRefresh, stripeConnectReturn } from './stripeconnect.js';
 import { deleteTimeOff, listTimeOff, postTimeOff } from './timeoff.js';
 import { VERSION } from './version.js';
 import { getCatalog } from './website.js';
@@ -80,6 +80,7 @@ export function createRouter(): Router {
       .on('GET', '/api/owner/stripe', getOwnerStripe)
       .on('POST', '/api/owner/stripe/connect', postStripeConnect)
       .on('DELETE', '/api/owner/stripe/connect', deleteStripeConnect) // the owner key only
+      .on('POST', '/api/owner/stripe/cards-to-delete/:id/deleted', postCardDeletedInStripe)
       // Computers signed in to the website's Business area
       .on('POST', '/api/owner/computer-codes', createComputerCode) // the owner key only
       .on('GET', '/api/owner/computer-sessions', listComputerSessions)

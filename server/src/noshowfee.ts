@@ -130,6 +130,8 @@ export function declineMessage(error: { code?: string | null; decline_code?: str
 interface ChargeRow extends AppointmentRow {
   stripe_customer_id: string | null;
   stripe_payment_method_id: string | null;
+  /** When the card was removed (retention.ts): deleted at Stripe, or on an account this server can't use any more. */
+  card_removed_at: Date | null;
   /** The connected account the card is saved on (null: saved with the server's own key). */
   card_stripe_account_id: string | null;
   /** Whether the card was saved in live mode (null without a card). */
@@ -310,15 +312,16 @@ export async function emailFeeReceipt(
 ): Promise<AppointmentRow | null> {
   let outcome: FeeReceiptOutcome;
   try {
-    const { rows } = await deps.db.query<{ checkout_session_id: string | null; stripe_account_id: string | null }>(
-      `SELECT c.checkout_session_id, c.stripe_account_id
+    const { rows } = await deps.db.query<{ checkout_session_id: string | null; stripe_account_id: string | null; removed_at: Date | null }>(
+      `SELECT c.checkout_session_id, c.stripe_account_id, c.removed_at
          FROM appointments a JOIN saved_cards c ON c.id = a.saved_card_id
         WHERE a.id = $1`,
       [appointmentId],
     );
     const card = rows[0];
-    if (!card?.checkout_session_id) {
-      // The card's Stripe details were deleted meanwhile (retention.ts): there's nothing to read the address from.
+    if (!card?.checkout_session_id || card.removed_at) {
+      // The card's Stripe details were deleted meanwhile (retention.ts), or it was removed because it's
+      // on an account this server can't use any more: there's nothing to read the address from.
       deps.log.warn("A fee went through, but its card's Stripe details are gone, so no receipt was sent: send one from the Stripe Dashboard", {
         appointmentId,
         paymentIntentId,
@@ -463,7 +466,8 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
 
   const claim = await deps.db.transaction(async (tx): Promise<Claim> => {
     const { rows } = await tx.query<ChargeRow>(
-      `SELECT a.*, c.stripe_customer_id, c.stripe_payment_method_id, c.stripe_account_id AS card_stripe_account_id, c.livemode AS card_livemode
+      `SELECT a.*, c.stripe_customer_id, c.stripe_payment_method_id, c.removed_at AS card_removed_at,
+              c.stripe_account_id AS card_stripe_account_id, c.livemode AS card_livemode
          FROM appointments a LEFT JOIN saved_cards c ON c.id = a.saved_card_id
         WHERE a.id = $1
         FOR UPDATE OF a`,
@@ -489,9 +493,12 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (chargeable.reason === 'late_cancel' && (await timeTakenSince(tx, row))) {
       chargeable = { reason: null, refusal: notChargeable(TIME_TAKEN_MESSAGE) };
     }
-    // The card was deleted at Stripe (retention.ts) once no booking needed it: why there's no fee, if
+    // The card was deleted at Stripe (retention.ts) once no booking needed it, or removed because it's
+    // on an account this server can't use any more (its ids kept for the shop): why there's no fee, if
     // there's another reason, or else that the card is gone.
-    if (!row.stripe_customer_id || !row.stripe_payment_method_id) throw chargeable.refusal ?? notChargeable(DELETED_CARD_MESSAGE);
+    if (row.card_removed_at || !row.stripe_customer_id || !row.stripe_payment_method_id) {
+      throw chargeable.refusal ?? notChargeable(DELETED_CARD_MESSAGE);
+    }
     // The card can only be charged on the account it was saved on, in the mode it was saved in,
     // and those must be the shop's now.
     const savedLive = row.card_livemode === true;

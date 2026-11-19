@@ -1736,6 +1736,27 @@ describe('a receipt for every fee', () => {
     expect((await feeRow(id)).no_show_fee_status).toBe('charged');
   });
 
+  it('a card removed meanwhile but kept for the shop (on a Stripe account this server can’t use): no receipt, and the log says so', async () => {
+    const id = await noShow();
+    const realCreate = h.stripe.paymentIntents.create;
+    h.stripe.paymentIntents.create = async (...args: Parameters<typeof realCreate>) => {
+      const intent = await realCreate(...args);
+      await h.database.pool.query(
+        `UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now() WHERE id = (SELECT saved_card_id FROM appointments WHERE id = $1)`,
+        [id],
+      );
+      return intent;
+    };
+    try {
+      const charged = await charge(id);
+      expect(charged.body.appointment.noShowFee).toMatchObject({ status: 'charged', receipt: 'failed' });
+      expect(h.stripe.calls.filter((c) => c.method === 'checkout.sessions.retrieve' && c.params && (c.params as { expand?: string[] }).expand?.[0] === 'setup_intent.payment_method')).toHaveLength(1);
+      expect(h.logs.some((l) => l.level === 'warn' && /Stripe details are gone, so no receipt was sent/.test(l.message))).toBe(true);
+    } finally {
+      h.stripe.paymentIntents.create = realCreate;
+    }
+  });
+
   it('a card whose Stripe details were deleted meanwhile: the fee stays charged, the receipt unsent, and the log says so', async () => {
     const id = await noShow();
     const realRetrieve = h.stripe.checkout.sessions.retrieve;

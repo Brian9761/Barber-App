@@ -103,9 +103,10 @@ describe('GET /api/cron/daily', () => {
     expect(first.body).toEqual({
       ok: true,
       deleted: { rateLimits: 1, apiUsage: 1, yelpCache: 0 },
-      // Clients' details and saved cards (test/retention.test.ts): none due here.
+      // Clients' details, saved cards and unfinished card pages (test/retention.test.ts): none due here.
       anonymized: { appointments: 0, sales: 0, payments: 0, receiptEmails: 0 },
       savedCards: { deleted: 0, stillNeeded: 0, failed: 0 },
+      unfinishedCardPages: { deleted: 0, unreachable: 0, failed: 0 },
     });
     const second = await h.call('GET', '/api/cron/daily', auth);
     expect(second.body.deleted).toEqual({ rateLimits: 0, apiUsage: 0, yelpCache: 0 });

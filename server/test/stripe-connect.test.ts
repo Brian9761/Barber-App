@@ -90,6 +90,8 @@ describe('the three modes', () => {
       message: "Card payments use this server's own Stripe key.",
       dashboardUrl: 'https://dashboard.stripe.com/',
       checkedAt: null,
+      // Nothing for the shop to delete in another Stripe account (test/retention.test.ts has some).
+      cardsToDelete: [],
     });
     h.config.stripeSecretKey = 'sk_live_fixture';
     expect((await status()).body.livemode).toBe(true);

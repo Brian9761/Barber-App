@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
-import { anonymizeExpired, bookingNeedsCard, NAME_REMOVED, retentionCutoff, RETENTION_MONTHS } from '../src/retention.js';
+import { CARD_PAGE_EXPIRED_MESSAGE, CHECKOUT_MINUTES } from '../src/cards.js';
+import {
+  anonymizeExpired,
+  bookingNeedsCard,
+  NAME_REMOVED,
+  retentionCutoff,
+  RETENTION_MONTHS,
+  UNFINISHED_CHECKOUT_MARGIN_HOURS,
+  unfinishedCheckoutCutoff,
+} from '../src/retention.js';
 import { RESPONSES } from './helpers/contract.js';
 import { CRON_SECRET, connectedShop, protectionOn, stripeError, useHarness } from './helpers/harness.js';
 import { seedWeek } from './helpers/week.js';
@@ -560,5 +569,296 @@ describe('the daily job deletes saved cards that are due', () => {
     h.setNow('2027-11-03T19:17:00Z');
     expect((await cron()).body.savedCards).toEqual({ deleted: 0, stillNeeded: 0, failed: 0 });
     expect((await cardRow()).removed_at).toBeNull();
+  });
+});
+
+describe('card pages whose card was never saved here are deleted at Stripe within 2 days', () => {
+  /** A card page made the way the app does (POST /api/cards/checkout); `finished`: the client added a card on Stripe's page. */
+  async function cardPage(finished: boolean, ip = '192.0.2.80'): Promise<{ token: string; sessionId: string }> {
+    const token = newManageToken();
+    const res = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': token }, body: { offeringId: FLOW45 }, ip });
+    expect(res.status, res.text).toBe(201);
+    if (finished) h.stripe.completeSession(res.body.sessionId);
+    return { token, sessionId: res.body.sessionId };
+  }
+  const page = async (id: string) => (await h.database.pool.query('SELECT * FROM card_checkouts WHERE checkout_session_id = $1', [id])).rows[0];
+  const pageCalls = () => h.stripe.calls.filter((c) => ['checkout.sessions.retrieve', 'paymentMethods.detach', 'customers.del'].includes(c.method));
+  const saveIt = (p: { token: string; sessionId: string }) =>
+    h.call('POST', '/api/cards', { headers: { 'x-card-token': p.token }, body: { sessionId: p.sessionId }, ip: '192.0.2.81' });
+
+  it('within 2 days: the page’s hour, 21 hours more for the apps’ and the website’s tries, and a day between runs that may each be an hour late', () => {
+    expect(CHECKOUT_MINUTES).toBe(60);
+    expect(UNFINISHED_CHECKOUT_MARGIN_HOURS).toBe(21);
+    expect(unfinishedCheckoutCutoff(new Date('2026-11-03T19:17:00Z'))).toEqual(new Date('2026-11-02T21:17:00Z'));
+    // The latest a page is deleted: taken up a moment after one run, so by the next, up to 24 hours and 59 minutes later.
+    expect(CHECKOUT_MINUTES / 60 + UNFINISHED_CHECKOUT_MARGIN_HOURS + 24 + 59 / 60).toBeLessThan(48);
+  });
+
+  it('a finished page nobody saved: its card detached and its Customer deleted 22 hours after it was made, not a minute before', async () => {
+    await protectionOn(h);
+    const p = await cardPage(true);
+    const session = h.stripe.sessions.get(p.sessionId)!;
+    const pm = (session.setup_intent as unknown as { payment_method: { id: string } }).payment_method.id;
+    h.setNow('2026-11-03T14:59:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 0, failed: 0 });
+    expect(pageCalls()).toEqual([]);
+    expect(await page(p.sessionId)).toMatchObject({ abandoned_at: null, deleted_at: null });
+    h.setNow('2026-11-03T15:01:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 1, unreachable: 0, failed: 0 });
+    expect(pageCalls().map((c) => [c.method, c.params, c.options])).toEqual([
+      ['checkout.sessions.retrieve', { id: p.sessionId, expand: ['setup_intent'] }, undefined],
+      ['paymentMethods.detach', { id: pm }, undefined],
+      ['customers.del', { id: 'cus_TestFixture000001' }, undefined],
+    ]);
+    expect(h.stripe.deletedCustomers).toEqual(new Set(['cus_TestFixture000001']));
+    // Marked, without the Customer's id, so nothing is asked again.
+    expect(await page(p.sessionId)).toMatchObject({
+      stripe_customer_id: null,
+      closed_at: null,
+      abandoned_at: new Date('2026-11-03T15:01:00Z'),
+      deleted_at: new Date('2026-11-03T15:01:00Z'),
+      stripe_unreachable_at: null,
+    });
+    h.setNow('2026-11-04T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 0, failed: 0 });
+    expect(pageCalls()).toHaveLength(3);
+    // A retry from the app that comes this late can't save the card that was deleted.
+    const late = await saveIt(p);
+    expect(late.status).toBe(404);
+    expect(late.body.error).toEqual({ code: 'not_found', message: CARD_PAGE_EXPIRED_MESSAGE });
+    expect((await h.database.pool.query('SELECT count(*)::int AS n FROM saved_cards')).rows[0].n).toBe(0);
+  });
+
+  it('a page that closed with no card on it: its empty Customer is deleted', async () => {
+    await protectionOn(h);
+    const p = await cardPage(false);
+    h.setNow('2026-11-03T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 1, unreachable: 0, failed: 0 });
+    expect(pageCalls().map((c) => c.method)).toEqual(['checkout.sessions.retrieve', 'customers.del']);
+    expect(await page(p.sessionId)).toMatchObject({ deleted_at: new Date('2026-11-03T19:17:00Z'), stripe_customer_id: null });
+    // Stripe forgot the page meanwhile: its Customer still goes.
+    const q = await cardPage(false, '192.0.2.82');
+    h.stripe.sessions.delete(q.sessionId);
+    h.setNow('2026-11-04T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 1, unreachable: 0, failed: 0 });
+    expect(h.stripe.deletedCustomers.size).toBe(2);
+  });
+
+  it('a page whose card was saved is left alone: the saved card is deleted from saved_cards, when it’s due', async () => {
+    const token = await saveCard();
+    const sessionId = (await cardRow()).checkout_session_id as string;
+    const saving = pageCalls().length;
+    h.setNow('2026-11-04T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 0, failed: 0 });
+    expect(pageCalls().slice(saving)).toEqual([]);
+    expect(await page(sessionId)).toMatchObject({ closed_at: new Date('2026-11-02T17:00:00Z'), abandoned_at: null, deleted_at: null });
+    expect((await cardRow()).removed_at).toBeNull();
+    // Still the client's to book with.
+    expect((await book(token, '2026-11-05T18:00:00Z')).id).toBeTruthy();
+  });
+
+  it('a card saved by older code (a rollback, say) whose page was never closed: closed now, not deleted', async () => {
+    await saveCard();
+    const sessionId = (await cardRow()).checkout_session_id as string;
+    await h.database.pool.query('UPDATE card_checkouts SET closed_at = NULL, stripe_customer_id = $2 WHERE checkout_session_id = $1', [
+      sessionId,
+      (await cardRow()).stripe_customer_id,
+    ]);
+    const saving = pageCalls().length;
+    h.setNow('2026-11-04T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 0, failed: 0 });
+    expect(pageCalls().slice(saving)).toEqual([]);
+    expect(await page(sessionId)).toMatchObject({ closed_at: new Date('2026-11-02T17:00:00Z'), stripe_customer_id: null, abandoned_at: null });
+  });
+
+  it('Stripe doesn’t answer: tried again the next day, and the card can’t be saved meanwhile', async () => {
+    await protectionOn(h);
+    const p = await cardPage(true);
+    h.setNow('2026-11-03T19:17:00Z');
+    h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 0, failed: 1 });
+    expect(h.logs.at(-1)).toMatchObject({ level: 'error', message: 'Stripe retrieve card checkout failed', details: { message: 'socket hang up' } });
+    expect(await page(p.sessionId)).toMatchObject({ abandoned_at: new Date('2026-11-03T19:17:00Z'), deleted_at: null });
+    expect((await saveIt(p)).body.error).toEqual({ code: 'not_found', message: CARD_PAGE_EXPIRED_MESSAGE });
+    // The Customer can't be deleted either, the next day: tried again the day after.
+    h.setNow('2026-11-04T19:17:00Z');
+    const realDel = h.stripe.customers.del;
+    h.stripe.customers.del = async () => {
+      h.stripe.customers.del = realDel;
+      throw stripeError('StripeAPIError', { statusCode: 500 }, 'Server error');
+    };
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 0, failed: 1 });
+    h.setNow('2026-11-05T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 1, unreachable: 0, failed: 0 });
+    expect(await page(p.sessionId)).toMatchObject({ abandoned_at: new Date('2026-11-03T19:17:00Z'), deleted_at: new Date('2026-11-05T19:17:00Z') });
+    expect(h.stripe.deletedCustomers.size).toBe(1);
+  });
+
+  it('with Stripe Connect, deleted on the account the page was made on', async () => {
+    const account = await connectedShop(h);
+    await protectionOn(h, h.config.stripeSecretKey);
+    await cardPage(true);
+    h.setNow('2026-11-03T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 1, unreachable: 0, failed: 0 });
+    expect(pageCalls().map((c) => [c.method, c.options])).toEqual([
+      ['checkout.sessions.retrieve', { stripeAccount: account }],
+      ['paymentMethods.detach', { stripeAccount: account }],
+      ['customers.del', { stripeAccount: account }],
+    ]);
+  });
+
+  it('on a Stripe account this server can’t use any more: nothing asked of Stripe, listed for the shop, which says when it’s deleted', async () => {
+    await protectionOn(h);
+    const p = await cardPage(true);
+    // The shop connects its own Stripe account the next morning.
+    h.setNow('2026-11-03T16:00:00Z');
+    await connectedShop(h);
+    const calls = h.stripe.calls.length;
+    h.setNow('2026-11-03T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 1, failed: 0 });
+    expect(h.stripe.calls.slice(calls).filter((c) => c.method !== 'accounts.retrieve')).toEqual([]);
+    expect(h.logs.at(-1)).toEqual({
+      level: 'warn',
+      message: "A card page that wasn't finished is on a Stripe account this server can't use any more: delete its customer in that account's Dashboard",
+      details: { customerId: 'cus_TestFixture000001', stripeAccount: null, livemode: false },
+    });
+    expect(await page(p.sessionId)).toMatchObject({ stripe_customer_id: 'cus_TestFixture000001', stripe_unreachable_at: new Date('2026-11-03T19:17:00Z'), deleted_at: null });
+    const settings = await h.call('GET', '/api/owner/stripe', owner);
+    expect(settings.body.cardsToDelete).toEqual([
+      { id: p.sessionId, kind: 'cardPage', stripeAccountId: null, livemode: false, customerId: 'cus_TestFixture000001', card: null },
+    ]);
+    // It isn't asked about again while it waits for the shop.
+    h.setNow('2026-11-04T19:17:00Z');
+    expect((await cron()).body.unfinishedCardPages).toEqual({ deleted: 0, unreachable: 0, failed: 0 });
+    // The shop deleted it in its old Stripe account.
+    const done = await h.call('POST', `/api/owner/stripe/cards-to-delete/${p.sessionId}/deleted`, owner);
+    expect(done.status, done.text).toBe(200);
+    expect(done.body).toMatchObject({ mode: 'connect', status: 'active', cardsToDelete: [] });
+    expect(await page(p.sessionId)).toMatchObject({ stripe_customer_id: null, stripe_unreachable_at: null, deleted_at: new Date('2026-11-04T19:17:00Z') });
+    // Again (a lost answer): the same, nothing changes.
+    expect((await h.call('POST', `/api/owner/stripe/cards-to-delete/${p.sessionId}/deleted`, owner)).body.cardsToDelete).toEqual([]);
+    expect(await page(p.sessionId)).toMatchObject({ deleted_at: new Date('2026-11-04T19:17:00Z') });
+  });
+});
+
+describe('a card on a Stripe account this server can’t use any more is the shop’s to delete there', () => {
+  const policyFor = async () => (await h.call('GET', `/api/no-show-policy?offeringId=${encodeURIComponent(FLOW45)}`)).body.policyText;
+
+  it('removed here (it can’t book or be charged), its Stripe ids kept and its customer in the log, until the shop says it deleted it', async () => {
+    const token = await saveCard();
+    const saved = await cardRow();
+    await connectedShop(h);
+    expect((await removeCard(token)).body.cardDeletion.status).toBe('deleted');
+    expect(stripeDeletes()).toEqual([]);
+    expect(h.logs.at(-1)).toEqual({
+      level: 'warn',
+      message: "A saved card is on a Stripe account this server can't use any more: removed here, delete it in that account's Dashboard",
+      details: { cardId: saved.id, customerId: saved.stripe_customer_id, stripeAccount: null, livemode: false },
+    });
+    expect(await cardRow()).toMatchObject({
+      removed_at: new Date('2026-11-02T17:00:00Z'),
+      stripe_unreachable_at: new Date('2026-11-02T17:00:00Z'),
+      checkout_session_id: saved.checkout_session_id,
+      stripe_customer_id: saved.stripe_customer_id,
+      stripe_payment_method_id: saved.stripe_payment_method_id,
+    });
+    // It can't book.
+    const booked = await h.call('POST', '/api/appointments', {
+      headers: { 'x-card-token': token },
+      body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Andre Sample', phone: '4425550170' }, noShowPolicy: await policyFor() },
+    });
+    expect(booked.body.error.code).toBe('card_required');
+    // Settings lists it: where, what card, and the customer to search for.
+    const settings = await h.call('GET', '/api/owner/stripe', owner);
+    expect(settings.body.cardsToDelete).toEqual([
+      {
+        id: saved.id,
+        kind: 'savedCard',
+        stripeAccountId: null,
+        livemode: false,
+        customerId: saved.stripe_customer_id,
+        card: { brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 },
+      },
+    ]);
+    expect(RESPONSES['stripe-connection-cards-to-delete'].safeParse(settings.body).success).toBe(true);
+    // Removing it again: still nothing asked of Stripe, still on the list.
+    expect((await removeCard(token)).body.cardDeletion.status).toBe('deleted');
+    expect((await h.call('GET', '/api/owner/stripe', owner)).body.cardsToDelete).toHaveLength(1);
+    // "Deleted in Stripe": its ids are forgotten, and it's off the list (a computer can say so too).
+    const computer = await h.call('POST', '/api/owner/computer-codes', owner);
+    const signedIn = await h.call('POST', '/api/computer-sessions', { body: { code: computer.body.code, name: 'Chrome on Mac' } });
+    const done = await h.call('POST', `/api/owner/stripe/cards-to-delete/${saved.id}/deleted`, { headers: { authorization: `Bearer ${signedIn.body.token}` } });
+    expect(done.status, done.text).toBe(200);
+    expect(done.body.cardsToDelete).toEqual([]);
+    expect(RESPONSES['stripe-connection-card-deleted'].safeParse(done.body).success).toBe(true);
+    expect(await cardRow()).toMatchObject({
+      removed_at: new Date('2026-11-02T17:00:00Z'),
+      stripe_unreachable_at: null,
+      checkout_session_id: null,
+      stripe_customer_id: null,
+      stripe_payment_method_id: null,
+      brand: 'visa',
+      last4: '4242',
+    });
+    // Again: the same answer. An id that's nothing here, or isn't an id: a 404.
+    expect((await h.call('POST', `/api/owner/stripe/cards-to-delete/${saved.id}/deleted`, owner)).status).toBe(200);
+    for (const id of ['00000000-0000-4000-8000-0000000000ff', 'cs_test_Unknown', 'nope', 'pm_123']) {
+      const res = await h.call('POST', `/api/owner/stripe/cards-to-delete/${id}/deleted`, owner);
+      expect(res.status, id).toBe(404);
+      expect(res.body.error).toEqual({ code: 'not_found', message: "We couldn't find that card." });
+    }
+  });
+
+  it('the daily job, likewise: an expired card saved with the shop’s own key, once Stripe is connected', async () => {
+    await protectionOn(h);
+    const token = newManageToken();
+    const checkout = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': token }, body: { offeringId: FLOW45 } });
+    h.stripe.completeSession(checkout.body.sessionId, { brand: 'amex', last4: '0005', exp_month: 11, exp_year: 2026 });
+    expect((await h.call('POST', '/api/cards', { headers: { 'x-card-token': token }, body: { sessionId: checkout.body.sessionId } })).status).toBe(201);
+    await connectedShop(h);
+    h.setNow('2026-12-01T19:17:00Z');
+    expect((await cron()).body.savedCards).toEqual({ deleted: 1, stillNeeded: 0, failed: 0 });
+    expect(stripeDeletes()).toEqual([]);
+    expect((await h.call('GET', '/api/owner/stripe', owner)).body.cardsToDelete).toMatchObject([
+      { kind: 'savedCard', stripeAccountId: null, customerId: 'cus_TestFixture000001', card: { brand: 'amex', last4: '0005', expMonth: 11, expYear: 2026 } },
+    ]);
+    // It isn't picked up again.
+    h.setNow('2026-12-02T19:17:00Z');
+    expect((await cron()).body.savedCards).toEqual({ deleted: 0, stillNeeded: 0, failed: 0 });
+  });
+
+  it('saved with a test key, deleted once the key is live: listed, never taken for deleted (Stripe would say “no such customer”)', async () => {
+    const token = await saveCard();
+    h.config.stripeSecretKey = 'sk_live_fixture';
+    expect((await removeCard(token)).body.cardDeletion.status).toBe('deleted');
+    expect(stripeDeletes()).toEqual([]);
+    expect(await cardRow()).toMatchObject({ stripe_unreachable_at: new Date('2026-11-02T17:00:00Z'), stripe_customer_id: 'cus_TestFixture000001' });
+    expect((await h.call('GET', '/api/owner/stripe', owner)).body.cardsToDelete).toMatchObject([{ kind: 'savedCard', livemode: false, stripeAccountId: null }]);
+  });
+
+  it('on a connected account the shop took the platform’s access away from: listed with that account', async () => {
+    const account = await connectedShop(h);
+    const token = await saveCard();
+    const saved = await cardRow();
+    h.stripe.nextError = stripeError('StripePermissionError', { statusCode: 403 }, `The provided key does not have access to account '${account}' (or that account does not exist).`);
+    expect((await removeCard(token)).body.cardDeletion.status).toBe('deleted');
+    expect(h.stripe.deletedCustomers.size).toBe(0);
+    expect(await cardRow()).toMatchObject({ stripe_account_id: account, stripe_customer_id: saved.stripe_customer_id, stripe_unreachable_at: new Date('2026-11-02T17:00:00Z') });
+    expect((await h.call('GET', '/api/owner/stripe', owner)).body.cardsToDelete).toMatchObject([
+      { kind: 'savedCard', stripeAccountId: account, livemode: false, customerId: saved.stripe_customer_id },
+    ]);
+  });
+
+  it('a card kept for the shop can’t be charged a fee', async () => {
+    const token = await saveCard();
+    const booking = await book(token);
+    h.setNow('2026-11-03T18:50:00Z');
+    await setStatus(booking.id, 'noShow');
+    // Removed here with its ids kept (say the shop changed how it connects to Stripe).
+    await h.database.pool.query('UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now()');
+    const res = await h.call('POST', `/api/owner/appointments/${booking.id}/no-show-fee`, owner);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toEqual({ code: 'not_chargeable', message: "The client's saved card was deleted, so it can't be charged." });
+    expect(h.stripe.calls.filter((c) => c.method === 'paymentIntents.create')).toEqual([]);
   });
 });

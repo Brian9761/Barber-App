@@ -1,0 +1,24 @@
+{
+  "mode": "connect",
+  "status": "active",
+  "accountId": "acct_TestFixture000007",
+  "businessName": "Izzy Clipz Barbershop",
+  "livemode": false,
+  "chargesEnabled": true,
+  "payoutsEnabled": true,
+  "detailsSubmitted": true,
+  "requirementsDue": 0,
+  "message": "Connected. Card payments are on. Payouts to your bank are on.",
+  "dashboardUrl": "https://dashboard.stripe.com/",
+  "checkedAt": "2026-11-03T19:17:00Z",
+  "cardsToDelete": [
+    {
+      "id": "cs_test_Fixture000005",
+      "kind": "cardPage",
+      "stripeAccountId": null,
+      "livemode": false,
+      "customerId": "cus_TestFixture000004",
+      "card": null
+    }
+  ]
+}

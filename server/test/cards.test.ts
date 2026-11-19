@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
-import { publicBase } from '../src/cards.js';
+import { CARD_PAGE_EXPIRED_MESSAGE, publicBase } from '../src/cards.js';
 import { protectionOn, stripeError, useHarness } from './helpers/harness.js';
 
 // Saving a card for no-show protection: Stripe Checkout in setup mode, the https
@@ -330,5 +330,115 @@ describe('a card saved from the website (returnTo: "web")', () => {
     expect((await h.call('GET', '/api/cards/cancel?to=web')).headers.get('location')).toBe('https://izzyclipz.example/book/card-return?status=cancelled');
     // Anything but to=web keeps the app's links.
     expect((await h.call('GET', '/api/cards/cancel?to=app')).headers.get('location')).toBe('izzyclipz://card-cancelled');
+  });
+});
+
+describe('every card page is kept (Stripe’s ids only) until its card is saved (migrations/011)', () => {
+  const pages = async () => (await h.database.pool.query('SELECT * FROM card_checkouts ORDER BY created_at, checkout_session_id')).rows;
+
+  it('the page and its Customer, the moment the page is made; closed, without the Customer, once its card is saved', async () => {
+    await protectionOn(h);
+    const token = newManageToken();
+    const res = await checkout(token);
+    expect(res.status, res.text).toBe(201);
+    expect(await pages()).toEqual([
+      {
+        checkout_session_id: res.body.sessionId,
+        stripe_customer_id: 'cus_TestFixture000001',
+        stripe_account_id: null,
+        livemode: false,
+        created_at: new Date('2026-11-02T17:00:00Z'),
+        closed_at: null,
+        abandoned_at: null,
+        deleted_at: null,
+        stripe_unreachable_at: null,
+      },
+    ]);
+    // Nothing about the client, and never the token.
+    expect(JSON.stringify(await pages())).not.toContain(token);
+    h.stripe.completeSession(res.body.sessionId);
+    h.advance(3);
+    expect((await save(token, res.body.sessionId)).status).toBe(201);
+    expect(await pages()).toMatchObject([
+      { checkout_session_id: res.body.sessionId, stripe_customer_id: null, closed_at: new Date('2026-11-02T17:03:00Z'), abandoned_at: null },
+    ]);
+    // saved_cards has its Stripe ids now.
+    const card = (await h.database.pool.query('SELECT checkout_session_id, stripe_customer_id FROM saved_cards')).rows[0];
+    expect(card).toEqual({ checkout_session_id: res.body.sessionId, stripe_customer_id: 'cus_TestFixture000001' });
+    // Saving it again (a lost answer) is the same card, and the page stays as it is.
+    expect((await save(token, res.body.sessionId)).status).toBe(200);
+    expect(await pages()).toMatchObject([{ closed_at: new Date('2026-11-02T17:03:00Z') }]);
+  });
+
+  it('Stripe can’t make the page: the Customer just made is deleted, and nothing is kept', async () => {
+    await protectionOn(h);
+    const realCreate = h.stripe.checkout.sessions.create;
+    h.stripe.checkout.sessions.create = async () => {
+      h.stripe.checkout.sessions.create = realCreate;
+      throw stripeError('StripeAPIError', { statusCode: 500 }, 'Server error');
+    };
+    const res = await checkout(newManageToken());
+    expect(res.status).toBe(500);
+    expect(res.body.error).toEqual({ code: 'server_error', message: "We couldn't reach Stripe. Please try again." });
+    expect(h.stripe.calls.map((c) => [c.method, c.params])).toEqual([
+      ['customers.create', expect.anything()],
+      ['customers.del', { id: 'cus_TestFixture000001' }],
+    ]);
+    expect(h.stripe.deletedCustomers).toEqual(new Set(['cus_TestFixture000001']));
+    expect(h.logs).toEqual([expect.objectContaining({ level: 'error', message: 'Stripe create card checkout failed' })]);
+    expect(await pages()).toEqual([]);
+  });
+
+  it('…and if Stripe can’t delete that Customer either, the log names it, to delete in the Dashboard', async () => {
+    await protectionOn(h);
+    const realCreate = h.stripe.checkout.sessions.create;
+    h.stripe.checkout.sessions.create = async () => {
+      h.stripe.checkout.sessions.create = realCreate;
+      // The Customer can't be deleted either: Stripe is down.
+      h.stripe.nextError = stripeError('StripeConnectionError', {}, 'socket hang up');
+      throw stripeError('StripeConnectionError', {}, 'socket hang up');
+    };
+    expect((await checkout(newManageToken())).status).toBe(500);
+    expect(h.stripe.deletedCustomers.size).toBe(0);
+    expect(h.logs.at(-1)).toEqual({
+      level: 'warn',
+      message: "A card page couldn't be made and Stripe didn't delete its empty customer record: delete it in the Stripe Dashboard",
+      details: { customerId: 'cus_TestFixture000001', stripeAccount: null },
+    });
+  });
+
+  it('a page that can’t be kept here isn’t shown: its Customer is deleted and the answer is a 500', async () => {
+    await protectionOn(h);
+    // The page's row can't be written (here: a row with its id is already there).
+    await h.database.pool.query(
+      `INSERT INTO card_checkouts (checkout_session_id, stripe_customer_id, livemode, created_at) VALUES ('cs_test_Fixture000002', 'cus_Other', false, now())`,
+    );
+    const res = await checkout(newManageToken());
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('server_error');
+    expect(res.text).not.toContain('checkout.stripe.com');
+    expect(h.stripe.deletedCustomers).toEqual(new Set(['cus_TestFixture000001']));
+  });
+
+  it('a page the daily job took up can’t save its card any more: a 404 that says to add it again', async () => {
+    await protectionOn(h);
+    const token = newManageToken();
+    const sessionId = await completedSession(token);
+    await h.database.pool.query('UPDATE card_checkouts SET abandoned_at = now() WHERE checkout_session_id = $1', [sessionId]);
+    const res = await save(token, sessionId);
+    expect(res.status).toBe(404);
+    expect(res.body.error).toEqual({ code: 'not_found', message: CARD_PAGE_EXPIRED_MESSAGE });
+    expect(CARD_PAGE_EXPIRED_MESSAGE).toBe('This card page has expired. Add your card again.');
+    expect((await h.database.pool.query('SELECT count(*)::int AS n FROM saved_cards')).rows[0].n).toBe(0);
+    expect(await pages()).toMatchObject([{ closed_at: null }]);
+  });
+
+  it('a page made before migration 011 (no row) still saves its card, as before', async () => {
+    await protectionOn(h);
+    const token = newManageToken();
+    const sessionId = await completedSession(token);
+    await h.database.pool.query('DELETE FROM card_checkouts');
+    expect((await save(token, sessionId)).status).toBe(201);
+    expect(await pages()).toEqual([]);
   });
 });

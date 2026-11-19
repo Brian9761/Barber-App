@@ -131,6 +131,20 @@ export const StripeConnection = z.strictObject({
   message: z.string().min(1),
   dashboardUrl: z.string().regex(/^https:\/\//),
   checkedAt: instant.nullable(),
+  // What the shop deletes itself, in a Stripe account this server can't use any more (retention.ts).
+  cardsToDelete: z.array(
+    z.strictObject({
+      // The saved card's id, or the card page's Checkout Session id.
+      id: z.string().regex(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|cs_(test|live)_[A-Za-z0-9]+)$/),
+      kind: z.enum(['savedCard', 'cardPage']),
+      stripeAccountId: z.string().regex(/^acct_[A-Za-z0-9]+$/).nullable(),
+      livemode: z.boolean(),
+      customerId: z.string().regex(/^cus_[A-Za-z0-9_]+$/),
+      card: z
+        .strictObject({ brand: z.string().regex(/^[a-z0-9_]+$/), last4: z.string().regex(/^\d{4}$/), expMonth: int.min(1).max(12), expYear: int.min(2000) })
+        .nullable(),
+    }),
+  ),
 });
 export const ComputerSession = z.strictObject({
   id,
@@ -401,6 +415,10 @@ export const RESPONSES = {
   'stripe-connection-active': StripeConnection,
   'stripe-connection-restricted': StripeConnection,
   'stripe-connection-disconnected': StripeConnection,
+  // A saved card and an unfinished card page left on the shop's own Stripe key after it connected
+  // its account, and the list once the shop said it deleted the card ("Deleted in Stripe").
+  'stripe-connection-cards-to-delete': StripeConnection,
+  'stripe-connection-card-deleted': StripeConnection,
   'stripe-connect-link': z.strictObject({ url: z.string().regex(/^https:\/\/connect\.stripe\.com\//), expiresAt: instant }),
   // Signing in on a computer
   'computer-code': z.strictObject({ code: z.string().regex(/^\d{6}$/), expiresAt: instant, expiresInSeconds: int.positive() }),
