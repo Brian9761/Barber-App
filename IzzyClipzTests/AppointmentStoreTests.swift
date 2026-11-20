@@ -143,6 +143,163 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertNil(tokens.secrets[AppointmentStore.pendingBookingsAccount])
     }
 
+    // MARK: The card of a booking not yet confirmed
+
+    private func request(card: IzzyAPI.CardToken, keepCard: Bool?, start: Date = TestData.friday) -> IzzyAPI.NewAppointment {
+        var request = request(start: start)
+        request.noShow = IzzyAPI.NoShowAgreement(cardToken: card, policyText: "The policy as shown.")
+        request.keepCard = keepCard
+        return request
+    }
+
+    private var pendingBookingsItem: String? { tokens.secrets[AppointmentStore.pendingBookingsAccount] }
+
+    /// A card's digest is its key's SHA-256 in hex, as worked out apart from the app: for card keys,
+    /// NIST's examples and the empty message, and lengths on each side of where SHA-256's padding
+    /// takes another block (the same digests from CryptoKit on iOS and the Linux build's own).
+    func testACardsDigestIsTheSHA256OfItsKeyInHex() throws {
+        let card = try XCTUnwrap(IzzyAPI.CardToken(rawValue: TestData.cardKey))
+        XCTAssertEqual(card.digest, TestData.cardKeyDigest)
+        XCTAssertEqual(IzzyAPI.CardToken.digest(ofKey: TestData.cardKey), TestData.cardKeyDigest)
+        let other = try XCTUnwrap(IzzyAPI.CardToken(rawValue: "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8"))
+        XCTAssertEqual(other.digest, "cf0931e168b49e987503caf18af6fe253b6b3d82a81008c3e8e1ee67c7c8dc55")
+        let generated = IzzyAPI.CardToken.generate()
+        XCTAssertEqual(generated.digest.count, 64)
+        XCTAssertTrue(generated.digest.allSatisfy { "0123456789abcdef".contains($0) })
+        XCTAssertNotEqual(generated.digest, IzzyAPI.CardToken.generate().digest)
+
+        let published = [
+            "": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "abc": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq": "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1",
+        ]
+        for (message, digest) in published {
+            XCTAssertEqual(IzzyAPI.CardToken.digest(ofKey: message), digest, "\"\(message)\"")
+        }
+        let byLength = [
+            55: "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318",
+            56: "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a",
+            63: "7d3e74a05d7db15bce4ad9ec0658ea98e3f06eeecf16b4c6fff2da457ddc2f34",
+            64: "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb",
+            65: "635361c48bb9eab14198e76ea8ab7f1a41685d6ad62aa9146d301d4f17eb0ae0",
+            119: "31eba51c313a5c08226adf18d4a359cfdfd8d2e816b13f4af952f7ea6584dcfb",
+            120: "2f3d335432c70b580af0e8e1b3674a7c020d683aa5f73aaaedfdc55af904c21c",
+            1000: "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3",
+        ]
+        for (length, digest) in byLength {
+            XCTAssertEqual(IzzyAPI.CardToken.digest(ofKey: String(repeating: "a", count: length)), digest, "\(length) times \"a\"")
+        }
+    }
+
+    /// A booking with a card and Remember me off (`keepCard: false`) keeps, until it's confirmed,
+    /// which card it said not to keep: as the key's digest, never the key. That Keychain item goes
+    /// into backups and to a new iPhone; the key stays in the saved-card store, on this iPhone only.
+    func testAnUnconfirmedBookingKeepsOnlyTheDigestOfTheCardItSaidNotToKeep() throws {
+        let defaults = TestData.defaults()
+        let store = makeStore(defaults: defaults)
+        let card = try XCTUnwrap(IzzyAPI.CardToken(rawValue: TestData.cardKey))
+        let forNow = request(card: card, keepCard: false)
+        let token = store.bookingToken(for: forNow)
+        XCTAssertEqual(store.cardNotKept(by: forNow), TestData.cardKeyDigest)
+
+        let stored = try XCTUnwrap(pendingBookingsItem)
+        XCTAssertTrue(stored.contains(TestData.cardKeyDigest))
+        XCTAssertFalse(stored.contains(TestData.cardKey), "Never the key")
+        XCTAssertFalse(stored.contains("\"cardNotKept\""))
+        XCTAssertFalse(String(describing: defaults.dictionaryRepresentation()).contains(TestData.cardKey))
+
+        // The app opened again: the same token, and the same card not kept, whatever card and
+        // Remember me the retry has (it's the same booking).
+        let reopened = makeStore(defaults: defaults)
+        XCTAssertEqual(reopened.bookingToken(for: forNow), token)
+        XCTAssertEqual(reopened.cardNotKept(by: forNow), TestData.cardKeyDigest)
+        XCTAssertEqual(reopened.cardNotKept(by: request(card: .generate(), keepCard: nil)), TestData.cardKeyDigest)
+        XCTAssertEqual(reopened.cardNotKept(by: request()), TestData.cardKeyDigest)
+        XCTAssertEqual(pendingBookingsItem, stored, "Unchanged")
+
+        // Booked: nothing pending, so no card either.
+        reopened.finishedBooking(forNow)
+        XCTAssertNil(reopened.cardNotKept(by: forNow))
+        XCTAssertNil(pendingBookingsItem)
+    }
+
+    /// Only a booking that goes with a card and says not to keep it notes one: not one that keeps
+    /// its card (Remember me on: `keepCard` left out, or `true`), not one without a card, and not a
+    /// booking never tried.
+    func testOnlyABookingThatSaysNotToKeepItsCardNotesIt() throws {
+        let store = makeStore(defaults: TestData.defaults())
+        let card = try XCTUnwrap(IzzyAPI.CardToken(rawValue: TestData.cardKey))
+        let kept = request(card: card, keepCard: nil)
+        let keptToo = request(card: card, keepCard: true, start: TestData.friday.addingTimeInterval(30 * 60))
+        let withoutCard = request(start: TestData.friday.addingTimeInterval(60 * 60))
+        for booking in [kept, keptToo, withoutCard] {
+            _ = store.bookingToken(for: booking)
+            XCTAssertNil(store.cardNotKept(by: booking))
+        }
+        XCTAssertNil(store.cardNotKept(by: request(start: TestData.friday.addingTimeInterval(90 * 60))), "Never tried")
+        let stored = try XCTUnwrap(pendingBookingsItem)
+        XCTAssertFalse(stored.contains("cardNotKept"))
+        XCTAssertFalse(stored.contains(TestData.cardKey))
+    }
+
+    /// Earlier versions kept the card's key itself in the unconfirmed booking. The first time the
+    /// list is read (when the app becomes active), it's saved again with only the key's digest, and
+    /// nothing else about it changes: the same token for each booking, the same card not kept. The
+    /// ones whose time has passed go at the same time, and a list already saved this way stays as it is.
+    func testABookingSavedWithTheCardsKeyIsSavedAgainWithOnlyItsDigest() throws {
+        let card = try XCTUnwrap(IzzyAPI.CardToken(rawValue: TestData.cardKey))
+        let forNow = request(card: card, keepCard: false)
+        let kept = request(card: card, keepCard: nil, start: TestData.friday.addingTimeInterval(60 * 60))
+        let over = request(card: card, keepCard: false, start: TestData.monday)
+        let (first, second, third) = (IzzyAPI.ManageToken.generate(), IzzyAPI.ManageToken.generate(), IzzyAPI.ManageToken.generate())
+        try tokens.setSecret(
+            EarlierPendingBooking.list([
+                EarlierPendingBooking(forNow, token: first, cardNotKept: card),
+                EarlierPendingBooking(kept, token: second, cardNotKept: nil),
+                EarlierPendingBooking(over, token: third, cardNotKept: card),
+            ]),
+            for: AppointmentStore.pendingBookingsAccount
+        )
+        XCTAssertTrue(try XCTUnwrap(pendingBookingsItem).contains("\"cardNotKept\":\"\(TestData.cardKey)\""), "As an earlier version left it")
+
+        let store = makeStore(defaults: TestData.defaults())
+        store.refreshLocally()
+        let stored = try XCTUnwrap(pendingBookingsItem)
+        XCTAssertFalse(stored.contains(TestData.cardKey), "The key is gone from the Keychain item")
+        XCTAssertFalse(stored.contains("\"cardNotKept\""))
+        XCTAssertTrue(stored.contains("\"cardNotKeptDigest\":\"\(TestData.cardKeyDigest)\""))
+        XCTAssertFalse(stored.contains(third.rawValue), "Its time has passed")
+        XCTAssertEqual(store.bookingToken(for: forNow), first)
+        XCTAssertEqual(store.bookingToken(for: kept), second)
+        XCTAssertEqual(store.cardNotKept(by: forNow), TestData.cardKeyDigest)
+        XCTAssertNil(store.cardNotKept(by: kept))
+        XCTAssertEqual(pendingBookingsItem, stored)
+
+        // The next launch reads it as this version saved it.
+        let reopened = makeStore(defaults: TestData.defaults())
+        reopened.refreshLocally()
+        XCTAssertEqual(reopened.bookingToken(for: forNow), first)
+        XCTAssertEqual(reopened.cardNotKept(by: forNow), TestData.cardKeyDigest)
+        XCTAssertEqual(pendingBookingsItem, stored)
+    }
+
+    /// Read first by a retry rather than by the app becoming active: the key goes all the same. If
+    /// the Keychain won't take the list without it, the list with it is removed, and this launch
+    /// still has the booking for a retry.
+    func testABookingSavedWithTheCardsKeyLosesItEvenWhenTheKeychainRefusesTheNewList() throws {
+        let card = try XCTUnwrap(IzzyAPI.CardToken(rawValue: TestData.cardKey))
+        let forNow = request(card: card, keepCard: false)
+        let first = IzzyAPI.ManageToken.generate()
+        try tokens.setSecret(EarlierPendingBooking.list([EarlierPendingBooking(forNow, token: first, cardNotKept: card)]), for: AppointmentStore.pendingBookingsAccount)
+        tokens.failsWrites = true
+
+        let store = makeStore(defaults: TestData.defaults())
+        XCTAssertEqual(store.cardNotKept(by: forNow), TestData.cardKeyDigest)
+        XCTAssertNil(pendingBookingsItem, "The list with the key doesn't stay")
+        XCTAssertEqual(store.bookingToken(for: forNow), first)
+        XCTAssertEqual(store.cardNotKept(by: forNow), TestData.cardKeyDigest)
+    }
+
     func testRemindersAreScheduledTheDayBeforeAndAnHourBefore() async throws {
         scheduler.status = .authorized
         let store = makeStore(defaults: TestData.defaults())
