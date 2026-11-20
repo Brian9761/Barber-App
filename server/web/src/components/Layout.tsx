@@ -263,7 +263,8 @@ export function Footer() {
             <h2 className="globalfooter__heading">For the shop</h2>
             <ul className="globalfooter__list">
               <li>
-                <Link to="/business/">Izzy Clipz Business</Link>
+                {/* A page of its own (its own manifest and icons): opened as one, so its focus and head start fresh, as the Business area's own link back here does. */}
+                <a href="/business/">Izzy Clipz Business</a>
               </li>
               <li>
                 <a href={contact.instagram.url}>Instagram @{contact.instagram.handle}</a>
@@ -271,7 +272,10 @@ export function Footer() {
             </ul>
           </div>
         </nav>
-        {/* The shop's policies (Privacy first) on a row of their own, then who runs the shop and where, and the copyright. */}
+        {/*
+          The shop's policies (Privacy first) on a row of their own, then who runs the shop and where, and the copyright:
+          all at the size of the booking pages' words, never smaller (OWNER-CHECKLIST §3 item 20).
+        */}
         <div className="globalfooter__legal">
           <nav className="globalfooter__policies" aria-label="Legal">
             <ul>
@@ -292,7 +296,7 @@ export function Footer() {
           </nav>
           {/* Who runs the shop and where, at the size of the booking pages' words (OWNER-CHECKLIST §3 item 20). */}
           {catalog ? <OperatorLines shop={catalog.shop} className="globalfooter__operator" testId="footer-operator" /> : null}
-          <p>
+          <p className="globalfooter__copyright">
             Copyright © {year} {(catalog && legalNameOf(catalog.shop)) ?? contact.fullName}. All rights reserved.
           </p>
         </div>

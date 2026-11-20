@@ -307,15 +307,21 @@
   padding-top: var(--space-5);
 }
 
-/* The shop's policies: every one in reach, none louder than the rest. */
+/*
+ * The shop's policies: every one in reach, none louder than the rest, in the booking pages' size
+ * (the refund policy is linked here, next to the Cancellation & No-Show Policy: owner checklist §3
+ * item 20 asks for it "in text no smaller than the booking text").
+ */
 .globalfooter__policies {
   flex: 1 0 100%;
+  font-size: var(--text-body);
+  line-height: 1.47;
 }
 
 .globalfooter__policies ul {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-1) var(--space-5);
+  gap: var(--space-2) var(--space-5);
   list-style: none;
 }
 
@@ -337,6 +343,12 @@
 
 .globalfooter__operator p + p {
   margin-top: var(--space-1);
+}
+
+/* The copyright, with the LLC's name once given: the same size, in the footer's quieter colour. */
+.globalfooter__copyright {
+  font-size: var(--text-body);
+  line-height: 1.47;
 }
 
 /* ------------------------------------------------------------------- Buttons */
