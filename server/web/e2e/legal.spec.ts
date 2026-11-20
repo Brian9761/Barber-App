@@ -237,6 +237,22 @@ test('at 320 pixels wide, the footer’s policies, who runs the shop and the cop
   await view(page, testInfo, 'legal-05c-footer-320');
 });
 
+test('the footer’s “Izzy Clipz Business” opens it as a page of its own, with the focus on its content, as on every change of page', async ({ page }) => {
+  await page.goto('/');
+  const link = page.getByRole('contentinfo').getByRole('link', { name: 'Izzy Clipz Business' });
+  await expect(link).toHaveAttribute('href', '/business/');
+  await link.click();
+  await expect(page).toHaveURL(/\/business\/$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeVisible();
+  await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/business/manifest.webmanifest');
+  await expect(page.locator('main.biz-main')).toBeFocused();
+  // Opened at its address instead (a bookmark, an address typed in), the browser starts at the top: "Skip to main content" first.
+  await page.goto('/business/');
+  await expect(page.getByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused();
+});
+
 test('the legal pages open offline once the app is kept on this device', async ({ page, context }) => {
   await page.goto('/');
   await controlledByWorker(page);

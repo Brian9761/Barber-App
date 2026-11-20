@@ -842,3 +842,59 @@ describe('the shop’s policies', () => {
     expect(within(all[all.length - 1]!).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(expected.map(([, href]) => href));
   });
 });
+
+describe('opened from the clients’ pages', () => {
+  // How the browser says this page was opened: from where (document.referrer) and how (a link, a
+  // reload, Back or Forward). Izzy Clipz Business is a page of its own, so the clients' footer
+  // opens it afresh, and its focus starts at its content, as on every change of page.
+  const restore: (() => void)[] = [];
+  function openedAs(referrer: string, type: NavigationTimingType): void {
+    const ownReferrer = Object.getOwnPropertyDescriptor(document, 'referrer');
+    Object.defineProperty(document, 'referrer', { configurable: true, get: () => referrer });
+    restore.push(() => (ownReferrer ? Object.defineProperty(document, 'referrer', ownReferrer) : delete (document as { referrer?: string }).referrer));
+    const ownEntries = Object.getOwnPropertyDescriptor(performance, 'getEntriesByType');
+    Object.defineProperty(performance, 'getEntriesByType', {
+      configurable: true,
+      writable: true,
+      value: (kind: string) => (kind === 'navigation' ? [{ type } as PerformanceNavigationTiming] : []),
+    });
+    restore.push(() =>
+      ownEntries ? Object.defineProperty(performance, 'getEntriesByType', ownEntries) : delete (performance as { getEntriesByType?: unknown }).getEntriesByType,
+    );
+  }
+
+  afterEach(() => {
+    for (const step of restore.splice(0).reverse()) step();
+  });
+
+  async function openSignIn(): Promise<void> {
+    mockApi(TODAY_ROUTES);
+    renderApp('/business/');
+    await screen.findByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' });
+  }
+
+  it('starts at its content when a link on the clients’ pages opened it (their footer’s “Izzy Clipz Business”)', async () => {
+    openedAs(`${window.location.origin}/`, 'navigate');
+    await openSignIn();
+    expect(document.activeElement).toBe(screen.getByRole('main'));
+  });
+
+  it('starts at its content opened from a policy’s page too', async () => {
+    openedAs(`${window.location.origin}/privacy`, 'navigate');
+    await openSignIn();
+    expect(document.activeElement).toBe(screen.getByRole('main'));
+  });
+
+  it.each([
+    ['a reload', '/', 'reload'],
+    ['Back or Forward', '/', 'back_forward'],
+    ['a bookmark or an address typed in', null, 'navigate'],
+    ['another site', 'https://example.com/izzy', 'navigate'],
+    ['another Business page', '/business/today', 'navigate'],
+    ['Business without its slash', '/business', 'navigate'],
+  ] as const)('leaves the focus where the browser puts it after %s', async (_how, from, type) => {
+    openedAs(from === null ? '' : from.startsWith('/') ? `${window.location.origin}${from}` : from, type);
+    await openSignIn();
+    expect(document.activeElement).toBe(document.body);
+  });
+});

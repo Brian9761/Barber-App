@@ -359,15 +359,22 @@ test('works with the keyboard alone, and installs as Izzy Clipz Business', async
   await expectBusinessInstallable(page, request);
 });
 
-test('the clients’ site keeps its own manifest, and its footer leads to Izzy Clipz Business', async ({ page }) => {
+test('the clients’ site keeps its own manifest, and its footer leads to Izzy Clipz Business, a page of its own with the focus on its content', async ({
+  page,
+}) => {
   await page.goto('/');
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
+  // Marked, to tell whether the browser loads the next page afresh.
+  await page.evaluate(() => ((window as unknown as { izzyClientsPage?: boolean }).izzyClientsPage = true));
   await page.getByRole('contentinfo').getByRole('link', { name: 'Izzy Clipz Business' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'Izzy Clipz Business on your computer' })).toBeVisible();
-  // Reached without a page load, the page still names Business's manifest and icons...
+  // A page of its own, loaded afresh, naming Business's manifest and icons...
+  expect(await page.evaluate(() => (window as unknown as { izzyClientsPage?: boolean }).izzyClientsPage ?? false)).toBe(false);
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/business/manifest.webmanifest');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex');
-  // ...and gives the site's back on the way out.
+  // ...where, as on every change of page, the focus is on its content (the Accessibility Statement)...
+  await expect(page.locator('main.biz-main')).toBeFocused();
+  // ...and that gives the site's back on the way out.
   await page.goBack();
   await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest');
 });

@@ -263,7 +263,11 @@ export function Footer() {
             <h2 className="globalfooter__heading">For the shop</h2>
             <ul className="globalfooter__list">
               <li>
-                <Link to="/business/">Izzy Clipz Business</Link>
+                {/*
+                  A page of its own (its own manifest and icons), opened as one, as its link back here is: its
+                  page starts afresh, with the focus on its content (src/business/components/Frame.tsx).
+                */}
+                <a href="/business/">Izzy Clipz Business</a>
               </li>
               <li>
                 <a href={contact.instagram.url}>Instagram @{contact.instagram.handle}</a>

@@ -146,6 +146,27 @@ function DemoLine() {
   );
 }
 
+/**
+ * Whether this page was opened from a link on one of the clients' pages (their footer's "Izzy Clipz
+ * Business"). Izzy Clipz Business is a page of its own (its own manifest and icons), so the browser
+ * loads it afresh; and as on every change of page, the focus then starts at its content (the
+ * Accessibility Statement: "When you go to another page, the focus moves to its main content.").
+ * Not on a reload, Back or Forward, where the browser puts the reader back where they were, nor
+ * when it's opened from a bookmark, an address typed in, another site or another Business page.
+ */
+export function openedFromTheClientsPages(): boolean {
+  try {
+    const [navigation] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+    if (navigation && navigation.type !== 'navigate') return false;
+    if (!document.referrer) return false;
+    const from = new URL(document.referrer);
+    return from.origin === window.location.origin && from.pathname !== '/business' && !from.pathname.startsWith('/business/');
+  } catch {
+    // A browser that can't say how the page was opened: as it is.
+    return false;
+  }
+}
+
 /** The frame around every Business page. */
 export function Frame({ signedIn, children }: { signedIn: boolean; children: ReactNode }) {
   const { pathname } = useLocation();
@@ -154,10 +175,13 @@ export function Frame({ signedIn, children }: { signedIn: boolean; children: Rea
   const signOut = useSignOut();
   const { phone, fullName } = useShopContact();
 
-  // A new page starts at the top, and screen readers and keyboards start at its content.
+  // A new page starts at the top, and screen readers and keyboards start at its content: opened
+  // from the clients' pages too (unless the reader has already moved the focus somewhere).
   useEffect(() => {
     if (firstRender.current) {
       firstRender.current = false;
+      const untouched = document.activeElement === null || document.activeElement === document.body;
+      if (untouched && openedFromTheClientsPages()) mainRef.current?.focus({ preventScroll: true });
       return;
     }
     window.scrollTo(0, 0);
