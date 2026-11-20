@@ -300,6 +300,54 @@ final class AppointmentStoreTests: XCTestCase {
         XCTAssertEqual(store.cardNotKept(by: forNow), TestData.cardKeyDigest)
     }
 
+    /// A list this version can't read counts as none, as before, and is removed once it has been
+    /// read, in case an earlier version left a card's key in it.
+    func testAListThatCantBeReadIsRemoved() throws {
+        let card = try XCTUnwrap(IzzyAPI.CardToken(rawValue: TestData.cardKey))
+        let forNow = request(card: card, keepCard: false)
+        let first = IzzyAPI.ManageToken.generate()
+        let earlier = try EarlierPendingBooking.list([EarlierPendingBooking(forNow, token: first, cardNotKept: card)])
+        // A manage token that isn't one: the list can't be read.
+        XCTAssertTrue(earlier.contains(first.rawValue))
+        try tokens.setSecret(earlier.replacingOccurrences(of: first.rawValue, with: "not-a-token"), for: AppointmentStore.pendingBookingsAccount)
+        XCTAssertTrue(try XCTUnwrap(pendingBookingsItem).contains(TestData.cardKey))
+
+        let store = makeStore(defaults: TestData.defaults())
+        store.refreshLocally()
+        XCTAssertNil(pendingBookingsItem, "Removed, with the key in it")
+        XCTAssertNil(store.cardNotKept(by: forNow), "Counts as none")
+        XCTAssertNotEqual(store.bookingToken(for: forNow), first)
+        let stored = try XCTUnwrap(pendingBookingsItem)
+        XCTAssertFalse(stored.contains(TestData.cardKey))
+        XCTAssertTrue(stored.contains(TestData.cardKeyDigest))
+    }
+
+    /// A Keychain that can't be read yet (the iPhone hasn't been unlocked since it restarted) counts
+    /// as no list, as before, and the list is left as it is: it isn't one this version can't read.
+    /// The next launch that can read it saves it again with only the digest.
+    func testABookingSavedWithTheCardsKeyWaitsForAKeychainThatCanBeRead() throws {
+        let card = try XCTUnwrap(IzzyAPI.CardToken(rawValue: TestData.cardKey))
+        let forNow = request(card: card, keepCard: false)
+        let first = IzzyAPI.ManageToken.generate()
+        let earlier = try EarlierPendingBooking.list([EarlierPendingBooking(forNow, token: first, cardNotKept: card)])
+        try tokens.setSecret(earlier, for: AppointmentStore.pendingBookingsAccount)
+
+        tokens.failsReads = true
+        let locked = makeStore(defaults: TestData.defaults())
+        locked.refreshLocally()
+        XCTAssertNil(locked.cardNotKept(by: forNow), "Nothing could be read")
+        XCTAssertEqual(pendingBookingsItem, earlier, "Left for a launch that can read it")
+
+        tokens.failsReads = false
+        let next = makeStore(defaults: TestData.defaults())
+        next.refreshLocally()
+        let stored = try XCTUnwrap(pendingBookingsItem)
+        XCTAssertFalse(stored.contains(TestData.cardKey))
+        XCTAssertTrue(stored.contains(TestData.cardKeyDigest))
+        XCTAssertEqual(next.bookingToken(for: forNow), first)
+        XCTAssertEqual(next.cardNotKept(by: forNow), TestData.cardKeyDigest)
+    }
+
     func testRemindersAreScheduledTheDayBeforeAndAnHourBefore() async throws {
         scheduler.status = .authorized
         let store = makeStore(defaults: TestData.defaults())

@@ -634,21 +634,23 @@ final class AppointmentStore {
 
     /// The bookings not yet confirmed whose time hasn't come, dropping the ones whose has.
     private func currentPendingBookings() -> [PendingBooking] {
-        var heldCardKeys = false
+        var mayHoldCardKeys = false
         if pendingBookings == nil {
-            // Unreadable (the iPhone hasn't been unlocked since it restarted) counts as none.
+            // Unreadable (the iPhone hasn't been unlocked since it restarted) counts as none, and
+            // is left for a later launch to read.
             let stored = try? tokens.secret(for: Self.pendingBookingsAccount)
             let read = stored.flatMap { try? PendingBooking.decodeList(from: Data($0.utf8)) }
             pendingBookings = read?.bookings ?? []
             // Saved by an earlier version, with a card's key in it: saved again now, with only the
-            // key's digest, so the key leaves this Keychain item.
-            heldCardKeys = read?.heldCardKeys ?? false
+            // key's digest, so the key leaves this Keychain item. A list this version can't make
+            // sense of counts as none, as before, and goes too, in case it holds a key.
+            mayHoldCardKeys = stored != nil && (read?.heldCardKeys ?? true)
         }
         let all = pendingBookings ?? []
         let current = now()
         let live = all.filter { $0.start > current }
-        if heldCardKeys || live.count != all.count {
-            if !savePendingBookings(live), heldCardKeys {
+        if mayHoldCardKeys || live.count != all.count {
+            if !savePendingBookings(live), mayHoldCardKeys {
                 // The Keychain wouldn't take the list without the key, and the one with it mustn't
                 // stay. This launch still has the list (`pendingBookings`).
                 try? tokens.removeSecret(for: Self.pendingBookingsAccount)
