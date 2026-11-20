@@ -62,6 +62,30 @@ async function scrollToTop(element: Locator): Promise<void> {
   await element.evaluate((node) => node.scrollIntoView({ block: 'start' }));
 }
 
+/** The footer's policies, "Refunds" with them, in order. */
+const FOOTER_POLICIES = ['Privacy Policy', 'Terms of Service', 'Cancellation & No-Show Policy', 'Refunds', 'Accessibility'];
+
+/**
+ * The footer's policies (the refund policy with them), who runs the shop and the copyright, at the
+ * booking pages' size (17px, --text-body), never smaller (OWNER-CHECKLIST §3 item 20: "in text no
+ * smaller than the booking text"), in the site's footer and in a policy's plain HTML alike.
+ */
+async function expectFooterAtBookingSize(page: Page, what: string): Promise<void> {
+  const sizes = await page.getByRole('contentinfo').evaluate((footer) => {
+    const size = (element: Element) => getComputedStyle(element).fontSize;
+    const copyright = Array.from(footer.querySelectorAll('p')).find((p) => p.textContent?.startsWith('Copyright ©'));
+    return {
+      policies: Array.from(footer.querySelectorAll('nav[aria-label="Legal"] a')).map((a) => [a.textContent, size(a)]),
+      operator: Array.from(footer.querySelectorAll('[data-testid="footer-operator"] p')).map(size),
+      copyright: copyright ? size(copyright) : null,
+    };
+  });
+  expect(sizes.policies, `${what}: the policies`).toEqual(FOOTER_POLICIES.map((name) => [name, '17px']));
+  expect(sizes.operator.length, `${what}: who runs the shop`).toBeGreaterThan(0);
+  expect(sizes.operator, `${what}: who runs the shop`).toEqual(sizes.operator.map(() => '17px'));
+  expect(sizes.copyright, `${what}: the copyright`).toBe('17px');
+}
+
 const DOCS = [
   { path: '/privacy', heading: 'Privacy Policy', title: 'Privacy Policy', shot: '01-privacy', part: (page: Page) => page.getByRole('table').nth(1) },
   { path: '/terms', heading: 'Terms of Service', title: 'Terms of Service', shot: '02-terms', part: (page: Page) => page.getByRole('heading', { level: 2, name: '4. Prices and paying' }) },
@@ -142,6 +166,8 @@ test('the footer of every page links the four, Privacy first, and each opens wit
   await expect(page.getByRole('contentinfo')).not.toContainText(/operated by|To be added|To get this information by email/);
   await expect(page.getByRole('contentinfo')).toContainText(/Copyright © \d{4} Izzy Clipz Barbershop\. All rights reserved\./);
   expect(await operator.locator('p').first().evaluate((line) => getComputedStyle(line).fontSize)).toBe('17px');
+  // So are the policies, "Refunds" with them, and the copyright.
+  await expectFooterAtBookingSize(page, 'Home');
   await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
   await view(page, testInfo, 'legal-05-footer');
 
@@ -178,6 +204,37 @@ test('the footer of every page links the four, Privacy first, and each opens wit
   await page.getByTestId('legal-page').getByRole('link', { name: 'Cancellation & No-Show Policy' }).first().click();
   await expect(page).toHaveURL(/\/cancellation-policy$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Cancellation & No-Show Policy' })).toBeVisible();
+});
+
+test('at 320 pixels wide, the footer’s policies, who runs the shop and the copyright fit, tidily, at the booking pages’ size', async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto('/');
+  await expect(page.getByRole('contentinfo').getByTestId('footer-operator')).toBeVisible();
+  await expectFooterAtBookingSize(page, 'Home at 320 pixels');
+  await expectFits(page, 'Home at 320 pixels');
+  const footer = await page.getByRole('contentinfo').evaluate((element) => {
+    const width = document.documentElement.clientWidth;
+    const box = (node: Element) => node.getBoundingClientRect();
+    const links = Array.from(element.querySelectorAll('nav[aria-label="Legal"] a'));
+    const lineHeight = links[0] ? parseFloat(getComputedStyle(links[0]).lineHeight) : 0;
+    const lines = [
+      ...links,
+      ...Array.from(element.querySelectorAll('[data-testid="footer-operator"] p')),
+      ...Array.from(element.querySelectorAll('p')).filter((p) => p.textContent?.startsWith('Copyright ©')),
+    ];
+    return {
+      width,
+      // Each policy on a line of its own making: never broken over two lines.
+      broken: links.filter((a) => box(a).height > lineHeight * 1.5).map((a) => a.textContent),
+      // Inside the page's side margins (16 pixels at this width).
+      outside: lines.filter((line) => box(line).left < 15.5 || box(line).right > width - 15.5).map((line) => line.textContent?.slice(0, 30)),
+    };
+  });
+  expect(footer.width).toBe(320);
+  expect(footer.broken, 'no policy is broken over two lines').toEqual([]);
+  expect(footer.outside, 'everything keeps the side margins').toEqual([]);
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await view(page, testInfo, 'legal-05c-footer-320');
 });
 
 test('the legal pages open offline once the app is kept on this device', async ({ page, context }) => {
@@ -653,6 +710,8 @@ test.describe('without JavaScript', () => {
     await expect(footer.getByRole('list', { name: 'Hours' }).getByRole('listitem')).toHaveText(['Monday–Saturday: 10 AM – 7 PM', 'Sunday: 10 AM – 6 PM']);
     await expect(footer.getByTestId('footer-operator')).toHaveText('Izzy Clipz Barbershop, 1919 Mission Ave, Ste 105, Oceanside, CA 92058, United States.');
     await expect(footer.getByRole('navigation', { name: 'Legal' }).getByRole('link', { name: 'Refunds' })).toHaveAttribute('href', '/terms#refunds');
+    // At the booking pages' size, as in the site's own footer.
+    await expectFooterAtBookingSize(page, '/privacy without JavaScript');
     await page.getByTestId('noscript').scrollIntoViewIfNeeded();
     await plainView(page, testInfo, 'legal-15-privacy-without-javascript');
 
