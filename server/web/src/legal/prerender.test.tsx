@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
+import catalogData from '../../../data/catalog.json';
 import { LEGAL_DOCUMENTS } from './documents';
 import { DEMO_DRAFT_LINE, DRAFT_LINE, DRAFT_TITLE } from './LegalPage';
 import { PLACEHOLDER_START } from './placeholders';
@@ -60,6 +61,25 @@ describe('the legal pages in plain HTML', () => {
     expect(page.body).toContain('<main id="main" tabindex="-1" data-prerendered="">');
     expect(page.body).toContain('<nav class="globalfooter__policies" aria-label="Legal">');
     expect(page.body).not.toContain('<script');
+  });
+
+  it('draw the site’s own nav bar, so nothing in it moves when the site takes over: Book with its pill, and “Menu” going to the footer’s site directory', () => {
+    for (const page of renderLegalPages({ draft: true, demo: false })) {
+      const nav = page.body.slice(0, page.body.indexOf('</nav>')).replace(/<svg[\s\S]*?<\/svg>/g, '<svg/>');
+      // The logo home, the site's pages (shown on a computer), Book, and the Menu stand-in (shown on a phone), in GlobalNav's order.
+      expect(nav, page.path).toMatch(
+        /<a class="globalnav__logo" href="\/">.*<ul class="globalnav__links">.*<\/ul><a class="globalnav__book" aria-label="Book an appointment" href="\/book"><span class="globalnav__book-pill" aria-hidden="true">Book<\/span><\/a><a href="#site-directory" class="globalnav__menu-standin"/,
+      );
+      // "Menu" works without the script: it goes to the footer's site directory, which says where it goes.
+      expect(nav, page.path).toContain(
+        '<a href="#site-directory" class="globalnav__menu-standin" aria-label="Menu: the site&#x27;s pages, at the bottom of this page"><svg/><span>Menu</span></a>',
+      );
+      expect(page.body, page.path).toContain('<nav id="site-directory" class="globalfooter__directory" aria-label="Site directory">');
+    }
+  });
+
+  it('carry the catalog they were drawn with, the build’s, for the site’s first draw over them', () => {
+    for (const page of renderLegalPages({ draft: true, demo: false })) expect(page.catalog, page.path).toEqual(catalogData);
   });
 
   it('give the shop’s hours and who runs the shop in the footer, from the catalog the build serves', () => {

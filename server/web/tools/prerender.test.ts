@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { LEGAL_PAGE_FILES, legalPageHtml, type LegalPageContent } from './prerender.js';
+import { BUILD_CATALOG_ID } from '../src/legal/takeover.js';
+import { jsonDataBlock, LEGAL_PAGE_FILES, legalPageHtml, type LegalPageContent } from './prerender.js';
 
 // The legal pages' plain HTML, made from the built index.html: their own title and description,
 // their markup in #root, the legal pages' styles and script linked, and nothing else changed.
@@ -58,6 +59,22 @@ describe('a legal page’s plain HTML', () => {
     expect(head).toContain('<link rel="stylesheet" crossorigin href="/assets/LegalPage-x.css">');
     expect(head).toContain('<link rel="modulepreload" crossorigin href="/assets/LegalPage-y.js">');
     expect(head).not.toContain('rel="canonical"');
+  });
+
+  it('carries the catalog it was drawn with right after #root, as data the browser never runs, for the site’s first draw over it', () => {
+    const catalog = { shop: { name: 'Izzy Clipz', note: 'Walk-ins </script><script>alert(1)</script> & <!-- welcome -->' }, hours: { '2': { opens: '10:00', closes: '19:00' } } };
+    const html = legalPageHtml(BUILT, { ...PAGE, catalog }, EXTRAS);
+    const block = jsonDataBlock(BUILD_CATALOG_ID, catalog);
+    expect(block.startsWith(`<script type="application/json" id="${BUILD_CATALOG_ID}">`)).toBe(true);
+    expect(html).toContain(`<div id="root">${PAGE.body}</div>${block}`);
+    // Nothing in it can end the element or open a comment: no "<" at all, and it reads back as it was.
+    const json = block.slice(block.indexOf('>') + 1, block.lastIndexOf('</script>'));
+    expect(json).not.toContain('<');
+    expect(JSON.parse(json)).toEqual(catalog);
+    expect(html.match(/<\/script>/g)).toHaveLength(2);
+    // Without one, there's nothing after #root.
+    expect(legalPageHtml(BUILT, PAGE, EXTRAS)).toContain(`<div id="root">${PAGE.body}</div>\n`);
+    expect(legalPageHtml(BUILT, PAGE, EXTRAS)).not.toContain(BUILD_CATALOG_ID);
   });
 
   it('names its address when the site’s is known', () => {

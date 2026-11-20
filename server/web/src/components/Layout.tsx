@@ -23,6 +23,20 @@ export const NAV_LINKS = [
   { to: '/app', label: 'Get the app' },
 ];
 
+/** The footer's site directory, which the plain HTML's "Menu" goes to (src/legal/prerender.tsx). */
+export const SITE_DIRECTORY_ID = 'site-directory';
+
+/** "Book" in the nav: a link with its blue pill (the legal pages' plain HTML has it too: src/legal/prerender.tsx). */
+export function NavBookLink() {
+  return (
+    <Link to="/book" className="globalnav__book" aria-label="Book an appointment">
+      <span className="globalnav__book-pill" aria-hidden="true">
+        Book
+      </span>
+    </Link>
+  );
+}
+
 /** The nav's links. Opened as the app, "Get the app" has done its job. */
 function useNavLinks() {
   const standalone = useStandalone();
@@ -124,11 +138,7 @@ export function GlobalNav() {
             </li>
           ))}
         </ul>
-        <Link to="/book" className="globalnav__book" aria-label="Book an appointment">
-          <span className="globalnav__book-pill" aria-hidden="true">
-            Book
-          </span>
-        </Link>
+        <NavBookLink />
         <button
           ref={buttonRef}
           type="button"
@@ -208,7 +218,7 @@ export function Footer() {
             Prefer to call? <CallLink /> · Walk-ins welcome.
           </p>
         </div>
-        <nav className="globalfooter__directory" aria-label="Site directory">
+        <nav id={SITE_DIRECTORY_ID} className="globalfooter__directory" aria-label="Site directory">
           <div>
             <h2 className="globalfooter__heading">Explore</h2>
             <ul className="globalfooter__list">

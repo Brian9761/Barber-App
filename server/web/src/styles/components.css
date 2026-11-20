@@ -129,7 +129,12 @@
   background: var(--color-action-hover);
 }
 
-.globalnav__menu-button {
+/*
+ * Menu, on a phone; and in a policy's plain HTML, its stand-in, a link to the footer's site directory
+ * (src/legal/prerender.tsx), the same size, so nothing moves when the site's button takes its place.
+ */
+.globalnav__menu-button,
+.globalnav__menu-standin {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -140,6 +145,11 @@
   background: none;
   color: #f5f5f7;
   font-size: 15px;
+  text-decoration: none;
+}
+
+.globalnav__menu-standin:hover {
+  text-decoration: none;
 }
 
 .globalnav__menu-panel {
@@ -200,6 +210,7 @@
   }
 
   .globalnav__menu-button,
+  .globalnav__menu-standin,
   .globalnav__menu-panel {
     display: none;
   }

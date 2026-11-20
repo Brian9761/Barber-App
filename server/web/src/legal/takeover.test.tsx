@@ -1,8 +1,19 @@
 import { act, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadLegalPage } from '../App';
-import { renderApp } from '../test/api';
-import { finishTakingOver, readingPlace, restoreReadingPlace, takeOverInProgress, takeOverPrerenderedPage, type ReadingPlace } from './takeover';
+import catalogData from '../../../data/catalog.json';
+import { asCatalog } from '../data/catalog';
+import { catalog as testCatalog, renderApp } from '../test/api';
+import {
+  BUILD_CATALOG_ID,
+  finishTakingOver,
+  readingPlace,
+  restoreReadingPlace,
+  takeBuildCatalog,
+  takeOverInProgress,
+  takeOverPrerenderedPage,
+  type ReadingPlace,
+} from './takeover';
 
 // A policy opened at its address comes as plain HTML first (tools/prerender.ts), which can be read,
 // scrolled and tabbed through before the site's script arrives. The site then draws the same page
@@ -170,5 +181,54 @@ describe('drawing over a policy’s plain HTML', () => {
     expect(within(screen.getByTestId('legal-contents')).getByText('On this page').closest('details')?.open).toBe(true);
     expect(scrollIntoView).toHaveBeenCalled();
     expect(document.activeElement).toBe(heading);
+  });
+});
+
+describe('the catalog a policy’s plain HTML carries', () => {
+  // The build puts the catalog the page was drawn with after #root (tools/prerender.ts), so the
+  // site's first draw over it has the footer's hours and who runs the shop too, and nothing jumps.
+  afterEach(() => {
+    document.body.replaceChildren();
+  });
+
+  /** The data block as the build writes it: JSON with no "<" in it. */
+  function carried(json: string): string {
+    return `<div id="root"><main data-prerendered=""></main></div><script type="application/json" id="${BUILD_CATALOG_ID}">${json}</script>`;
+  }
+
+  it('is read from the page, “<” and all, and taken out of it', () => {
+    const withAngles = { ...catalogData, shop: { ...catalogData.shop, tagline: 'Fades <and> lineups' } };
+    document.body.innerHTML = carried(JSON.stringify(withAngles).replace(/</g, '\\u003c'));
+    expect(takeBuildCatalog()).toEqual(withAngles);
+    expect(document.getElementById(BUILD_CATALOG_ID)).toBeNull();
+    // Taken: there's none the next time.
+    expect(takeBuildCatalog()).toBeUndefined();
+  });
+
+  it('is nothing when the page carries none, or it can’t be read', () => {
+    document.body.innerHTML = '<div id="root"><main data-prerendered=""></main></div>';
+    expect(takeBuildCatalog()).toBeUndefined();
+    document.body.innerHTML = carried('{"shop": ');
+    expect(takeBuildCatalog()).toBeUndefined();
+    expect(document.getElementById(BUILD_CATALOG_ID)).toBeNull();
+  });
+
+  it('is drawn with only when it has a catalog’s shape', () => {
+    expect(asCatalog(catalogData)).toBe(catalogData);
+    expect(asCatalog(testCatalog)).toBe(testCatalog);
+    const broken: unknown[] = [
+      undefined,
+      null,
+      'catalog',
+      [],
+      {},
+      { ...catalogData, shop: null },
+      { ...catalogData, shop: { ...catalogData.shop, address: { lines: 'Oceanside' } } },
+      { ...catalogData, hours: [] },
+      { ...catalogData, offerings: {} },
+      { ...catalogData, timeZone: 7 },
+      { ...catalogData, windowDays: '30' },
+    ];
+    for (const value of broken) expect(asCatalog(value), JSON.stringify(value)?.slice(0, 60)).toBeUndefined();
   });
 });

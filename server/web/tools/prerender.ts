@@ -4,7 +4,9 @@
 // do in the site), so each policy can be read without JavaScript, and by curl, archivers and
 // search engines. Each has its own <title> and description, and the legal pages' own styles. When
 // the script runs, the site takes the page over as on every other one (createRoot replaces what's
-// in #root).
+// in #root), with the catalog the page was drawn with, which it carries after #root as data (a
+// JSON <script>, never run), so the site's first draw has the shop's hours and who runs the shop
+// in its footer too, and nothing on the page jumps.
 //
 // The hosting serves them before its catch-all rewrite to index.html (vercel.json: Vercel looks
 // for a file before it applies rewrites, and each page also has a rewrite of its own; the
@@ -12,6 +14,7 @@
 // network for a legal page first, and offline the app's own page opens it (src/sw/routes.ts).
 
 import type { Plugin, Rollup } from 'vite';
+import { BUILD_CATALOG_ID } from '../src/legal/takeover.js';
 import { LEGAL_FILES } from './legal.js';
 
 /** Where each page is in the build, as the hosting serves it: "privacy/index.html". */
@@ -28,6 +31,8 @@ export interface LegalPageContent {
   description: string;
   /** The page's markup, for #root. */
   body: string;
+  /** The catalog it was drawn with, carried for the site's first draw over it (src/main.tsx). */
+  catalog?: unknown;
 }
 
 /** What the page links besides the built page's own files. */
@@ -42,6 +47,16 @@ export interface LegalPageExtras {
 
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/**
+ * `value` as JSON inside a <script type="application/json"> (a data block: the browser never runs
+ * it, so the site's Content-Security-Policy has nothing to allow), with no "<" in it, so nothing
+ * in it can end the element.
+ */
+export function jsonDataBlock(id: string, value: unknown): string {
+  const json = JSON.stringify(value).replace(/</g, '\\u003c');
+  return `<script type="application/json" id="${escapeHtml(id)}">${json}</script>`;
 }
 
 /**
@@ -66,7 +81,8 @@ export function legalPageHtml(template: string, page: LegalPageContent, extras: 
     ...(extras.origin ? [`<link rel="canonical" href="${escapeHtml(extras.origin + page.path)}">`] : []),
   ];
   fill(/\s*<\/head>/, `${links.map((link) => `\n    ${link}`).join('')}\n  </head>`, '</head>');
-  fill(/<div id="root"><\/div>/, `<div id="root">${page.body}</div>`, 'empty <div id="root">');
+  const catalog = page.catalog === undefined ? '' : jsonDataBlock(BUILD_CATALOG_ID, page.catalog);
+  fill(/<div id="root"><\/div>/, `<div id="root">${page.body}</div>${catalog}`, 'empty <div id="root">');
   return html;
 }
 

@@ -13,6 +13,29 @@ export type CatalogState =
 
 const CatalogContext = createContext<CatalogState>({ status: 'loading' });
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * `value` if it has a catalog's shape (its rules, hours, menu and team, and the shop's details),
+ * else undefined: what a policy's plain HTML carries (legal/takeover.ts), checked before the site
+ * draws with it.
+ */
+export function asCatalog(value: unknown): Catalog | undefined {
+  if (!isRecord(value) || !isRecord(value.shop) || !isRecord(value.hours)) return undefined;
+  const { shop } = value;
+  const numbers = [value.slotIntervalMinutes, value.leadTimeMinutes, value.windowDays].every((n) => typeof n === 'number');
+  const lists = [value.services, value.barbers, value.offerings, value.firstAvailable].every(Array.isArray);
+  const shopOk =
+    typeof shop.name === 'string' &&
+    typeof shop.fullName === 'string' &&
+    isRecord(shop.phone) &&
+    isRecord(shop.address) &&
+    Array.isArray(shop.address.lines);
+  return typeof value.timeZone === 'string' && numbers && lists && shopOk ? (value as unknown as Catalog) : undefined;
+}
+
 export function CatalogProvider({ children, initial }: { children: ReactNode; initial?: Catalog }) {
   const [state, setState] = useState<CatalogState>(initial ? { status: 'ready', catalog: initial } : { status: 'loading' });
   const [attempt, setAttempt] = useState(0);

@@ -4,6 +4,29 @@
 // place, in one go (main.tsx), and the reader keeps their place: the section they were reading,
 // the link the keyboard was on, and "On this page" open or closed as it was.
 
+// No imports: the build reads this file in Node (tools/prerender.ts), the site in the browser.
+
+/** Where a policy's plain HTML carries the catalog it was drawn with (tools/prerender.ts puts it after #root). */
+export const BUILD_CATALOG_ID = 'izzy-build-catalog';
+
+/**
+ * The catalog a policy's plain HTML was drawn with (the build's: the same file the shop's server
+ * answers /api/catalog with), as the page carries it, taken out of the page: the site's first draw
+ * over the plain HTML uses it (main.tsx), so the footer's hours and who runs the shop are there
+ * from the start, as they were, instead of going while the site asks for the catalog, and the page
+ * doesn't jump. Undefined when the page doesn't carry one or it can't be read.
+ */
+export function takeBuildCatalog(doc: Document = document): unknown {
+  const element = doc.getElementById(BUILD_CATALOG_ID);
+  if (!element) return undefined;
+  element.remove();
+  try {
+    return JSON.parse(element.textContent ?? '') as unknown;
+  } catch {
+    return undefined;
+  }
+}
+
 /** While the site draws over a policy's plain HTML: whether its "On this page" was open. */
 let takingOver: { contentsOpen: boolean } | null = null;
 

@@ -9,10 +9,11 @@ import './styles/base.css';
 import './styles/components.css';
 import './styles/pages.css';
 import './styles/app.css';
+import type { Catalog } from './api/types';
 import { App, loadLegalPage, ROUTER_FUTURE } from './App';
-import { CatalogProvider } from './data/catalog';
+import { asCatalog, CatalogProvider } from './data/catalog';
 import { isDemo } from './demo/mode';
-import { finishTakingOver, readingPlace, restoreReadingPlace, takeOverPrerenderedPage } from './legal/takeover';
+import { finishTakingOver, readingPlace, restoreReadingPlace, takeBuildCatalog, takeOverPrerenderedPage } from './legal/takeover';
 import { carryAppointments, forgetDemoLeftovers, loadAppointments, pruneAppointments, pruneBusinessSession } from './lib/storage';
 import { openOtherSitesOutside } from './pwa/externalLinks';
 import { listenForInstallPrompt } from './pwa/installPrompt';
@@ -40,34 +41,40 @@ if (!isDemo()) {
 const root = document.getElementById('root');
 if (!root) throw new Error('The page has no #root element');
 
-const site = (
-  <StrictMode>
-    <BrowserRouter future={ROUTER_FUTURE}>
-      <CatalogProvider>
-        <App />
-      </CatalogProvider>
-    </BrowserRouter>
-  </StrictMode>
-);
+/** The site, asking for the shop's catalog itself, or starting with `catalog` when it already has it. */
+function site(catalog?: Catalog) {
+  return (
+    <StrictMode>
+      <BrowserRouter future={ROUTER_FUTURE}>
+        <CatalogProvider initial={catalog}>
+          <App />
+        </CatalogProvider>
+      </BrowserRouter>
+    </StrictMode>
+  );
+}
 
 if (root.querySelector('[data-prerendered]')) {
   // A policy's plain HTML (tools/prerender.ts), which the reader may have started on: the site
   // draws the same page in its place in one go, with the legal pages' code here first (never
-  // "Loading…" in between), and the reader keeps their place (legal/takeover.ts).
+  // "Loading…" in between), and the reader keeps their place (legal/takeover.ts). It draws with
+  // the catalog the plain HTML was drawn with, which the page carries, so the nav and the footer
+  // (its hours and who runs the shop) are the same from the first draw and nothing jumps.
+  const built = asCatalog(takeBuildCatalog());
   void loadLegalPage().then(
     () => {
       const place = readingPlace(root);
       takeOverPrerenderedPage(place.contentsOpen);
-      flushSync(() => createRoot(root).render(site));
+      flushSync(() => createRoot(root).render(site(built)));
       // Drawn: the next page opened in the site is drawn as usual, whatever this one was.
       finishTakingOver();
       restoreReadingPlace(root, place);
     },
     // The code didn't come: the page asks for it again itself, and says so if it can't.
-    () => createRoot(root).render(site),
+    () => createRoot(root).render(site(built)),
   );
 } else {
-  createRoot(root).render(site);
+  createRoot(root).render(site());
 }
 
 // The service worker, in the built site only (the dev server changes files as they're edited).

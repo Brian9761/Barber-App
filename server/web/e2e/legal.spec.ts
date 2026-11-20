@@ -728,6 +728,19 @@ test.describe('without JavaScript', () => {
     await expect(footer.getByRole('navigation', { name: 'Legal' }).getByRole('link', { name: 'Refunds' })).toHaveAttribute('href', '/terms#refunds');
     // At the booking pages' size, as in the site's own footer.
     await expectFooterAtBookingSize(page, '/privacy without JavaScript');
+    // The nav is the site's: Book with its pill, and on a phone "Menu", which goes to the footer's site directory.
+    const nav = page.getByRole('navigation', { name: 'Izzy Clipz' });
+    await expect(nav.getByRole('link', { name: 'Book an appointment' })).toHaveAttribute('href', '/book');
+    const menu = page.locator('nav.globalnav .globalnav__menu-standin');
+    if (isPhone(testInfo)) {
+      await expect(menu).toHaveAccessibleName("Menu: the site's pages, at the bottom of this page");
+      await expect(menu).toHaveText('Menu');
+      await menu.click();
+      await expect(page).toHaveURL(/\/privacy#site-directory$/);
+      await expect(footer.getByRole('navigation', { name: 'Site directory' })).toBeInViewport();
+    } else {
+      await expect(menu).toBeHidden();
+    }
     await page.getByTestId('noscript').scrollIntoViewIfNeeded();
     await plainView(page, testInfo, 'legal-15-privacy-without-javascript');
 
@@ -815,6 +828,64 @@ test.describe('on a slow connection', () => {
       }),
     ).toEqual(['https://stripe.com/privacy', true]);
     await view(page, testInfo, 'legal-16-slow-takeover-keeps-place');
+  });
+
+  test('the site takes the plain HTML over without moving the nav or the footer: the same bar, Book and Menu in it, and the footer’s hours and who runs the shop all along', async ({
+    page,
+  }, testInfo) => {
+    // The site's script comes late, so the plain HTML can be measured first.
+    let release = () => undefined as void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await page.route(/\/assets\/main-[^/]+\.js$/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await page.goto('/privacy', { waitUntil: 'commit' });
+    const footer = page.getByRole('contentinfo');
+    await expect(page.locator('[data-prerendered]')).toHaveCount(1);
+    await expect(footer.getByTestId('footer-operator')).toBeVisible();
+    await page.evaluate(async () => {
+      await document.fonts.ready;
+    });
+    // Every box in the nav: the bar, the logo, the site's pages, Book and Menu (each shown or not, as the screen's width has it).
+    const navBoxes = () =>
+      page.locator('nav.globalnav').evaluate((nav) =>
+        [nav, ...Array.from(nav.querySelectorAll('.globalnav__logo, .globalnav__link, .globalnav__book, .globalnav__book-pill, .globalnav__menu-button, .globalnav__menu-standin'))].map((element) => {
+          const box = element.getBoundingClientRect();
+          const name = element.className.toString().replace('globalnav__menu-standin', 'globalnav__menu-button');
+          return `${name} ${box.x.toFixed(1)},${box.y.toFixed(1)} ${box.width.toFixed(1)}x${box.height.toFixed(1)}`;
+        }),
+      );
+    const before = await navBoxes();
+    expect(before.some((box) => box.startsWith('globalnav__book ')), 'the plain HTML has Book').toBe(true);
+    // From here on, the footer's height each time anything in the page changes.
+    await page.evaluate(() => {
+      const heights: number[] = [];
+      (window as unknown as { izzyFooterHeights: number[] }).izzyFooterHeights = heights;
+      const note = () => {
+        const element = document.querySelector('footer.globalfooter');
+        if (element) heights.push(Math.round(element.getBoundingClientRect().height * 10) / 10);
+      };
+      note();
+      new MutationObserver(note).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    });
+
+    release();
+    await siteTookOver(page);
+    // The site's own Menu button now, and its footer with the hours and who runs the shop.
+    await expect(page.locator('nav.globalnav button.globalnav__menu-button')).toHaveCount(1);
+    await expect(page.locator('.globalnav__menu-standin')).toHaveCount(0);
+    await expect(footer.getByTestId('footer-operator')).toBeVisible();
+    await expect(footer.getByRole('list', { name: 'Hours' })).toBeVisible();
+    // Whatever the site asks for on the way (were it the catalog) has come.
+    await page.waitForLoadState('networkidle');
+    expect(await navBoxes(), 'the nav, box for box').toEqual(before);
+    const heights = await page.evaluate(() => (window as unknown as { izzyFooterHeights: number[] }).izzyFooterHeights);
+    expect(heights.length).toBeGreaterThan(1);
+    expect([...new Set(heights)], 'the footer’s height, through the takeover').toHaveLength(1);
+    await view(page, testInfo, 'legal-17-takeover-same-nav');
   });
 });
 

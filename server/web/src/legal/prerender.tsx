@@ -1,16 +1,18 @@
 // The four legal pages as plain HTML, made when the site is built (tools/prerender.ts), so each
 // document can be read without JavaScript, and by anything that reads a page as the server sends
 // it. It's the pages' own article (LegalArticle, from the same docs/legal files, a draft or
-// published by the same rule), under a nav that needs no script and the site's own footer, with
-// the shop's hours and who runs the shop from the catalog this build serves. Once the site's
-// script runs, it draws the page in its place, as on every other page.
+// published by the same rule), under the site's nav drawn with no script and the site's own
+// footer, with the shop's hours and who runs the shop from the catalog this build serves. Once
+// the site's script runs, it draws the page in its place, as on every other page, with that same
+// catalog (the page carries it), so neither the nav nor the footer moves.
 
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Link } from 'react-router-dom';
 import { StaticRouter } from 'react-router-dom/server';
 import catalogData from '../../../data/catalog.json';
 import type { Catalog } from '../api/types';
-import { Footer, NAV_LINKS } from '../components/Layout';
+import { Icon } from '../components/Icon';
+import { Footer, NAV_LINKS, NavBookLink, SITE_DIRECTORY_ID } from '../components/Layout';
 import { Logo } from '../components/Logo';
 import { fullTitle } from '../components/usePageMeta';
 import { CatalogProvider } from '../data/catalog';
@@ -28,9 +30,16 @@ export interface PrerenderedLegalPage {
   description: string;
   /** What goes in the page's #root. */
   body: string;
+  /** The catalog it was drawn with, which the page carries for the site's first draw over it (src/main.tsx). */
+  catalog: Catalog;
 }
 
-/** The global nav without the phone's menu, which needs the script: the logo home, and on a computer the site's pages. */
+/**
+ * The global nav as the site draws it (GlobalNav in components/Layout.tsx), so nothing in it moves
+ * when the site takes over: the logo home, on a computer the site's pages, Book with its pill, and
+ * on a phone "Menu". The site's menu needs the script, so here "Menu" goes to the footer's site
+ * directory, which has every page; the site's own Menu button takes its place, the same size.
+ */
 function StaticNav() {
   return (
     <nav className="globalnav" aria-label="Izzy Clipz">
@@ -47,6 +56,11 @@ function StaticNav() {
             </li>
           ))}
         </ul>
+        <NavBookLink />
+        <a href={`#${SITE_DIRECTORY_ID}`} className="globalnav__menu-standin" aria-label="Menu: the site's pages, at the bottom of this page">
+          <Icon name="menu" />
+          <span>Menu</span>
+        </a>
       </div>
     </nav>
   );
@@ -66,6 +80,7 @@ export function renderLegalPages({ draft, demo }: { draft: boolean; demo: boolea
     file: `${document.id}/index.html`,
     title: fullTitle(document.title),
     description: document.description,
+    catalog: BUILD_CATALOG,
     body: renderToStaticMarkup(
       <StaticRouter location={document.path}>
         <CatalogProvider initial={BUILD_CATALOG}>
