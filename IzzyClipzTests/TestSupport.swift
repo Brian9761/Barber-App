@@ -156,4 +156,30 @@ enum TestData {
     static func calendarDay(_ year: Int, _ month: Int, _ day: Int) -> LocalDate {
         LocalDate(year: year, month: month, day: day)!
     }
+
+    /// A card's key in the form `IzzyAPI.CardToken.generate()` makes (here the bytes 0 to 31), and
+    /// its SHA-256 in hex, worked out apart from the app (Python's hashlib).
+    static let cardKey = "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8"
+    static let cardKeyDigest = "ea866a757e4c38babfa8127cbe9a409d3e1f93a00ff1488ff735fcf917afffd0"
+}
+
+/// An unconfirmed booking as app versions before the card's digest saved it (`PendingBooking`): with
+/// the key of the card it said not to keep, in the Keychain item that goes into backups.
+struct EarlierPendingBooking: Encodable {
+    let request: String
+    let token: IzzyAPI.ManageToken
+    let start: Date
+    let cardNotKept: IzzyAPI.CardToken?
+
+    init(_ request: IzzyAPI.NewAppointment, token: IzzyAPI.ManageToken, cardNotKept: IzzyAPI.CardToken?) {
+        self.request = request.retryKey
+        self.token = token
+        start = request.start
+        self.cardNotKept = cardNotKept
+    }
+
+    /// The list as those versions kept it (`AppointmentStore.pendingBookingsAccount`).
+    static func list(_ entries: [EarlierPendingBooking]) throws -> String {
+        String(decoding: try IzzyAPI.makeEncoder().encode(entries), as: UTF8.self)
+    }
 }

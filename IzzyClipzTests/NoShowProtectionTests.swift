@@ -912,6 +912,126 @@ final class NoShowBookingTests: XCTestCase {
         XCTAssertTrue(api.cardDeletions.isEmpty)
     }
 
+    // MARK: A retry that finds the first try's booking
+
+    private func agreement(_ card: StoredCard) -> IzzyAPI.NoShowAgreement {
+        IzzyAPI.NoShowAgreement(cardToken: card.token, policyText: NoShowTestData.carlosPolicyText)
+    }
+
+    private var pendingBookingsItem: String? { tokens.secrets[AppointmentStore.pendingBookingsAccount] }
+
+    /// The first try, with Remember me off, gets no answer. The client turns Remember me on and
+    /// tries again, and the retry finds the booking the first try made: its card is forgotten and
+    /// deleted all the same (the shop marked it for deletion with that booking), from the digest the
+    /// unconfirmed booking kept. Its key was only ever in the saved-card store.
+    func testARetryThatFindsTheFirstTrysBookingDoesntKeepItsCard() async throws {
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: false)
+        let appointments = makeAppointments()
+        api.bookHandler = { _ in throw APIError.offline }
+        _ = await makeSubmitter(appointments: appointments).book(try draft(remember: false), noShow: agreement(card))
+        let pending = try XCTUnwrap(pendingBookingsItem)
+        XCTAssertTrue(pending.contains(card.token.digest))
+        XCTAssertFalse(pending.contains(card.token.rawValue), "Never the key")
+        XCTAssertEqual(cards.saved, card, "Not booked yet: the card stays for the next try")
+
+        RememberedDetails.apply(remember: true, details: CustomerDetails(name: "Alex", phone: "(442) 555-0123"), to: CustomerDetailsStore(defaults: defaults), cards: cards)
+        XCTAssertTrue(cards.isRemembered)
+        api.bookHandler = { _ in TestData.confirmation() }
+        let submitter = makeSubmitter(appointments: appointments)
+        let saved = await submitter.book(try draft(remember: true), noShow: agreement(card))
+        XCTAssertNotNil(saved)
+        XCTAssertEqual(api.bookingTokens.count, 2)
+        XCTAssertEqual(Set(api.bookingTokens).count, 1, "The same booking")
+        XCTAssertNil(cards.saved, "The card the shop is deleting isn't kept")
+        XCTAssertNil(keychain.secrets[SavedCardStore.account])
+        _ = await submitter.cardDeletion?.value
+        XCTAssertEqual(api.cardDeletions, [card.token])
+        XCTAssertNil(pendingBookingsItem, "Settled: nothing to retry")
+    }
+
+    /// A card added after the first try isn't the one that try said not to keep: with Remember me
+    /// on, the retry keeps it for next time, and nothing is deleted.
+    func testARetryKeepsACardAddedSinceTheFirstTry() async throws {
+        let first = NoShowTestData.stored()
+        cards.save(first, remember: false)
+        let appointments = makeAppointments()
+        api.bookHandler = { _ in throw APIError.offline }
+        _ = await makeSubmitter(appointments: appointments).book(try draft(remember: false), noShow: agreement(first))
+
+        let newer = NoShowTestData.stored(NoShowTestData.card(last4: "1881"))
+        cards.save(newer, remember: true)
+        api.bookHandler = { _ in TestData.confirmation() }
+        let submitter = makeSubmitter(appointments: appointments)
+        let saved = await submitter.book(try draft(remember: true), noShow: agreement(newer))
+        XCTAssertNotNil(saved)
+        XCTAssertEqual(Set(api.bookingTokens).count, 1, "The same booking")
+        XCTAssertEqual(cards.saved, newer)
+        XCTAssertTrue(cards.isRemembered)
+        XCTAssertEqual(SavedCardStore(secrets: keychain, now: { TestData.now }).saved, newer, "Kept for next time")
+        XCTAssertNil(submitter.cardDeletion)
+        XCTAssertTrue(api.cardDeletions.isEmpty)
+    }
+
+    /// The first try kept its card (Remember me on), so there's nothing to hold against it: the
+    /// retry keeps the card too, or, with Remember me turned off since, forgets it as any booking does.
+    func testARetryOfABookingThatKeptItsCardFollowsRememberMe() async throws {
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: true)
+        let appointments = makeAppointments()
+        api.bookHandler = { _ in throw APIError.offline }
+        _ = await makeSubmitter(appointments: appointments).book(try draft(remember: true), noShow: agreement(card))
+        XCTAssertFalse(try XCTUnwrap(pendingBookingsItem).contains("cardNotKept"))
+
+        api.bookHandler = { _ in TestData.confirmation() }
+        let keeping = makeSubmitter(appointments: appointments)
+        _ = await keeping.book(try draft(remember: true), noShow: agreement(card))
+        XCTAssertEqual(cards.saved, card)
+        XCTAssertTrue(cards.isRemembered)
+        XCTAssertNil(keeping.cardDeletion)
+
+        // Another booking of the same kind, tried with Remember me on, then booked with it off.
+        let later = TestData.friday.addingTimeInterval(60 * 60)
+        api.bookHandler = { _ in throw APIError.offline }
+        _ = await makeSubmitter(appointments: appointments).book(try draft(start: later, remember: true), noShow: agreement(card))
+        api.bookHandler = { _ in TestData.confirmation(id: "6c9f3d2f-4e5b-4f70-9bac-1d2e3f4a5b6c", start: later, token: "token-2") }
+        let forgetting = makeSubmitter(appointments: appointments)
+        _ = await forgetting.book(try draft(start: later, remember: false), noShow: agreement(card))
+        XCTAssertNil(cards.saved)
+        _ = await forgetting.cardDeletion?.value
+        XCTAssertEqual(api.cardDeletions, [card.token])
+    }
+
+    /// A booking an earlier version left unconfirmed, with the card's key itself in it. After the
+    /// update the key leaves the Keychain item as soon as it's read, and the retry still finds the
+    /// booking with the earlier token and still doesn't keep that card, from its digest.
+    func testARetryOfABookingSavedWithTheCardsKeyStillDoesntKeepTheCard() async throws {
+        let card = NoShowTestData.stored()
+        cards.save(card, remember: true)
+        let firstTry = try draft(remember: false).request(noShow: agreement(card))
+        XCTAssertEqual(firstTry.keepCard, false)
+        let earlier = IzzyAPI.ManageToken.generate()
+        try tokens.setSecret(EarlierPendingBooking.list([EarlierPendingBooking(firstTry, token: earlier, cardNotKept: card.token)]), for: AppointmentStore.pendingBookingsAccount)
+        XCTAssertTrue(try XCTUnwrap(pendingBookingsItem).contains(card.token.rawValue), "As the earlier version left it")
+
+        let appointments = makeAppointments()
+        appointments.refreshLocally()
+        let pending = try XCTUnwrap(pendingBookingsItem)
+        XCTAssertFalse(pending.contains(card.token.rawValue), "The key is gone from the Keychain item")
+        XCTAssertTrue(pending.contains(card.token.digest))
+
+        api.bookHandler = { _ in TestData.confirmation() }
+        let submitter = makeSubmitter(appointments: appointments)
+        let saved = await submitter.book(try draft(remember: true), noShow: agreement(card))
+        XCTAssertNotNil(saved)
+        XCTAssertEqual(api.bookingTokens, [earlier], "The same booking: the earlier version's token")
+        XCTAssertNil(cards.saved, "The card the shop is deleting isn't kept")
+        XCTAssertNil(keychain.secrets[SavedCardStore.account])
+        _ = await submitter.cardDeletion?.value
+        XCTAssertEqual(api.cardDeletions, [card.token])
+        XCTAssertNil(pendingBookingsItem)
+    }
+
     /// The whole thing against the in-memory server: the policy, a card from the test card page,
     /// the booking with its card on file and fee, and the next booking with the same card.
     func testBookingWithACardOnTheInMemoryServer() async throws {
