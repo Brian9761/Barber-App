@@ -181,9 +181,12 @@ function Review({ catalog, draft, target, start }: { catalog: Catalog; draft: Bo
         if (kept) deleteSavedCardQuietly(kept.token, { keepalive: true });
       }
       clearPendingCheckout();
-      rememberLastBooked(confirmation.appointment.id);
+      // The confirmation shows the appointment from the list this browser keeps, which "Forget me"
+      // clears; never from the browser's history, which would keep the client's name, number, email
+      // and note out of its reach. Only if the list wouldn't save is it held in this page's memory.
+      rememberLastBooked(confirmation.appointment.id, saved ? null : confirmation.appointment);
       dispatch({ type: 'booked' });
-      navigate('/book/confirmed', { replace: true, state: { appointment: confirmation.appointment, saved } });
+      navigate('/book/confirmed', { replace: true });
     } catch (error) {
       setBooking(false);
       const found = bookingFailure(error, new Date(start), zone);

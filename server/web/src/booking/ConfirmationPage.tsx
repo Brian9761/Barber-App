@@ -1,5 +1,5 @@
-import { Link, Navigate, useLocation } from 'react-router-dom';
-import type { Appointment, Catalog } from '../api/types';
+import { Link, Navigate } from 'react-router-dom';
+import type { Catalog } from '../api/types';
 import { Icon } from '../components/Icon';
 import { MoreLink, Notice, PreferToCall } from '../components/ui';
 import { usePageMeta } from '../components/usePageMeta';
@@ -8,15 +8,8 @@ import { isDemo } from '../demo/mode';
 import { cardLabel, durationLabel, list } from '../lib/format';
 import { appointmentEvent, downloadIcs, icsFile } from '../lib/ics';
 import { longDateTimeLabel } from '../lib/shopTime';
-import { loadAppointments, type ListedAppointment } from '../lib/storage';
 import { thisDevice } from '../pwa/platform';
-import { lastBookedId } from './lastBooked';
-
-interface ConfirmationState {
-  appointment?: Appointment;
-  /** False when this browser couldn't keep the appointment and its token. */
-  saved?: boolean;
-}
+import { lastBooked } from './lastBooked';
 
 /**
  * "You're booked": the appointment as the shop booked it (with the barber it
@@ -27,6 +20,10 @@ interface ConfirmationState {
  * In the demo it's "Demo booking made", with the demo notice right under it, on
  * the first screen of a phone: nobody should leave thinking the shop has it. Its
  * calendar file says so too, and has no reminder.
+ *
+ * The appointment comes from what this browser keeps (lastBooked.ts), never from the
+ * browser's history: after "Forget me", Back or a reload finds nothing, and opens My
+ * appointments instead.
  */
 export function ConfirmationPage({ catalog }: { catalog: Catalog }) {
   const demo = isDemo();
@@ -37,12 +34,10 @@ export function ConfirmationPage({ catalog }: { catalog: Catalog }) {
       : 'Your appointment at Izzy Clipz Barbershop is booked. No payment now: you pay at the shop.',
   );
   const device = thisDevice();
-  const location = useLocation();
-  const state = (location.state as ConfirmationState | null) ?? {};
-  const fromStorage = loadAppointments().find((s) => s.id === lastBookedId())?.appointment;
-  const appointment: ListedAppointment | undefined = state.appointment ?? fromStorage;
-  if (!appointment) return <Navigate to="/appointments" replace />;
-  const saved = state.saved ?? true;
+  const booked = lastBooked();
+  if (!booked) return <Navigate to="/appointments" replace />;
+  // `saved` is false when this browser couldn't keep the appointment and its token.
+  const { appointment, saved } = booked;
   const shop = catalog.shop;
 
   const addToCalendar = () => {
