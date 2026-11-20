@@ -174,6 +174,7 @@ Your developer has the exact details (research.md §18 lists them). **Ship them 
 - **Never change a completed appointment to a no-show.**
 - **If a client disagrees with a fee,** listen, check, refund it in Stripe if it was a mistake, and reply within 5 business days.
 - **If the card is declined,** text the client that day (or email them, if they gave an email), and give them at least 7 days from then to pay another way, for example at the shop. The policy promises this, and Visa's rules require it.
+- **Cards to delete in Stripe.** If you ever change how the shop connects to Stripe, or switch its key between test and live, Settings › Stripe (in Izzy Clipz Business and in the website's Business area) lists the saved cards and unfinished card pages the server can no longer reach, under "Cards to delete in Stripe". Delete each customer in the old Stripe account (Customers, then search for the customer id), then tap Deleted in Stripe. The Privacy Policy promises these are deleted.
 
 ## 7. Handling requests and problems
 
