@@ -500,9 +500,9 @@ final class NoShowFeeTests: XCTestCase {
                 XCTAssertEqual(error.userMessage, IzzyAPI.NoShowRule.timeTakenMessage, "\(status)")
             }
         }
-        let shown = try await harness.api.appointments(on: TestClock.today)
-        let leeNow = try XCTUnwrap(shown.first { $0.id == lee.id })
-        let afterAll = try XCTUnwrap(FeePanel(appointment: leeNow, now: TestClock.now, shopTime: TestClock.shopTime, others: shown))
+        let day = try await harness.api.appointments(on: TestClock.today)
+        let leeNow = try XCTUnwrap(day.first { $0.id == lee.id })
+        let afterAll = try XCTUnwrap(FeePanel(appointment: leeNow, now: TestClock.now, shopTime: TestClock.shopTime, others: day))
         XCTAssertNil(afterAll.action)
         XCTAssertEqual(afterAll.status, .notCharged(note: IzzyAPI.NoShowRule.timeTakenMessage))
     }
