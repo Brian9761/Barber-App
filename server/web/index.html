@@ -31,11 +31,14 @@
   </head>
   <body>
     <!--
-      Without JavaScript: first on every page, in colours of its own (the page behind it is black).
-      The four policies are pages of their own built as plain HTML (tools/prerender.ts), so they open.
+      Without JavaScript: first on every page, in colours of its own (the page behind it is black), in
+      a landmark of its own, and not printed (base.css). The four policies are pages of their own built
+      as plain HTML (tools/prerender.ts), so they open; there, "Skip to main content" comes before it.
     -->
     <noscript>
-      <div
+      <aside
+        class="noscript-note"
+        aria-label="Without JavaScript"
         data-testid="noscript"
         style="background: #fff; color: #1d1d1f; font: 17px/1.5 -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif; padding: 20px 24px; border-bottom: 1px solid #d2d2d7"
       >
@@ -51,7 +54,7 @@
           <a href="/cancellation-policy" style="color: #0066cc">Cancellation &amp; No-Show Policy</a> and
           <a href="/accessibility" style="color: #0066cc">Accessibility</a>.
         </p>
-      </div>
+      </aside>
     </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

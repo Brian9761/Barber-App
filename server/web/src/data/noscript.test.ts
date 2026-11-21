@@ -22,3 +22,18 @@ describe('the note for browsers without JavaScript', () => {
     expect(note).toContain('Open Monday–Saturday: 10 AM – 7 PM; Sunday: 10 AM – 6 PM.');
   });
 });
+
+describe('the note’s place on the page', () => {
+  const business = readFileSync(new URL('../../business/index.html', import.meta.url), 'utf8');
+
+  it('is a landmark of its own, named for screen readers, with the class print styles hide, on the site’s pages and Business’s', () => {
+    for (const [what, html] of [
+      ['the site', page],
+      ['Business', business],
+    ] as const) {
+      const inside = html.match(/<noscript>\s*([\s\S]*?)\s*<\/noscript>/)?.[1] ?? '';
+      expect(inside, what).toMatch(/^<aside\s+class="noscript-note"\s+aria-label="Without JavaScript"\s+data-testid="noscript"/);
+      expect(inside.trimEnd().endsWith('</aside>'), what).toBe(true);
+    }
+  });
+});

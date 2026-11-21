@@ -263,6 +263,13 @@ details[open] > .legal-toc__summary .legal-toc__chevron {
     display: none;
   }
 
+  /* On paper a link can't be followed: one to another site prints its address after it. */
+  .legal__article a[href^='http://']::after,
+  .legal__article a[href^='https://']::after {
+    content: ' (' attr(href) ')';
+    overflow-wrap: anywhere;
+  }
+
   .legal__h2,
   .legal__h3 {
     break-after: avoid;

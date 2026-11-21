@@ -257,7 +257,21 @@ li a.inline-link,
   white-space: nowrap;
 }
 
-/* Printed (a policy, say), a page is just its content: no nav, ribbons, footer or Reload bar. */
+/*
+ * Without JavaScript, a policy's plain HTML has its "Skip to main content" first, before the note for
+ * browsers without it (tools/prerender.ts puts it in the <noscript>), so the one the page draws after
+ * the note isn't needed twice.
+ */
+@media (scripting: none) {
+  #root > .skip-link {
+    display: none;
+  }
+}
+
+/*
+ * Printed (a policy, say), a page is just its content: no nav, ribbons, footer or Reload bar, nor the
+ * note for browsers without JavaScript (its own colours are inline, hence !important).
+ */
 @media print {
   body,
   main {
@@ -265,6 +279,7 @@ li a.inline-link,
   }
 
   .skip-link,
+  .noscript-note,
   .globalnav,
   .app-ribbons,
   .globalfooter,

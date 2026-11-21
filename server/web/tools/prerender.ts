@@ -45,6 +45,9 @@ export interface LegalPageExtras {
   origin: string;
 }
 
+/** The policy pages' "Skip to main content" for browsers without JavaScript, as the page's own (src/legal/prerender.tsx). */
+export const SKIP_LINK = '<a class="skip-link" href="#main">Skip to main content</a>';
+
 function escapeHtml(text: string): string {
   return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
@@ -81,6 +84,10 @@ export function legalPageHtml(template: string, page: LegalPageContent, extras: 
     ...(extras.origin ? [`<link rel="canonical" href="${escapeHtml(extras.origin + page.path)}">`] : []),
   ];
   fill(/\s*<\/head>/, `${links.map((link) => `\n    ${link}`).join('')}\n  </head>`, '</head>');
+  // Without JavaScript, "Skip to main content" comes first, before the note for browsers without it
+  // (base.css hides the page's own one after the note then), so the keyboard needn't go through the
+  // note's links to reach the policy. Only here: the site's other pages have no content without it.
+  fill(/<noscript>/, `<noscript>${SKIP_LINK}`, '<noscript>');
   const catalog = page.catalog === undefined ? '' : jsonDataBlock(BUILD_CATALOG_ID, page.catalog);
   fill(/<div id="root"><\/div>/, `<div id="root">${page.body}</div>${catalog}`, 'empty <div id="root">');
   return html;

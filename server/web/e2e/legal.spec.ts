@@ -1,4 +1,5 @@
 import { mkdirSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join, resolve } from 'node:path';
 import type { Locator, Page, TestInfo } from '@playwright/test';
 import { navLink, signInWithCode } from './business-support.js';
@@ -35,6 +36,8 @@ import {
 // Screenshots go to E2E_LEGAL_SHOTS_DIR (or with the others), named "<run>-legal-…".
 
 const LEGAL_SHOTS = resolve(process.env.E2E_LEGAL_SHOTS_DIR || SHOTS_DIR);
+/** axe-core's own script (the one @axe-core/playwright runs), for pages whose own scripts are off. */
+const AXE_SOURCE = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 const YELP = 'https://www.yelp.com/biz/izzy-clipz-barbershop-oceanside';
 
 /** What the screen shows now, as a visitor sees it. */
@@ -672,7 +675,50 @@ test.describe('without JavaScript', () => {
       ['Accessibility', '/accessibility'],
     ] as const;
     for (const [name, href] of policies) await expect(note.getByRole('link', { name, exact: true })).toHaveAttribute('href', href);
+    // A landmark of its own, named for screen readers.
+    await expect(page.getByRole('complementary', { name: 'Without JavaScript' })).toHaveAttribute('data-testid', 'noscript');
     return note;
+  }
+
+  /**
+   * axe-core on a page whose own scripts are off. Nothing can run in the page's own world then (so
+   * expectAccessible's AxeBuilder can't either), so it runs in a world of its own, as an extension's
+   * scripts do, and as Playwright's own checks do. Timers don't fire in a page whose scripts are off,
+   * so in that world axe-core's waits (setTimeout) go on at once, as promises do; and it doesn't fetch
+   * the page's stylesheets again (preload), which it only needs for a rule about locked orientation.
+   * axe-core takes whatever is in a <noscript> for hidden, as it is with scripts on; with them off the
+   * browser shows it in place, so each <noscript> is unwrapped first: the same nodes, in the same order.
+   */
+  async function axeWithoutPageScripts(page: Page): Promise<{ id: string; impact: string | null; nodes: { target: string[] }[] }[]> {
+    const cdp = await page.context().newCDPSession(page);
+    try {
+      const { frameTree } = await cdp.send('Page.getFrameTree');
+      const { executionContextId } = await cdp.send('Page.createIsolatedWorld', { frameId: frameTree.frame.id, worldName: 'izzy-axe', grantUniveralAccess: true });
+      const timers = 'globalThis.setTimeout = (callback, _ms, ...args) => { Promise.resolve().then(() => callback(...args)); return 0; }; globalThis.clearTimeout = () => undefined;';
+      const unwrap = "for (const noscript of Array.from(document.querySelectorAll('noscript'))) noscript.replaceWith(...Array.from(noscript.childNodes));";
+      await cdp.send('Runtime.evaluate', { expression: `${timers}\n${AXE_SOURCE}\n${unwrap}`, contextId: executionContextId });
+      const answer = await cdp.send('Runtime.evaluate', {
+        expression: 'axe.run(document, { preload: false }).then((r) => r.violations.map((v) => ({ id: v.id, impact: v.impact, nodes: v.nodes.map((n) => ({ target: n.target })) })))',
+        contextId: executionContextId,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      if (answer.exceptionDetails) throw new Error(`axe-core didn't run: ${answer.exceptionDetails.text}`);
+      return answer.result.value as { id: string; impact: string | null; nodes: { target: string[] }[] }[];
+    } finally {
+      await cdp.detach();
+    }
+  }
+
+  /** axe-core finds nothing outside a landmark (its "region" rule), and nothing serious or critical. */
+  async function expectInLandmarks(page: Page, what: string): Promise<void> {
+    const violations = await axeWithoutPageScripts(page);
+    expect(
+      violations
+        .filter((v) => v.id === 'region' || v.impact === 'serious' || v.impact === 'critical')
+        .map((v) => `${v.id} (${v.impact}): ${v.nodes.map((n) => n.target.join(' ')).slice(0, 4).join(' | ')}`),
+      `${what}: axe-core, everything in a landmark`,
+    ).toEqual([]);
   }
 
   test('Home starts with a note anyone can read, with the shop’s number and the four policies, which open', async ({ page }, testInfo) => {
@@ -684,6 +730,10 @@ test.describe('without JavaScript', () => {
     await expect(note).toContainText('Open Monday–Saturday: 10 AM – 7 PM; Sunday: 10 AM – 6 PM.');
     await expect(note).toContainText('Our policies open without it:');
     await expect(note).toBeInViewport({ ratio: 1 });
+    // Without the site there's nothing else on the page to skip to: the first Tab stop is the note's first link, the shop's number.
+    await page.keyboard.press('Tab');
+    await expect(note.getByRole('link', { name: '(442) 341-3053' })).toBeFocused();
+    await expectInLandmarks(page, 'Home without JavaScript');
     await plainView(page, testInfo, 'legal-14-home-without-javascript');
 
     await note.getByRole('link', { name: 'Privacy Policy' }).click();
@@ -696,6 +746,15 @@ test.describe('without JavaScript', () => {
   }, testInfo) => {
     await page.goto('/privacy');
     await expectNote(page);
+    // "Skip to main content" is the first Tab stop, before the note's links (and only once), and goes to the policy.
+    const skip = page.getByRole('link', { name: 'Skip to main content' });
+    await expect(skip).toHaveCount(1);
+    await page.keyboard.press('Tab');
+    await expect(skip).toBeFocused();
+    await expect(skip).toBeInViewport();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('main#main')).toBeFocused();
+    await expectInLandmarks(page, '/privacy without JavaScript');
     await expect(page).toHaveTitle('Privacy Policy · Izzy Clipz Barbershop');
     await expect(page.locator('meta[name="description"]')).toHaveAttribute('content', /^What Izzy Clipz Barbershop collects/);
     const heading = page.getByRole('heading', { level: 1 });
@@ -750,6 +809,34 @@ test.describe('without JavaScript', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Terms of Service');
     await expect(page).toHaveTitle('Terms of Service · Izzy Clipz Barbershop');
   });
+
+  test('printed, a policy is the policy alone, without the note for browsers without JavaScript', async ({ page }) => {
+    await page.goto('/privacy');
+    await expect(page.getByTestId('noscript')).toBeVisible();
+    await page.emulateMedia({ media: 'print' });
+    await expect(page.getByTestId('noscript')).toBeHidden();
+    await expect(page.locator('nav.globalnav')).toBeHidden();
+    await expect(page.getByRole('contentinfo')).toBeHidden();
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Privacy Policy');
+    await expect(page.getByRole('heading', { level: 1 })).toBeInViewport();
+    await page.emulateMedia({ media: 'screen' });
+    await expect(page.getByTestId('noscript')).toBeVisible();
+  });
+});
+
+test('printed, a link in a policy to another site shows its address after it; one to the site’s own pages doesn’t', async ({ page }) => {
+  await page.goto('/privacy');
+  await siteTookOver(page);
+  // What prints after a link: its ::after.
+  const after = (link: Locator) => link.evaluate((a) => getComputedStyle(a, '::after').content);
+  const stripe = page.locator('.legal__article a[href="https://stripe.com/privacy"]').first();
+  const own = page.locator('.legal__article a[href^="/"]').first();
+  await expect(stripe).toHaveText("Stripe's Privacy Policy");
+  await expect(own).toBeVisible();
+  expect(await after(stripe)).toBe('none');
+  await page.emulateMedia({ media: 'print' });
+  expect(await after(stripe)).toBe('" (https://stripe.com/privacy)"');
+  expect(await after(own)).toBe('none');
 });
 
 test('with JavaScript, the site takes a legal page over from its plain HTML in one go: never “Loading…”, its own nav, and “On this page” as it was', async ({

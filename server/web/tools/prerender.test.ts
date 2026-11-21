@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import { BUILD_CATALOG_ID } from '../src/legal/takeover.js';
-import { jsonDataBlock, LEGAL_PAGE_FILES, legalPageHtml, type LegalPageContent } from './prerender.js';
+import { jsonDataBlock, LEGAL_PAGE_FILES, legalPageHtml, SKIP_LINK, type LegalPageContent } from './prerender.js';
 
 // The legal pages' plain HTML, made from the built index.html: their own title and description,
 // their markup in #root, the legal pages' styles and script linked, and nothing else changed.
@@ -75,6 +75,15 @@ describe('a legal page’s plain HTML', () => {
     // Without one, there's nothing after #root.
     expect(legalPageHtml(BUILT, PAGE, EXTRAS)).toContain(`<div id="root">${PAGE.body}</div>\n`);
     expect(legalPageHtml(BUILT, PAGE, EXTRAS)).not.toContain(BUILD_CATALOG_ID);
+  });
+
+  it('starts, without JavaScript, with “Skip to main content”, before the note for browsers without it, as the page’s own link', () => {
+    const html = legalPageHtml(BUILT, PAGE, EXTRAS);
+    expect(html).toContain(`<noscript>${SKIP_LINK}<div data-testid="noscript">`);
+    expect(html.indexOf(SKIP_LINK)).toBeLessThan(html.indexOf('data-testid="noscript"'));
+    // The same link the page draws first, to the same place (src/legal/prerender.test.tsx checks the page's).
+    expect(SKIP_LINK).toBe('<a class="skip-link" href="#main">Skip to main content</a>');
+    expect(() => legalPageHtml(BUILT.replace(/<\/?noscript>/g, ''), PAGE, EXTRAS)).toThrow('has no <noscript>');
   });
 
   it('names its address when the site’s is known', () => {
