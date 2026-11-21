@@ -289,16 +289,21 @@ extension IzzyAPI.Appointment {
         status == .booked && canBeMarkedNoShow(at: now)
     }
 
-    /// Whether another client has this appointment's time now: another booked or completed
-    /// appointment of the same barber that overlaps it, among `others` (the day's). Then a late
-    /// cancellation isn't charged: the Cancellation & No-Show Policy promises it, and the server
-    /// refuses it (`timeTakenSince` in server/src/noshowfee.ts), asked once the appointment has
-    /// ended, when every booking for that time is in.
+    /// Whether another client took this cancelled appointment's time: another appointment of the same
+    /// barber that overlaps it, among `others` (the day's), booked at or after the client cancelled
+    /// (to the second), whatever became of it since, or booked, completed or marked a no-show now.
+    /// Then a late cancellation isn't charged: the Cancellation & No-Show Policy promises it, and the
+    /// server refuses it (`timeTakenSince` in server/src/noshowfee.ts), asked once the appointment has
+    /// ended, when every booking for that time is in. So the time is charged for once at most: the
+    /// client who took it and didn't come, or cancelled late in turn, can be charged instead. One
+    /// booked earlier and cancelled freed the time for this client, so it doesn't count.
     func timeTaken(among others: [IzzyAPI.Appointment]) -> Bool {
-        others.contains { other in
-            other.id != id && other.barberId == barberId
-                && (other.status == .booked || other.status == .completed)
-                && other.start < end && other.end > start
+        let cancelledAt = noShowFee?.customerCancelledAt
+        return others.contains { other in
+            guard other.id != id, other.barberId == barberId, other.start < end, other.end > start else { return false }
+            if other.status == .booked || other.status == .completed || other.status == .noShow { return true }
+            guard let cancelledAt else { return false }
+            return other.createdAt >= cancelledAt
         }
     }
 

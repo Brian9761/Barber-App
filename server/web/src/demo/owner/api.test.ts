@@ -291,6 +291,40 @@ describe('statuses and fees, like the server', () => {
     expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
   });
 
+  it('charges no late cancellation whose time another client was booked into since, whatever became of them, as the server rules', async () => {
+    await api.connectStripe();
+    const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
+    now = new Date('2026-11-04T19:50:00Z');
+    await api.setStatus(kim.id, 'cancelled');
+    // Written as the server would have it (see above): Kim booked her 12 PM at 11:30 AM and cancelled it
+    // in the app at 11:46, late; another client was booked into her time at `bookedAt`, now `status`.
+    const write = (bookedAt: string, status: OwnerAppointment['status']) => {
+      const store = JSON.parse(localStorage.getItem(DEMO_BUSINESS_KEY)!) as { days: Record<string, { appointments: OwnerAppointment[] }> };
+      const appointments = store.days['2026-11-04']!.appointments;
+      const kept = appointments.find((a) => a.id === kim.id)!;
+      Object.assign(kept, {
+        createdAt: '2026-11-04T19:30:00Z',
+        cancelledBy: 'customer',
+        shopCancelledAt: null,
+        noShowFee: { ...kept.noShowFee!, customerCancelledAt: '2026-11-04T19:46:00Z', reason: null },
+      });
+      const other = { ...kept, id: 'booked-since', customer: { name: 'Phone Client', phone: null, email: null }, card: null, noShowFee: null };
+      Object.assign(other, { createdAt: bookedAt, status, cancelledBy: status === 'cancelled' ? 'shop' : null });
+      store.days['2026-11-04']!.appointments = [...appointments.filter((a) => a.id !== other.id), other];
+      localStorage.setItem(DEMO_BUSINESS_KEY, JSON.stringify(store));
+    };
+    now = new Date('2026-11-04T20:45:00Z');
+    const timeTaken = feeCases.timeTaken;
+    // Booked at 11:46, the second Kim cancelled, and marked a no-show or cancelled since: it took the time.
+    for (const status of ['noShow', 'cancelled'] as const) {
+      write('2026-11-04T19:46:00Z', status);
+      expect(await rejects(api.chargeFee(kim.id)), status).toEqual({ code: 'not_chargeable', status: 409, message: timeTaken });
+    }
+    // Booked earlier and cancelled, it freed the time for Kim instead: her late cancellation can be charged.
+    write('2026-11-04T19:45:59Z', 'cancelled');
+    expect((await api.chargeFee(kim.id)).noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+  });
+
   it('never makes a completed visit with a card on file a no-show, even once it’s reopened, and says when it was first completed, as the server does', async () => {
     const kim = byName(await api.appointments('2026-11-04'), 'Kim Sample');
     expect(kim.completedAt).toBeNull();

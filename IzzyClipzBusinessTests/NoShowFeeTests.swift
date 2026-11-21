@@ -459,22 +459,52 @@ final class NoShowFeeTests: XCTestCase {
         var otherBarber = walkIn
         otherBarber.barberId = "someone-else"
         XCTAssertFalse(lee.timeTaken(among: [otherBarber]))
+        // Booked before Lee cancelled (the day before) and cancelled: it freed the time, it didn't take it.
         var cancelled = walkIn
         cancelled.status = .cancelled
         XCTAssertFalse(lee.timeTaken(among: [cancelled]))
 
-        // The sample server answers like the real one once a walk-in is booked into Lee's time.
+        // Booked into the time once Lee had cancelled (9:20 AM, to the second), it took it, whatever
+        // became of it: marked a no-show, or cancelled since. One fee for the time at most.
+        let leeCancelled = try XCTUnwrap(lee.noShowFee?.customerCancelledAt)
+        var bookedSince = walkIn
+        bookedSince.createdAt = leeCancelled
+        for status in [IzzyAPI.AppointmentStatus.cancelled, .noShow] {
+            bookedSince.status = status
+            XCTAssertTrue(lee.timeTaken(among: [bookedSince]), "\(status)")
+        }
+        bookedSince.createdAt = leeCancelled.addingTimeInterval(-1)
+        bookedSince.status = .cancelled
+        XCTAssertFalse(lee.timeTaken(among: [bookedSince]), "a second before Lee cancelled")
+        // A no-show counts whenever it was booked: the shop may have reopened it into the time since.
+        bookedSince.status = .noShow
+        XCTAssertTrue(lee.timeTaken(among: [bookedSince]))
+        bookedSince.status = .cancelled
+        let freeAgain = try XCTUnwrap(FeePanel(appointment: lee, now: TestClock.now, shopTime: TestClock.shopTime, others: [lee, bookedSince]))
+        XCTAssertEqual(freeAgain.action?.title, "Charge late cancellation fee ($35)")
+
+        // The sample server answers like the real one once a walk-in is booked into Lee's time, and
+        // still does once that walk-in is marked a no-show or cancelled.
         let booked = try await harness.api.createAppointment(
             IzzyAPI.NewAppointment(target: .offering(id: lee.offeringId), start: lee.start, customer: IzzyAPI.NewCustomer(name: "Walk In")),
             idempotencyKey: .generate()
         )
         XCTAssertEqual(booked.start, lee.start)
-        do {
-            _ = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
-            XCTFail("The time was taken")
-        } catch let error as APIError {
-            XCTAssertEqual(error.userMessage, IzzyAPI.NoShowRule.timeTakenMessage)
+        XCTAssertEqual(booked.createdAt, TestClock.now, "booked now, as the server dates it")
+        for status in [IzzyAPI.AppointmentStatus.booked, .noShow, .cancelled] {
+            if status != .booked { _ = try await harness.api.setStatus(status, ofAppointment: booked.id) }
+            do {
+                _ = try await harness.api.chargeNoShowFee(appointmentId: lee.id)
+                XCTFail("The time was taken (\(status))")
+            } catch let error as APIError {
+                XCTAssertEqual(error.userMessage, IzzyAPI.NoShowRule.timeTakenMessage, "\(status)")
+            }
         }
+        let shown = try await harness.api.appointments(on: TestClock.today)
+        let leeNow = try XCTUnwrap(shown.first { $0.id == lee.id })
+        let afterAll = try XCTUnwrap(FeePanel(appointment: leeNow, now: TestClock.now, shopTime: TestClock.shopTime, others: shown))
+        XCTAssertNil(afterAll.action)
+        XCTAssertEqual(afterAll.status, .notCharged(note: IzzyAPI.NoShowRule.timeTakenMessage))
     }
 
     func testAChargedFeeSaysWhenAndWhereRefundsAreMade() throws {

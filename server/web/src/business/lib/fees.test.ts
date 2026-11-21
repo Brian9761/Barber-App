@@ -90,6 +90,7 @@ describe('which fee can be charged', () => {
     expect(NOT_ENDED_MESSAGE).toBe(feeCases.notEnded);
     expect(LATE_CANCEL_NOT_ENDED_MESSAGE).toBe(feeCases.lateCancelNotEnded);
     expect(SHOP_CANCELLED_MESSAGE).toBe(feeCases.shopCancelled);
+    expect(TIME_TAKEN_MESSAGE).toBe(feeCases.timeTaken);
     for (const c of feeCases.clock) {
       const found = ruleFeeCaseAt(
         {
@@ -384,11 +385,35 @@ describe('the card on file in the details', () => {
     expect(panel.action).toBeNull();
     expect(panel.status).toEqual({ kind: 'notCharged', note: TIME_TAKEN_MESSAGE });
     expect(timeTaken(late, [walkIn])).toBe(true);
-    // Another barber at the same time, one right after, or a cancelled one doesn't take it.
+    // Another barber at the same time, one right after, or one booked before the client cancelled
+    // (11:55 AM) and cancelled doesn't take it: that one freed the time.
     expect(timeTaken(late, [{ ...walkIn, barberId: 'someone-else' }])).toBe(false);
     expect(timeTaken(late, [{ ...walkIn, start: late.end, end: new Date(Date.parse(late.end) + 30 * 60_000).toISOString() }])).toBe(false);
     expect(timeTaken(late, [{ ...walkIn, status: 'cancelled' as const }])).toBe(false);
     expect(feePanel(late, now, ZONE, [late, { ...walkIn, status: 'cancelled' as const }])!.action?.title).toBe('Charge late cancellation fee ($25)');
+  });
+
+  it('counts a client booked into the time after the cancellation, whatever became of them: one fee for the time at most', () => {
+    const late = { ...lateCharged, noShowFee: { ...lateCharged.noShowFee!, status: 'none' as const, chargedAt: null } };
+    const now = new Date('2026-11-03T22:00:00Z');
+    // Booked at 12:30 PM, the second the client cancelled, then marked a no-show or cancelled.
+    const cancelledAt = late.noShowFee.customerCancelledAt!;
+    expect(cancelledAt).toBe('2026-11-03T20:30:00Z');
+    const bookedSince = { ...late, id: 'booked-since', card: null, noShowFee: null, createdAt: cancelledAt };
+    for (const status of ['cancelled', 'noShow'] as const) {
+      expect(timeTaken(late, [{ ...bookedSince, status }]), status).toBe(true);
+      const panel = feePanel(late, now, ZONE, [late, { ...bookedSince, status }])!;
+      expect(panel.action, status).toBeNull();
+      expect(panel.status, status).toEqual({ kind: 'notCharged', note: TIME_TAKEN_MESSAGE });
+    }
+    // A second before the client cancelled, a cancelled booking had freed the time instead.
+    const secondBefore = '2026-11-03T20:29:59Z';
+    expect(timeTaken(late, [{ ...bookedSince, createdAt: secondBefore, status: 'cancelled' }])).toBe(false);
+    // A no-show counts whenever it was booked: the shop may have reopened it into the time since.
+    expect(timeTaken(late, [{ ...bookedSince, createdAt: secondBefore, status: 'noShow' }])).toBe(true);
+    // Without the cancel time (not a late cancellation), only what holds the time counts.
+    const noCancelTime = { ...late, noShowFee: { ...late.noShowFee, customerCancelledAt: null } };
+    expect(timeTaken(noCancelTime, [{ ...bookedSince, status: 'cancelled' }])).toBe(false);
   });
 
   it('has nothing to show without a card on file', () => {

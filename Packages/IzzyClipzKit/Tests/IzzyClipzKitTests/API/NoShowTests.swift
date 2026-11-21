@@ -988,6 +988,8 @@ final class NoShowRuleTests: XCTestCase {
         let notEnded: String
         let lateCancelNotEnded: String
         let shopCancelled: String
+        /// A late cancellation whose time another client was booked into since: the owner app shows it.
+        let timeTaken: String
         let deadline: Deadline
         let graceMinutes: Int
         let nothingCharged: NothingCharged
@@ -1006,6 +1008,7 @@ final class NoShowRuleTests: XCTestCase {
         XCTAssertEqual(document.notEnded, IzzyAPI.NoShowRule.notEndedMessage)
         XCTAssertEqual(document.lateCancelNotEnded, IzzyAPI.NoShowRule.lateCancelNotEndedMessage)
         XCTAssertEqual(document.shopCancelled, IzzyAPI.NoShowRule.shopCancelledMessage)
+        XCTAssertEqual(document.timeTaken, IzzyAPI.NoShowRule.timeTakenMessage)
         XCTAssertEqual(document.deadline.days, IzzyAPI.NoShowRule.feeDeadlineDays)
         XCTAssertEqual(document.deadline.message, IzzyAPI.NoShowRule.feeDeadlineMessage)
         XCTAssertEqual(document.graceMinutes, IzzyAPI.NoShowRule.lateCancelGraceMinutes)

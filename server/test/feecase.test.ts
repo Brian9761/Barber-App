@@ -24,6 +24,7 @@ import {
   SHOP_CANCELLED_MESSAGE,
   windowLabel,
 } from '../src/feecase.js';
+import { TIME_TAKEN_MESSAGE } from '../src/noshowfee.js';
 import type { AppointmentRow } from '../src/serialize.js';
 import { wholeSecond } from '../src/time.js';
 
@@ -509,6 +510,8 @@ describe('test/fixtures/fee-cases.json (read by the Kit)', () => {
       notEnded: NOT_ENDED_MESSAGE,
       lateCancelNotEnded: LATE_CANCEL_NOT_ENDED_MESSAGE,
       shopCancelled: SHOP_CANCELLED_MESSAGE,
+      // A late cancellation whose time another client was booked into since (`timeTakenSince`).
+      timeTaken: TIME_TAKEN_MESSAGE,
       deadline: { days: FEE_DEADLINE_DAYS, message: FEE_DEADLINE_MESSAGE },
       graceMinutes: LATE_CANCEL_GRACE_MINUTES,
       nothingCharged: { refusal: CASES[0]!.refusal, message: nothingCharged(CASES[0]!.refusal ?? '') },

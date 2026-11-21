@@ -302,7 +302,7 @@ final class FakeServer {
             if let offering = candidates.first {
                 appointments.append(makeAppointment(
                     offering: offering, start: start, customer: IzzyAPI.Customer(name: "Phone Sample", phone: "+14425550100"),
-                    status: .booked
+                    status: .booked, bookedAt: now()
                 ))
             }
             throw APIError.slotTaken
@@ -320,7 +320,7 @@ final class FakeServer {
         let appointment = makeAppointment(
             offering: offering, start: start,
             customer: IzzyAPI.Customer(name: name, phone: phone, email: request.customer.email),
-            note: request.note
+            note: request.note, bookedAt: now()
         )
         appointments.append(appointment)
         if let idempotencyKey {
@@ -736,6 +736,9 @@ final class FakeServer {
         return "00000000-0000-4000-8000-" + String(repeating: "0", count: max(0, 12 - digits.count)) + digits
     }
 
+    /// An appointment as the server would have it; booked a day ago unless `bookedAt` says when (a
+    /// booking made now, as the real server dates it: a late cancellation's fee looks at what was
+    /// booked into its time since).
     func makeAppointment(
         offering: Offering,
         start: Date,
@@ -743,7 +746,8 @@ final class FakeServer {
         status: IzzyAPI.AppointmentStatus = .booked,
         cancelledBy: IzzyAPI.CancelledBy? = nil,
         payment: IzzyAPI.AppointmentPayment = .unpaid,
-        note: String? = nil
+        note: String? = nil,
+        bookedAt: Date? = nil
     ) -> IzzyAPI.Appointment {
         IzzyAPI.Appointment(
             id: nextUUID(),
@@ -761,7 +765,7 @@ final class FakeServer {
             payment: payment,
             customer: customer,
             note: note?.trimmingCharacters(in: .whitespacesAndNewlines).nonEmptyOrNil,
-            createdAt: now().addingTimeInterval(-86_400)
+            createdAt: bookedAt ?? now().addingTimeInterval(-86_400)
         )
     }
 

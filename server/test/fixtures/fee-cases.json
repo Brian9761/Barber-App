@@ -804,6 +804,7 @@
   "notEnded": "The appointment hasn't ended yet, so it can't be a no-show.",
   "lateCancelNotEnded": "The appointment hasn't ended yet. You can charge the late-cancellation fee once it has, if no other client took the time.",
   "shopCancelled": "The shop cancelled this booking, so there's no fee.",
+  "timeTaken": "Another client was booked into this time after the cancellation, so there's no late-cancellation fee.",
   "deadline": {
     "days": 7,
     "message": "It's more than 7 days after the appointment, so the fee can't be charged."

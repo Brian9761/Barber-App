@@ -202,23 +202,31 @@ export function chargeableFee(appointment: Booking, now: Date): FeeReason | null
 export const TIME_TAKEN_MESSAGE = "Another client was booked into this time after the cancellation, so there's no late-cancellation fee.";
 
 /**
- * Whether another client has this cancelled booking's time now: another booked or completed
- * appointment of the same barber that overlaps it, among `others` (the day's appointments). Then the
- * late-cancellation fee isn't charged (the server refuses it too).
+ * Whether another client took this cancelled booking's time: another appointment of the same barber
+ * that overlaps it, among `others` (the day's appointments), booked at or after the client cancelled
+ * (to the second), whatever became of it since, or booked, completed or marked a no-show now. Then the
+ * late-cancellation fee isn't charged (the server refuses it too: `timeTakenSince` in
+ * server/src/noshowfee.ts). So the time is charged for once at most: the client who took it and didn't
+ * come, or cancelled late in turn, can be charged instead. One booked earlier and cancelled freed the
+ * time for this client, so it doesn't count.
  */
 export function timeTaken(
-  appointment: Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end'>,
-  others: readonly Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end' | 'status'>[],
+  appointment: Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end' | 'noShowFee'>,
+  others: readonly Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end' | 'status' | 'createdAt'>[],
 ): boolean {
   const start = new Date(appointment.start).getTime();
   const end = new Date(appointment.end).getTime();
+  const cancelled = appointment.noShowFee?.customerCancelledAt ? new Date(appointment.noShowFee.customerCancelledAt).getTime() : null;
   return others.some(
     (other) =>
       other.id !== appointment.id &&
       other.barberId === appointment.barberId &&
-      (other.status === 'booked' || other.status === 'completed') &&
       new Date(other.start).getTime() < end &&
-      new Date(other.end).getTime() > start,
+      new Date(other.end).getTime() > start &&
+      (other.status === 'booked' ||
+        other.status === 'completed' ||
+        other.status === 'noShow' ||
+        (cancelled !== null && new Date(other.createdAt).getTime() >= cancelled)),
   );
 }
 
@@ -417,13 +425,13 @@ export function feePanel(
   appointment: OwnerAppointment,
   now: Date,
   zone: string,
-  others: readonly Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end' | 'status'>[] = [],
+  others: readonly Pick<OwnerAppointment, 'id' | 'barberId' | 'start' | 'end' | 'status' | 'createdAt'>[] = [],
 ): FeePanel | null {
   const fee = appointment.noShowFee;
   if (!fee) return null;
   const card = appointment.card ? cardLabel(appointment.card) : 'the card on file';
   const found = chargeableFee(appointment, now);
-  // Another client has the time now: no late-cancellation fee (the policy's promise, and the server's rule).
+  // Another client took the time since the cancellation: no late-cancellation fee (the policy's promise, and the server's rule).
   const taken = found === 'lateCancel' && timeTaken(appointment, others);
   const chargeable = taken ? null : found;
   const agreement =
