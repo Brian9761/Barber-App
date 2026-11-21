@@ -29,8 +29,8 @@ const TUE10 = '2026-11-03T18:00:00Z';
 const WEBHOOK_SECRET = 'whsec_fixture_fee';
 const owner = { owner: true } as const;
 
-/** A protected booking for Tuesday 10 AM with a saved Visa 4242 (or the card saved under `cardToken`). */
-async function protectedBooking(options: { email?: string; start?: string; cardToken?: string } = {}) {
+/** A protected booking for Tuesday 10 AM with a saved Visa 4242 (or the card saved under `cardToken`), by Andre (or the client at `phone`). */
+async function protectedBooking(options: { email?: string; start?: string; cardToken?: string; phone?: string } = {}) {
   await protectionOn(h);
   h.config.stripeWebhookSecret = WEBHOOK_SECRET;
   const token = options.cardToken ?? (await saveCard());
@@ -40,7 +40,7 @@ async function protectedBooking(options: { email?: string; start?: string; cardT
     body: {
       offeringId: FLOW45,
       start: options.start ?? TUE10,
-      customer: { name: 'Andre Sample', phone: '4425550170', ...(options.email ? { email: options.email } : {}) },
+      customer: { name: 'Andre Sample', phone: options.phone ?? '4425550170', ...(options.email ? { email: options.email } : {}) },
       noShowPolicy: policy,
     },
   });
@@ -548,12 +548,134 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect(refused.body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
     expect(creates()).toHaveLength(0);
     expect((await feeRow(late.id)).no_show_fee_status).toBe('none');
-    // Marked done, it still had the time; cancelled, the time is free again and the fee can be charged.
-    expect((await setStatus(walkIn.body.appointment.id, 'completed')).status).toBe(200);
+    // Marked done, it still has the time. Marked a no-show or cancelled since, it was still booked into
+    // the time after the cancellation: whatever became of it, the fee stays refused.
+    const walkInId = walkIn.body.appointment.id as string;
+    for (const status of ['completed', 'noShow', 'cancelled']) {
+      if (status !== 'completed') expect((await setStatus(walkInId, 'booked')).status, status).toBe(200);
+      expect((await setStatus(walkInId, status)).status, status).toBe(200);
+      expect((await charge(late.id)).body.error, status).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    }
+    expect(creates()).toHaveLength(0);
+    expect((await feeRow(late.id)).no_show_fee_status).toBe('none');
+  });
+
+  it('a client booked into the time since who didn’t come still took it: their no-show fee can be charged, not this one', async () => {
+    // Cancelled at 9:05 AM, 55 minutes before the 10 AM: late.
+    const late = await cancelledAt('2026-11-03T17:05:00Z');
+    // At 9:10 another client books the freed 10 AM online, with their own card, and doesn't come.
+    h.setNow('2026-11-03T17:10:00Z');
+    const next = await protectedBooking({ phone: '4425550173' });
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await markNoShow(next.id)).status).toBe(200);
+    // One fee for the time at most: the late cancellation isn't charged, the no-show can be.
+    const refused = await charge(late.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect((await charge(next.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'noShow' });
     expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
-    expect((await setStatus(walkIn.body.appointment.id, 'booked')).status).toBe(200);
-    expect((await setStatus(walkIn.body.appointment.id, 'cancelled')).status).toBe(200);
+    expect(creates()).toHaveLength(1);
+    expect(creates()[0]!.params).toMatchObject({ metadata: { kind: 'no_show_fee', appointment_id: next.id } });
+    expect((await feeRow(late.id)).no_show_fee_status).toBe('none');
+  });
+
+  it('so does a phone booking the shop marked a no-show', async () => {
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    // At 9:40 the shop books a client who called into Flowxbori's 10 AM; at 10:50 they haven't come.
+    h.setNow('2026-11-03T17:40:00Z');
+    const phone = await h.call('POST', '/api/owner/appointments', {
+      ...owner,
+      body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Phone Client', phone: '4425550172' } },
+    });
+    expect(phone.status, phone.text).toBe(201);
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await markNoShow(phone.body.appointment.id)).status).toBe(200);
+    const refused = await charge(late.id);
+    expect(refused.status).toBe(409);
+    expect(refused.body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect(creates()).toHaveLength(0);
+  });
+
+  it('a client booked into the time since who cancelled late too: only the last one to give it up can be charged', async () => {
+    const late = await cancelledAt('2026-11-03T17:05:00Z');
+    // Booked at 9:10, cancelled at 9:50, 10 minutes before and 40 minutes after booking: late too.
+    h.setNow('2026-11-03T17:10:00Z');
+    const next = await protectedBooking({ phone: '4425550173' });
+    h.setNow('2026-11-03T17:50:00Z');
+    expect((await cancelInApp(next, ACCEPT)).body.appointment.noShowFee).toMatchObject({ reason: 'lateCancel' });
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    // The first client's booking was cancelled before the second one cancelled: it doesn't take their time.
+    expect((await charge(next.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    expect(creates()).toHaveLength(1);
+    expect((await feeRow(late.id)).no_show_fee_status).toBe('none');
+  });
+
+  it('a client booked into the time since who cancelled for free still took it: then neither is charged', async () => {
+    const late = await cancelledAt('2026-11-03T17:05:00Z');
+    // Booked at 9:10 and cancelled 15 minutes later, the grace period: free.
+    h.setNow('2026-11-03T17:10:00Z');
+    const next = await protectedBooking({ phone: '4425550173' });
+    h.setNow('2026-11-03T17:25:00Z');
+    const free = await cancelInApp(next);
+    expect(free.status, free.text).toBe(200);
+    expect(free.body.appointment.noShowFee.reason).toBeNull();
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect((await charge(next.id)).body.error).toEqual({ code: 'not_chargeable', message: "The client cancelled within 15 minutes of booking, so there's no fee." });
+    expect(creates()).toHaveLength(0);
+  });
+
+  it('a booking in the same second as the cancellation counts: the cancel time is kept to the second', async () => {
+    // The client cancels at exactly 9:05:00 AM, and the shop books a client who called into the time that same moment.
+    const late = await cancelledAt('2026-11-03T17:05:00Z');
+    const phone = await h.call('POST', '/api/owner/appointments', {
+      ...owner,
+      body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Phone Client', phone: '4425550172' } },
+    });
+    expect(phone.status, phone.text).toBe(201);
+    expect((await feeRow(phone.body.appointment.id)).created_at.toISOString()).toBe((await feeRow(late.id)).customer_cancelled_at.toISOString());
+    // The shop cancels it at once: it was still booked into the time after the cancellation.
+    expect((await setStatus(phone.body.appointment.id, 'cancelled')).status).toBe(200);
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect(creates()).toHaveLength(0);
+  });
+
+  it('a booking cancelled before the client booked doesn’t count: it freed the time for them', async () => {
+    // Monday at 9 AM a client who called is booked into Flowxbori's Tuesday 10 AM; the shop cancels it at their call at 9:10.
+    const earlier = await h.call('POST', '/api/owner/appointments', {
+      ...owner,
+      body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Earlier Client', phone: '4425550174' } },
+    });
+    expect(earlier.status, earlier.text).toBe(201);
+    h.setNow('2026-11-02T17:10:00Z');
+    expect((await setStatus(earlier.body.appointment.id, 'cancelled')).status).toBe(200);
+    // At 9:20 Andre books the freed 10 AM, and cancels it late on Tuesday at 9:30.
+    h.setNow('2026-11-02T17:20:00Z');
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    h.setNow('2026-11-03T18:50:00Z');
     expect((await charge(late.id)).body.appointment.noShowFee).toMatchObject({ status: 'charged', reason: 'lateCancel' });
+    expect(creates()).toHaveLength(1);
+  });
+
+  it('but one the shop reopened into the time after the cancellation does, even marked a no-show since', async () => {
+    const earlier = await h.call('POST', '/api/owner/appointments', {
+      ...owner,
+      body: { offeringId: FLOW45, start: TUE10, customer: { name: 'Earlier Client', phone: '4425550174' } },
+    });
+    expect(earlier.status, earlier.text).toBe(201);
+    h.setNow('2026-11-02T17:10:00Z');
+    expect((await setStatus(earlier.body.appointment.id, 'cancelled')).status).toBe(200);
+    h.setNow('2026-11-02T17:20:00Z');
+    const late = await cancelledAt('2026-11-03T17:30:00Z');
+    // At 9:40 the earlier client calls to come after all, and the shop reopens their booking; at 10:50 they haven't come.
+    h.setNow('2026-11-03T17:40:00Z');
+    expect((await setStatus(earlier.body.appointment.id, 'booked')).status).toBe(200);
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await markNoShow(earlier.body.appointment.id)).status).toBe(200);
+    expect((await charge(late.id)).body.error).toEqual({ code: 'not_chargeable', message: TIME_TAKEN_MESSAGE });
+    expect(creates()).toHaveLength(0);
   });
 
   it('another barber’s booking at the same time, or one right after, leaves the time untaken', async () => {

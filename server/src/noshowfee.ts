@@ -41,7 +41,9 @@ import { UUID_RE } from './validation.js';
 // cancelled by the client, can be charged (as a late cancellation), and only once
 // the appointment's end has passed, as for a no-show: by then every booking and
 // walk-in booked in the app for that time is there to see, and a late
-// cancellation whose time another client took isn't charged (`timeTakenSince`).
+// cancellation whose time another client took isn't charged (`timeTakenSince`),
+// even if that client was since marked a no-show or cancelled too: one fee for
+// the time at most.
 // A booking the shop cancelled is never charged, even once it's reopened
 // (`shop_cancelled_at`). That's the policy they agreed to.
 //
@@ -441,18 +443,33 @@ function chargeCase(row: AppointmentRow, now: Date): { reason: FeeReason; refusa
 }
 
 /**
- * Whether someone else has this cancelled booking's time now: another booked or completed
- * appointment of the same barber that overlaps it. Then a late-cancellation fee isn't charged
- * (the policy's promise). It's asked only once the appointment's end has passed (`feeCaseAt`), so
- * every booking and walk-in booked in the app for that time is there by then. A walk-in rung up
- * without an appointment can't be seen here, which is why the owner's confirmation reminds them of it.
+ * Whether someone else took this cancelled booking's time: another appointment of the same barber
+ * that overlaps it and was booked at or after the client's cancellation (to the second, as the
+ * cancel time is kept), whatever became of it since, or that holds it now (booked or completed) or
+ * held it until it was marked a no-show. Then a late-cancellation fee isn't charged (the policy's
+ * promise: "If someone else takes your time after you cancel late (a new booking or a walk-in), we
+ * won't charge the late-cancellation fee."). So the time is charged for once at most: a client who
+ * took it and didn't come, or cancelled late in turn, can be charged for it instead.
+ *
+ * Nothing overlapping can be booked while this booking holds the time (`appointments_no_overlap`),
+ * so one booked earlier was cancelled or marked a no-show before this client booked. A cancelled
+ * one doesn't count: it freed the time for them. A no-show does: the shop may have reopened it into
+ * the time after the cancellation, which the row can't tell apart, so the client gets the benefit of
+ * the doubt. It's asked only once the appointment's end has passed
+ * (`feeCaseAt`), so every booking and walk-in booked in the app for that time is there by then. A
+ * walk-in rung up without an appointment can't be seen here, which is why the owner's confirmation
+ * reminds them of it.
  */
-export async function timeTakenSince(db: Queryable, row: Pick<AppointmentRow, 'id' | 'barber_id' | 'start_at' | 'end_at'>): Promise<boolean> {
+export async function timeTakenSince(
+  db: Queryable,
+  row: Pick<AppointmentRow, 'id' | 'barber_id' | 'start_at' | 'end_at' | 'customer_cancelled_at'>,
+): Promise<boolean> {
   const { rows } = await db.query(
     `SELECT 1 FROM appointments
-      WHERE barber_id = $1 AND id <> $2 AND status IN ('booked', 'completed') AND start_at < $4 AND end_at > $3
+      WHERE barber_id = $1 AND id <> $2 AND start_at < $4 AND end_at > $3
+        AND (status IN ('booked', 'completed', 'no_show') OR created_at >= $5)
       LIMIT 1`,
-    [row.barber_id, row.id, row.start_at, row.end_at],
+    [row.barber_id, row.id, row.start_at, row.end_at, row.customer_cancelled_at],
   );
   return rows.length > 0;
 }
@@ -490,8 +507,9 @@ export async function chargeNoShowFee(ctx: Context): Promise<Response> {
     if (row.no_show_fee_status === 'declined') throw notChargeable(DECLINED_AGAIN_MESSAGE);
     if (row.no_show_fee_status === 'needs_action') throw notChargeable(NEEDS_CLIENT_AGAIN_MESSAGE);
     let chargeable = chargeCase(row, now);
-    // A late cancellation whose time another client took isn't charged (the policy's promise). It's
-    // chargeable only once the appointment has ended, so every booking for that time is in by now.
+    // A late cancellation whose time another client took isn't charged (the policy's promise), even
+    // if that client didn't come or cancelled since. It's chargeable only once the appointment has
+    // ended, so every booking for that time is in by now.
     if (chargeable.reason === 'late_cancel' && (await timeTakenSince(tx, row))) {
       chargeable = { reason: null, refusal: notChargeable(TIME_TAKEN_MESSAGE) };
     }
