@@ -14,7 +14,7 @@ import {
 } from '../src/noshowfee.js';
 import { LATE_CANCEL_NOT_ENDED_MESSAGE, SHOP_CANCELLED_MESSAGE } from '../src/feecase.js';
 import { SHOP_CANCELLED_NO_SHOW_MESSAGE } from '../src/appointments.js';
-import { RESPONSES } from './helpers/contract.js';
+import { checkFixture, RESPONSES } from './helpers/contract.js';
 import { protectionOn, stripeError, useHarness } from './helpers/harness.js';
 
 // Charging the fee to the card on file, for a no-show or a late cancellation, and
@@ -853,10 +853,11 @@ describe('late cancellations: the client cancels less than the agreed window bef
     expect((await setStatus(booking.id, 'completed')).body.appointment.shopCancelledAt).toBe('2026-11-02T17:00:00Z');
     expect((await charge(booking.id)).body.error).toEqual(SHOP_CANCELLED);
     expect(creates()).toHaveLength(0);
-    // The client's own view doesn't have it.
+    // The client's own view has it too (the first time, never cleared), so their apps warn of no fee.
     const mine = await h.call('GET', `/api/appointments/${booking.id}`, { headers: { 'x-manage-token': booking.manageToken } });
     expect(mine.status).toBe(200);
-    expect(mine.body.appointment).not.toHaveProperty('shopCancelledAt');
+    expect(mine.body.appointment).toMatchObject({ status: 'completed', shopCancelledAt: '2026-11-02T17:00:00Z' });
+    expect(mine.body.appointment).not.toHaveProperty('completedAt');
     // A booking without a card on file can still be marked a no-show (there's no fee either way).
     h.setNow('2026-11-02T17:00:00Z');
     const walkIn = await h.call('POST', '/api/owner/appointments', {
@@ -873,11 +874,19 @@ describe('late cancellations: the client cancels less than the agreed window bef
     const booking = await protectedBooking();
     await setStatus(booking.id, 'cancelled');
     await setStatus(booking.id, 'booked');
+    // The client's own view says when the shop cancelled it, so their apps warn of no fee and their
+    // reminders mention none (the Kit's lateCancelWarning and lateCancelTerms, the website's lateCancel.ts).
+    const mine = checkFixture(
+      'appointment-reopened-after-shop-cancel',
+      await h.call('GET', `/api/appointments/${booking.id}`, { headers: { 'x-manage-token': booking.manageToken } }),
+    );
+    expect(mine.appointment).toMatchObject({ status: 'booked', cancelledBy: null, shopCancelledAt: '2026-11-02T17:00:00Z' });
+    expect(mine.appointment.noShowFee).toMatchObject({ lateCancelWindowMinutes: 60, customerCancelledAt: null, reason: null });
     // Tuesday 9:30 AM, half an hour before: no warning (there's no fee), it just cancels.
     h.setNow('2026-11-03T17:30:00Z');
     const cancelled = await cancelInApp(booking);
     expect(cancelled.status, cancelled.text).toBe(200);
-    expect(cancelled.body.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'customer' });
+    expect(cancelled.body.appointment).toMatchObject({ status: 'cancelled', cancelledBy: 'customer', shopCancelledAt: '2026-11-02T17:00:00Z' });
     expect(cancelled.body.appointment.noShowFee).toMatchObject({ customerCancelledAt: '2026-11-03T17:30:00Z', reason: null });
     // After the end, the owner can't charge it, and the shop's list says why.
     h.setNow('2026-11-03T18:50:00Z');

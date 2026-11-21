@@ -41,19 +41,19 @@ export const Appointment = z.strictObject({
       reason: z.enum(['noShow', 'lateCancel']).nullable(),
     })
     .nullable(),
+  // When the shop first cancelled it (never cleared): then there's no fee, even once it's reopened.
+  shopCancelledAt: instant.nullable(),
 });
 
 /**
  * The owner's view of an appointment: the client's view plus its checkout (live sale), when it was
- * first completed and first cancelled by the shop (neither ever cleared), and what became of a
- * charged fee's receipt.
+ * first completed (never cleared), and what became of a charged fee's receipt.
  */
 export const OwnerAppointment = Appointment.extend({
   // The fee as the shop sees it: with what became of its receipt once it's charged (migrations/009).
   noShowFee: Appointment.shape.noShowFee.unwrap().extend({ receipt: z.enum(['sent', 'noEmail', 'failed']).nullable() }).nullable(),
   sale: z.strictObject({ id, totalCents: int.min(0).max(1_000_000), method: z.enum(['card', 'cash', 'other']) }).nullable(),
   completedAt: instant.nullable(),
-  shopCancelledAt: instant.nullable(),
 });
 
 export const Slot = z.strictObject({ start: instant, barberIds: z.array(id) });
@@ -350,6 +350,8 @@ export const RESPONSES = {
   'appointment-created': z.strictObject({ appointment: Appointment, manageToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/) }),
   appointment: z.strictObject({ appointment: Appointment }),
   'appointment-cancelled': z.strictObject({ appointment: Appointment }),
+  // The client's view of a booking the shop cancelled and reopened: `shopCancelledAt` says so (no fee to warn of).
+  'appointment-reopened-after-shop-cancel': z.strictObject({ appointment: Appointment }),
   reviews: z.strictObject({ google: ReviewSource, yelp: ReviewSource }),
   'reviews-unavailable': z.strictObject({ google: ReviewSource, yelp: ReviewSource }),
   products: z.strictObject({ products: z.array(Product) }),

@@ -37,7 +37,8 @@
       "customerCancelledAt": null,
       "lateCancelWindowMinutes": 60,
       "reason": null
-    }
+    },
+    "shopCancelledAt": null
   },
   "manageToken": "fixture-manage-token-0001xxxxxxxxxxxxxxxxxx"
 }

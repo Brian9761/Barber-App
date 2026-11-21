@@ -159,16 +159,17 @@ export interface Appointment {
   /**
    * When the shop first cancelled it, or null; never cleared, so a booking the shop cancelled can't be
    * charged a fee, even after it's reopened (feecase.ts), nor marked a no-show (see
-   * `patchOwnerAppointment`). Only the shop sees it.
+   * `patchOwnerAppointment`). The client sees it too, so their apps don't warn them of a fee (or
+   * remind them of one) for a booking the shop reopened, which has none.
    */
   shopCancelledAt: string | null;
 }
 
 /**
  * What a client sees of their own appointment: everything but the shop's checkout, when it was first
- * completed or cancelled by the shop, and what became of a fee's receipt.
+ * completed, and what became of a fee's receipt.
  */
-export type CustomerAppointment = Omit<Appointment, 'sale' | 'completedAt' | 'shopCancelledAt' | 'noShowFee'> & {
+export type CustomerAppointment = Omit<Appointment, 'sale' | 'completedAt' | 'noShowFee'> & {
   noShowFee: Omit<NonNullable<Appointment['noShowFee']>, 'receipt'> | null;
 };
 
@@ -235,10 +236,12 @@ export function appointmentJSON(row: AppointmentRow): Appointment {
 
 /**
  * The appointment as its client sees it (the customer endpoints): without the shop's checkout, when it
- * was first completed or cancelled by the shop, or what became of a fee's receipt.
+ * was first completed, or what became of a fee's receipt. When the shop first cancelled it is in, so a
+ * booking the shop cancelled and reopened has no late-cancellation warning or reminder in the apps:
+ * there's no fee for it (`cancellingIsLate`).
  */
 export function customerAppointmentJSON(row: AppointmentRow): CustomerAppointment {
-  const { sale: _sale, completedAt: _completedAt, shopCancelledAt: _shopCancelledAt, ...appointment } = appointmentJSON(row);
+  const { sale: _sale, completedAt: _completedAt, ...appointment } = appointmentJSON(row);
   // Replacing noShowFee keeps it where it was among the keys.
   if (!appointment.noShowFee) return { ...appointment, noShowFee: null };
   const { receipt: _receipt, ...fee } = appointment.noShowFee;
