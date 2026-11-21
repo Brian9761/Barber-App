@@ -174,12 +174,15 @@ time:
   a booking the client cancelled that you reopened: once it's reopened,
   it can't be charged a no-show fee either (Reopen says so first). To
   keep a fee for a client who wants their time back, ask them to book
-  again in the app. If another client was booked into that time (a new
-  booking, or a walk-in you booked in the app), there's no
-  late-cancellation fee: the Cancellation & No-Show Policy promises it,
-  so the details say so instead of offering the charge. A walk-in you
-  only rang up at checkout can't be seen there, so the charge's question
-  reminds you not to charge it then either.
+  again in the app. If another client was booked into that time after
+  the cancellation (a new booking, or a walk-in you booked in the app),
+  there's no late-cancellation fee, even if that client didn't come or
+  cancelled too: the Cancellation & No-Show Policy promises it, so the
+  details say so instead of offering the charge. So the time is charged
+  for once at most: the client who took it and didn't come can be
+  charged their own no-show fee instead. A walk-in you only rang up at
+  checkout can't be seen there, so the charge's question reminds you not
+  to charge it then either.
 
 **A booking the shop cancelled is never charged**, even once it's
 reopened: the policy promises no fee once the shop cancels. The server
