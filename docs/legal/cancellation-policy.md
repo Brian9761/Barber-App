@@ -76,7 +76,7 @@ A **no-show** means you didn't come to your appointment and didn't cancel it bef
 
 - **Only afterwards:** once your appointment's end time has passed, for a late cancellation as for a no-show.
 - **We decide each time** whether to charge it. We may waive a fee, for example after an emergency, and we try to treat everyone the same way. If you missed your appointment or cancelled late for a reason related to a disability, tell us, and we'll waive the fee or work out another fair change with you.
-- **If someone else takes your time** after you cancel late (a new booking or a walk-in), we won't charge the late-cancellation fee.
+- **If someone else takes your time** after you cancel late (a new booking or a walk-in), we won't charge the late-cancellation fee, even if that person doesn't come or cancels too.
 - **Within 7 days.** We charge a fee within 7 days after your appointment time, or not at all.
 - **To the card you saved for that booking**, through Stripe, our payment processor. It appears on your card statement as a charge from the shop.
 - **We'll let you know** by text or a call to the number on your booking, and Stripe emails you a receipt at the email address you gave on its card page. If Stripe can't email it, for example because it has no email address for you, we'll ask you where to send it.
