@@ -293,13 +293,18 @@ pays Stripe's fees and sees everything in his own Stripe Dashboard).
   saving cards and no-show protection stay off: Take payment says how to
   connect, with Go to Settings.
 - **Cards to delete in Stripe**: a card a client saved (or a card page they
-  didn't finish) on a Stripe account the server can't use any more, since
-  the shop changed how it connects to Stripe, can't be deleted by the
-  server. Settings then lists it under Card payments (Stripe): the card,
-  its expiry, the customer id and the account. Delete that customer in the
-  old Stripe account (Customers, then search for the id), then tap
-  **Deleted in Stripe** (it asks first): it comes off the list and the
-  server forgets it. The list is empty almost always, and then not shown.
+  didn't finish) on a Stripe account the server can't reach the way it's
+  connected now (the shop changed how it connects to Stripe, or its key is
+  switched to the other mode for a while) can't be deleted by the server.
+  It can't be used or charged any more, and a client who removes it is
+  told the shop will delete it in its Stripe account. Settings then lists
+  it under Card payments (Stripe): the card, its expiry, the customer id
+  and the account. Delete that customer in the Stripe account it shows
+  (Customers, then search for the id), then tap **Deleted in Stripe** (it
+  asks first): it comes off the list and the server forgets it. If the
+  server can reach one again (the key switched back, say), it deletes it
+  itself, and it goes from the list. The list is empty almost always, and
+  then not shown.
 - **Tap to Pay after connecting**: the first time the app connects Tap to
   Pay with his own account, Apple asks him to accept its Tap to Pay terms
   again (with the shop's Apple ID), because each Stripe account that takes
