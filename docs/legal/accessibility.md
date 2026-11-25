@@ -41,6 +41,7 @@ We aim for our website and apps to meet the [Web Content Accessibility Guideline
   - **Stripe's card page**, where you add a card when a booking needs one, is run by Stripe. It expires after 60 minutes; if that happens, you can start again, or contact us to book.
   - **Reviews from Google** are shown as Google provides them. Reviewers' words and photos come from their authors.
   - **Maps, and the Google, Yelp and Instagram pages** we link to, are run by those companies.
+- **Going from the shop's own tools back to the website** opens the website's page afresh, so the focus starts at the top of the page instead of on its main content. "Skip to main content" is the first thing you can Tab to.
 - **Signing in to the shop's own tools on a computer** uses a code that expires after 10 minutes. If it runs out, make a new one in the Izzy Clipz Business app.
 
 ## Other ways to book and get help

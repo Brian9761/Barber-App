@@ -140,7 +140,7 @@ Each item covers:
 - **What:** 32 random bytes that the app or website creates for each booking. The token lets the client look up and cancel that booking.
 - **On the iPhone:**
   - Stored in the Keychain, service `com.izzyclipz.app.manage-tokens`. It can be read after the iPhone's first unlock, and it moves to a new iPhone with an encrypted backup (`IzzyClipz/Services/SecretStore.swift`, `IzzyClipz/App/AppDelegate.swift`).
-  - Bookings not yet confirmed are kept under the item `pending-bookings`, each with its retry key, which includes the number. There are at most 10, and each stays until it's confirmed or its start time has passed (`IzzyClipz/Stores/AppointmentStore.swift`).
+  - Bookings not yet confirmed are kept under the item `pending-bookings`, each with its retry key, which includes the number, and, for a booking made with a card and "Remember me" off, the SHA-256 hash of that card's key in hex (`cardNotKeptDigest`), never the key itself. A list an earlier version saved with the key is saved again with only the hash the first time the app reads it (when it opens, or on a retry), and a list the app can't read is removed (`PendingBooking` in `IzzyClipz/Stores/AppointmentStore.swift`). Backups made before that can still hold the old list. There are at most 10, and each stays until it's confirmed or its start time has passed (`IzzyClipz/Stores/AppointmentStore.swift`).
 - **On the website:** kept in `izzy.appointments.v1` and in the `izzy_appointments` cookie (see 5.1).
 - **On the server:** only the token's SHA-256 hash (`appointments.manage_token_hash`; `server/src/auth.ts`).
 - **How long:**
@@ -172,7 +172,7 @@ This applies only once the owner has turned no-show protection on and Stripe is 
     - the connected Stripe account.
   - Each protected booking also copies the card's brand and last 4 digits (`appointments.card_brand`, `card_last4`, `saved_card_id`).
 - **On the iPhone:**
-  - Stored in the Keychain, service `com.izzyclipz.app.saved-card`, item `no-show-card`. It stays on this iPhone only and is never included in a backup (`KeychainSecretStore.savedCard()`).
+  - Stored in the Keychain, service `com.izzyclipz.app.saved-card`, item `no-show-card`, with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (`KeychainSecretStore.savedCard()`). It stays on this iPhone only: a backup copies a "this device only" item locked to this iPhone, so restoring the backup brings it back to the same iPhone but never to another one (Apple Platform Security, "Keychain data class protection" and "Keybags for Data Protection").
   - It's kept only when "Remember me" is on. Otherwise the card is held in memory for this booking only (`IzzyClipz/Stores/SavedCardStore.swift`).
   - "Remember me" starts on in the app (`BookingDetailsInProgress.start` in `IzzyClipz/App/AppRouter.swift`), and with a card the note under it says "your card stays saved". See G12.
 - **On the website:** `izzy.card.v1`, together with the number of the client who added the card. It's in `localStorage` with "Remember me" on, and in `sessionStorage` otherwise; without "Remember me" it's also forgotten once the booking is made (see 5.1).
@@ -363,6 +363,8 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
 | `izzy.business.lastBarber.v1` | localStorage | The barber last picked for "Sold by" (an id only) | With the sign-in: sign out; when the server refuses the session; after 30 days. A page that opens with no sign-in left also removes one left over. |
 | Demo only: `izzy.demo.v1`, `izzy.demo.appointments.v1`, `izzy.demo.business.v1`, `izzy.demo.business.session.v1` | localStorage | Demo bookings with a manage token and a 53-bit scrambled code of the number (no name, number, email or note); the Business demo's sample shop and sign-in | "Forget me"; "Reset the demo"; 60 days after a booking ends. The real site deletes them if it's opened at the demo's address. |
 
+After booking, "You're booked" is shown from the booking's id: nothing about the client goes into the browser's history. If this browser can't save its list of appointments, the page holds the booking in memory, without the name, number, email or note, until the page closes or "Forget me" (`server/web/src/booking/ReviewStep.tsx`, `server/web/src/booking/lastBooked.ts` (web)).
+
 "Forget me on this computer" on My appointments clears the details, the card, the appointment list, the cookie and the booking in progress (`server/web/src/pages/AppointmentsPage.tsx` (web)). On the server, it only asks the shop to delete the saved card, if this browser has one (`DELETE /api/cards`, `server/web/src/lib/cardRemoval.ts`): the appointments stay booked.
 
 ### 5.2 The cookie
@@ -411,7 +413,7 @@ Sources: `server/web/src/lib/storage.ts`, `server/web/src/booking/flow.ts`, `ser
   - `appointments.v2`: each appointment as the server last described it, **including the client's own name, number, note, and card brand and last 4**, until 30 days after the appointment ends.
   - `favorites.barberID`.
   - `reminders.enabled`, `reminders.intervalWeeks` and `reminders.lastCut` (the date of the last haircut).
-- **Stored in the Keychain:** manage tokens, the saved card (see 2.6 and 2.7) and any booking still being sent, with the client's number, until the server confirms it or its time has passed (`AppointmentStore.swift`). Also `no-show-cards-to-delete` (this iPhone only): the keys of cards held only until the app closes (added without "Remember me", or with it turned off on the details step). If the app closes before a booking settles one, the shop is asked to delete it the next time the app opens, and its key stays listed until the shop answers (`SavedCardStore.swift`, `becameActive` in `AppDelegate.swift`). On iOS, Keychain items can remain after the app is deleted.
+- **Stored in the Keychain:** manage tokens, the saved card (see 2.6 and 2.7) and any booking still being sent, with the client's number (and, for one made with a card and "Remember me" off, the SHA-256 hash of that card's key, never the key), until the server confirms it or its time has passed (`AppointmentStore.swift`). Also `no-show-cards-to-delete` (this iPhone only): the keys of cards held only until the app closes (added without "Remember me", or with it turned off on the details step). If the app closes before a booking settles one, the shop is asked to delete it the next time the app opens, and its key stays listed until the shop answers (`SavedCardStore.swift`, `becameActive` in `AppDelegate.swift`). On iOS, Keychain items can remain after the app is deleted.
 - **No files or databases of its own.** API calls use a temporary connection with no cache and no cookies (`Packages/IzzyClipzKit/Sources/IzzyClipzKit/API/IzzyAPIClient.swift`). Reviewers' photos and product photos load with `AsyncImage`, which uses the system's shared connection and its default cache, so iOS may keep copies of those public pictures in the app's Caches folder (`ReviewsView.swift`, `ShopView.swift`).
 - **Network:**
   - the shop's API;
