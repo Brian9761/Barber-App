@@ -80,7 +80,7 @@ final class NoShowModelTests: XCTestCase {
         XCTAssertEqual(try encodeAPI(created)["shopCancelledAt"], .null, "the shop's view has it, null or not")
         XCTAssertFalse(created.shopCancelledBefore)
 
-        // The client's own view, and a server from before it, don't have it, and don't get it back either.
+        // A server from before it (the Kit's own examples) doesn't have it, and doesn't get it back either.
         let mine = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try kitFixture("appointment.json")).appointment
         XCTAssertNil(mine.shopCancelledAt)
         XCTAssertNil(try encodeAPI(mine)["shopCancelledAt"])
@@ -103,6 +103,34 @@ final class NoShowModelTests: XCTestCase {
         made.shopCancelledAt = utc(2026, 11, 2, 17)
         XCTAssertEqual(try encodeAPI(made)["shopCancelledAt"], .string("2026-11-02T17:00:00Z"))
         XCTAssertEqual(IzzyAPI.ErrorCode.shopCancelled, "shop_cancelled")
+    }
+
+    /// The client's own view says when the shop cancelled a booking too (the server's own answers),
+    /// so a booking the shop cancelled and reopened warns of no fee before cancelling, and its
+    /// reminders mention none: there's no fee for it.
+    func testTheClientsViewSaysWhenTheShopCancelledSoItWarnsOfNoFee() throws {
+        let never = try decoder.decode(IzzyAPI.AppointmentResponse.self, from: try serverFixture("appointment.json")).appointment
+        XCTAssertNil(never.shopCancelledAt)
+        XCTAssertEqual(try encodeAPI(never)["shopCancelledAt"], .null, "the client's view has it, null or not")
+        let reopened = try decoder.decode(
+            IzzyAPI.AppointmentResponse.self, from: try serverFixture("appointment-reopened-after-shop-cancel.json")
+        ).appointment
+        XCTAssertEqual(reopened.status, .booked)
+        XCTAssertEqual(reopened.shopCancelledAt, utc(2026, 11, 2, 17))
+        XCTAssertEqual(try encodeAPI(reopened)["shopCancelledAt"], .string("2026-11-02T17:00:00Z"))
+        XCTAssertTrue(reopened.shopCancelledBefore)
+        // Half an hour before its 10 AM, inside the 1-hour window: no warning, no fee in the reminders.
+        let halfAnHourBefore = reopened.start.addingTimeInterval(-30 * 60)
+        XCTAssertNil(reopened.lateCancelWarning(at: halfAnHourBefore))
+        XCTAssertNil(reopened.lateCancelTerms)
+        // Had the shop never cancelled it, the same booking would warn, and its reminders would say so.
+        var notCancelled = reopened
+        notCancelled.shopCancelledAt = nil
+        XCTAssertEqual(
+            notCancelled.lateCancelWarning(at: halfAnHourBefore),
+            "Cancelling now, less than 1 hour before your appointment, may be charged $35, the full service price."
+        )
+        XCTAssertEqual(notCancelled.lateCancelTerms, LateCancelTerms(windowMinutes: 60, feeLabel: "$35", bookedAt: reopened.createdAt))
     }
 
     /// The shop's view says what became of a charged fee's receipt (owner checklist §3 item 19): sent,

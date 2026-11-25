@@ -124,13 +124,14 @@ extension IzzyAPI {
         /// Whether the server's answer had `completedAt` at all (the shop's view from a server that
         /// sends it), so it's written back exactly as it was read. Not part of the value.
         var completedAtField = FieldPresence(false)
-        /// When the shop first cancelled it (owner calls only), or `nil`. The server never clears it: a
-        /// booking the shop cancelled can't be charged a fee, even after it's reopened, so it can't be
-        /// marked a no-show either (`shopCancelledBefore`). Always `nil` in the client's own view, which
-        /// doesn't have it.
+        /// When the shop first cancelled it, or `nil`. The server never clears it: a booking the shop
+        /// cancelled can't be charged a fee, even after it's reopened, so it can't be marked a no-show
+        /// either (`shopCancelledBefore`), and the client isn't warned of a fee for it, nor reminded of
+        /// one (`lateCancelWarning(at:)`, `lateCancelTerms`). Both views have it; `nil` from a server
+        /// before it.
         public var shopCancelledAt: Date?
-        /// Whether the server's answer had `shopCancelledAt` at all (the shop's view from a server that
-        /// sends it), so it's written back exactly as it was read. Not part of the value.
+        /// Whether the server's answer had `shopCancelledAt` at all (from a server that sends it), so
+        /// it's written back exactly as it was read. Not part of the value.
         var shopCancelledAtField = FieldPresence(false)
 
         public init(
@@ -232,7 +233,7 @@ extension IzzyAPI {
                 sale: try container.decodeIfPresent(AppointmentSale.self, forKey: .sale),
                 // Only in the shop's view, from a server that says when it was first completed.
                 completedAt: try container.decodeIfPresent(Date.self, forKey: .completedAt),
-                // Only in the shop's view, from a server that says when the shop first cancelled it.
+                // In both views, from a server that says when the shop first cancelled it.
                 shopCancelledAt: try container.decodeIfPresent(Date.self, forKey: .shopCancelledAt)
             )
             saleField = FieldPresence(container.contains(.sale))
@@ -260,7 +261,7 @@ extension IzzyAPI {
             try container.encode(createdAt, forKey: .createdAt)
             try container.encode(card, forKey: .card)
             try container.encode(noShowFee, forKey: .noShowFee)
-            // `null` only where the server writes it: the shop's view.
+            // `null` only where the server writes it: the shop's view (`shopCancelledAt` in both).
             if sale != nil || saleField.isPresent {
                 try container.encode(sale, forKey: .sale)
             }
