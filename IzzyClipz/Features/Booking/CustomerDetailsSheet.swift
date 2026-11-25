@@ -9,8 +9,9 @@ import UIKit
 /// Removing the card, or forgetting it with the details, also asks the shop to delete it
 /// (`CardDeleter`), after a confirmation, since that can't be undone. The key leaves this iPhone
 /// straight away whatever the shop answers; the sheet then says what the shop said ("Your saved card
-/// is deleted…", or that it's deleted once no appointment needs it), or, when the shop couldn't be
-/// reached, to call to have it deleted.
+/// is deleted…", that it's deleted once no appointment needs it, or, for a card on a Stripe account
+/// the shop's server can't use any more, that it can't be used or charged and the shop deletes it in
+/// its Stripe account), or, when the shop couldn't be reached, to call to have it deleted.
 struct CustomerDetailsSheet: View {
     @Environment(CustomerDetailsStore.self) private var store
     @Environment(SavedCardStore.self) private var cards

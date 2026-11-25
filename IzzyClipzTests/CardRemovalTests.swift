@@ -10,6 +10,10 @@ final class CardDeleterTests: XCTestCase {
     private let token = IzzyAPI.CardToken.generate()
     private let deleted = IzzyAPI.CardDeletion(status: .deleted, message: "Your saved card is deleted. It can't be charged any more.")
     private let scheduled = IzzyAPI.CardDeletion(status: .scheduled, message: "Your card will be deleted as soon as your appointments no longer need it.")
+    /// The server's answer for a card on a Stripe account it can't use any more (server/src/cards.ts).
+    private let leftForShop = IzzyAPI.CardDeletion(
+        status: .shop, message: "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account."
+    )
 
     func testTheShopsAnswer() async {
         api.deleteCardHandler = { [deleted] _ in deleted }
@@ -79,6 +83,31 @@ final class CardDeleterTests: XCTestCase {
         XCTAssertTrue(failed.offersCall)
         XCTAssertFalse(CardRemovalState.finished(.answered(deleted)).offersCall)
         XCTAssertFalse(CardRemovalState.asking.offersCall)
+    }
+
+    /// "Remove card" or "Forget my details" for a card on a Stripe account the shop's server can't use
+    /// any more (the shop changed how it connects to Stripe): Your details says, in the server's words,
+    /// that it can't be used or charged and that the shop deletes it in its Stripe account. It's never
+    /// called deleted (it's still there), and there's nothing for the client to call about.
+    func testACardLeftForTheShopToDeleteInStripe() async {
+        api.deleteCardHandler = { [leftForShop] _ in leftForShop }
+        let result = await CardDeleter.delete(token, api: api)
+        XCTAssertEqual(result, .answered(leftForShop))
+        XCTAssertEqual(api.cardDeletions, [token], "One answer is enough")
+        let said = CardRemovalState.finished(result)
+        XCTAssertEqual(said.message, "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account.")
+        XCTAssertFalse(said.message.contains("is deleted"))
+        XCTAssertFalse(said.offersCall)
+
+        // An answer without words gets the server's usual ones for it: never those for a deleted card,
+        // nor those for one a booking still needs.
+        let wordless = CardRemovalState.finished(.answered(IzzyAPI.CardDeletion(status: .shop, message: " \n")))
+        XCTAssertEqual(wordless.message, "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account.")
+        XCTAssertEqual(CardRemovalState.shopMessage, leftForShop.message)
+        XCTAssertEqual(
+            IzzyAPI.CardDeletion.Status.allCases.map(CardRemovalState.message(for:)),
+            [CardRemovalState.deletedMessage, CardRemovalState.scheduledMessage, CardRemovalState.shopMessage]
+        )
     }
 }
 
@@ -154,5 +183,55 @@ final class FakeShopAPICardDeletionTests: XCTestCase {
         let then = try await fake.deleteCard(token: token)
         XCTAssertEqual(then.status, .deleted)
         XCTAssertEqual(fake.cardRemoval(for: token)?.deleted, true)
+    }
+
+    /// The shop changed how it connects to Stripe since these cards were saved, as on the server: a
+    /// card no booking needs is removed and left for the shop to delete in that Stripe account
+    /// (`shop`, never `deleted`), and asking again answers the same. A card a booking still needs is
+    /// scheduled first, as before, and one deleted before the change stays deleted.
+    func testACardOnAStripeAccountTheServerCantUseIsLeftForTheShop() async throws {
+        let fake = NoShowTestData.fake()
+        let deletedBefore = try await saveCard(on: fake)
+        _ = try await fake.deleteCard(token: deletedBefore)
+        let unused = try await saveCard(on: fake)
+        let booked = try await saveCard(on: fake)
+        _ = try await book(on: fake, with: booked)
+        fake.shopChangedHowItConnectsToStripe()
+
+        let first = try await fake.deleteCard(token: unused)
+        XCTAssertEqual(first, IzzyAPI.CardDeletion(
+            status: .shop, message: "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account."
+        ))
+        let again = try await fake.deleteCard(token: unused)
+        XCTAssertEqual(again, first)
+        XCTAssertEqual(fake.cardRemoval(for: unused)?.requested, true)
+        XCTAssertEqual(fake.cardRemoval(for: unused)?.deleted, false, "Still in that Stripe account")
+        XCTAssertEqual(fake.cardRemoval(for: unused)?.leftForShop, true)
+
+        let needed = try await fake.deleteCard(token: booked)
+        XCTAssertEqual(needed, IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage), "A booking still needs it")
+        XCTAssertEqual(fake.cardRemoval(for: booked)?.leftForShop, false)
+
+        let stillDeleted = try await fake.deleteCard(token: deletedBefore)
+        XCTAssertEqual(stillDeleted, IzzyAPI.CardDeletion(status: .deleted, message: CardRemovalState.deletedMessage))
+        XCTAssertEqual(fake.cardRemoval(for: deletedBefore)?.leftForShop, false)
+    }
+
+    /// A card saved before the shop changed how it connects to Stripe can't book any more, in the
+    /// server's words; one saved after it can.
+    func testACardFromTheShopsEarlierStripeAccountCantBook() async throws {
+        let fake = NoShowTestData.fake()
+        let earlier = try await saveCard(on: fake)
+        fake.shopChangedHowItConnectsToStripe()
+        do {
+            _ = try await book(on: fake, with: earlier)
+            XCTFail("Saved on the shop's earlier Stripe account")
+        } catch {
+            XCTAssertEqual(error as? APIError, .cardRequired(message: "Add your card again: the shop changed its payment account."))
+        }
+        let later = try await saveCard(on: fake)
+        let confirmation = try await book(on: fake, with: later)
+        XCTAssertEqual(confirmation.appointment.status, .booked)
+        XCTAssertEqual(fake.cardRemoval(for: later)?.requested, false)
     }
 }

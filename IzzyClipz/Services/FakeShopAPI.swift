@@ -19,6 +19,9 @@ import Foundation
 ///   with another policy than today's (`policy_changed`), with the server's words. It deletes a
 ///   card the client removes (`deleteCard`) now, or once no booking needs it, as the server does,
 ///   and a booking made without Remember me (`keepCard: false`) marks its card for deletion too.
+///   After `shopChangedHowItConnectsToStripe()`, the cards saved until then are on a Stripe account
+///   it can't use any more, as on the server: they can't book, and one the client removes is left
+///   for the shop to delete in that Stripe account (`shop`), never called deleted.
 ///
 /// Launch arguments make it misbehave on purpose, so the app's error states can be tested; see
 /// `Options`. Everything it returns that isn't the shop's real menu (sample reviews, sample
@@ -105,8 +108,11 @@ final class FakeShopAPI: ShopAPI {
         let card: IzzyAPI.SavedCard
         /// The client removed it (or asked to): it can't book again.
         var deleteRequested = false
-        /// Deleted at Stripe: it can't be charged any more.
+        /// Removed: deleted at Stripe (or, `outOfReach`, left for the shop to delete there), so it
+        /// can't be charged any more.
         var removed = false
+        /// On a Stripe account the server can't use any more (`shopChangedHowItConnectsToStripe`).
+        var outOfReach = false
     }
 
     /// Who pays what for a no-show or a late cancellation, as the server works it out for a booking.
@@ -492,7 +498,9 @@ final class FakeShopAPI: ShopAPI {
     /// `DELETE /api/cards`, as the server answers (`deleteCard` in server/src/cards.ts): the card
     /// can't book again from now on, and it's deleted at once unless a booking still needs it (it's
     /// still booked, could still be charged a fee within 7 days of its start, or a fee is pending),
-    /// then it's `scheduled`. Asking again answers the same; a token with no card is a 404.
+    /// then it's `scheduled`. One on a Stripe account the server can't use any more is removed instead
+    /// and left for the shop to delete there (`shop`). Asking again answers the same; a token with no
+    /// card is a 404.
     func deleteCard(token: IzzyAPI.CardToken) async throws -> IzzyAPI.CardDeletion {
         try await respond()
         guard var record = savedCards[token.rawValue] else {
@@ -503,9 +511,23 @@ final class FakeShopAPI: ShopAPI {
             record.removed = true
         }
         savedCards[token.rawValue] = record
-        return record.removed
-            ? IzzyAPI.CardDeletion(status: .deleted, message: CardRemovalState.deletedMessage)
-            : IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage)
+        guard record.removed else {
+            return IzzyAPI.CardDeletion(status: .scheduled, message: CardRemovalState.scheduledMessage)
+        }
+        return record.outOfReach
+            ? IzzyAPI.CardDeletion(status: .shop, message: CardRemovalState.shopMessage)
+            : IzzyAPI.CardDeletion(status: .deleted, message: CardRemovalState.deletedMessage)
+    }
+
+    /// Stands for the shop changing how it connects to Stripe (connecting its own Stripe account,
+    /// say): every card saved until now that isn't deleted yet is on a Stripe account the server
+    /// can't use any more. As on the server, it can't book again ("Add your card again: the shop
+    /// changed its payment account."), and once no booking needs it, removing it leaves it for the
+    /// shop to delete in that Stripe account. For tests.
+    func shopChangedHowItConnectsToStripe() {
+        for (token, record) in savedCards where !record.removed {
+            savedCards[token]?.outOfReach = true
+        }
     }
 
     /// Whether a booking still needs the card saved under `token`, as the server decides
@@ -531,10 +553,11 @@ final class FakeShopAPI: ShopAPI {
         }
     }
 
-    /// Whether the client removed the card saved under `token` (or asked to), and whether it's
-    /// deleted at Stripe. For tests.
-    func cardRemoval(for token: IzzyAPI.CardToken) -> (requested: Bool, deleted: Bool)? {
-        savedCards[token.rawValue].map { ($0.deleteRequested, $0.removed) }
+    /// Whether the client removed the card saved under `token` (or asked to), whether it's deleted at
+    /// Stripe, and whether it's removed but left for the shop to delete in a Stripe account the server
+    /// can't use any more. For tests.
+    func cardRemoval(for token: IzzyAPI.CardToken) -> (requested: Bool, deleted: Bool, leftForShop: Bool)? {
+        savedCards[token.rawValue].map { ($0.deleteRequested, $0.removed && !$0.outOfReach, $0.removed && $0.outOfReach) }
     }
 
     /// `cs_test_…` or `cs_live_…` with 1 to 200 letters and digits after it, as the server checks.
@@ -582,6 +605,10 @@ final class FakeShopAPI: ShopAPI {
         // A card the client removed (or asked to) doesn't book again, as on the server.
         guard let saved = savedCards[agreement.cardToken.rawValue], !saved.deleteRequested else {
             throw APIError.cardRequired(message: "We couldn't find your saved card. Add it again.")
+        }
+        // Saved on the shop's earlier Stripe account: this one can't charge it.
+        guard !saved.outOfReach else {
+            throw APIError.cardRequired(message: "Add your card again: the shop changed its payment account.")
         }
         guard saved.card.isValid(at: request.start, in: shop.timeZone) else {
             throw APIError.cardRequired(message: "That card expires before your appointment. Add another card.")

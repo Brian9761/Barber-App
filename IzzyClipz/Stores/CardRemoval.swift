@@ -2,7 +2,8 @@ import Foundation
 
 /// What the shop's server said when asked to delete a saved card (`DELETE /api/cards`).
 enum CardRemoval: Equatable {
-    /// Its answer: deleted now, or as soon as no booking needs the card (`status`), in its words.
+    /// Its answer: deleted now, as soon as no booking needs the card, or left for the shop to delete
+    /// in its Stripe account (`status`), in its words.
     case answered(IzzyAPI.CardDeletion)
     /// It has no card under that key (a 404): there was nothing to delete there.
     case nothingToDelete
@@ -15,7 +16,9 @@ enum CardRemoval: Equatable {
 /// "Remember me", and when another card takes its place. The key exists only on this iPhone, so
 /// once it's forgotten nobody could use or remove the card again; the server deletes it at Stripe
 /// now, or as soon as no booking needs it (it answers "scheduled": a card saved without Remember me
-/// is kept only while that booking can still be charged).
+/// is kept only while that booking can still be charged). A card on a Stripe account the server
+/// can't use any more (the shop changed how it connects to Stripe) can't be used or charged from
+/// then on, and the shop deletes it in that Stripe account (it answers "shop"): never "deleted".
 ///
 /// The key is forgotten on this iPhone whatever the answer (the callers forget it first): a network
 /// problem never keeps it.
@@ -60,8 +63,10 @@ enum CardRemovalState: Equatable {
     case finished(CardRemoval)
 
     /// "Asking the shop to delete your saved card…", then the shop's own words ("Your saved card is
-    /// deleted. It can't be charged any more." or "Your card will be deleted as soon as your
-    /// appointments no longer need it."), or what to do when it couldn't be reached.
+    /// deleted. It can't be charged any more.", "Your card will be deleted as soon as your
+    /// appointments no longer need it." or, for a card the shop deletes in its Stripe account, "Your
+    /// saved card can't be used or charged any more. The shop will delete it in its Stripe
+    /// account."), or what to do when it couldn't be reached.
     var message: String {
         switch self {
         case .asking:
@@ -69,7 +74,7 @@ enum CardRemovalState: Equatable {
         case .finished(.answered(let deletion)):
             let words = deletion.message.trimmingCharacters(in: .whitespacesAndNewlines)
             if !words.isEmpty { return words }
-            return deletion.status == .deleted ? Self.deletedMessage : Self.scheduledMessage
+            return Self.message(for: deletion.status)
         case .finished(.nothingToDelete):
             return "Your card is removed from this iPhone."
         case .finished(.failed):
@@ -82,6 +87,17 @@ enum CardRemovalState: Equatable {
     var offersCall: Bool { self == .finished(.failed) }
 
     /// The server's words for each answer (`server/src/cards.ts`), for an answer without them.
+    static func message(for status: IzzyAPI.CardDeletion.Status) -> String {
+        switch status {
+        case .deleted: return deletedMessage
+        case .scheduled: return scheduledMessage
+        case .shop: return shopMessage
+        }
+    }
+
     static let deletedMessage = "Your saved card is deleted. It can't be charged any more."
     static let scheduledMessage = "Your card will be deleted as soon as your appointments no longer need it."
+    /// A card on a Stripe account the shop's server can't use any more: it can't be used or charged,
+    /// and it's still there until the shop deletes it, so it's never called deleted.
+    static let shopMessage = "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account."
 }
