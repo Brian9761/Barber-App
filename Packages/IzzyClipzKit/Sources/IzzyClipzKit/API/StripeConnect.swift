@@ -218,7 +218,8 @@ extension IzzyAPI {
     /// any more because the shop changed how it connects to Stripe (`GET /api/owner/stripe`'s
     /// `cardsToDelete`). The server can't delete it there, so the shop does: in that account's
     /// Dashboard, Customers, then a search for `customerId`. Then "Deleted in Stripe"
-    /// (`cardDeletedInStripe(id:)`) takes it off the list, and the server forgets its ids.
+    /// (`cardDeletedInStripe(id:)`) takes it off the list, and the server forgets its ids. (Once the
+    /// server can reach it again, say its key is switched back, it deletes it itself, and it goes.)
     public struct StripeCardToDelete: Codable, Hashable, Identifiable, Sendable {
         public enum Kind: String, Codable, CaseIterable, Hashable, Sendable {
             /// A card a client saved.
@@ -294,9 +295,10 @@ extension IzzyAPI {
 
         /// The list's title in Settings.
         public static let listTitle = "Cards to delete in Stripe"
-        /// What the list asks of the shop (the button is "Deleted in Stripe").
+        /// What the list asks of the shop (the button is "Deleted in Stripe"). It may be the account
+        /// the shop uses now (its key switched to the other mode for a while, say), so never "old".
         public static let instructions =
-            "The server can't reach these in Stripe any more, because the shop changed how it connects to Stripe. Delete these in your old Stripe account: Customers, then search for the customer id. Then tap Deleted in Stripe."
+            "The server can't reach these in Stripe the way it's connected now. Delete each one in the Stripe account it shows: Customers, then search for the customer id. Then tap Deleted in Stripe. If the server can reach one again, it deletes it itself."
         /// The button on each row.
         public static let deletedButtonTitle = "Deleted in Stripe"
         /// What it asks first: the server then forgets the customer id.
@@ -304,9 +306,9 @@ extension IzzyAPI {
         public static let confirmButtonTitle = "It's deleted"
         public static let keepButtonTitle = "Not yet"
 
-        /// "Only tap It's deleted once customer cus_123 is deleted in your old Stripe account. …"
+        /// "Only tap It's deleted once customer cus_123 is deleted in that Stripe account. …"
         public var confirmMessage: String {
-            "Only tap It's deleted once customer \(customerId) is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here."
+            "Only tap It's deleted once customer \(customerId) is deleted in that Stripe account. It then comes off this list, and the customer id is forgotten here."
         }
 
         private enum CodingKeys: String, CodingKey {

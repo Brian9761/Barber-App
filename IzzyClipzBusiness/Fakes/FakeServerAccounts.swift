@@ -56,8 +56,8 @@ extension FakeServer {
         return stripeConnection()
     }
 
-    /// Two to delete in the shop's old Stripe account, for tests: a card saved with the shop's own
-    /// key before Stripe was connected, and a card page from then that wasn't finished.
+    /// Two to delete in a Stripe account the server can't reach, for tests: a card saved with the
+    /// shop's own key before Stripe was connected, and a card page from then that wasn't finished.
     static let sampleCardsToDelete = [
         IzzyAPI.StripeCardToDelete(
             id: "00000000-0000-4000-8000-0000000000c1", kind: .savedCard, livemode: true, customerId: "cus_sample_old_card",

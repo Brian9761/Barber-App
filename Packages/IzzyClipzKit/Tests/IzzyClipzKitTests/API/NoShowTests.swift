@@ -1089,6 +1089,22 @@ final class NoShowClientTests: XCTestCase {
         }
     }
 
+    /// A card on a Stripe account the shop's server can't use any more (the server's own answer):
+    /// the shop deletes it there, and it's never read as deleted.
+    func testACardLeftForTheShopToDeleteIsNeverReadAsDeleted() async throws {
+        let answer = try serverFixture("card-deletion-shop.json")
+        StubURLProtocol.reply { _ in .json(200, String(decoding: answer, as: UTF8.self)) }
+        let left = try await client.deleteCard(token: IzzyAPI.CardToken.generate())
+        XCTAssertEqual(left, IzzyAPI.CardDeletion(
+            status: .shop,
+            message: "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account."
+        ))
+        XCTAssertNotEqual(left.status, .deleted)
+        // Written back as the server writes it.
+        XCTAssertEqual(try encodeAPI(left), .object(["status": .string("shop"), "message": .string(left.message)]))
+        XCTAssertEqual(IzzyAPI.CardDeletion.Status.allCases, [.deleted, .scheduled, .shop])
+    }
+
     /// A conformer (an app's fake) that doesn't implement it yet answers like a server without it.
     func testAShopAPIWithoutCardDeletionAnswersNotFound() async throws {
         struct Older: ShopAPI {

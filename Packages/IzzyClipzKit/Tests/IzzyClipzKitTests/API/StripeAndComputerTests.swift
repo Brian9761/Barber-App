@@ -79,10 +79,14 @@ final class StripeConnectionTests: XCTestCase {
         XCTAssertEqual(live.title, "American Express •••• 0005")
         XCTAssertEqual(live.spokenTitle, "American Express ending in 0005")
         XCTAssertEqual(live.confirmMessage,
-                       "Only tap It's deleted once customer cus_1 is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here.")
+                       "Only tap It's deleted once customer cus_1 is deleted in that Stripe account. It then comes off this list, and the customer id is forgotten here.")
         XCTAssertEqual(IzzyAPI.StripeCardToDelete.listTitle, "Cards to delete in Stripe")
         XCTAssertEqual(IzzyAPI.StripeCardToDelete.deletedButtonTitle, "Deleted in Stripe")
-        XCTAssertTrue(IzzyAPI.StripeCardToDelete.instructions.contains("Delete these in your old Stripe account: Customers, then search for the customer id."))
+        // It may be the account the shop uses now (its key switched to the other mode for a while), so never "old".
+        XCTAssertEqual(IzzyAPI.StripeCardToDelete.instructions,
+                       "The server can't reach these in Stripe the way it's connected now. Delete each one in the Stripe account it shows: Customers, then search for the customer id. Then tap Deleted in Stripe. If the server can reach one again, it deletes it itself.")
+        XCTAssertFalse(IzzyAPI.StripeCardToDelete.instructions.contains("old"))
+        XCTAssertFalse(live.confirmMessage.contains("old"))
         // Written back with every field, null when empty.
         XCTAssertEqual(try encodeAPI(IzzyAPI.StripeCardToDelete(id: "cs_test_1", kind: .cardPage, livemode: true, customerId: "cus_2")), .object([
             "id": .string("cs_test_1"), "kind": .string("cardPage"), "stripeAccountId": .null, "livemode": .bool(true),

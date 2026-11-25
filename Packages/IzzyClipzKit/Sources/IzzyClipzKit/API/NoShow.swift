@@ -609,6 +609,10 @@ extension IzzyAPI {
             /// An appointment booked with it still needs it (it's upcoming, or could still be charged a
             /// fee within 7 days); it's deleted as soon as none does.
             case scheduled
+            /// It's on a Stripe account the shop's server can't use any more (the shop changed how it
+            /// connects to Stripe): it can't be used or charged, and the shop deletes it in that Stripe
+            /// account (or the server does, once it can reach it again). Never "deleted".
+            case shop
 
             /// A status this version doesn't know reads as `scheduled`: never as deleted.
             public init(from decoder: Decoder) throws {
