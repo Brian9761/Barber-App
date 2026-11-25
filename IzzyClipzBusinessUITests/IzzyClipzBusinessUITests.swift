@@ -974,6 +974,9 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         replaceText(in: "noShowFlatAmount", with: "600")
         XCTAssertTrue(waitForLabel(reveal("noShowSettingsProblem"), containing: "Pick a flat fee from $0.50 to $500."))
         tap("saveNoShowSettings")
+        // Save closes the keyboard and leaves the field where the owner was typing, still in view.
+        XCTAssertTrue(waitForDisappearance(of: app.keyboards.firstMatch), "Save didn't close the keyboard")
+        assertInView("noShowFlatAmount", reading: "600")
         XCTAssertTrue(waitForLabel(reveal("noShowSaveError"), containing: "Pick a flat fee from $0.50 to $500."))
         // $25 for every booking: both messages go as soon as it's fixed, before any Save.
         reveal("noShowFlatAmount", searchingFirst: .up)
@@ -1184,13 +1187,19 @@ final class IzzyClipzBusinessUITests: XCTestCase {
     }
 
     /// Replaces a text field's text: taps near its trailing end (so the cursor goes after the text),
-    /// deletes what's there and types `text`.
+    /// deletes what's there and types `text`, one key at a time.
     ///
     /// The tap is 44 points in from the end of the field's frame, not a share of the frame's width:
     /// iOS 18 gives a form row's text field the whole row's frame, whose last 20 points are the row's
     /// margin, outside the field. 95% of the way along the flat fee's row (iPhone 16 Pro, iOS 18.6)
     /// was 18 points from its end, 2 points past the field: both taps there went to the row, and the
     /// field never got the keyboard. The field is brought out from under the navigation bar first.
+    ///
+    /// After the tap and after every key, the field must still be in view (assertInView), and nothing
+    /// here scrolls it back. On iOS 18.6 the app once moved the flat fee's field up under the navigation
+    /// bar while it had the keyboard, as the fee's problem appeared next to it, and $600 was typed into
+    /// a field the owner couldn't see. One key at a time, each state the owner would see while typing
+    /// is drawn and checked (the empty field included), not just the last one.
     private func replaceText(in identifier: String, with text: String, file: StaticString = #filePath, line: UInt = #line) {
         let field = revealBelowNavigationBar(identifier, file: file, line: line)
         let trailingEnd = field.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)).withOffset(CGVector(dx: -44, dy: 0))
@@ -1200,9 +1209,58 @@ final class IzzyClipzBusinessUITests: XCTestCase {
             XCTAssertTrue(waitForKeyboardFocus(on: field), "No keyboard for \(identifier)", file: file, line: line)
         }
         let value = field.value as? String ?? ""
-        let current = value == field.placeholderValue ? "" : value
+        var shown = value == field.placeholderValue ? "" : value
+        assertInView(identifier, reading: shown, file: file, line: line)
         // "\u{8}" is the keyboard's delete key (XCUIKeyboardKey.delete.rawValue).
-        field.typeText(String(repeating: "\u{8}", count: current.count) + text)
+        let keys = Array(repeating: "\u{8}", count: shown.count) + text.map(String.init)
+        for key in keys {
+            field.typeText(key)
+            shown = key == "\u{8}" ? String(shown.dropLast()) : shown + key
+            assertInView(identifier, reading: shown, file: file, line: line)
+        }
+    }
+
+    /// Fails unless the element is wholly in view once it has stopped moving: below the navigation bar
+    /// and above whatever covers the bottom of the page (coveredFrom). It never scrolls, so a field the
+    /// app moved out of sight fails here, with where everything was. `shown` is what the field should
+    /// read then, for the message.
+    private func assertInView(_ identifier: String, reading shown: String, file: StaticString = #filePath, line: UInt = #line) {
+        let target = element(identifier)
+        let frame = settle(target) ?? .null
+        let bar = app.navigationBars.firstMatch
+        let top = bar.exists ? bar.frame.maxY : app.frame.minY
+        let bottom = coveredFrom()
+        // A point of slack for frames that are fractions of a point apart.
+        XCTAssertTrue(
+            !frame.isNull && !frame.isEmpty && frame.minY >= top - 1 && frame.maxY <= bottom + 1,
+            "\(identifier) is out of view reading \"\(shown)\": it's at \(frame), the navigation bar ends at y \(top) "
+                + "and the bottom of the page is covered from y \(bottom)",
+            file: file, line: line
+        )
+    }
+
+    /// Where the bottom of the page starts to be covered: the keyboard's top while it's up (or the top
+    /// of the toolbar on it, the decimal pad's Done), the tab bar's top while it's down, else the bottom
+    /// of the screen.
+    private func coveredFrom() -> CGFloat {
+        let keyboard = app.keyboards.firstMatch
+        if keyboard.exists, !keyboard.frame.isEmpty {
+            var top = keyboard.frame.minY
+            // A toolbar sitting on the keyboard (Done): a toolbar's height, ending at the keyboard's top
+            // or within a few points of it.
+            for toolbar in app.toolbars.allElementsBoundByIndex where toolbar.exists {
+                let frame = toolbar.frame
+                if !frame.isEmpty, frame.height < 100, frame.minY < top, frame.maxY > top - 24 {
+                    top = frame.minY
+                }
+            }
+            return top
+        }
+        let tabBar = app.tabBars.firstMatch
+        if tabBar.exists, !tabBar.frame.isEmpty {
+            return tabBar.frame.minY
+        }
+        return app.frame.maxY
     }
 
     /// Closes the keyboard with the Done button above it (a decimal pad has no return key). A busy
@@ -1305,11 +1363,13 @@ final class IzzyClipzBusinessUITests: XCTestCase {
         return target
     }
 
-    /// Reveals an element in the page and, if it has gone up under the navigation bar, drags the page
-    /// down just far enough to bring it out below the bar. Under the bar an element still reads as on
-    /// the screen and hittable, but a tap there lands on the bar: on iOS 18.6 the flat fee's row
-    /// stopped at y 64 to 130, under the bar (56 to 100), and two taps at its middle (y 97) never
-    /// reached the field. (The Analytics tests' revealBelowBar does the same on their screen.)
+    /// Reveals an element in the page and, if it's under the navigation bar, drags the page down just
+    /// far enough to bring it out below the bar, as a person would before tapping it. Under the bar an
+    /// element still reads as on the screen and hittable, but a tap there lands on the bar: two taps at
+    /// the middle (y 97) of the flat fee's row, under the bar (56 to 100), never reached the field.
+    /// reveal can stop with an element there after its own drags, as on the Analytics screen
+    /// (revealBelowBar). That flat fee's row hadn't been put there by a drag but by the app, while the
+    /// field had the keyboard; that's fixed in the app, and replaceText checks it doesn't happen again.
     @discardableResult
     private func revealBelowNavigationBar(_ identifier: String, file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
         let target = reveal(identifier, file: file, line: line)

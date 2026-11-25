@@ -163,15 +163,44 @@ struct NoShowSettingsView: View {
                 }
                 .frame(minHeight: BusinessTheme.minimumTapSize)
             }
-            if let problem = store.problem {
-                InlineMessage(text: problem, systemImage: "exclamationmark.octagon.fill", color: .red)
-                    .accessibilityIdentifier("noShowSettingsProblem")
+            if Self.problemIsARow, let problem = store.problem {
+                problemMessage(problem)
             }
         } header: {
             Text("Fee")
         } footer: {
-            Text(NoShowSettingsStore.feeFooter)
+            if Self.problemIsARow {
+                Text(NoShowSettingsStore.feeFooter)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let problem = store.problem {
+                        // As prominent as the row it stands in for: the footer's own text is small and gray.
+                        problemMessage(problem)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                    }
+                    Text(NoShowSettingsStore.feeFooter)
+                }
+            }
         }
+    }
+
+    /// What Save would be turned down for, in the server's words: "Pick a flat fee from $0.50 to $500."
+    private func problemMessage(_ problem: String) -> some View {
+        InlineMessage(text: problem, systemImage: "exclamationmark.octagon.fill", color: .red)
+            .accessibilityIdentifier("noShowSettingsProblem")
+    }
+
+    /// Whether the fee's problem is a row under the flat fee's field (iOS 26) or the first line of the
+    /// Fee section's footer, also right under the field (iOS 18). On iOS 18.6 the row appearing under
+    /// the focused field moved the form up 125 points, with the keyboard still up: an owner deleting
+    /// $20 to type $600 saw the field go up under the navigation bar as the problem appeared, and typed
+    /// $600 into a field they couldn't see. A change in the footer adds no row next to the field. The
+    /// owner app's UI test checks after every key that the field is still between the navigation bar
+    /// and the keyboard.
+    private static var problemIsARow: Bool {
+        if #available(iOS 26.0, *) { return true }
+        return false
     }
 
     private var lateCancellationSection: some View {
