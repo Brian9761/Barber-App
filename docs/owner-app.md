@@ -192,8 +192,11 @@ booking, so it can't become a no-show.") and no fee ("The shop cancelled
 this booking, so there's no fee."), and **Reopen** says so first ("The
 shop cancelled this booking, so once it's reopened, it can't be charged
 a fee. To keep a fee, ask the client to book again in the app
-instead."). A client who cancels it late after that isn't warned of a
-fee either.
+instead."). The client's own view of the booking says when the shop
+cancelled it too, so once the iPhone app or the website has checked
+the booking with the shop (they do when they open), a client who
+cancels it late isn't warned of a fee, and the app's reminders don't
+mention one.
 
 A fee is never more than the booked service's price (the settings'
 example says so, with the cheap service a flat fee is capped for), and it
