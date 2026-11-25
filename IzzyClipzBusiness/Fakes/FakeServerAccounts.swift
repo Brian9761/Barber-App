@@ -23,8 +23,8 @@ extension FakeServer {
 
     // MARK: Stripe
 
-    /// `GET /api/owner/stripe`, in the server's words, with what the shop has to delete in an old
-    /// Stripe account (`cardsToDelete`: none, unless a test adds some).
+    /// `GET /api/owner/stripe`, in the server's words, with what the shop has to delete in a Stripe
+    /// account the server can't reach (`cardsToDelete`: none, unless a test adds some).
     func stripeConnection() -> IzzyAPI.StripeConnection {
         guard options.stripeConfigured else { return IzzyAPI.StripeConnection(mode: .off, status: .off, cardsToDelete: cardsToDelete) }
         switch options.stripeAccount {
@@ -44,9 +44,9 @@ extension FakeServer {
         }
     }
 
-    /// `POST /api/owner/stripe/cards-to-delete/:id/deleted`: the shop deleted that customer in its old
-    /// Stripe account, so it's off the list. Like the server, doing it again answers the same; an id
-    /// it never had is a 404.
+    /// `POST /api/owner/stripe/cards-to-delete/:id/deleted`: the shop deleted that customer in the
+    /// Stripe account it's on, so it's off the list. Like the server, doing it again answers the same;
+    /// an id it never had is a 404.
     func cardDeletedInStripe(id: String) throws -> IzzyAPI.StripeConnection {
         guard cardsToDelete.contains(where: { $0.id == id }) || cardsDeletedInStripe.contains(id) else {
             throw APIError.server(code: IzzyAPI.ErrorCode.notFound, message: "We couldn't find that card.", status: 404)
