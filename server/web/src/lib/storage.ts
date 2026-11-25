@@ -71,6 +71,34 @@ export const DEMO_BUSINESS_SESSION_KEY = 'izzy.demo.business.session.v1';
 export const BUSINESS_LAST_BARBER_KEY = 'izzy.business.lastBarber.v1';
 /** This computer's sign-in to Izzy Clipz Business (src/business/session.ts): never the owner key. */
 export const BUSINESS_SESSION_KEY = 'izzy.business.session.v1';
+
+/** A sign-in to Izzy Clipz Business as this computer keeps it (src/business/session.ts). */
+export interface BusinessSession {
+  token: string;
+  /** The session's id on the server ("this computer" in the list of computers). */
+  id: string;
+  /** "Chrome on Mac". */
+  name: string;
+  createdAt: string;
+  expiresAt: string;
+}
+
+/**
+ * Whether what's kept under a sign-in's key is one: Business's own pages (src/business/session.ts)
+ * and the clients' (pruneBusinessSession) go by this one rule, so they agree on when no sign-in is
+ * left, and with it the barber picked last.
+ */
+export function isBusinessSession(value: unknown): value is BusinessSession {
+  return (
+    isObject(value) &&
+    typeof value.token === 'string' &&
+    value.token.length >= 16 &&
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    typeof value.createdAt === 'string' &&
+    typeof value.expiresAt === 'string'
+  );
+}
 /** How long a finished appointment stays listed, like the app. */
 export const KEEP_DAYS = 30;
 
@@ -202,20 +230,20 @@ export function keepsAnything(): boolean {
  * When the site opens, a sign-in to Izzy Clipz Business whose 30 days have run out goes from this
  * computer, even if only the clients' pages are used here now (the Privacy Policy: "The sign-in also
  * ends after 30 days (the next time our website is opened on that computer)"), and the barber picked
- * last at checkout goes once no sign-in is left. Business's own pages leave it to
- * src/business/session.ts, which also says "This computer was signed out" then.
+ * last at checkout goes once no sign-in is left: none kept, or nothing kept that is one, by
+ * Business's own rule (isBusinessSession). What isn't one is left where it is, for Business's own
+ * pages, which remove it. They leave all this to src/business/session.ts, which also says "This
+ * computer was signed out" when the 30 days are up.
  */
 export function pruneBusinessSession(now: Date = new Date()): void {
   let signedIn = false;
   for (const key of [BUSINESS_SESSION_KEY, DEMO_BUSINESS_SESSION_KEY]) {
     const stored = readJSON('local', key);
-    if (stored === null) continue;
-    if (isObject(stored) && typeof stored.expiresAt === 'string') {
-      const ends = Date.parse(stored.expiresAt);
-      if (Number.isFinite(ends) && ends <= now.getTime()) {
-        removeKey('local', key);
-        continue;
-      }
+    if (!isBusinessSession(stored)) continue;
+    // As Business's pages read it: a date that can't be read is no end.
+    if (Date.parse(stored.expiresAt) <= now.getTime()) {
+      removeKey('local', key);
+      continue;
     }
     signedIn = true;
   }

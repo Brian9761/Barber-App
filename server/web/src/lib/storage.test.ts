@@ -11,6 +11,7 @@ import {
   dropCarried,
   forgetAppointments,
   forgetDemoLeftovers,
+  isBusinessSession,
   loadAppointments,
   pruneAppointments,
   pruneBusinessSession,
@@ -206,6 +207,42 @@ describe('this computer’s sign-in to Izzy Clipz Business', () => {
     localStorage.setItem('izzy.business.session.v1', JSON.stringify({ token: 'x' }));
     pruneBusinessSession(NOW);
     expect(localStorage.getItem('izzy.business.session.v1')).not.toBeNull();
+  });
+
+  it('goes by Business’s own rule for what a sign-in is: what isn’t one keeps no barber picked last, as on Business’s pages', () => {
+    const barber = JSON.stringify('carlos-rafael');
+    const notSignIns = [
+      // A token too short to be one, however far off its end.
+      JSON.stringify({ token: 'short', id: 'a', name: 'Chrome on Mac', createdAt: '2026-10-03T18:00:00Z', expiresAt: '2099-01-01T00:00:00Z' }),
+      JSON.stringify({ token: 42 }),
+      JSON.stringify({ token: 'x'.repeat(43), expiresAt: '2099-01-01T00:00:00Z' }),
+      '{not json',
+    ];
+    for (const value of notSignIns) {
+      localStorage.clear();
+      localStorage.setItem('izzy.business.session.v1', value);
+      localStorage.setItem('izzy.demo.business.session.v1', value);
+      localStorage.setItem('izzy.business.lastBarber.v1', barber);
+      pruneBusinessSession(NOW);
+      expect(localStorage.getItem('izzy.business.lastBarber.v1'), value).toBeNull();
+      // Business's own pages remove the value itself (src/business/session.ts); here it's left to them.
+      expect(localStorage.getItem('izzy.business.session.v1'), value).toBe(value);
+      expect(localStorage.getItem('izzy.demo.business.session.v1'), value).toBe(value);
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(value);
+      } catch {
+        // Unreadable: nothing.
+      }
+      expect(isBusinessSession(parsed), value).toBe(false);
+    }
+    // One that is a sign-in by that rule keeps it, as Business's pages do.
+    localStorage.clear();
+    localStorage.setItem('izzy.business.session.v1', session('2026-12-02T18:00:00Z'));
+    localStorage.setItem('izzy.business.lastBarber.v1', barber);
+    pruneBusinessSession(NOW);
+    expect(isBusinessSession(JSON.parse(localStorage.getItem('izzy.business.session.v1') ?? 'null'))).toBe(true);
+    expect(localStorage.getItem('izzy.business.lastBarber.v1')).toBe(barber);
   });
 
   it('takes the barber picked last at checkout with the sign-in, also one left from an earlier sign-out', () => {

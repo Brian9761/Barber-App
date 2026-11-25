@@ -12,21 +12,23 @@
 
 import { useSyncExternalStore } from 'react';
 import { isDemo } from '../demo/mode';
-import { BUSINESS_LAST_BARBER_KEY, BUSINESS_SESSION_KEY, DEMO_BUSINESS_SESSION_KEY, readJSON, removeKey, writeJSON } from '../lib/storage';
+import {
+  BUSINESS_LAST_BARBER_KEY,
+  BUSINESS_SESSION_KEY,
+  DEMO_BUSINESS_SESSION_KEY,
+  isBusinessSession,
+  readJSON,
+  removeKey,
+  writeJSON,
+  type BusinessSession,
+} from '../lib/storage';
 import type { SignedIn } from './types';
 
 export const SESSION_KEY = BUSINESS_SESSION_KEY;
 export const DEMO_SESSION_KEY = DEMO_BUSINESS_SESSION_KEY;
 
-export interface StoredSession {
-  token: string;
-  /** The session's id on the server ("this computer" in the list of computers). */
-  id: string;
-  /** "Chrome on Mac". */
-  name: string;
-  createdAt: string;
-  expiresAt: string;
-}
+/** The sign-in as it's kept, by the rule the clients' pages also go by (lib/storage.ts). */
+export type StoredSession = BusinessSession;
 
 /** Why the sign-in page shows: never signed in, signed out here, or the server ended the session. */
 export type SignedOutReason = 'none' | 'signedOut' | 'expired';
@@ -40,19 +42,6 @@ export interface SessionState {
 
 function key(): string {
   return isDemo() ? DEMO_SESSION_KEY : SESSION_KEY;
-}
-
-function isStoredSession(value: unknown): value is StoredSession {
-  if (typeof value !== 'object' || value === null) return false;
-  const v = value as Record<string, unknown>;
-  return (
-    typeof v.token === 'string' &&
-    v.token.length >= 16 &&
-    typeof v.id === 'string' &&
-    typeof v.name === 'string' &&
-    typeof v.createdAt === 'string' &&
-    typeof v.expiresAt === 'string'
-  );
 }
 
 /** This computer's sign-in has ended: it goes, and the barber picked last at checkout with it. */
@@ -70,7 +59,7 @@ function forgetSignIn(): void {
  */
 function load(): { session: StoredSession | null; expired: boolean } {
   const stored = readJSON('local', key());
-  if (!isStoredSession(stored)) {
+  if (!isBusinessSession(stored)) {
     forgetSignIn();
     return { session: null, expired: false };
   }
