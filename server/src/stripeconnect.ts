@@ -506,8 +506,8 @@ export async function getOwnerStripe(ctx: Context): Promise<Response> {
   return json(connectionJSON(setup, connection, config, await cardsToDelete(ctx.deps.db)));
 }
 
-// POST /api/owner/stripe/cards-to-delete/:id/deleted: the shop deleted that customer in its old
-// Stripe account's Dashboard ("Deleted in Stripe"). Its Stripe ids are forgotten and it's off the
+// POST /api/owner/stripe/cards-to-delete/:id/deleted: the shop deleted that customer in the Dashboard
+// of the Stripe account it's on ("Deleted in Stripe"). Its Stripe ids are forgotten and it's off the
 // list; the answer is the connection as Settings shows it (from the cache, like the connect routes).
 // Doing it again answers the same.
 
