@@ -47,11 +47,8 @@ export function lateCancelWarningText(windowMinutes: number, feeCents: number, f
   return `Cancelling now, less than ${windowLabel(windowMinutes)} before your appointment, may be charged ${amount}.`;
 }
 
-/**
- * What these rules read: never the client's own details. The shop's view also says when the shop first
- * cancelled it (`shopCancelledAt`; the client's view doesn't have it).
- */
-type Booked = Omit<Appointment, 'customer' | 'note'> & { shopCancelledAt?: string | null };
+/** What these rules read: never the client's own details. */
+type Booked = Omit<Appointment, 'customer' | 'note'>;
 
 /** Whether the agreed fee is the whole price: the server says so; an older server is judged by the label. */
 function isFullPrice(appointment: Booked): boolean {
@@ -65,7 +62,7 @@ function isFullPrice(appointment: Booked): boolean {
  * policy the client agreed to; null when it's free. Like the server, the first time the client
  * cancelled (or asked to) counts, if there was one, and cancelling within 15 minutes of booking
  * is free (so there's no warning then), as is a booking the shop cancelled before reopening it
- * (where that's known: the shop's view says so).
+ * (`shopCancelledAt`, which the client's view has too: there's no fee for it).
  */
 export function lateCancelWarning(appointment: Booked, now: Date): string | null {
   const fee = appointment.noShowFee;

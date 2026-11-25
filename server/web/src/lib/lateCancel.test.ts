@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import feeCases from '../../../test/fixtures/fee-cases.json';
 import noShowRule from '../../../test/fixtures/no-show-rule.json';
 import lateCancelFee from '../../../test/fixtures/contract/errors/late_cancel_fee.json';
+import reopenedFixture from '../../../test/fixtures/contract/appointment-reopened-after-shop-cancel.json';
 import { fixtureAppointment, policy35 } from '../test/api';
 import type { Appointment } from '../api/types';
 import {
@@ -67,11 +68,21 @@ describe('the warning before cancelling', () => {
     expect(lateCancelWarning(withFee({ lateCancelWindowMinutes: null }), at('2026-11-03T17:30:00Z'))).toBeNull();
   });
 
-  it('says nothing for a booking the shop cancelled before reopening it, where that’s known (the shop’s view)', () => {
-    // The client's own view doesn't say, so it warns as the agreed policy reads, and the server decides.
+  it('says nothing for a booking the shop cancelled before reopening it: the client’s own view says so', () => {
+    // The shop never cancelled this one (null): it warns as the agreed policy reads.
+    expect(fixtureAppointment.shopCancelledAt).toBeNull();
     expect(lateCancelWarning(fixtureAppointment, at('2026-11-03T17:30:00Z'))).toBe(lateCancelFee.error.message);
     expect(lateCancelWarning({ ...fixtureAppointment, shopCancelledAt: null }, at('2026-11-03T17:30:00Z'))).toBe(lateCancelFee.error.message);
-    // The shop's view says when the shop cancelled it: then cancelling is free (no fee to warn of).
+    // Kept from a server before it (no field): the same, and the server decides.
+    const { shopCancelledAt: _omitted, ...older } = fixtureAppointment;
+    expect(lateCancelWarning(older, at('2026-11-03T17:30:00Z'))).toBe(lateCancelFee.error.message);
+    // When the shop cancelled it, cancelling is free (no fee to warn of): the server's own answer for a
+    // booking the shop cancelled and reopened, as the client sees it, half an hour before.
+    const reopened = reopenedFixture.appointment as unknown as Appointment;
+    expect(reopened).toMatchObject({ status: 'booked', start: '2026-11-03T18:00:00Z', shopCancelledAt: '2026-11-02T17:00:00Z' });
+    expect(reopened.noShowFee).toMatchObject({ lateCancelWindowMinutes: 60, customerCancelledAt: null });
+    expect(lateCancelWarning(reopened, at('2026-11-03T17:30:00Z'))).toBeNull();
+    expect(lateCancelWarning({ ...reopened, shopCancelledAt: null }, at('2026-11-03T17:30:00Z'))).toBe(lateCancelFee.error.message);
     expect(lateCancelWarning({ ...fixtureAppointment, shopCancelledAt: '2026-11-02T18:00:00Z' }, at('2026-11-03T17:30:00Z'))).toBeNull();
   });
 

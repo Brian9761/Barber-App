@@ -10,7 +10,7 @@ export type SaleMethod = 'card' | 'cash' | 'other';
 
 /**
  * An appointment as the shop sees it: with its checkout (its live sale), if any, and when it was first
- * completed and first cancelled by the shop.
+ * completed. When the shop first cancelled it is in the client's view too.
  */
 export interface OwnerAppointment extends Appointment {
   sale: { id: string; totalCents: number; method: SaleMethod } | null;

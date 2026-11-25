@@ -228,8 +228,8 @@ extension IzzyAPI.Appointment {
     /// (`feeCaseAt` in `server/src/feecase.ts`, checked against `server/test/fixtures/fee-cases.json`):
     /// a no-show or a late cancellation (more than 15 minutes after booking) only once the appointment
     /// has ended (until then another client may still take a late cancellation's time, and then
-    /// there's no fee), never for a booking the shop cancelled, even reopened since (the shop's
-    /// view's `shopCancelledAt`), and nothing more than 7 days after the start. It doesn't look at
+    /// there's no fee), never for a booking the shop cancelled, even reopened since
+    /// (`shopCancelledAt`), and nothing more than 7 days after the start. It doesn't look at
     /// whether the fee is charged already: the server answers that as it is.
     public func feeCase(at now: Date) -> IzzyAPI.NoShowRule.FeeCase {
         guard card != nil, let noShowFee else { return .refused(IzzyAPI.NoShowRule.noCardMessage) }
@@ -274,8 +274,8 @@ extension IzzyAPI.Appointment {
     /// A booking with a card on file that the shop cancelled, now or before it was reopened: it can't
     /// be charged a fee, nor marked a no-show, since the agreement ended when the shop cancelled (the
     /// server's `shopCancelledAt`, which it never clears; a booking still cancelled by the shop counts
-    /// too, as the server reads one cancelled before it kept the time). Always `false` in the client's
-    /// own view of a reopened booking, where only the server's answer says so.
+    /// too, as the server reads one cancelled before it kept the time). The client's own view has
+    /// `shopCancelledAt` too.
     public var shopCancelledBefore: Bool {
         card != nil && (shopCancelledAt != nil || (status == .cancelled && cancelledBy == .shop))
     }
@@ -326,7 +326,8 @@ extension IzzyAPI.Appointment {
     /// Like the server, the time that counts is the first time the client cancelled (or asked to),
     /// if there was one: a booking they cancelled early, which the shop then reopened, stays free.
     /// Cancelling within 15 minutes of booking is free too (the grace period), so there's no warning then,
-    /// and so is a booking the shop cancelled before reopening it (`shopCancelledAt`, in the shop's view).
+    /// and so is a booking the shop cancelled before reopening it (`shopCancelledAt`, which the client's
+    /// own view has too: there's no fee for it).
     /// Work it out again when the client taps the button, not only when the dialog opens. The
     /// server decides by its own clock, though: when the phone's is off (or the minute turned while
     /// the dialog was open), cancelling throws `APIError.lateCancelFee` with this same warning.
