@@ -8,7 +8,7 @@ import type { Deps } from './deps.js';
 import { ApiError, baseOf, httpUrl, json, readJsonObject, redirect } from './http.js';
 import { loadNoShowSettings, protectionFor } from './noshow.js';
 import { hit, ipKey } from './ratelimit.js';
-import { deleteAtStripe, removeCard } from './retention.js';
+import { deleteAtStripe, removeCard, type CardRemoval } from './retention.js';
 import type { Context } from './router.js';
 import { accountMatch, requestOptions, shopAccount, shopStripe, stripeFailure, type ShopAccount } from './stripeaccount.js';
 import { localDate } from './time.js';
@@ -29,11 +29,11 @@ import { parse, shortId } from './validation.js';
 // 3. POST /api/cards { sessionId } with the same X-Card-Token → the card's brand,
 //    last 4 and expiry, stored under that token. Doing it again answers the same.
 //
-// Every card page is kept in card_checkouts (Stripe's ids only) from step 1, and closed once its
-// card is saved in step 3. One that never gets there (the page, the tab or the app closed right
-// after Stripe saved the card) is deleted at Stripe by the daily job, card and Customer, within 2
-// days of being made (retention.ts, `purgeUnfinishedCheckouts`); its card can't be saved after
-// that.
+// Every card page is kept in card_checkouts (Stripe's ids only) from step 1 until its card is saved
+// in step 3 (then its row goes: saved_cards has the ids). One that never gets there (the page, the
+// tab or the app closed right after Stripe saved the card) is deleted at Stripe, card and Customer,
+// by the first cron run after 22 hours: within 35 hours of being made, or 47 when that run misses
+// it (retention.ts, `purgeUnfinishedCheckouts`); its card can't be saved after that.
 //
 // With Stripe Connect, the Customer, the Checkout Session and so the card live on the
 // shop's connected account (stripe_account_id), and only work while the shop keeps it.
@@ -94,27 +94,30 @@ export interface SavedCardRow {
   delete_requested_at: Date | null;
   /**
    * When it was found on a Stripe account this server can't use any more (migrations/011): removed
-   * here, its Stripe ids kept until the shop says it deleted it in that account's Dashboard.
+   * here, its Stripe ids kept until it's deleted there (by the shop, or by the server once it can
+   * reach it again).
    */
   stripe_unreachable_at: Date | null;
+  /** How the server reached Stripe then (`setupFingerprint`): it's tried again once that changes. */
+  stripe_unreachable_setup: string | null;
 }
 
-/** A card page (migrations/011): Stripe's ids, and how far it got. */
+/** A card page whose card isn't saved (migrations/011): Stripe's ids, and how far it got. */
 export interface CardCheckoutRow {
   checkout_session_id: string;
-  /** Null once there's nothing left to delete with it (its card saved, or deleted at Stripe). */
+  /** Null once there's nothing left to delete with it (deleted at Stripe). */
   stripe_customer_id: string | null;
   stripe_account_id: string | null;
   livemode: boolean;
   created_at: Date;
-  /** Its card was saved (POST /api/cards). */
-  closed_at: Date | null;
   /** The daily job took it up, its card never saved: it can't be saved any more. */
   abandoned_at: Date | null;
   /** Deleted at Stripe (or by the shop in its Dashboard). */
   deleted_at: Date | null;
   /** On a Stripe account this server can't use any more: waiting for the shop to delete it there. */
   stripe_unreachable_at: Date | null;
+  /** How the server reached Stripe then (`setupFingerprint`): it's tried again once that changes. */
+  stripe_unreachable_setup: string | null;
 }
 
 /** Whether a saved card can still be used for a new booking: not removed, and the client hasn't asked to delete it. */
@@ -379,10 +382,9 @@ export async function saveCard(ctx: Context): Promise<Response> {
         shop.stripeAccount ?? null,
       ],
     );
-    // From now on saved_cards has its Stripe ids, and deletes them from there.
-    if (rows[0] && pages[0]) {
-      await tx.query('UPDATE card_checkouts SET closed_at = $2, stripe_customer_id = NULL WHERE checkout_session_id = $1', [session.id, now]);
-    }
+    // From now on saved_cards has its Stripe ids, and deletes them from there: the page's row goes,
+    // so its Checkout Session's id is kept in one place only (and goes with the card's other ids).
+    if (rows[0] && pages[0]) await tx.query('DELETE FROM card_checkouts WHERE checkout_session_id = $1', [session.id]);
     return rows[0] ?? null;
   });
   if (saved) return json({ card: savedCardJSON(saved) }, 201);
@@ -403,12 +405,21 @@ function normalizedBrand(brand: string | null | undefined): string {
 
 export const CARD_DELETED_MESSAGE = "Your saved card is deleted. It can't be charged any more.";
 export const CARD_SCHEDULED_MESSAGE = 'Your card will be deleted as soon as your appointments no longer need it.';
+export const CARD_SHOP_MESSAGE = "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account.";
+
+const CARD_REMOVAL_MESSAGES: Record<CardRemoval, string> = {
+  deleted: CARD_DELETED_MESSAGE,
+  scheduled: CARD_SCHEDULED_MESSAGE,
+  shop: CARD_SHOP_MESSAGE,
+};
 
 /**
  * Deletes the card at Stripe now (`deleted`), or, while a booking still needs it (upcoming, still
  * chargeable before the 7-day deadline, or a fee pending), marks it so the daily job deletes it once
- * none does (`scheduled`). Either way it can't book again. Doing it again answers the same; a token
- * with no card is a 404.
+ * none does (`scheduled`). A card on a Stripe account this server can't use any more (the shop
+ * changed how it connects to Stripe) is removed here and left for the shop to delete there
+ * (`shop`): never called deleted. Either way it can't book again. Doing it again answers the same; a
+ * token with no card is a 404. (An app that doesn't know `shop` reads it as `scheduled`.)
  */
 export async function deleteCard(ctx: Context): Promise<Response> {
   const { request, deps } = ctx;
@@ -416,7 +427,7 @@ export async function deleteCard(ctx: Context): Promise<Response> {
   const card = await findCardByToken(deps.db, token);
   if (!card) throw new ApiError('not_found', "We couldn't find that card.");
   const status = await removeCard(deps, card, deps.now());
-  return json({ cardDeletion: { status, message: status === 'deleted' ? CARD_DELETED_MESSAGE : CARD_SCHEDULED_MESSAGE } });
+  return json({ cardDeletion: { status, message: CARD_REMOVAL_MESSAGES[status] } });
 }
 
 // Booking with a card on file (POST /api/appointments with X-Card-Token).

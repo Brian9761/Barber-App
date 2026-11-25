@@ -329,9 +329,11 @@ describe('contract fixtures (API v1)', () => {
     expect((await h.call('POST', '/api/cards', { headers: { 'x-card-token': savedToken }, body: { sessionId: saved.body.sessionId } })).status).toBe(201);
     const left = await h.call('POST', '/api/cards/checkout', { headers: { 'x-card-token': Buffer.alloc(32, 3).toString('base64url') }, body: { offeringId: FLOW45 } });
     h.stripe.completeSession(left.body.sessionId, { brand: 'mastercard', last4: '4444', exp_month: 3, exp_year: 2029 });
-    // The shop connects its own Stripe account; the client removes the card, and the next day the job finds the page.
+    // The shop connects its own Stripe account; the client removes the card (it's the shop's to delete
+    // in Stripe now, never "deleted"), and the next day the job finds the page.
     await connectedShop(h);
-    expect((await h.call('DELETE', '/api/cards', { headers: { 'x-card-token': savedToken } })).body.cardDeletion.status).toBe('deleted');
+    const removal = check('card-deletion-shop', await h.call('DELETE', '/api/cards', { headers: { 'x-card-token': savedToken } }));
+    expect(removal.cardDeletion.status).toBe('shop');
     h.setNow('2026-11-03T19:17:00Z');
     expect((await h.call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${CRON_SECRET}` } })).body.unfinishedCardPages).toEqual({
       deleted: 0,

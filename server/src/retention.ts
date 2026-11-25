@@ -5,7 +5,17 @@ import type { Queryable } from './db.js';
 import type { Deps } from './deps.js';
 import { feeCase, feeDeadline, pastFeeDeadline } from './feecase.js';
 import type { AppointmentRow } from './serialize.js';
-import { accessRevoked, keyLivemode, requestOptions, shopStripe, stripeFailure, stripeSetup, type StripeErrorLike } from './stripeaccount.js';
+import {
+  accessRevoked,
+  keyLivemode,
+  requestOptions,
+  setupFingerprint,
+  shopStripe,
+  stripeFailure,
+  stripeSetup,
+  type ShopStripe,
+  type StripeErrorLike,
+} from './stripeaccount.js';
 import { localDate } from './time.js';
 
 // How long the shop keeps clients' details, as its Privacy Policy says (docs/legal/privacy.md,
@@ -21,12 +31,16 @@ import { localDate } from './time.js';
 //   12 months without being used for a booking, or the client asked (Remove card, Forget my details,
 //   or a booking made without Remember me), as soon as no booking still needs it.
 // - A card page whose card was never saved here (the page, the tab or the app closed right after
-//   Stripe saved it): its card (if one was added) and its Customer deleted at Stripe within 2 days.
+//   Stripe saved it): its card (if one was added) and its Customer deleted at Stripe by the first
+//   run after 22 hours: within 35 hours of the page being made, or 47 when that run misses it
+//   (`UNFINISHED_CHECKOUT_MARGIN_HOURS`). (A page whose card is saved isn't kept: saved_cards has
+//   its ids, and deletes them as above.)
 // - Either one on a Stripe account this server can't use any more: removed here, and listed for
-//   the shop (GET /api/owner/stripe, `cardsToDelete`) to delete in that account's Dashboard.
+//   the shop (GET /api/owner/stripe, `cardsToDelete`) to delete in that account's Dashboard; tried
+//   again each time the way the server reaches Stripe changes, in case it can reach it again.
 //
-// The daily job (cron.ts) does all of it in batches; the privacy tools (privacy.ts) do it for one
-// person at once.
+// The daily job (cron.ts) does all of it in batches (the card pages twice a day); the privacy tools
+// (privacy.ts) do it for one person at once.
 
 /** How long details are kept, in months. One place to change it. */
 export const RETENTION_MONTHS = 12;
@@ -235,7 +249,7 @@ export async function cardNeeded(db: Queryable, cardId: string, now: Date): Prom
 // Deleting a saved card.
 
 const errorOf = (error: unknown) => (typeof error === 'object' && error !== null ? error : {}) as StripeErrorLike;
-/** Stripe doesn't have it (any more). */
+/** Stripe doesn't have it, on the account (and in the mode) this key reaches. */
 const missing = (error: unknown) => errorOf(error).code === 'resource_missing' || errorOf(error).statusCode === 404;
 
 /** What deleting a card at Stripe needs: its ids, and the account and mode it was saved on. */
@@ -253,12 +267,14 @@ export interface StripeCardIds {
  * was saved on. After that Stripe can't charge it. (The completed Checkout Session keeps the email
  * typed on Stripe's page: Stripe can't delete a Checkout Session, and the Privacy Policy says so.)
  *
- * - `deleted`: done, or Stripe had neither any more.
- * - `unreachable`: it's on an account this server can't use any more (saved with the shop's own key
- *   before Stripe was connected, or the other way round, or with a key of the other mode, test or
- *   live, or the shop took the platform's access away). It can't be charged from here either; it
- *   has to be deleted in that account's Dashboard. (Asked with a key of the other mode, Stripe would
- *   answer "no such customer", which isn't "deleted".)
+ * - `deleted`: done, or its Customer was deleted already (by an earlier try, or by the shop in its
+ *   Dashboard).
+ * - `unreachable`: it's on an account this server can't use any more: saved with the shop's own key
+ *   before Stripe was connected, or the other way round; with a key of the other mode (test or
+ *   live) or of another Stripe account than the key now; or the shop took the platform's access
+ *   away. It can't be charged from here either; it has to be deleted in that account's Dashboard.
+ *   Stripe keeps every Customer, deleted ones too, so one it has never heard of is on another
+ *   account (or in the other mode): that's never taken for deleted.
  * - `failed`: Stripe is off on this server or didn't answer; try again later.
  */
 export async function deleteAtStripe(deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log'>, card: StripeCardIds): Promise<'deleted' | 'unreachable' | 'failed'> {
@@ -272,7 +288,8 @@ export async function deleteAtStripe(deps: Pick<Deps, 'config' | 'db' | 'stripe'
     try {
       await shop.stripe.paymentMethods.detach(card.stripe_payment_method_id, undefined, requestOptions(shop));
     } catch (error) {
-      // Already detached or gone is fine: deleting the Customer below removes whatever is left.
+      // Already detached or gone is fine: deleting the Customer below removes whatever is left (or
+      // finds that it's on another account).
       if (errorOf(error).type !== 'StripeInvalidRequestError') {
         if (accessRevoked(error)) return 'unreachable';
         stripeFailure(deps, error, 'detach card');
@@ -284,14 +301,39 @@ export async function deleteAtStripe(deps: Pick<Deps, 'config' | 'db' | 'stripe'
     try {
       await shop.stripe.customers.del(card.stripe_customer_id, undefined, requestOptions(shop));
     } catch (error) {
-      if (!missing(error)) {
-        if (accessRevoked(error)) return 'unreachable';
-        stripeFailure(deps, error, 'delete customer');
-        return 'failed';
-      }
+      if (missing(error)) return customerGone(deps, shop, card.stripe_customer_id);
+      if (accessRevoked(error)) return 'unreachable';
+      stripeFailure(deps, error, 'delete customer');
+      return 'failed';
     }
   }
   return 'deleted';
+}
+
+/**
+ * After Stripe said it has no such Customer to delete: `deleted` when it was deleted already (Stripe
+ * still answers for a deleted Customer, marked deleted), `unreachable` when Stripe has never heard of
+ * it here (it's on another account, or in the other mode, than this key's).
+ */
+async function customerGone(deps: Pick<Deps, 'log'>, shop: ShopStripe, customerId: string): Promise<'deleted' | 'unreachable' | 'failed'> {
+  try {
+    const customer = await shop.stripe.customers.retrieve(customerId, undefined, requestOptions(shop));
+    if ((customer as { deleted?: unknown }).deleted === true) return 'deleted';
+    // There after all (Stripe's two answers crossed): tried again later.
+    stripeFailure(deps, new Error('Stripe had no such customer to delete, then found it'), 'delete customer');
+    return 'failed';
+  } catch (error) {
+    if (missing(error) || accessRevoked(error)) return 'unreachable';
+    stripeFailure(deps, error, 'retrieve customer');
+    return 'failed';
+  }
+}
+
+/** How the server reaches Stripe now (`setupFingerprint`), when something was found out of its reach: so never off. */
+function currentSetup(deps: Pick<Deps, 'config'>): string {
+  const setup = setupFingerprint(deps.config);
+  if (!setup) throw new Error("Stripe is off on this server, so nothing can be found out of its reach");
+  return setup;
 }
 
 /** The card can't be used or charged any more: removed, without Stripe's ids. */
@@ -307,10 +349,26 @@ async function markRemoved(db: Queryable, cardId: string, now: Date): Promise<vo
 /**
  * The card is on a Stripe account this server can't use any more: it can't be used or charged any
  * more (removed), but it keeps Stripe's ids, so the shop can find it and delete it in that account's
- * Dashboard (`cardsToDelete`), until the shop says it did (`deletedInStripe`).
+ * Dashboard (`cardsToDelete`), until it's deleted there (`deletedInStripe`) or the server can reach
+ * it again and deletes it itself (`retryCardsToDelete`). `setup`: how the server reaches Stripe now.
  */
-async function markUnreachable(db: Queryable, cardId: string, now: Date): Promise<void> {
-  await db.query('UPDATE saved_cards SET removed_at = $2, stripe_unreachable_at = $2 WHERE id = $1 AND removed_at IS NULL', [cardId, now]);
+async function markUnreachable(db: Queryable, cardId: string, now: Date, setup: string): Promise<void> {
+  await db.query(
+    'UPDATE saved_cards SET removed_at = $2, stripe_unreachable_at = $2, stripe_unreachable_setup = $3 WHERE id = $1 AND removed_at IS NULL',
+    [cardId, now, setup],
+  );
+}
+
+/** A card on the shop's list is deleted at Stripe: its ids forgotten, and it's off the list. Whether it was on it. */
+async function forgetDeletedCard(db: Queryable, cardId: string): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE saved_cards
+        SET checkout_session_id = NULL, stripe_customer_id = NULL, stripe_payment_method_id = NULL,
+            stripe_unreachable_at = NULL, stripe_unreachable_setup = NULL
+      WHERE id = $1::uuid AND stripe_unreachable_at IS NOT NULL`,
+    [cardId],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 /**
@@ -322,28 +380,35 @@ export async function markRequested(db: Queryable, cardId: string, now: Date): P
 }
 
 /** After `deleteAtStripe`: removed here, and kept for the shop when Stripe can't be reached from here. */
-async function settleCard(deps: Pick<Deps, 'db' | 'log'>, card: SavedCardRow, result: 'deleted' | 'unreachable', now: Date): Promise<void> {
+async function settleCard(deps: Pick<Deps, 'config' | 'db' | 'log'>, card: SavedCardRow, result: 'deleted' | 'unreachable', now: Date): Promise<void> {
   if (result === 'deleted') return markRemoved(deps.db, card.id, now);
   logUnreachable(deps, card);
-  return markUnreachable(deps.db, card.id, now);
+  return markUnreachable(deps.db, card.id, now, currentSetup(deps));
 }
+
+/**
+ * What became of a card the client (or the privacy tools) asked to delete:
+ * - `deleted`: deleted at Stripe, now or before;
+ * - `scheduled`: a booking still needs it (or Stripe didn't answer): the daily job deletes it as soon
+ *   as none does;
+ * - `shop`: it's on a Stripe account this server can't use any more: removed here, so it can't be
+ *   used or charged, and the shop deletes it in that account (`cardsToDelete`), unless the server
+ *   can reach it again first and deletes it itself (`retryCardsToDelete`).
+ */
+export type CardRemoval = 'deleted' | 'scheduled' | 'shop';
 
 /**
  * Deletes a card at Stripe now, or marks it for the daily job when it can't be (a booking still needs
  * it, or Stripe didn't answer). Either way it can't book again. For DELETE /api/cards and the privacy tools.
  */
-export async function removeCard(
-  deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log'>,
-  card: SavedCardRow,
-  now: Date,
-): Promise<'deleted' | 'scheduled'> {
-  if (card.removed_at) return 'deleted';
+export async function removeCard(deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log'>, card: SavedCardRow, now: Date): Promise<CardRemoval> {
+  if (card.removed_at) return card.stripe_unreachable_at ? 'shop' : 'deleted';
   await markRequested(deps.db, card.id, now);
   if (await cardNeeded(deps.db, card.id, now)) return 'scheduled';
   const result = await deleteAtStripe(deps, card);
   if (result === 'failed') return 'scheduled';
   await settleCard(deps, card, result, now);
-  return 'deleted';
+  return result === 'deleted' ? 'deleted' : 'shop';
 }
 
 function logUnreachable(deps: Pick<Deps, 'log'>, card: Pick<SavedCardRow, 'id' | 'stripe_account_id' | 'stripe_customer_id' | 'livemode'>): void {
@@ -356,10 +421,12 @@ function logUnreachable(deps: Pick<Deps, 'log'>, card: Pick<SavedCardRow, 'id' |
 }
 
 export interface CardPurge {
-  /** Deleted at Stripe (or unreachable there, and removed here). */
+  /** Deleted at Stripe. */
   deleted: number;
   /** Due for deletion, but a booking still needs it. */
   stillNeeded: number;
+  /** On a Stripe account this server can't use any more: removed here, and listed for the shop to delete there (never counted as deleted). */
+  unreachable: number;
   /** Stripe didn't answer (or is off): tried again tomorrow. */
   failed: number;
 }
@@ -370,7 +437,7 @@ export interface CardPurge {
  * to delete, is deleted at Stripe once no booking needs it; oldest first, until the budget runs out.
  */
 export async function purgeSavedCards(deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log' | 'catalog'>, now: Date, budget: Budget): Promise<CardPurge> {
-  const done: CardPurge = { deleted: 0, stillNeeded: 0, failed: 0 };
+  const done: CardPurge = { deleted: 0, stillNeeded: 0, unreachable: 0, failed: 0 };
   const [year, month] = localDate(now, deps.catalog.timeZone).split('-').map(Number) as [number, number];
   // Where the next page starts (cards still needed are passed over, and found again tomorrow).
   const cursor: { createdAt: Date | null; id: string | null } = { createdAt: null, id: null };
@@ -400,21 +467,26 @@ export async function purgeSavedCards(deps: Pick<Deps, 'config' | 'db' | 'stripe
         continue;
       }
       await settleCard(deps, card, result, now);
-      done.deleted += 1;
+      done[result] += 1;
     }
     if (rows.length < 100) break;
   }
   return done;
 }
 
-// Card pages whose card was never saved here (migrations/011, cards.ts).
+// Card pages whose card was never saved here (migrations/011, cards.ts). A page whose card is saved
+// isn't kept here: its row goes as the card is saved, and saved_cards deletes the card from then on.
 
 /**
  * How long after a card page closes (CHECKOUT_MINUTES after it was made) its card may still be
  * saved: the apps and the website try again when an answer is lost, and the website's page can be
- * reloaded. A little under a day, so that the daily job, which runs once a day and up to an hour
- * late, still deletes an unfinished page at Stripe within 2 days of it being made, as the Privacy
- * Policy says.
+ * reloaded. A little under a day, so that an unfinished page is still deleted at Stripe within 2
+ * days of being made, as the Privacy Policy says, even when one run misses it. Pages are taken up
+ * twice a day (cron.ts: the daily job, and the card pages' own run 12 hours later), and on Vercel's
+ * Hobby plan each run comes anywhere within its scheduled hour, so two runs are at most 12 hours 59
+ * minutes apart. The worst case, then: 22 hours, plus up to 12 hours 59 minutes until the next run
+ * (34 hours 59 minutes); when that run misses the page (it fails, runs out of time, or Stripe
+ * doesn't answer), the one after it (46 hours 59 minutes); each further miss adds 12 hours.
  */
 export const UNFINISHED_CHECKOUT_MARGIN_HOURS = 21;
 
@@ -432,6 +504,8 @@ function idOf(value: string | { id: string } | null | undefined): string | null 
 /**
  * Deletes an unfinished card page's card, if Stripe saved one, and its Customer, on the account it
  * was made on: the page is read first, for the card its SetupIntent saved. Then as `deleteAtStripe`.
+ * Stripe keeps every Checkout Session, so a page it has never heard of was made on another account
+ * (or in the other mode) than this key's, with its Customer: `unreachable`.
  */
 async function deletePageAtStripe(
   deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log'>,
@@ -449,12 +523,9 @@ async function deletePageAtStripe(
     const setupIntent = typeof session.setup_intent === 'object' && session.setup_intent !== null ? session.setup_intent : null;
     paymentMethod = idOf(setupIntent?.payment_method);
   } catch (error) {
-    // A page Stripe doesn't have (any more) has no card to detach; its Customer is still deleted.
-    if (!missing(error)) {
-      if (accessRevoked(error)) return 'unreachable';
-      stripeFailure(deps, error, 'retrieve card checkout');
-      return 'failed';
-    }
+    if (missing(error) || accessRevoked(error)) return 'unreachable';
+    stripeFailure(deps, error, 'retrieve card checkout');
+    return 'failed';
   }
   return deleteAtStripe(deps, {
     stripe_account_id: page.stripe_account_id,
@@ -464,40 +535,49 @@ async function deletePageAtStripe(
   });
 }
 
+/** A card page on the shop's list is deleted at Stripe: its Customer's id forgotten, and it's off the list. Whether it was on it. */
+async function forgetDeletedPage(db: Queryable, id: string, now: Date): Promise<boolean> {
+  const result = await db.query(
+    `UPDATE card_checkouts SET deleted_at = $2, stripe_customer_id = NULL, stripe_unreachable_at = NULL, stripe_unreachable_setup = NULL
+      WHERE checkout_session_id = $1 AND stripe_unreachable_at IS NOT NULL AND deleted_at IS NULL`,
+    [id, now],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 export interface CheckoutPurge {
   /** Deleted at Stripe: the card, if one was added, and the Customer. */
   deleted: number;
   /** On a Stripe account this server can't use any more: listed for the shop to delete there. */
   unreachable: number;
-  /** Stripe didn't answer (or is off): tried again tomorrow. Its card can't be saved meanwhile. */
+  /** Stripe didn't answer (or is off): tried again at the next run. Its card can't be saved meanwhile. */
   failed: number;
 }
 
 /**
- * The daily job's part, after the saved cards: every card page made more than its 60 minutes and
- * `UNFINISHED_CHECKOUT_MARGIN_HOURS` ago whose card was never saved here is taken up (from then on
- * its card can't be saved: POST /api/cards answers that the page has expired) and deleted at Stripe,
- * its card (if Stripe saved one) and its Customer; oldest first, until the budget runs out. One
- * Stripe didn't answer is tried again the next day; one on an account this server can't use any
- * more waits for the shop (`cardsToDelete`). A page deleted at Stripe stays marked, so nothing is
- * asked twice.
+ * The daily job's part, and the card pages' own run 12 hours later (cron.ts): every card page made
+ * more than its 60 minutes and `UNFINISHED_CHECKOUT_MARGIN_HOURS` ago whose card was never saved
+ * here is taken up (from then on its card can't be saved: POST /api/cards answers that the page has
+ * expired) and deleted at Stripe, its card (if Stripe saved one) and its Customer; oldest first,
+ * until the budget runs out. One Stripe didn't answer is tried again at the next run; one on an
+ * account this server can't use any more waits for the shop (`cardsToDelete`). A page deleted at
+ * Stripe stays marked, so nothing is asked twice and its card can never be saved.
  */
 export async function purgeUnfinishedCheckouts(deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log'>, now: Date, budget: Budget): Promise<CheckoutPurge> {
   const done: CheckoutPurge = { deleted: 0, unreachable: 0, failed: 0 };
-  // A page whose card was saved by code from before migrations/011 (a rollback, say) was never
-  // closed: it's closed now, and saved_cards deletes its card.
+  // A page whose card was saved by code from before migrations/011 (a rollback, say) is still here:
+  // it goes now, and saved_cards deletes its card.
   await deps.db.query(
-    `UPDATE card_checkouts c SET closed_at = s.created_at, stripe_customer_id = NULL
-       FROM saved_cards s
-      WHERE s.checkout_session_id = c.checkout_session_id AND c.closed_at IS NULL AND c.abandoned_at IS NULL`,
+    `DELETE FROM card_checkouts c USING saved_cards s
+      WHERE s.checkout_session_id = c.checkout_session_id AND c.deleted_at IS NULL AND c.stripe_unreachable_at IS NULL`,
   );
   const cutoff = unfinishedCheckoutCutoff(now);
-  // Where the next page of rows starts (pages Stripe didn't answer for are passed over, and found again tomorrow).
+  // Where the next page of rows starts (pages Stripe didn't answer for are passed over, and found again next time).
   const cursor: { createdAt: Date | null; id: string | null } = { createdAt: null, id: null };
   while (timeLeft(budget)) {
     const { rows } = await deps.db.query<{ checkout_session_id: string; created_at: Date }>(
       `SELECT checkout_session_id, created_at FROM card_checkouts
-        WHERE closed_at IS NULL AND deleted_at IS NULL AND stripe_unreachable_at IS NULL
+        WHERE deleted_at IS NULL AND stripe_unreachable_at IS NULL
           AND (abandoned_at IS NOT NULL OR created_at < $1)
           AND ($2::timestamptz IS NULL OR (created_at, checkout_session_id) > ($2::timestamptz, $3::text))
         ORDER BY created_at, checkout_session_id
@@ -509,11 +589,11 @@ export async function purgeUnfinishedCheckouts(deps: Pick<Deps, 'config' | 'db' 
       cursor.createdAt = createdAt;
       cursor.id = id;
       // Taken up under the row's lock, which POST /api/cards takes too: a card being saved right now
-      // is left alone (and closed by then), and one taken up here can't be saved any more.
+      // is left alone (and its row gone by then), and one taken up here can't be saved any more.
       const page = await deps.db.transaction(async (tx) => {
         const { rows: locked } = await tx.query<CardCheckoutRow>(
           `SELECT * FROM card_checkouts c
-            WHERE c.checkout_session_id = $1 AND c.closed_at IS NULL AND c.deleted_at IS NULL AND c.stripe_unreachable_at IS NULL
+            WHERE c.checkout_session_id = $1 AND c.deleted_at IS NULL AND c.stripe_unreachable_at IS NULL
               AND NOT EXISTS (SELECT 1 FROM saved_cards s WHERE s.checkout_session_id = c.checkout_session_id)
             FOR UPDATE SKIP LOCKED`,
           [id],
@@ -534,7 +614,11 @@ export async function purgeUnfinishedCheckouts(deps: Pick<Deps, 'config' | 'db' 
           stripeAccount: page.stripe_account_id,
           livemode: page.livemode,
         });
-        await deps.db.query('UPDATE card_checkouts SET stripe_unreachable_at = $2 WHERE checkout_session_id = $1', [id, now]);
+        await deps.db.query('UPDATE card_checkouts SET stripe_unreachable_at = $2, stripe_unreachable_setup = $3 WHERE checkout_session_id = $1', [
+          id,
+          now,
+          currentSetup(deps),
+        ]);
         done.unreachable += 1;
         continue;
       }
@@ -546,7 +630,7 @@ export async function purgeUnfinishedCheckouts(deps: Pick<Deps, 'config' | 'db' 
   return done;
 }
 
-// What the shop deletes in an old Stripe account itself (Settings → Stripe).
+// What the shop deletes in a Stripe account itself (Settings → Stripe), and what the server tries again.
 
 /** A saved card, or an unfinished card page, on a Stripe account this server can't use any more. */
 export interface CardToDeleteJSON {
@@ -566,7 +650,7 @@ export interface CardToDeleteJSON {
 /** At most this many are listed at once (the oldest first); the next ones show once those are done. */
 export const CARDS_TO_DELETE_LIMIT = 100;
 
-/** What the shop has to delete in an old Stripe account, oldest first. */
+/** What the shop has to delete in a Stripe account the server can't use, oldest first. */
 export async function cardsToDelete(db: Queryable): Promise<CardToDeleteJSON[]> {
   const { rows } = await db.query<{
     id: string;
@@ -607,25 +691,85 @@ export async function cardsToDelete(db: Queryable): Promise<CardToDeleteJSON[]> 
  */
 export async function deletedInStripe(db: Queryable, id: string, now: Date): Promise<{ found: boolean }> {
   if (id.startsWith('cs_')) {
-    const { rows } = await db.query<{ found: boolean }>(
-      `WITH done AS (
-         UPDATE card_checkouts SET deleted_at = $2, stripe_customer_id = NULL, stripe_unreachable_at = NULL
-          WHERE checkout_session_id = $1 AND stripe_unreachable_at IS NOT NULL AND deleted_at IS NULL
-          RETURNING 1)
-       SELECT EXISTS (SELECT 1 FROM done) OR EXISTS (SELECT 1 FROM card_checkouts WHERE checkout_session_id = $1) AS found`,
-      [id, now],
-    );
-    return { found: rows[0]?.found === true };
+    if (await forgetDeletedPage(db, id, now)) return { found: true };
+    return { found: (await db.query('SELECT 1 FROM card_checkouts WHERE checkout_session_id = $1', [id])).rows.length > 0 };
   }
-  const { rows } = await db.query<{ found: boolean }>(
-    `WITH done AS (
-       UPDATE saved_cards SET checkout_session_id = NULL, stripe_customer_id = NULL, stripe_payment_method_id = NULL, stripe_unreachable_at = NULL
-        WHERE id = $1::uuid AND stripe_unreachable_at IS NOT NULL
-        RETURNING 1)
-     SELECT EXISTS (SELECT 1 FROM done) OR EXISTS (SELECT 1 FROM saved_cards WHERE id = $1::uuid) AS found`,
-    [id],
-  );
-  return { found: rows[0]?.found === true };
+  if (await forgetDeletedCard(db, id)) return { found: true };
+  return { found: (await db.query('SELECT 1 FROM saved_cards WHERE id = $1::uuid', [id])).rows.length > 0 };
+}
+
+export interface CardsToDeleteRetry {
+  /** Deleted at Stripe, now that the server can reach it again: off the shop's list. */
+  deleted: number;
+  /** Still out of the server's reach: it stays on the list (tried again once the server's Stripe setup changes). */
+  unreachable: number;
+  /** Stripe didn't answer: tried again tomorrow. */
+  failed: number;
+}
+
+/**
+ * The daily job's part, last: every saved card and card page on the shop's list (`cardsToDelete`)
+ * is tried again once the way the server reaches Stripe has changed since it was found out of reach
+ * (`setupFingerprint`: say the key was switched back between test and live, back to the shop's own
+ * key, or to the right account's). One Stripe deletes now is off the list, its ids forgotten; one
+ * still out of reach stays, and isn't tried again until the setup changes again; one Stripe didn't
+ * answer for is tried again tomorrow. Oldest first, until the budget runs out.
+ */
+export async function retryCardsToDelete(deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log'>, now: Date, budget: Budget): Promise<CardsToDeleteRetry> {
+  const done: CardsToDeleteRetry = { deleted: 0, unreachable: 0, failed: 0 };
+  const setup = setupFingerprint(deps.config);
+  if (!setup) return done;
+  // Where the next page of rows starts (ones Stripe didn't answer for are passed over).
+  const cardCursor: { at: Date | null; id: string | null } = { at: null, id: null };
+  while (timeLeft(budget)) {
+    const { rows }: { rows: SavedCardRow[] } = await deps.db.query<SavedCardRow>(
+      `SELECT * FROM saved_cards
+        WHERE stripe_unreachable_at IS NOT NULL AND stripe_unreachable_setup IS DISTINCT FROM $1
+          AND ($2::timestamptz IS NULL OR (stripe_unreachable_at, id) > ($2::timestamptz, $3::uuid))
+        ORDER BY stripe_unreachable_at, id
+        LIMIT 100`,
+      [setup, cardCursor.at, cardCursor.id],
+    );
+    for (const card of rows) {
+      if (!timeLeft(budget)) return done;
+      cardCursor.at = card.stripe_unreachable_at;
+      cardCursor.id = card.id;
+      const result = await deleteAtStripe(deps, card);
+      if (result === 'deleted') await forgetDeletedCard(deps.db, card.id);
+      if (result === 'unreachable') {
+        await deps.db.query('UPDATE saved_cards SET stripe_unreachable_setup = $2 WHERE id = $1 AND stripe_unreachable_at IS NOT NULL', [card.id, setup]);
+      }
+      done[result] += 1;
+    }
+    if (rows.length < 100) break;
+  }
+  const pageCursor: { at: Date | null; id: string | null } = { at: null, id: null };
+  while (timeLeft(budget)) {
+    const { rows }: { rows: CardCheckoutRow[] } = await deps.db.query<CardCheckoutRow>(
+      `SELECT * FROM card_checkouts
+        WHERE stripe_unreachable_at IS NOT NULL AND deleted_at IS NULL AND stripe_unreachable_setup IS DISTINCT FROM $1
+          AND ($2::timestamptz IS NULL OR (stripe_unreachable_at, checkout_session_id) > ($2::timestamptz, $3::text))
+        ORDER BY stripe_unreachable_at, checkout_session_id
+        LIMIT 100`,
+      [setup, pageCursor.at, pageCursor.id],
+    );
+    for (const page of rows) {
+      if (!timeLeft(budget)) return done;
+      pageCursor.at = page.stripe_unreachable_at;
+      pageCursor.id = page.checkout_session_id;
+      const result = await deletePageAtStripe(deps, page);
+      if (result === 'deleted') await forgetDeletedPage(deps.db, page.checkout_session_id, now);
+      if (result === 'unreachable') {
+        await deps.db.query(
+          'UPDATE card_checkouts SET stripe_unreachable_setup = $2 WHERE checkout_session_id = $1 AND stripe_unreachable_at IS NOT NULL AND deleted_at IS NULL',
+          [page.checkout_session_id, setup],
+        );
+      }
+      done[result] += 1;
+    }
+    if (rows.length < 100) break;
+  }
+  return done;
 }
 
 export { anonymizeAppointments, anonymizePayments, anonymizeSales };

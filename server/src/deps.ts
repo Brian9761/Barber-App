@@ -48,6 +48,11 @@ export interface StripeClient {
     create(params: Stripe.CustomerCreateParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer>;
     /** Deleting a saved card's Customer (retention.ts): Stripe can't charge anything saved under it any more. */
     del(id: string, params?: Stripe.CustomerDeleteParams, options?: Stripe.RequestOptions): Promise<Stripe.DeletedCustomer>;
+    /**
+     * After Stripe said it has no such Customer (retention.ts): one already deleted is still
+     * answered, marked deleted; one Stripe has never heard of is on another Stripe account.
+     */
+    retrieve(id: string, params?: Stripe.CustomerRetrieveParams, options?: Stripe.RequestOptions): Promise<Stripe.Customer | Stripe.DeletedCustomer>;
   };
   /** Deleting a saved card (retention.ts): detached from its Customer, it can never be used again. */
   paymentMethods: {

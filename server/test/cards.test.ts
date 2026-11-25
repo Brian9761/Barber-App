@@ -336,7 +336,7 @@ describe('a card saved from the website (returnTo: "web")', () => {
 describe('every card page is kept (Stripe’s ids only) until its card is saved (migrations/011)', () => {
   const pages = async () => (await h.database.pool.query('SELECT * FROM card_checkouts ORDER BY created_at, checkout_session_id')).rows;
 
-  it('the page and its Customer, the moment the page is made; closed, without the Customer, once its card is saved', async () => {
+  it('the page and its Customer, the moment the page is made; gone once its card is saved (saved_cards has its ids)', async () => {
     await protectionOn(h);
     const token = newManageToken();
     const res = await checkout(token);
@@ -348,10 +348,10 @@ describe('every card page is kept (Stripe’s ids only) until its card is saved 
         stripe_account_id: null,
         livemode: false,
         created_at: new Date('2026-11-02T17:00:00Z'),
-        closed_at: null,
         abandoned_at: null,
         deleted_at: null,
         stripe_unreachable_at: null,
+        stripe_unreachable_setup: null,
       },
     ]);
     // Nothing about the client, and never the token.
@@ -359,15 +359,24 @@ describe('every card page is kept (Stripe’s ids only) until its card is saved 
     h.stripe.completeSession(res.body.sessionId);
     h.advance(3);
     expect((await save(token, res.body.sessionId)).status).toBe(201);
-    expect(await pages()).toMatchObject([
-      { checkout_session_id: res.body.sessionId, stripe_customer_id: null, closed_at: new Date('2026-11-02T17:03:00Z'), abandoned_at: null },
-    ]);
-    // saved_cards has its Stripe ids now.
+    // saved_cards has its Stripe ids now, the Checkout Session's id in one place only: it goes with
+    // the card's other ids when the card is deleted (migrations/008).
+    expect(await pages()).toEqual([]);
     const card = (await h.database.pool.query('SELECT checkout_session_id, stripe_customer_id FROM saved_cards')).rows[0];
     expect(card).toEqual({ checkout_session_id: res.body.sessionId, stripe_customer_id: 'cus_TestFixture000001' });
-    // Saving it again (a lost answer) is the same card, and the page stays as it is.
-    expect((await save(token, res.body.sessionId)).status).toBe(200);
-    expect(await pages()).toMatchObject([{ closed_at: new Date('2026-11-02T17:03:00Z') }]);
+    // Saving it again (a lost answer) is the same card, from saved_cards.
+    const again = await save(token, res.body.sessionId);
+    expect(again.status).toBe(200);
+    expect(again.body.card).toEqual({ brand: 'visa', last4: '4242', expMonth: 12, expYear: 2030 });
+    expect(await pages()).toEqual([]);
+    // Removed, the card keeps no Stripe id, and neither does anything else here.
+    expect((await h.call('DELETE', '/api/cards', { headers: { 'x-card-token': token } })).body.cardDeletion.status).toBe('deleted');
+    expect((await h.database.pool.query('SELECT checkout_session_id, stripe_customer_id, stripe_payment_method_id FROM saved_cards')).rows).toEqual([
+      { checkout_session_id: null, stripe_customer_id: null, stripe_payment_method_id: null },
+    ]);
+    expect(await pages()).toEqual([]);
+    // A try this late (another copy of the request) isn't saved again.
+    expect((await save(token, res.body.sessionId)).status).toBe(404);
   });
 
   it('Stripe can’t make the page: the Customer just made is deleted, and nothing is kept', async () => {
@@ -430,7 +439,7 @@ describe('every card page is kept (Stripe’s ids only) until its card is saved 
     expect(res.body.error).toEqual({ code: 'not_found', message: CARD_PAGE_EXPIRED_MESSAGE });
     expect(CARD_PAGE_EXPIRED_MESSAGE).toBe('This card page has expired. Add your card again.');
     expect((await h.database.pool.query('SELECT count(*)::int AS n FROM saved_cards')).rows[0].n).toBe(0);
-    expect(await pages()).toMatchObject([{ closed_at: null }]);
+    expect(await pages()).toMatchObject([{ checkout_session_id: sessionId, stripe_customer_id: 'cus_TestFixture000001', deleted_at: null }]);
   });
 
   it('a page made before migration 011 (no row) still saves its card, as before', async () => {

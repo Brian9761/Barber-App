@@ -50,6 +50,17 @@ export function keyFingerprint(config: Config): string | null {
   return key ? createHash('sha256').update(key).digest('hex').slice(0, 16) : null;
 }
 
+/**
+ * How the server reaches Stripe, in short: its setup and its key's fingerprint ("direct:…" or
+ * "connect:…", never the key); null while Stripe is off. Something found on a Stripe account the
+ * server can't use is tried again once this changes (retention.ts, `retryCardsToDelete`).
+ */
+export function setupFingerprint(config: Config): string | null {
+  const setup = stripeSetup(config);
+  const fingerprint = keyFingerprint(config);
+  return setup === 'off' || !fingerprint ? null : `${setup}:${fingerprint}`;
+}
+
 // The connected account, cached in settings under 'stripe_connect' (stripeconnect.ts keeps it fresh).
 
 export const CONNECT_SETTINGS_KEY = 'stripe_connect';
@@ -320,6 +331,7 @@ export type StripeCall =
   | 'create terminal location'
   | 'detach card'
   | 'delete customer'
+  | 'retrieve customer'
   | 'send receipt'
   | 'send fee receipt';
 

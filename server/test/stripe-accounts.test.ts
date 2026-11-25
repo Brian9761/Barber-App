@@ -115,6 +115,10 @@ describe('every Stripe call for the shop goes to its connected account', () => {
     await site('another onboarding link', () => h.call('POST', '/api/owner/stripe/connect', { ...owner, body: { returnTo: 'web' } }));
     const spare = await saveCard('192.0.2.53');
     await site('a client removes a saved card', () => h.call('DELETE', '/api/cards', { headers: { 'x-card-token': spare } }));
+    const gone = await saveCard('192.0.2.54');
+    // The shop already deleted that card's customer in its Stripe Dashboard.
+    await h.stripe.customers.del(h.stripe.customerIds.at(-1)!, undefined, { stripeAccount: account });
+    await site('a card whose customer Stripe already deleted', () => h.call('DELETE', '/api/cards', { headers: { 'x-card-token': gone } }));
 
     expect(sites.map((s) => [s.site, methods(s.calls)])).toEqual([
       ['connect (the account and its onboarding link)', ['accounts.create', 'accountLinks.create']],
@@ -132,6 +136,8 @@ describe('every Stripe call for the shop goes to its connected account', () => {
       ['…looked up at Stripe before charging again', ['paymentIntents.list', 'checkout.sessions.retrieve', 'paymentIntents.update']],
       ['another onboarding link', ['accountLinks.create']],
       ['a client removes a saved card', ['paymentMethods.detach', 'customers.del']],
+      // Stripe has no such customer to delete: asked whether it was deleted (it was), on the card's account.
+      ['a card whose customer Stripe already deleted', ['paymentMethods.detach', 'customers.del', 'customers.retrieve']],
     ]);
     const platformCalls = new Set(['accounts.create', 'accounts.retrieve', 'accountLinks.create']);
     for (const call of h.stripe.calls) {

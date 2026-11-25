@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { newManageToken } from '../src/auth.js';
-import { correctAppointment, findPersonData, forgetPerson, PRIVACY_USAGE, privacyCommand, PrivacyError } from '../src/privacy.js';
+import {
+  CARDS_FOR_THE_SHOP_NOTE,
+  correctAppointment,
+  findPersonData,
+  forgetPerson,
+  PRIVACY_USAGE,
+  privacyCommand,
+  PrivacyError,
+} from '../src/privacy.js';
 import { NAME_REMOVED } from '../src/retention.js';
-import { protectionOn, useHarness } from './helpers/harness.js';
+import { connectedShop, protectionOn, useHarness } from './helpers/harness.js';
 
 // The owner's tools for a client's privacy request (src/privacy.ts, scripts/privacy.ts): find and
 // export one person's data, correct it, and forget it.
@@ -183,13 +191,13 @@ describe('privacy:forget', () => {
       appointments: { removed: 2, kept: [{ id: ids.nextWeek, start: '2026-11-09T18:00:00Z', reason: 'upcoming' }] },
       sales: 1,
       payments: 1,
-      savedCards: { deleted: 0, scheduled: 0, found: 1 },
+      savedCards: { deleted: 0, scheduled: 0, waitingForShop: 0, found: 1 },
       runAgainAfter: '2026-11-16T18:00:00Z',
     });
     expect((await h.database.pool.query(`SELECT count(*)::int AS n FROM appointments WHERE anonymized_at IS NOT NULL`)).rows[0].n).toBe(0);
 
     const done = await forgetPerson(h.deps, { phone: '(442) 555-0170' });
-    expect(done).toEqual({ ...dry, dryRun: false, savedCards: { deleted: 0, scheduled: 1, found: 1 } });
+    expect(done).toEqual({ ...dry, dryRun: false, savedCards: { deleted: 0, scheduled: 1, waitingForShop: 0, found: 1 } });
     const row = async (id: string) => (await h.database.pool.query('SELECT * FROM appointments WHERE id = $1', [id])).rows[0];
     for (const id of [ids.tuesday, ids.thursday]) {
       expect(await row(id)).toMatchObject({ customer_name: NAME_REMOVED, customer_phone: null, customer_email: null, note: null, manage_token_hash: null });
@@ -212,9 +220,41 @@ describe('privacy:forget', () => {
     await h.call('PATCH', `/api/owner/appointments/${ids.nextWeek}`, { ...owner, body: { status: 'completed' } });
     h.setNow('2026-11-09T19:00:00Z');
     const again = await forgetPerson(h.deps, { phone: '(442) 555-0170' });
-    expect(again).toMatchObject({ appointments: { removed: 1, kept: [] }, savedCards: { deleted: 1, scheduled: 0, found: 1 }, runAgainAfter: null });
+    expect(again).toMatchObject({ appointments: { removed: 1, kept: [] }, savedCards: { deleted: 1, scheduled: 0, waitingForShop: 0, found: 1 }, runAgainAfter: null });
+    expect(again.cardsNote).toBeUndefined();
     expect(h.stripe.calls.filter((c) => c.method === 'customers.del')).toHaveLength(1);
     expect(await findPersonData(h.deps, { phone: '(442) 555-0170' })).toMatchObject({ appointments: [], sales: [], payments: [], savedCards: [] });
+  });
+
+  it('a card on a Stripe account the server can’t use any more isn’t counted as deleted: it waits for the shop, which is told where to delete it', async () => {
+    // Saved with the shop's own key, used for a visit that's done; then the shop connects Stripe.
+    const token = await saveCard();
+    const id = await book(token, '2026-11-03T18:00:00Z');
+    h.setNow('2026-11-03T18:50:00Z');
+    expect((await h.call('PATCH', `/api/owner/appointments/${id}`, { ...owner, body: { status: 'completed' } })).status).toBe(200);
+    await connectedShop(h);
+    const before = (await h.database.pool.query('SELECT id, stripe_customer_id FROM saved_cards')).rows[0];
+    const out = await privacyCommand(['forget', '--phone', '(442) 555-0170'], h.deps);
+    expect(out.exitCode).toBe(0);
+    const forgotten = JSON.parse(out.output);
+    expect(forgotten).toMatchObject({ dryRun: false, savedCards: { deleted: 0, scheduled: 0, waitingForShop: 1, found: 1 }, cardsNote: CARDS_FOR_THE_SHOP_NOTE });
+    expect(CARDS_FOR_THE_SHOP_NOTE).toBe(
+      "Some of their saved cards are on a Stripe account the server can't use any more, so it couldn't delete them there. They can't be used or charged. Delete them in that Stripe account: they're listed in Izzy Clipz Business under Settings, Cards to delete in Stripe (and in Settings in the website's Business area).",
+    );
+    // Nothing was asked of Stripe; the card can't be used, keeps its ids for the shop, and is on the list.
+    expect(h.stripe.calls.filter((c) => c.method === 'customers.del' || c.method === 'paymentMethods.detach')).toEqual([]);
+    expect((await h.database.pool.query('SELECT removed_at, stripe_unreachable_at, stripe_customer_id FROM saved_cards')).rows[0]).toEqual({
+      removed_at: new Date('2026-11-03T18:50:00Z'),
+      stripe_unreachable_at: new Date('2026-11-03T18:50:00Z'),
+      stripe_customer_id: before.stripe_customer_id,
+    });
+    expect((await h.call('GET', '/api/owner/stripe', owner)).body.cardsToDelete).toMatchObject([{ id: before.id, kind: 'savedCard', customerId: before.stripe_customer_id }]);
+    // The client removing it afterwards is told the same: the shop deletes it, never "deleted"…
+    const removal = () => h.call('DELETE', '/api/cards', { headers: { 'x-card-token': token } });
+    expect((await removal()).body.cardDeletion.status).toBe('shop');
+    // …until the shop says it deleted it there.
+    expect((await h.call('POST', `/api/owner/stripe/cards-to-delete/${before.id}/deleted`, owner)).status).toBe(200);
+    expect((await removal()).body.cardDeletion.status).toBe('deleted');
   });
 });
 

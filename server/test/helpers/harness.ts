@@ -400,6 +400,16 @@ export class FakeStripe implements StripeClient {
       for (const { method } of this.savedMethods()) if (method.customer === id) method.customer = null;
       return { id, object: 'customer', deleted: true } as Stripe.DeletedCustomer;
     },
+    // Like Stripe: a deleted Customer is still answered, marked deleted; one made on another account isn't found.
+    retrieve: async (id: string, params?: Stripe.CustomerRetrieveParams, options?: Stripe.RequestOptions) => {
+      this.calls.push({ method: 'customers.retrieve', params: { id, ...params }, options });
+      this.maybeFail();
+      if (!this.customerIds.includes(id) || !this.visible(id, options)) {
+        throw stripeError('StripeInvalidRequestError', { code: 'resource_missing', param: 'id', statusCode: 404 }, `No such customer: '${id}'`);
+      }
+      if (this.deletedCustomers.has(id)) return { id, object: 'customer', deleted: true } as Stripe.DeletedCustomer;
+      return { id, object: 'customer', description: null, metadata: {} } as unknown as Stripe.Customer;
+    },
   };
 
   /** The cards saved through Checkout, as Stripe keeps them, with the account each was saved on. */

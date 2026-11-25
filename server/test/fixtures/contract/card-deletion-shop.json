@@ -1,0 +1,6 @@
+{
+  "cardDeletion": {
+    "status": "shop",
+    "message": "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account."
+  }
+}

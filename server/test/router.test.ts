@@ -93,6 +93,68 @@ describe('GET /api/cron/daily', () => {
     expect((await h.call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${CRON_SECRET}` } })).status).toBe(401);
   });
 
+  it('GET /api/cron/card-pages: the same secret, and only the card pages', async () => {
+    expect((await h.call('GET', '/api/cron/card-pages')).status).toBe(401);
+    expect((await h.call('GET', '/api/cron/card-pages', { headers: { authorization: 'Bearer wrong' } })).status).toBe(401);
+    await h.database.pool.query(`INSERT INTO rate_limits (key, window_start, count) VALUES ('old', '2026-10-30T00:00:00Z', 3)`);
+    const res = await h.call('GET', '/api/cron/card-pages', { headers: { authorization: `Bearer ${CRON_SECRET}` } });
+    expect(res.status).toBe(200);
+    // test/retention.test.ts has the card pages themselves.
+    expect(res.body).toEqual({ ok: true, unfinishedCardPages: { deleted: 0, unreachable: 0, failed: 0 } });
+    expect((await h.database.pool.query('SELECT key FROM rate_limits')).rows).toEqual([{ key: 'old' }]);
+    h.config.cronSecret = undefined;
+    expect((await h.call('GET', '/api/cron/card-pages', { headers: { authorization: `Bearer ${CRON_SECRET}` } })).status).toBe(401);
+  });
+
+  it('every step runs even when one before it fails: the failure is logged, and the answer is a 500 that names it', async () => {
+    const pool = h.database.pool;
+    await pool.query(`INSERT INTO rate_limits (key, window_start, count) VALUES ('old', '2026-10-30T00:00:00Z', 3)`);
+    await pool.query(`INSERT INTO api_usage (day, counter, count) VALUES ('2026-07-01', 'google_places_details', 9)`);
+    const db = h.deps.db;
+    const realQuery = db.query;
+    // The first step (the card pages) and the Yelp cache fail; everything else still runs.
+    db.query = ((text: string, values?: unknown[]) => {
+      if (/^\s*(DELETE FROM yelp_cache|DELETE FROM card_checkouts)/.test(text)) {
+        return Promise.reject(Object.assign(new Error('canceling statement due to lock timeout'), { code: '55P03' }));
+      }
+      return realQuery(text, values);
+    }) as typeof db.query;
+    try {
+      const res = await h.call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${CRON_SECRET}` } });
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        ok: false,
+        failedSteps: ['unfinishedCardPages', 'yelpCache'],
+        deleted: { rateLimits: 1, apiUsage: 1, yelpCache: 0 },
+        anonymized: { appointments: 0, sales: 0, payments: 0, receiptEmails: 0 },
+        savedCards: { deleted: 0, stillNeeded: 0, unreachable: 0, failed: 0 },
+        unfinishedCardPages: { deleted: 0, unreachable: 0, failed: 0 },
+        cardsToDelete: { deleted: 0, unreachable: 0, failed: 0 },
+      });
+      expect(h.logs.filter((l) => l.level === 'error')).toEqual([
+        {
+          level: 'error',
+          message: 'A step of a cron job failed; the steps after it still ran',
+          details: { step: 'unfinishedCardPages', error: 'Error: canceling statement due to lock timeout', code: '55P03' },
+        },
+        {
+          level: 'error',
+          message: 'A step of a cron job failed; the steps after it still ran',
+          details: { step: 'yelpCache', error: 'Error: canceling statement due to lock timeout', code: '55P03' },
+        },
+      ]);
+      expect((await pool.query('SELECT count(*)::int AS n FROM rate_limits')).rows[0].n).toBe(0);
+      // The card pages' own run says so too.
+      const pages = await h.call('GET', '/api/cron/card-pages', { headers: { authorization: `Bearer ${CRON_SECRET}` } });
+      expect(pages.status).toBe(500);
+      expect(pages.body).toEqual({ ok: false, failedSteps: ['unfinishedCardPages'], unfinishedCardPages: { deleted: 0, unreachable: 0, failed: 0 } });
+    } finally {
+      db.query = realQuery;
+    }
+    // The next run, with the database back, is a 200 again.
+    expect((await h.call('GET', '/api/cron/daily', { headers: { authorization: `Bearer ${CRON_SECRET}` } })).status).toBe(200);
+  });
+
   it('cleans up old rate-limit windows and usage counters, idempotently', async () => {
     const pool = h.database.pool;
     await pool.query(`INSERT INTO rate_limits (key, window_start, count) VALUES ('old', '2026-10-30T00:00:00Z', 3), ('new', '2026-11-02T19:00:00Z', 1)`);
@@ -103,10 +165,11 @@ describe('GET /api/cron/daily', () => {
     expect(first.body).toEqual({
       ok: true,
       deleted: { rateLimits: 1, apiUsage: 1, yelpCache: 0 },
-      // Clients' details, saved cards and unfinished card pages (test/retention.test.ts): none due here.
+      // Clients' details, saved cards, unfinished card pages and the shop's list (test/retention.test.ts): none due here.
       anonymized: { appointments: 0, sales: 0, payments: 0, receiptEmails: 0 },
-      savedCards: { deleted: 0, stillNeeded: 0, failed: 0 },
+      savedCards: { deleted: 0, stillNeeded: 0, unreachable: 0, failed: 0 },
       unfinishedCardPages: { deleted: 0, unreachable: 0, failed: 0 },
+      cardsToDelete: { deleted: 0, unreachable: 0, failed: 0 },
     });
     const second = await h.call('GET', '/api/cron/daily', auth);
     expect(second.body.deleted).toEqual({ rateLimits: 0, apiUsage: 0, yelpCache: 0 });

@@ -8,7 +8,7 @@ import {
   revokeComputerSession,
   revokeCurrentComputerSession,
 } from './computers.js';
-import { dailyCron } from './cron.js';
+import { cardPagesCron, dailyCron } from './cron.js';
 import type { Deps } from './deps.js';
 import { json } from './http.js';
 import { completePayment, connectionToken, createPayment, listPayments, ownerMe, sendPaymentReceipt, stripeWebhook } from './payments.js';
@@ -90,6 +90,7 @@ export function createRouter(): Router {
       // Machines
       .on('POST', '/api/stripe/webhook', stripeWebhook)
       .on('GET', '/api/cron/daily', dailyCron)
+      .on('GET', '/api/cron/card-pages', cardPagesCron)
   );
 }
 

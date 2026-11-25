@@ -224,12 +224,34 @@ export async function correctAppointment(deps: Pick<Deps, 'db' | 'now'>, id: str
   });
 }
 
+/** What forget did (or, with `dryRun`, would do). */
+export interface ForgetResult {
+  person: Who;
+  /** Found by name: names aren't unique. */
+  note?: string;
+  dryRun: boolean;
+  appointments: { removed: number; kept: { id: string; start: string; reason: 'upcoming' | 'fee' }[] };
+  sales: number;
+  payments: number;
+  /** `waitingForShop`: on a Stripe account the server can't use any more, for the shop to delete there. */
+  savedCards: { deleted: number; scheduled: number; waitingForShop: number; found: number };
+  runAgainAfter: string | null;
+  /** Where the shop deletes the cards `waitingForShop` counts; only when there are some. */
+  cardsNote?: string;
+}
+
+/** What forget says when some of the person's saved cards are for the shop to delete in Stripe itself. */
+export const CARDS_FOR_THE_SHOP_NOTE =
+  "Some of their saved cards are on a Stripe account the server can't use any more, so it couldn't delete them there. They can't be used or charged. Delete them in that Stripe account: they're listed in Izzy Clipz Business under Settings, Cards to delete in Stripe (and in Settings in the website's Business area).";
+
 /**
  * Deletes the person's details now, as the daily job does after 12 months: from their appointments,
  * except one still needed (upcoming, or one whose fee is pending or can still be charged within the
  * 7 days), and from those appointments' checkouts and card payments. Their saved cards are deleted
- * at Stripe, or as soon as no booking needs them (like DELETE /api/cards). `dryRun` only says what
- * would happen. Run it again after `runAgainAfter` for the appointments it had to keep.
+ * at Stripe, or as soon as no booking needs them (like DELETE /api/cards); one on a Stripe account
+ * the server can't use any more is removed here and counted as `waitingForShop`, with a `cardsNote`
+ * on where the shop deletes it. `dryRun` only says what would happen. Run it again after
+ * `runAgainAfter` for the appointments it had to keep.
  */
 export async function forgetPerson(deps: Pick<Deps, 'config' | 'db' | 'stripe' | 'log' | 'now'>, person: Person, options: { dryRun?: boolean } = {}) {
   const now = deps.now();
@@ -256,14 +278,14 @@ export async function forgetPerson(deps: Pick<Deps, 'config' | 'db' | 'stripe' |
       : { rows: [] as { id: string }[] };
   const cardIds = [...new Set(rows.map((r) => r.saved_card_id).filter((id): id is string => id !== null))];
   const latest = rows.filter((row) => keptIds.has(row.id)).map((row) => feeDeadline(row.start_at).getTime());
-  const result = {
+  const result: ForgetResult = {
     person: key,
     ...('name' in key ? { note: SAME_NAME_NOTE } : {}),
     dryRun: options.dryRun === true,
     appointments: { removed: removable.length, kept },
     sales: sales.length,
     payments: payments.length,
-    savedCards: { deleted: 0, scheduled: 0, found: cardIds.length },
+    savedCards: { deleted: 0, scheduled: 0, waitingForShop: 0, found: cardIds.length },
     runAgainAfter: latest.length > 0 ? formatInstant(new Date(Math.max(...latest))) : null,
   };
   if (options.dryRun) return result;
@@ -275,9 +297,12 @@ export async function forgetPerson(deps: Pick<Deps, 'config' | 'db' | 'stripe' |
       ? await deps.db.query<SavedCardRow>('SELECT * FROM saved_cards WHERE id = ANY($1::uuid[]) ORDER BY created_at', [cardIds])
       : { rows: [] as SavedCardRow[] };
   for (const card of cards) {
-    if ((await removeCard(deps, card, now)) === 'deleted') result.savedCards.deleted += 1;
+    const removal = await removeCard(deps, card, now);
+    if (removal === 'deleted') result.savedCards.deleted += 1;
+    else if (removal === 'shop') result.savedCards.waitingForShop += 1;
     else result.savedCards.scheduled += 1;
   }
+  if (result.savedCards.waitingForShop > 0) result.cardsNote = CARDS_FOR_THE_SHOP_NOTE;
   return result;
 }
 

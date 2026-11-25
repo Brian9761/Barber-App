@@ -1785,7 +1785,7 @@ describe('a receipt for every fee', () => {
     h.stripe.paymentIntents.create = async (...args: Parameters<typeof realCreate>) => {
       const intent = await realCreate(...args);
       await h.database.pool.query(
-        `UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now() WHERE id = (SELECT saved_card_id FROM appointments WHERE id = $1)`,
+        `UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now(), stripe_unreachable_setup = 'connect:0123456789abcdef' WHERE id = (SELECT saved_card_id FROM appointments WHERE id = $1)`,
         [id],
       );
       return intent;

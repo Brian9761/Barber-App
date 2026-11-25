@@ -122,8 +122,10 @@ describe('npm run migrate', () => {
       'stripe_account_id',
       'stripe_customer_id',
       'stripe_payment_method_id',
-      // 011: when it was found on a Stripe account this server can't use any more (its ids kept for the shop).
+      // 011: when it was found on a Stripe account this server can't use any more (its ids kept for the
+      // shop), and how the server reached Stripe then (it's tried again once that changes).
       'stripe_unreachable_at',
+      'stripe_unreachable_setup',
       'token_hash',
     ]);
     expect(await columns('settings')).toEqual(['key', 'updated_at', 'value']);
@@ -630,17 +632,21 @@ describe('npm run migrate', () => {
     expect(await columns('card_checkouts')).toEqual([
       'abandoned_at timestamp with time zone null',
       'checkout_session_id text',
-      'closed_at timestamp with time zone null',
       'created_at timestamp with time zone',
       'deleted_at timestamp with time zone null',
       'livemode boolean',
       'stripe_account_id text null',
       'stripe_customer_id text null',
       'stripe_unreachable_at timestamp with time zone null',
+      'stripe_unreachable_setup text null',
     ]);
-    expect(await columns('saved_cards')).toContain('stripe_unreachable_at timestamp with time zone null');
+    expect(await columns('saved_cards')).toEqual(
+      expect.arrayContaining(['stripe_unreachable_at timestamp with time zone null', 'stripe_unreachable_setup text null']),
+    );
     const index = async (name: string) => (await db.pool.query(`SELECT indexdef FROM pg_indexes WHERE indexname = $1`, [name])).rows[0]?.indexdef;
-    expect(await index('card_checkouts_unfinished_idx')).toContain('(created_at) WHERE ((closed_at IS NULL) AND (deleted_at IS NULL) AND (stripe_unreachable_at IS NULL))');
+    expect(await index('card_checkouts_unfinished_idx')).toContain('(created_at) WHERE ((deleted_at IS NULL) AND (stripe_unreachable_at IS NULL))');
+    expect(await index('card_checkouts_unreachable_idx')).toContain('(stripe_unreachable_at) WHERE (stripe_unreachable_at IS NOT NULL)');
+    expect(await index('saved_cards_unreachable_idx')).toContain('(stripe_unreachable_at) WHERE (stripe_unreachable_at IS NOT NULL)');
     // 001–010 into a schema of its own, a saved card the way the server wrote it, then 011 on top.
     const dir = mkdtempSync(join(tmpdir(), 'izzy-migrations-before-011-'));
     const all = migrationFiles();
@@ -651,6 +657,7 @@ describe('npm run migrate', () => {
       await expect(client.query(sql), sql).rejects.toMatchObject({ constraint });
       await client.query('ROLLBACK TO SAVEPOINT probe');
     };
+    const SETUP = `'direct:0123456789abcdef'`;
     try {
       await client.query('CREATE SCHEMA before_011');
       await client.query('SET search_path TO before_011, public');
@@ -664,8 +671,8 @@ describe('npm run migrate', () => {
       writeFileSync(join(dir, file.name), file.sql);
       expect((await migrate(client, pathToFileURL(`${dir}/`))).applied).toEqual(['011_card_checkouts.sql']);
       // The card from before it: as it was, and not waiting for the shop.
-      expect((await client.query('SELECT stripe_customer_id, removed_at, stripe_unreachable_at FROM saved_cards')).rows).toEqual([
-        { stripe_customer_id: 'cus_before011', removed_at: null, stripe_unreachable_at: null },
+      expect((await client.query('SELECT stripe_customer_id, removed_at, stripe_unreachable_at, stripe_unreachable_setup FROM saved_cards')).rows).toEqual([
+        { stripe_customer_id: 'cus_before011', removed_at: null, stripe_unreachable_at: null, stripe_unreachable_setup: null },
       ]);
       // The code already live still saves cards without it.
       await client.query(card('b'.repeat(64), 'cs_test_after011'));
@@ -673,24 +680,46 @@ describe('npm run migrate', () => {
       const page = (id: string, fields: string, values: string) =>
         `INSERT INTO card_checkouts (checkout_session_id, livemode, created_at${fields}) VALUES ('${id}', false, now()${values})`;
       await client.query(page('cs_test_open', ', stripe_customer_id, stripe_account_id', `, 'cus_open', 'acct_1Shop'`));
-      await client.query(page('cs_test_saved', ', closed_at', ', now()'));
+      await client.query(page('cs_test_taken', ', stripe_customer_id, abandoned_at', `, 'cus_taken', now()`));
       await client.query(page('cs_test_gone', ', abandoned_at, deleted_at', ', now(), now()'));
-      await client.query(page('cs_test_shop', ', stripe_customer_id, abandoned_at, stripe_unreachable_at', `, 'cus_shop', now(), now()`));
-      // Stripe's ids only, in Stripe's shapes.
+      await client.query(
+        page('cs_test_shop', ', stripe_customer_id, abandoned_at, stripe_unreachable_at, stripe_unreachable_setup', `, 'cus_shop', now(), now(), ${SETUP}`),
+      );
+      await client.query(
+        page('cs_test_shop2', ', stripe_customer_id, abandoned_at, stripe_unreachable_at, stripe_unreachable_setup', `, 'cus_shop2', now(), now(), 'connect:fedcba9876543210'`),
+      );
+      // Stripe's ids only, in Stripe's shapes; how the server reached Stripe, never a key.
       await refused('card_checkouts_checkout_session_id_check', page('client@example.com', ', stripe_customer_id', `, 'cus_x'`));
       await refused('card_checkouts_stripe_customer_id_check', page('cs_test_x1', ', stripe_customer_id', `, 'Andre Sample'`));
       await refused('card_checkouts_stripe_account_id_check', page('cs_test_x2', ', stripe_customer_id, stripe_account_id', `, 'cus_x', 'acct_'`));
       await refused('card_checkouts_pkey', page('cs_test_open', ', stripe_customer_id', `, 'cus_x'`));
-      // An open page keeps its Customer's id until there's nothing left to delete with it.
+      for (const setup of [`'sk_test_123'`, `'direct:sk_test_0123456789'`, `'off:0123456789abcdef'`, `'direct:0123456789ABCDEF'`]) {
+        await refused(
+          'card_checkouts_stripe_unreachable_setup_check',
+          page('cs_test_x7', ', stripe_customer_id, abandoned_at, stripe_unreachable_at, stripe_unreachable_setup', `, 'cus_x', now(), now(), ${setup}`),
+        );
+      }
+      // A page keeps its Customer's id until there's nothing left to delete with it.
       await refused('card_checkouts_customer', page('cs_test_x3', '', ''));
-      // Saved or taken up by the daily job, never both; deleted or waiting for the shop only once taken up.
-      await refused('card_checkouts_closed_or_abandoned', page('cs_test_x4', ', closed_at, abandoned_at', ', now(), now()'));
-      await refused('card_checkouts_cleanup', page('cs_test_x5', ', stripe_customer_id, stripe_unreachable_at', `, 'cus_x', now()`));
-      await refused('card_checkouts_cleanup', page('cs_test_x6', ', closed_at, deleted_at', ', now(), now()'));
-      // A card waits for the shop only once removed, and with its customer's id.
-      await refused('saved_cards_unreachable', `UPDATE saved_cards SET stripe_unreachable_at = now() WHERE checkout_session_id = 'cs_test_before011'`);
-      await client.query(`UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now() WHERE checkout_session_id = 'cs_test_before011'`);
-      await refused('saved_cards_unreachable', `UPDATE saved_cards SET stripe_customer_id = NULL WHERE checkout_session_id = 'cs_test_before011'`);
+      await refused('card_checkouts_customer', page('cs_test_x4', ', abandoned_at', ', now()'));
+      // Deleted or waiting for the shop only once taken up, never both, and waiting with how the server reached Stripe.
+      await refused('card_checkouts_cleanup', page('cs_test_x5', `, stripe_customer_id, stripe_unreachable_at, stripe_unreachable_setup`, `, 'cus_x', now(), ${SETUP}`));
+      await refused('card_checkouts_cleanup', page('cs_test_x6', ', deleted_at', ', now()'));
+      await refused(
+        'card_checkouts_deleted_or_waiting',
+        page('cs_test_x8', ', stripe_customer_id, abandoned_at, deleted_at, stripe_unreachable_at, stripe_unreachable_setup', `, 'cus_x', now(), now(), now(), ${SETUP}`),
+      );
+      await refused('card_checkouts_unreachable', page('cs_test_x9', ', stripe_customer_id, abandoned_at, stripe_unreachable_at', `, 'cus_x', now(), now()`));
+      await refused('card_checkouts_unreachable', page('cs_test_x10', ', stripe_customer_id, abandoned_at, stripe_unreachable_setup', `, 'cus_x', now(), ${SETUP}`));
+      await refused('card_checkouts_customer', `UPDATE card_checkouts SET stripe_customer_id = NULL WHERE checkout_session_id = 'cs_test_shop'`);
+      // A card waits for the shop only once removed, with its customer's id, and with how the server reached Stripe.
+      const before = `WHERE checkout_session_id = 'cs_test_before011'`;
+      await refused('saved_cards_unreachable', `UPDATE saved_cards SET stripe_unreachable_at = now(), stripe_unreachable_setup = ${SETUP} ${before}`);
+      await refused('saved_cards_unreachable', `UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now() ${before}`);
+      await refused('saved_cards_unreachable', `UPDATE saved_cards SET removed_at = now(), stripe_unreachable_setup = ${SETUP} ${before}`);
+      await refused('saved_cards_stripe_unreachable_setup_check', `UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now(), stripe_unreachable_setup = 'sk_live_123' ${before}`);
+      await client.query(`UPDATE saved_cards SET removed_at = now(), stripe_unreachable_at = now(), stripe_unreachable_setup = ${SETUP} ${before}`);
+      await refused('saved_cards_unreachable', `UPDATE saved_cards SET stripe_customer_id = NULL ${before}`);
       await client.query('ROLLBACK');
     } finally {
       await client.query('ROLLBACK').catch(() => undefined);

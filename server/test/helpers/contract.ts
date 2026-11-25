@@ -392,6 +392,8 @@ export const RESPONSES = {
   // DELETE /api/cards: deleted at Stripe now, or once no booking needs it.
   'card-deletion': z.strictObject({ cardDeletion: z.strictObject({ status: z.enum(['deleted', 'scheduled']), message: z.string().min(1) }) }),
   'card-deletion-scheduled': z.strictObject({ cardDeletion: z.strictObject({ status: z.enum(['deleted', 'scheduled']), message: z.string().min(1) }) }),
+  // …or, on a Stripe account the server can't use any more, removed here for the shop to delete there: never "deleted".
+  'card-deletion-shop': z.strictObject({ cardDeletion: z.strictObject({ status: z.literal('shop'), message: z.string().min(1) }) }),
   'no-show-settings': z.strictObject({ noShowSettings: NoShowSettings }),
   'no-show-settings-updated': z.strictObject({ noShowSettings: NoShowSettings }),
   'payments-with-fees': z.strictObject({ payments: z.array(Payment) }),
