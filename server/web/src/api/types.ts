@@ -153,6 +153,12 @@ export interface Appointment {
   createdAt: string;
   card: { brand: string; last4: string } | null;
   noShowFee: NoShowFee | null;
+  /**
+   * When the shop first cancelled it, or null. The server never clears it: a booking the shop cancelled
+   * has no fee, even once it's reopened, so there's no late-cancellation warning for it. Missing from a
+   * server from before it (and in appointments this browser kept from then, until they're refreshed).
+   */
+  shopCancelledAt?: string | null;
 }
 
 /** POST /api/appointments */

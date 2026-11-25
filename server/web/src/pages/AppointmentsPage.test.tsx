@@ -5,6 +5,7 @@ import cancelledLate from '../../../test/fixtures/contract/appointment-cancelled
 import cancelledFixture from '../../../test/fixtures/contract/appointment-cancelled.json';
 import lateCancelFee from '../../../test/fixtures/contract/errors/late_cancel_fee.json';
 import notCancellable from '../../../test/fixtures/contract/errors/not_cancellable.json';
+import reopenedFixture from '../../../test/fixtures/contract/appointment-reopened-after-shop-cancel.json';
 import type { Appointment } from '../api/types';
 import cardSaved from '../../../test/fixtures/contract/card-saved.json';
 import cardDeleted from '../../../test/fixtures/contract/card-deletion.json';
@@ -186,6 +187,43 @@ describe('cancelling', () => {
 
     const dialog = await openCancel();
     expect(within(dialog).getByTestId('late-cancel-warning').textContent?.trim()).toBe(lateCancelFee.error.message);
+  });
+
+  it('doesn’t warn about a fee for a booking the shop cancelled and reopened: the shop says so when it’s checked', async () => {
+    // The server's own answer for Tuesday's 10 AM, which the shop cancelled on Monday and reopened, as its
+    // client sees it. This browser kept it from before (when the shop hadn't cancelled it).
+    const reopened = reopenedFixture.appointment as unknown as Appointment;
+    expect(reopened).toMatchObject({ status: 'booked', start: '2026-11-03T18:00:00Z', shopCancelledAt: '2026-11-02T17:00:00Z' });
+    at('2026-11-03T17:30:00Z'); // half an hour before: inside the 1-hour window
+    saveAppointment({ ...reopened, shopCancelledAt: null }, MANAGE);
+    const api = mockApi([
+      ['GET /api/appointments/*', { body: { appointment: reopened } }],
+      [
+        'POST /api/appointments/*',
+        {
+          body: {
+            appointment: {
+              ...reopened,
+              status: 'cancelled',
+              cancelledBy: 'customer',
+              noShowFee: { ...reopened.noShowFee!, customerCancelledAt: '2026-11-03T17:30:00Z' },
+            },
+          },
+        },
+      ],
+    ]);
+    renderApp('/appointments');
+
+    const dialog = await openCancel();
+    // There's no fee for it, so nothing is said of one, as when cancelling is free.
+    expect(within(dialog).queryByTestId('late-cancel-warning')).toBeNull();
+    expect(dialog.textContent).toContain(times('Haircut with Flowxbori, Tuesday, November 3 at 10 AM. The shop sees it right away.'));
+    expect(loadAppointments()[0]!.appointment.shopCancelledAt).toBe('2026-11-02T17:00:00Z');
+    await userEvent.click(within(dialog).getByTestId('confirm-cancel'));
+    await screen.findByText('Appointment cancelled. The shop sees it right away.');
+    // Nothing to accept: the server doesn't ask either.
+    const posts = api.calls.filter((c) => c.method === 'POST');
+    expect(posts.map((c) => [c.path, c.body])).toEqual([[`/api/appointments/${reopened.id}/cancel`, undefined]]);
   });
 
   it('asks again with the shop’s warning when the shop’s clock says it’s late', async () => {
