@@ -1,6 +1,6 @@
 // Settings: Card payments (Stripe), with the status as the app shows it and Connect Stripe
 // or Finish setting up, which opens Stripe's own page and comes back here (and, when there are
-// some, the cards to delete in an old Stripe account, each with Deleted in Stripe); No-show
+// some, the cards to delete in a Stripe account it can't reach, each with Deleted in Stripe); No-show
 // protection, the same settings as the app; this computer, and the other computers signed
 // in; how to put Izzy Clipz Business on this phone or computer; and in the demo, Reset.
 

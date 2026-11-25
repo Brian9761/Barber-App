@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import cardDeleted from '../../../test/fixtures/contract/card-deletion.json';
 import cardScheduled from '../../../test/fixtures/contract/card-deletion-scheduled.json';
+import cardForTheShop from '../../../test/fixtures/contract/card-deletion-shop.json';
 import { apiError, mockApi } from '../test/api';
 import { deleteSavedCard, forgetMeCardLine, notYouCardLine } from './cardRemoval';
 import { newToken } from './tokens';
@@ -14,12 +15,16 @@ describe('deleting a saved card at the shop', () => {
     expect(await deleteSavedCard(token)).toEqual({ status: 'deleted', message: cardDeleted.cardDeletion.message });
     mock.once('DELETE /api/cards', { body: cardScheduled });
     expect(await deleteSavedCard(token)).toEqual({ status: 'scheduled', message: cardScheduled.cardDeletion.message });
+    // On a Stripe account the shop's server can't use any more: the shop deletes it there.
+    mock.once('DELETE /api/cards', { body: cardForTheShop });
+    expect(await deleteSavedCard(token)).toEqual({ status: 'shop', message: cardForTheShop.cardDeletion.message });
     expect(mock.calls.map((c) => [c.method, c.path, c.headers['x-card-token']])).toEqual([
+      ['DELETE', '/api/cards', token],
       ['DELETE', '/api/cards', token],
       ['DELETE', '/api/cards', token],
     ]);
     // Sent so it still goes if the client closes the tab right after: the key is gone from here.
-    expect(mock.calls.map((c) => c.keepalive)).toEqual([true, true]);
+    expect(mock.calls.map((c) => c.keepalive)).toEqual([true, true, true]);
   });
 
   it('says there was nothing to delete when the shop has no card with that key', async () => {
@@ -49,6 +54,9 @@ describe('what the site says about it', () => {
     expect(forgetMeCardLine({ status: 'asking' }, PHONE)).toBe('Asking the shop to delete your saved card…');
     expect(forgetMeCardLine(cardDeleted.cardDeletion as never, PHONE)).toBe("Your saved card is deleted. It can't be charged any more.");
     expect(forgetMeCardLine(cardScheduled.cardDeletion as never, PHONE)).toBe('Your card will be deleted as soon as your appointments no longer need it.');
+    expect(forgetMeCardLine(cardForTheShop.cardDeletion as never, PHONE)).toBe(
+      "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account.",
+    );
     expect(forgetMeCardLine({ status: 'none' }, PHONE)).toBeNull();
     expect(forgetMeCardLine({ status: 'failed' }, PHONE)).toBe(
       "We couldn't reach the shop to delete your saved card. To have it removed, call the shop at (442) 341-3053.",
@@ -59,6 +67,10 @@ describe('what the site says about it', () => {
     expect(notYouCardLine(cardDeleted.cardDeletion as never, PHONE)).toBe("The shop deleted the saved card too, so it can't be charged any more.");
     expect(notYouCardLine(cardScheduled.cardDeletion as never, PHONE)).toBe(
       'The shop will delete the saved card as soon as the appointments booked with it no longer need it.',
+    );
+    // Never "deleted": it's still in that Stripe account, for the shop to delete.
+    expect(notYouCardLine(cardForTheShop.cardDeletion as never, PHONE)).toBe(
+      "The saved card can't be used or charged any more. The shop will delete it in its Stripe account.",
     );
     expect(notYouCardLine({ status: 'failed' }, PHONE)).toBe(
       "The shop couldn't be reached to delete the saved card. To have it removed, call the shop at (442) 341-3053.",

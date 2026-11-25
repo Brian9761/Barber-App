@@ -623,7 +623,7 @@ describe('products, settings and computers', () => {
     expect(session.current().reason).toBe('expired');
   });
 
-  it('has no cards to delete in an old Stripe account, unless a test gives some, and takes one off like the server', async () => {
+  it('has no cards to delete in a Stripe account the server can’t reach, unless a test gives some, and takes one off like the server', async () => {
     expect((await api.stripe()).cardsToDelete).toEqual([]);
     expect(await rejects(api.cardDeletedInStripe('cs_test_unknown'))).toMatchObject({ code: 'not_found', status: 404, message: "We couldn't find that card." });
     const withCards = createDemoOwnerApi({

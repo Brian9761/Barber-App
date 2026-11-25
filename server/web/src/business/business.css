@@ -2543,7 +2543,7 @@
   font-weight: 700;
 }
 
-/* Settings → Card payments (Stripe): the cards to delete in an old Stripe account. */
+/* Settings → Card payments (Stripe): the cards to delete in a Stripe account the server can't reach. */
 .biz-cards-to-delete {
   display: grid;
   gap: var(--space-3);

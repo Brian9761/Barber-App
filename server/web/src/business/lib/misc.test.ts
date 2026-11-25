@@ -116,7 +116,7 @@ describe('Cards to delete in Stripe', () => {
       customer: 'Customer: cus_TestFixture000001',
       account: "Stripe account: the shop's own Stripe key (test mode)",
       confirm:
-        "Only click It's deleted once customer cus_TestFixture000001 is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here.",
+        "Only click It's deleted once customer cus_TestFixture000001 is deleted in that Stripe account. It then comes off this list, and the customer id is forgotten here.",
     });
     expect(cardToDeleteView(page!)).toMatchObject({
       title: "A card page that wasn't finished",
@@ -129,7 +129,11 @@ describe('Cards to delete in Stripe', () => {
       expiry: 'Expires 3/29',
       account: 'Stripe account: acct_1OldShop',
     });
-    expect(CARDS_TO_DELETE_INSTRUCTIONS).toContain('Delete these in your old Stripe account: Customers, then search for the customer id.');
+    // It may be the account the shop uses now, so never "old"; the app says the same with "tap".
+    expect(CARDS_TO_DELETE_INSTRUCTIONS).toBe(
+      "The server can't reach these in Stripe the way it's connected now. Delete each one in the Stripe account it shows: Customers, then search for the customer id. Then click Deleted in Stripe. If the server can reach one again, it deletes it itself.",
+    );
+    expect(CARDS_TO_DELETE_INSTRUCTIONS).not.toContain('old');
     // A connection from a server from before the list has none.
     expect((stripeActive as StripeConnection).cardsToDelete).toEqual([]);
   });

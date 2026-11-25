@@ -29,13 +29,20 @@ interface RequestOptions {
 /** The server's words for each answer to DELETE /api/cards (server/src/cards.ts), should an answer come without them. */
 export const CARD_DELETED_MESSAGE = "Your saved card is deleted. It can't be charged any more.";
 export const CARD_SCHEDULED_MESSAGE = 'Your card will be deleted as soon as your appointments no longer need it.';
+export const CARD_SHOP_MESSAGE = "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account.";
+
+const CARD_DELETION_MESSAGES: Record<CardDeletion['status'], string> = {
+  deleted: CARD_DELETED_MESSAGE,
+  scheduled: CARD_SCHEDULED_MESSAGE,
+  shop: CARD_SHOP_MESSAGE,
+};
 
 /** DELETE /api/cards's answer as the site reads it: a status it doesn't know reads as scheduled, never as deleted (like the Kit). */
 export function cardDeletionOf(answer: { cardDeletion?: { status?: unknown; message?: unknown } } | null | undefined): CardDeletion {
-  const status = answer?.cardDeletion?.status === 'deleted' ? 'deleted' : 'scheduled';
+  const said = answer?.cardDeletion?.status;
+  const status: CardDeletion['status'] = said === 'deleted' || said === 'shop' ? said : 'scheduled';
   const message = answer?.cardDeletion?.message;
-  const fallback = status === 'deleted' ? CARD_DELETED_MESSAGE : CARD_SCHEDULED_MESSAGE;
-  return { status, message: typeof message === 'string' && message.trim() !== '' ? message.trim() : fallback };
+  return { status, message: typeof message === 'string' && message.trim() !== '' ? message.trim() : CARD_DELETION_MESSAGES[status] };
 }
 
 export async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {

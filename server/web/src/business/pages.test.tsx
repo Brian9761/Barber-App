@@ -713,7 +713,7 @@ describe('Settings', () => {
     expect((await screen.findByTestId('stripe-status')).textContent).toContain('Connected · Izzy Clipz Barbershop');
     expect(screen.getByText('To disconnect, use the iPhone app.')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Open Stripe Dashboard/ }).getAttribute('href')).toBe('https://dashboard.stripe.com/');
-    // Nothing to delete in an old Stripe account: no list.
+    // Nothing to delete in a Stripe account the server can't reach: no list.
     expect(screen.queryByTestId('cards-to-delete')).toBeNull();
   });
 
@@ -731,7 +731,7 @@ describe('Settings', () => {
     expect(screen.queryByRole('button', { name: /Connect Stripe|Finish setting up/ })).toBeNull();
   });
 
-  it('lists the cards to delete in an old Stripe account, and takes one off once the shop says it deleted it there', async () => {
+  it('lists the cards to delete in a Stripe account the server can’t reach, and takes one off once the shop says it deleted it there', async () => {
     signedIn();
     const api = mockApi([
       ['GET /api/owner/stripe', { body: stripeCardsToDelete }],
@@ -743,7 +743,7 @@ describe('Settings', () => {
     const list = await screen.findByTestId('cards-to-delete');
     expect(within(list).getByRole('heading', { level: 3, name: 'Cards to delete in Stripe' })).toBeTruthy();
     expect(list.textContent).toContain(
-      "The server can't reach these in Stripe any more, because the shop changed how it connects to Stripe. Delete these in your old Stripe account: Customers, then search for the customer id. Then click Deleted in Stripe.",
+      "The server can't reach these in Stripe the way it's connected now. Delete each one in the Stripe account it shows: Customers, then search for the customer id. Then click Deleted in Stripe. If the server can reach one again, it deletes it itself.",
     );
     const rows = within(list).getAllByTestId('card-to-delete');
     expect(rows.map((row) => row.textContent)).toEqual([
@@ -755,7 +755,7 @@ describe('Settings', () => {
     let dialog = screen.getByTestId('confirm-deleted-in-stripe');
     expect(within(dialog).getByRole('heading', { name: 'Did you delete it in Stripe?' })).toBeTruthy();
     expect(dialog.textContent).toContain(
-      "Only click It's deleted once customer cus_TestFixture000001 is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here.",
+      "Only click It's deleted once customer cus_TestFixture000001 is deleted in that Stripe account. It then comes off this list, and the customer id is forgotten here.",
     );
     await userEvent.click(within(dialog).getByRole('button', { name: 'Not yet' }));
     expect(api.calls.some((c) => c.method === 'POST')).toBe(false);

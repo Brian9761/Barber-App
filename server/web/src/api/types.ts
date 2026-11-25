@@ -203,10 +203,12 @@ export interface SavedCard {
 /**
  * DELETE /api/cards: what became of the saved card. `deleted` at Stripe now, or `scheduled`: a
  * booking still needs it (it's upcoming, or can still be charged a fee within 7 days), and it's
- * deleted as soon as none does. Either way it can't book again. `message` says so in plain words.
+ * deleted as soon as none does; or `shop`: it's on a Stripe account the shop's server can't use any
+ * more, so the shop deletes it there (never "deleted"). Either way it can't book again. `message`
+ * says so in plain words.
  */
 export interface CardDeletion {
-  status: 'deleted' | 'scheduled';
+  status: 'deleted' | 'scheduled' | 'shop';
   message: string;
 }
 

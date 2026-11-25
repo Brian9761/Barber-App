@@ -119,6 +119,12 @@ class StandInStripe implements Pick<StripeClient, 'customers' | 'checkout' | 'pa
       this.deletedCustomers.add(id);
       return { id, object: 'customer', deleted: true } as unknown as Stripe.DeletedCustomer;
     },
+    // What the server asks when Stripe says it has no such Customer to delete (it never says so
+    // here): like Stripe, a deleted Customer is still answered, marked deleted.
+    retrieve: async (id: string) => {
+      if (this.deletedCustomers.has(id)) return { id, object: 'customer', deleted: true } as unknown as Stripe.DeletedCustomer;
+      return { id, object: 'customer' } as unknown as Stripe.Customer;
+    },
   };
 
   readonly paymentMethods = {
@@ -320,13 +326,15 @@ async function plumbing(req: IncomingMessage, res: ServerResponse, url: URL): Pr
   }
   if (parts[1] === 'card-to-delete' && req.method === 'POST') {
     // A saved card on a Stripe account this server can't use any more, as the server leaves it for the
-    // shop to delete there itself: removed, with its Stripe ids kept (Settings → Cards to delete in Stripe).
+    // shop to delete there itself: removed, with its Stripe ids kept (Settings → Cards to delete in Stripe),
+    // and how the server reached Stripe when it found that (any setup will do: these tests never run
+    // the daily job, which tries it again once that changes).
     const n = randomUUID().replaceAll('-', '');
     const id = randomUUID();
     await pool.query(
       `INSERT INTO saved_cards (id, token_hash, checkout_session_id, stripe_customer_id, stripe_payment_method_id, brand, last4,
-                                exp_month, exp_year, livemode, created_at, removed_at, stripe_unreachable_at)
-       VALUES ($1, $2, $3, $4, $5, 'visa', '4242', 12, 2030, false, now(), now(), now())`,
+                                exp_month, exp_year, livemode, created_at, removed_at, stripe_unreachable_at, stripe_unreachable_setup)
+       VALUES ($1, $2, $3, $4, $5, 'visa', '4242', 12, 2030, false, now(), now(), now(), 'direct:0123456789abcdef')`,
       [id, `${n}${n}`, `cs_test_old${n}`, `cus_old${n.slice(0, 12)}`, `pm_old${n}`],
     );
     return send(res, 200, JSON.stringify({ id, customerId: `cus_old${n.slice(0, 12)}` }));

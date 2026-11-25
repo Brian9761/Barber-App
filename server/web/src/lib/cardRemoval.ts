@@ -12,7 +12,7 @@ import { api, ErrorCode, isApiError } from '../api/client';
 import type { CardDeletion } from '../api/types';
 
 export type CardRemoval =
-  /** The shop's answer: deleted now, or once no booking needs it. */
+  /** The shop's answer: deleted now, or once no booking needs it, or left for the shop to delete in its Stripe account. */
   | CardDeletion
   /** The shop has no card under that key (a 404): there was nothing to delete. */
   | { status: 'none' }
@@ -55,6 +55,7 @@ export function forgetMeCardLine(removal: CardRemovalState | null, shopPhone: st
       return 'Asking the shop to delete your saved card…';
     case 'deleted':
     case 'scheduled':
+    case 'shop':
       return removal.message;
     case 'failed':
       return `We couldn't reach the shop to delete your saved card. To have it removed, call the shop at ${shopPhone}.`;
@@ -76,6 +77,8 @@ export function notYouCardLine(removal: CardRemovalState | null, shopPhone: stri
       return "The shop deleted the saved card too, so it can't be charged any more.";
     case 'scheduled':
       return 'The shop will delete the saved card as soon as the appointments booked with it no longer need it.';
+    case 'shop':
+      return "The saved card can't be used or charged any more. The shop will delete it in its Stripe account.";
     case 'failed':
       return `The shop couldn't be reached to delete the saved card. To have it removed, call the shop at ${shopPhone}.`;
     default:

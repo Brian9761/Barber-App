@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import cardDeleted from '../../../test/fixtures/contract/card-deletion.json';
 import cardScheduled from '../../../test/fixtures/contract/card-deletion-scheduled.json';
+import cardForTheShop from '../../../test/fixtures/contract/card-deletion-shop.json';
 import { apiError, FLOW45, mockApi } from '../test/api';
 import { api, ApiError, defaultMessage, errorFromResponse, OFFLINE_MESSAGE } from './client';
-import { CARD_DELETED_MESSAGE, CARD_SCHEDULED_MESSAGE, cardDeletionOf } from './http';
+import { CARD_DELETED_MESSAGE, CARD_SCHEDULED_MESSAGE, CARD_SHOP_MESSAGE, cardDeletionOf } from './http';
 
 const TOKEN = 'AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE';
 
@@ -98,6 +99,18 @@ describe('the API client', () => {
     expect(cardDeletionOf({ cardDeletion: { status: 'later', message: 'Soon.' } })).toEqual({ status: 'scheduled', message: 'Soon.' });
     expect(cardDeletionOf({ cardDeletion: { status: 'deleted' } })).toEqual(cardDeleted.cardDeletion);
     expect(cardDeletionOf({})).toEqual(cardScheduled.cardDeletion);
+  });
+
+  it('reads a card left for the shop to delete in its Stripe account as that, never as deleted', async () => {
+    expect(CARD_SHOP_MESSAGE).toBe(cardForTheShop.cardDeletion.message);
+    expect(cardDeletionOf(cardForTheShop)).toEqual({ status: 'shop', message: cardForTheShop.cardDeletion.message });
+    // Without the server's words, the site's own copy of them.
+    expect(cardDeletionOf({ cardDeletion: { status: 'shop', message: ' ' } })).toEqual({
+      status: 'shop',
+      message: "Your saved card can't be used or charged any more. The shop will delete it in its Stripe account.",
+    });
+    mockApi([['DELETE /api/cards', { body: cardForTheShop }]]);
+    expect(await api.deleteCard(TOKEN)).toEqual({ status: 'shop', message: CARD_SHOP_MESSAGE });
   });
 
   it('starts Stripe’s card page coming back to the website', async () => {

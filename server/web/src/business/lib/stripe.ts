@@ -68,11 +68,13 @@ export function cardsReady(connection: Pick<StripeConnection, 'status'> | null):
 }
 
 // "Cards to delete in Stripe": saved cards (and unfinished card pages) on a Stripe account the server
-// can't use any more, which the shop deletes there itself, in the owner app's words.
+// can't use any more, which the shop deletes there itself, in the owner app's words. It may be the
+// account the shop uses now (its key switched to the other mode for a while, say), so never "old";
+// and once the server can reach one again, it deletes it itself.
 
 export const CARDS_TO_DELETE_TITLE = 'Cards to delete in Stripe';
 export const CARDS_TO_DELETE_INSTRUCTIONS =
-  "The server can't reach these in Stripe any more, because the shop changed how it connects to Stripe. Delete these in your old Stripe account: Customers, then search for the customer id. Then click Deleted in Stripe.";
+  "The server can't reach these in Stripe the way it's connected now. Delete each one in the Stripe account it shows: Customers, then search for the customer id. Then click Deleted in Stripe. If the server can reach one again, it deletes it itself.";
 export const DELETED_IN_STRIPE = 'Deleted in Stripe';
 export const CARD_PAGE_TITLE = "A card page that wasn't finished";
 export const OFF_THE_LIST = "It's off the list. Thanks for deleting it in Stripe.";
@@ -100,6 +102,6 @@ export function cardToDeleteView(item: StripeCardToDelete): CardToDeleteView {
     expiry: card ? `Expires ${card.expMonth}/${String(card.expYear % 100).padStart(2, '0')}` : null,
     customer: `Customer: ${item.customerId}`,
     account: `Stripe account: ${item.stripeAccountId ?? "the shop's own Stripe key"}${item.livemode ? '' : ' (test mode)'}`,
-    confirm: `Only click It's deleted once customer ${item.customerId} is deleted in your old Stripe account. It then comes off this list, and the customer id is forgotten here.`,
+    confirm: `Only click It's deleted once customer ${item.customerId} is deleted in that Stripe account. It then comes off this list, and the customer id is forgotten here.`,
   };
 }

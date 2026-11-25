@@ -220,7 +220,7 @@ export function createDemoOwnerApi(options: DemoOwnerOptions = {}): OwnerApi {
   const latency = options.latencyMs ?? 120;
   const connectStep = options.connectStepMs ?? CONNECT_STEP_MS;
   const zone = catalog.timeZone;
-  /** What the shop has to delete in an old Stripe account, and what it said it deleted (asking again answers the same). */
+  /** What the shop has to delete in a Stripe account the server can't reach, and what it said it deleted (asking again answers the same). */
   let cardsToDelete: StripeCardToDelete[] = structuredClone(options.cardsToDelete ?? []);
   const deletedInStripe = new Set<string>();
 
