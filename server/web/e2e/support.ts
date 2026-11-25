@@ -275,6 +275,28 @@ export async function emulateStandalone(context: BrowserContext): Promise<void> 
   });
 }
 
+/**
+ * Opened as the app, the site's styles hide what the app doesn't need from the first paint, before any
+ * script runs (`@media (display-mode: standalone)`, src/styles/app.css): a policy's plain HTML too.
+ * Chromium can't be put in that display mode, so its styles never match it; the class the site gives
+ * the page in the app (`is-standalone`, src/pwa/platform.ts) stands in for it here, from the start, as
+ * the media query would be (src/pwa/platform.test.ts checks the styles hide the same in both).
+ */
+export async function emulateStandaloneStyles(context: BrowserContext): Promise<void> {
+  await context.addInitScript(() => {
+    const mark = () => document.documentElement.classList.add('is-standalone');
+    if (document.documentElement) {
+      mark();
+      return;
+    }
+    new MutationObserver((_records, observer) => {
+      if (!document.documentElement) return;
+      mark();
+      observer.disconnect();
+    }).observe(document, { childList: true });
+  });
+}
+
 /** A notched phone opened from the Home Screen: the status bar's and the home bar's room at the screen's edges. */
 export async function phoneSafeArea(page: Page, insets = { top: 47, bottom: 34, left: 0, right: 0 }): Promise<void> {
   const cdp = await page.context().newCDPSession(page);

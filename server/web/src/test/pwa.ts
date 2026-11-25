@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { vi } from 'vitest';
 import type { BeforeInstallPromptEvent } from '../pwa/installPrompt';
 
@@ -44,4 +47,22 @@ export function displayMode(standalone: boolean) {
     removeListener: () => undefined,
     dispatchEvent: () => false,
   }));
+}
+
+/**
+ * The site's app styles (styles/app.css) in the page, as a browser has them, for what they hide in the
+ * app: jsdom reads the file itself (a stylesheet imported in the tests is empty). Takes them out again,
+ * and the page's `is-standalone` mark (src/pwa/platform.ts) with them.
+ */
+export function withAppStyles(): { sheet: CSSStyleSheet; remove: () => void } {
+  const style = document.createElement('style');
+  style.textContent = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '../styles/app.css'), 'utf8');
+  document.head.append(style);
+  return {
+    sheet: style.sheet!,
+    remove: () => {
+      style.remove();
+      document.documentElement.classList.remove('is-standalone');
+    },
+  };
 }

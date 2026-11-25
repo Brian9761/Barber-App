@@ -2,6 +2,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useCatalog, useShopContact } from '../data/catalog';
 import { LEGAL_DOCUMENTS } from '../legal/documents';
+import { takeOverInProgress } from '../legal/takeover';
 import { InstallHint } from '../pwa/InstallHint';
 import { OfflineNotice } from '../pwa/OfflineNotice';
 import { useStandalone } from '../pwa/platform';
@@ -13,18 +14,33 @@ import { PageErrorBoundary, PageLoadFailed } from './PageError';
 import { CallLink } from './ui';
 import { legalNameOf, OperatorLines, REFUNDS_HREF, REFUNDS_LABEL } from './OperatorLines';
 
-/** The nav's pages (the legal pages' plain HTML has them too: src/legal/prerender.tsx). */
-export const NAV_LINKS = [
+/**
+ * What has done its job once the site is open as the app: drawn always, and hidden then by the
+ * styles (app.css), so a policy's plain HTML, drawn before any script, is the same.
+ */
+export const NOT_IN_APP = 'not-in-app';
+
+/**
+ * The nav's pages (the legal pages' plain HTML has them too: src/legal/prerender.tsx), with the class
+ * of their list item: "Get the app" isn't shown in the app.
+ */
+export const NAV_LINKS: readonly { to: string; label: string; itemClass?: string }[] = [
   { to: '/services', label: 'Services' },
   { to: '/barbers', label: 'Barbers' },
   { to: '/reviews', label: 'Reviews' },
   { to: '/visit', label: 'Visit' },
   { to: '/appointments', label: 'My appointments' },
-  { to: '/app', label: 'Get the app' },
+  { to: '/app', label: 'Get the app', itemClass: NOT_IN_APP },
 ];
 
 /** The footer's site directory, which the plain HTML's "Menu" goes to (src/legal/prerender.tsx). */
 export const SITE_DIRECTORY_ID = 'site-directory';
+
+/**
+ * The nav's "Menu" on a phone, and the plain HTML's stand-in for it (src/legal/prerender.tsx): one id,
+ * so the keyboard on the one is on the other once the site takes over (legal/takeover.ts).
+ */
+export const MENU_BUTTON_ID = 'globalnav-menu-button';
 
 /** "Book" in the nav: a link with its blue pill (the legal pages' plain HTML has it too: src/legal/prerender.tsx). */
 export function NavBookLink() {
@@ -35,12 +51,6 @@ export function NavBookLink() {
       </span>
     </Link>
   );
-}
-
-/** The nav's links. Opened as the app, "Get the app" has done its job. */
-function useNavLinks() {
-  const standalone = useStandalone();
-  return standalone ? NAV_LINKS.filter((link) => link.to !== '/app') : NAV_LINKS;
 }
 
 /** Every page: the global nav, the page, and the footer. */
@@ -84,7 +94,6 @@ export function Layout() {
 
 export function GlobalNav() {
   const { pathname } = useLocation();
-  const links = useNavLinks();
   // The page the menu was opened on: going to another page closes it in that same render, so the
   // page under it is reachable again (not inert) by the time Layout moves focus to the new page.
   const [openOn, setOpenOn] = useState<string | null>(null);
@@ -130,8 +139,8 @@ export function GlobalNav() {
           <Logo height={38} label="Izzy Clipz" />
         </Link>
         <ul className="globalnav__links">
-          {links.map((link) => (
-            <li key={link.to}>
+          {NAV_LINKS.map((link) => (
+            <li key={link.to} className={link.itemClass}>
               <NavLink to={link.to} className="globalnav__link">
                 {link.label}
               </NavLink>
@@ -141,6 +150,7 @@ export function GlobalNav() {
         <NavBookLink />
         <button
           ref={buttonRef}
+          id={MENU_BUTTON_ID}
           type="button"
           className="globalnav__menu-button"
           aria-expanded={menuOpen}
@@ -160,8 +170,8 @@ export function GlobalNav() {
                   Home
                 </NavLink>
               </li>
-              {links.map((link) => (
-                <li key={link.to}>
+              {NAV_LINKS.map((link) => (
+                <li key={link.to} className={link.itemClass}>
                   <NavLink to={link.to} className="globalnav__menu-link">
                     {link.label}
                   </NavLink>
@@ -187,14 +197,21 @@ export function GlobalNav() {
 
 /**
  * Opened as the app there's no browser Back button, so the nav has one, on every page but Home
- * and the booking steps (which have their own), once there's somewhere to go back to.
+ * and the booking steps (which have their own), once there's somewhere to go back to. Not on a
+ * policy the site has just drawn over its plain HTML (legal/takeover.ts), which has none (it's
+ * drawn before any script), until the reader goes on to another page: reloaded in the app, say,
+ * nothing in the nav moves when the site takes over.
  */
 function AppBack() {
   const standalone = useStandalone();
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, key } = useLocation();
+  // The page the site drew over the plain HTML, while the reader is still on it; once they've gone
+  // on (even back to it later), Back is as on every other page.
+  const [drawnOver, setDrawnOver] = useState(() => (takeOverInProgress() ? key : null));
+  if (drawnOver !== null && drawnOver !== key) setDrawnOver(null);
   const index = (window.history.state as { idx?: number } | null)?.idx ?? 0;
-  if (!standalone || index === 0 || pathname === '/' || pathname.startsWith('/book')) return null;
+  if (!standalone || drawnOver === key || index === 0 || pathname === '/' || pathname.startsWith('/book')) return null;
   return (
     <button type="button" className="globalnav__back" onClick={() => navigate(-1)}>
       <Icon name="chevronLeft" />
@@ -206,8 +223,6 @@ function AppBack() {
 export function Footer() {
   const catalog = useCatalog();
   const contact = useShopContact();
-  // Opened as the app, "Get the app" has done its job, here as in the nav.
-  const standalone = useStandalone();
   const year = new Date().getFullYear();
   return (
     <footer className="globalfooter">
@@ -245,11 +260,10 @@ export function Footer() {
               <li>
                 <Link to="/appointments">My appointments</Link>
               </li>
-              {standalone ? null : (
-                <li>
-                  <Link to="/app">Get the app</Link>
-                </li>
-              )}
+              {/* Opened as the app, it has done its job, here as in the nav (hidden by the styles). */}
+              <li className={NOT_IN_APP}>
+                <Link to="/app">Get the app</Link>
+              </li>
             </ul>
           </div>
           <div>

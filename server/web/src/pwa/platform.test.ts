@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { displayMode, installOffer, USER_AGENTS } from '../test/pwa';
+import { NOT_IN_APP } from '../components/Layout';
+import { displayMode, installOffer, USER_AGENTS, withAppStyles } from '../test/pwa';
 import { countVisit, dismissHint, hintDismissed, INSTALL_HINT_KEY, showInstallHint, type HintFacts } from './installHint';
 import { forgetInstallPrompt, listenForInstallPrompt, promptInstall } from './installPrompt';
 import { openOtherSitesOutside } from './externalLinks';
-import { detectPlatform, deviceWord, isStandalone, markStandalone } from './platform';
+import { APP_MODES, detectPlatform, deviceWord, isStandalone, markStandalone } from './platform';
 
 // What the Get the app page and the install hint decide from: the device and browser, whether
 // the site is already open as the app, and the browser's own offer to install it.
@@ -66,6 +67,40 @@ describe('open as the app', () => {
   it('is never assumed where the browser can’t tell', () => {
     vi.stubGlobal('matchMedia', undefined);
     expect(isStandalone()).toBe(false);
+  });
+
+  it('hides what has done its job then (“Get the app”) in the styles, in every way the app can be open, and with the page’s mark', () => {
+    const styles = withAppStyles();
+    try {
+      // From the first paint, before any script (a policy's plain HTML, say): the display modes themselves.
+      const hiding = Array.from(styles.sheet.cssRules).filter(
+        (rule): rule is CSSMediaRule =>
+          rule instanceof CSSMediaRule &&
+          Array.from(rule.cssRules).some(
+            (inner) =>
+              inner instanceof CSSStyleRule &&
+              inner.selectorText === `.${NOT_IN_APP}` &&
+              inner.style.getPropertyValue('display') === 'none' &&
+              inner.style.getPropertyPriority('display') === 'important',
+          ),
+      );
+      expect(hiding).toHaveLength(1);
+      expect(hiding[0]!.media.mediaText.split(/,\s*/)).toEqual(APP_MODES.map((mode) => `(display-mode: ${mode})`));
+
+      // And once the site knows (Safari's own flag included), with the class it gives the page.
+      const item = document.createElement('li');
+      item.className = NOT_IN_APP;
+      document.body.append(item);
+      displayMode(false);
+      markStandalone();
+      expect(getComputedStyle(item).display).not.toBe('none');
+      displayMode(true);
+      markStandalone();
+      expect(getComputedStyle(item).display).toBe('none');
+      item.remove();
+    } finally {
+      styles.remove();
+    }
   });
 });
 

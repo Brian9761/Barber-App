@@ -58,8 +58,8 @@ export function thisDevice(): DeviceWord {
   return deviceWord(navigator.userAgent, navigator.maxTouchPoints ?? 0);
 }
 
-/** How the app can be open without the browser around it. */
-const APP_MODES = ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'] as const;
+/** How the app can be open without the browser around it (app.css hides what the app doesn't need in each). */
+export const APP_MODES = ['standalone', 'fullscreen', 'minimal-ui', 'window-controls-overlay'] as const;
 
 /** Whether the site is open as the app: from the Home Screen, or an installed app's own window. */
 export function isStandalone(win: Window = window): boolean {

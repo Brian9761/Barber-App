@@ -1,9 +1,13 @@
 import { act, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadLegalPage } from '../App';
 import catalogData from '../../../data/catalog.json';
+import { MENU_BUTTON_ID } from '../components/Layout';
 import { asCatalog } from '../data/catalog';
 import { catalog as testCatalog, renderApp } from '../test/api';
+import { displayMode } from '../test/pwa';
+import { renderLegalPages } from './prerender';
 import {
   BUILD_CATALOG_ID,
   finishTakingOver,
@@ -132,6 +136,24 @@ describe('the site’s page, right after it’s drawn over the plain HTML', () =
     expect(top.scrolled).toEqual({});
   });
 
+  it('keeps the keyboard on “Menu”: the plain HTML’s link to the site directory is the site’s Menu button, by its id', () => {
+    // The plain HTML as the build writes it, on a phone, with the keyboard on its "Menu".
+    const plain = document.createElement('div');
+    plain.innerHTML = renderLegalPages({ draft: true, demo: false }).find((page) => page.path === '/privacy')!.body;
+    document.body.append(plain);
+    const standIn = plain.querySelector<HTMLAnchorElement>('a.globalnav__menu-standin')!;
+    standIn.focus();
+    const place = readingPlace(plain, fakeWindow(0));
+    expect(place.focus).toEqual({ tag: 'a', id: MENU_BUTTON_ID, href: '#site-directory', text: 'Menu' });
+    plain.remove();
+    // The site's page in its place: the keyboard is on its Menu button, not back at the start.
+    const { container } = renderApp('/privacy');
+    restoreReadingPlace(container, place, fakeWindow(0));
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    expect(menu.id).toBe(MENU_BUTTON_ID);
+    expect(document.activeElement).toBe(menu);
+  });
+
   it('opened at a #section with the keyboard on nothing yet, the keyboard goes on from that section’s heading, without scrolling', () => {
     const root = plainPage();
     const heading = root.querySelector<HTMLElement>('#who-we-share')!;
@@ -168,6 +190,39 @@ describe('drawing over a policy’s plain HTML', () => {
     await act(async () => undefined);
     expect(screen.getByRole('heading', { level: 3, name: 'Saved cards' })).toBeTruthy();
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it('opened as the app, draws no Back over the plain HTML, which has none, until the reader goes on to another page', async () => {
+    displayMode(true);
+    await loadLegalPage();
+    // Reached in the app, so there's somewhere to go back to, then reloaded (the history keeps its place).
+    window.history.replaceState({ idx: 1 }, '');
+    try {
+      // Opened in the site itself, such a page has Back.
+      const { unmount } = renderApp('/privacy');
+      expect(within(screen.getByRole('navigation', { name: 'Izzy Clipz' })).getByRole('button', { name: 'Back' })).toBeTruthy();
+      unmount();
+
+      // Drawn over its plain HTML, it has none either, so nothing in the nav moves.
+      takeOverPrerenderedPage(false);
+      renderApp('/privacy');
+      const nav = screen.getByRole('navigation', { name: 'Izzy Clipz' });
+      expect(screen.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeTruthy();
+      expect(within(nav).queryByRole('button', { name: 'Back' })).toBeNull();
+      // The menu opened and closed (the nav drawn again) changes nothing.
+      await userEvent.click(within(nav).getByRole('button', { name: 'Menu' }));
+      await userEvent.click(within(nav).getByRole('button', { name: 'Close' }));
+      expect(within(nav).queryByRole('button', { name: 'Back' })).toBeNull();
+
+      // Going on to another page, Back is there as on every page, and back on the policy too.
+      await userEvent.click(within(screen.getByRole('contentinfo')).getByRole('link', { name: 'Terms of Service' }));
+      expect(await screen.findByRole('heading', { level: 1, name: 'Terms of Service' })).toBeTruthy();
+      await userEvent.click(within(nav).getByRole('button', { name: 'Back' }));
+      expect(await screen.findByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeTruthy();
+      expect(within(nav).getByRole('button', { name: 'Back' })).toBeTruthy();
+    } finally {
+      window.history.replaceState(null, '');
+    }
   });
 
   it('opened in the site itself, a policy is drawn as usual: “On this page” open on a computer, and a #section scrolled to', async () => {

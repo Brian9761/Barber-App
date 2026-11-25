@@ -1,11 +1,13 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { NOT_IN_APP } from '../components/Layout';
 import { saveAppointment } from '../lib/storage';
 import { newToken } from '../lib/tokens';
 import { forgetInstallPrompt, listenForInstallPrompt } from '../pwa/installPrompt';
+import { markStandalone } from '../pwa/platform';
 import { fixtureAppointment, mockApi, renderApp, reviewsUnavailable } from '../test/api';
-import { displayMode, installOffer, USER_AGENTS } from '../test/pwa';
+import { displayMode, installOffer, USER_AGENTS, withAppStyles } from '../test/pwa';
 
 // "Get the app": the steps for the visitor's own device, the others one tap away, the
 // browser's own Install button where it has one, a QR code on computers, and "You're using
@@ -199,15 +201,32 @@ describe('its Privacy Policy', () => {
 
 describe('in the nav and footer', () => {
   it('is "Get the app" in both, and leaves them once it’s the app', () => {
-    mockApi([['GET /api/reviews', { body: reviewsUnavailable }]]);
-    const { unmount } = renderApp('/visit');
-    expect(within(screen.getByRole('navigation', { name: 'Izzy Clipz' })).getByRole('link', { name: 'Get the app' }).getAttribute('href')).toBe('/app');
-    expect(within(screen.getByRole('navigation', { name: 'Site directory' })).getByRole('link', { name: 'Get the app' }).getAttribute('href')).toBe('/app');
-    unmount();
-    displayMode(true);
-    renderApp('/visit');
-    expect(within(screen.getByRole('navigation', { name: 'Izzy Clipz' })).queryByRole('link', { name: 'Get the app' })).toBeNull();
-    expect(within(screen.getByRole('navigation', { name: 'Site directory' })).queryByRole('link', { name: 'Get the app' })).toBeNull();
+    // The site's styles hide it in the app (app.css), so a policy's plain HTML, drawn before any
+    // script, leaves it out too, as the page the site then draws in its place does.
+    const styles = withAppStyles();
+    try {
+      mockApi([['GET /api/reviews', { body: reviewsUnavailable }]]);
+      const { unmount } = renderApp('/visit');
+      expect(within(screen.getByRole('navigation', { name: 'Izzy Clipz' })).getByRole('link', { name: 'Get the app' }).getAttribute('href')).toBe('/app');
+      expect(within(screen.getByRole('navigation', { name: 'Site directory' })).getByRole('link', { name: 'Get the app' }).getAttribute('href')).toBe('/app');
+      const navAndFooter = () => screen.getByRole('navigation', { name: 'Izzy Clipz' }).outerHTML + screen.getByRole('contentinfo').outerHTML;
+      const inBrowser = navAndFooter();
+      unmount();
+      displayMode(true);
+      // As the site marks the page when it opens (main.tsx).
+      markStandalone();
+      renderApp('/visit');
+      expect(within(screen.getByRole('navigation', { name: 'Izzy Clipz' })).queryByRole('link', { name: 'Get the app' })).toBeNull();
+      expect(within(screen.getByRole('navigation', { name: 'Site directory' })).queryByRole('link', { name: 'Get the app' })).toBeNull();
+      // Drawn as in a browser, only hidden: the plain HTML, which can't know, is the same.
+      expect(navAndFooter()).toBe(inBrowser);
+      for (const name of ['Izzy Clipz', 'Site directory']) {
+        const link = within(screen.getByRole('navigation', { name })).getByRole('link', { name: 'Get the app', hidden: true });
+        expect(link.closest('li')?.classList.contains(NOT_IN_APP), name).toBe(true);
+      }
+    } finally {
+      styles.remove();
+    }
   });
 });
 

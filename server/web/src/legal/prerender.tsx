@@ -12,7 +12,7 @@ import { StaticRouter } from 'react-router-dom/server';
 import catalogData from '../../../data/catalog.json';
 import type { Catalog } from '../api/types';
 import { Icon } from '../components/Icon';
-import { Footer, NAV_LINKS, NavBookLink, SITE_DIRECTORY_ID } from '../components/Layout';
+import { Footer, MENU_BUTTON_ID, NAV_LINKS, NavBookLink, SITE_DIRECTORY_ID } from '../components/Layout';
 import { Logo } from '../components/Logo';
 import { fullTitle } from '../components/usePageMeta';
 import { CatalogProvider } from '../data/catalog';
@@ -38,7 +38,9 @@ export interface PrerenderedLegalPage {
  * The global nav as the site draws it (GlobalNav in components/Layout.tsx), so nothing in it moves
  * when the site takes over: the logo home, on a computer the site's pages, Book with its pill, and
  * on a phone "Menu". The site's menu needs the script, so here "Menu" goes to the footer's site
- * directory, which has every page; the site's own Menu button takes its place, the same size.
+ * directory, which has every page; the site's own Menu button takes its place, the same size, with
+ * the same id, so the keyboard on the one is on the other. Opened as the app, "Get the app" is
+ * hidden by the styles here as it is there, and the site draws no Back over this page (Layout.tsx).
  */
 function StaticNav() {
   return (
@@ -49,7 +51,7 @@ function StaticNav() {
         </Link>
         <ul className="globalnav__links">
           {NAV_LINKS.map((link) => (
-            <li key={link.to}>
+            <li key={link.to} className={link.itemClass}>
               <Link to={link.to} className="globalnav__link">
                 {link.label}
               </Link>
@@ -57,7 +59,12 @@ function StaticNav() {
           ))}
         </ul>
         <NavBookLink />
-        <a href={`#${SITE_DIRECTORY_ID}`} className="globalnav__menu-standin" aria-label="Menu: the site's pages, at the bottom of this page">
+        <a
+          id={MENU_BUTTON_ID}
+          href={`#${SITE_DIRECTORY_ID}`}
+          className="globalnav__menu-standin"
+          aria-label="Menu: the site's pages, at the bottom of this page"
+        >
           <Icon name="menu" />
           <span>Menu</span>
         </a>

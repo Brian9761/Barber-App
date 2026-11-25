@@ -113,6 +113,22 @@ html.is-standalone body {
   overscroll-behavior-y: none;
 }
 
+/*
+ * What has done its job once the site is the app ("Get the app" in the nav and the footer). Hidden by
+ * the styles, from the first paint, in every way the app can be open (src/pwa/platform.ts's
+ * APP_MODES), so a policy's plain HTML, drawn before any script, leaves it out as the site does, and
+ * nothing moves when the site takes over; `is-standalone` covers Safari's own word for it.
+ */
+@media (display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui), (display-mode: window-controls-overlay) {
+  .not-in-app {
+    display: none !important;
+  }
+}
+
+html.is-standalone .not-in-app {
+  display: none !important;
+}
+
 /* "‹ Back" at the nav's left, where a browser's Back button would be. */
 .globalnav__back {
   display: inline-flex;

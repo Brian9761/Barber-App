@@ -6,6 +6,8 @@ import { navLink, signInWithCode } from './business-support.js';
 import {
   controlledByWorker,
   detailsFields,
+  emulateStandalone,
+  emulateStandaloneStyles,
   expect,
   expectAccessible,
   expectFits,
@@ -917,64 +919,134 @@ test.describe('on a slow connection', () => {
     await view(page, testInfo, 'legal-16-slow-takeover-keeps-place');
   });
 
-  test('the site takes the plain HTML over without moving the nav or the footer: the same bar, Book and Menu in it, and the footer’s hours and who runs the shop all along', async ({
+  test('the site takes the plain HTML over without moving the nav or the footer: the same bar, Book and Menu in it, the keyboard still on Menu, and the footer’s hours and who runs the shop all along', async ({
     page,
   }, testInfo) => {
     // The site's script comes late, so the plain HTML can be measured first.
-    let release = () => undefined as void;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    await page.route(/\/assets\/main-[^/]+\.js$/, async (route) => {
-      await held;
-      await route.continue();
-    });
+    const release = await holdTheSiteScript(page);
     await page.goto('/privacy', { waitUntil: 'commit' });
-    const footer = page.getByRole('contentinfo');
-    await expect(page.locator('[data-prerendered]')).toHaveCount(1);
-    await expect(footer.getByTestId('footer-operator')).toBeVisible();
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-    });
-    // Every box in the nav: the bar, the logo, the site's pages, Book and Menu (each shown or not, as the screen's width has it).
-    const navBoxes = () =>
-      page.locator('nav.globalnav').evaluate((nav) =>
-        [nav, ...Array.from(nav.querySelectorAll('.globalnav__logo, .globalnav__link, .globalnav__book, .globalnav__book-pill, .globalnav__menu-button, .globalnav__menu-standin'))].map((element) => {
-          const box = element.getBoundingClientRect();
-          const name = element.className.toString().replace('globalnav__menu-standin', 'globalnav__menu-button');
-          return `${name} ${box.x.toFixed(1)},${box.y.toFixed(1)} ${box.width.toFixed(1)}x${box.height.toFixed(1)}`;
-        }),
-      );
-    const before = await navBoxes();
-    expect(before.some((box) => box.startsWith('globalnav__book ')), 'the plain HTML has Book').toBe(true);
-    // From here on, the footer's height each time anything in the page changes.
-    await page.evaluate(() => {
-      const heights: number[] = [];
-      (window as unknown as { izzyFooterHeights: number[] }).izzyFooterHeights = heights;
-      const note = () => {
-        const element = document.querySelector('footer.globalfooter');
-        if (element) heights.push(Math.round(element.getBoundingClientRect().height * 10) / 10);
-      };
-      note();
-      new MutationObserver(note).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-    });
+    const before = await measurePlainHtml(page);
+    // On a phone, the keyboard on "Menu" (the plain HTML's link to the site directory)…
+    const phone = isPhone(testInfo);
+    if (phone) await tabTo(page, page.locator('a.globalnav__menu-standin'));
 
     release();
-    await siteTookOver(page);
-    // The site's own Menu button now, and its footer with the hours and who runs the shop.
-    await expect(page.locator('nav.globalnav button.globalnav__menu-button')).toHaveCount(1);
-    await expect(page.locator('.globalnav__menu-standin')).toHaveCount(0);
-    await expect(footer.getByTestId('footer-operator')).toBeVisible();
-    await expect(footer.getByRole('list', { name: 'Hours' })).toBeVisible();
-    // Whatever the site asks for on the way (were it the catalog) has come.
-    await page.waitForLoadState('networkidle');
-    expect(await navBoxes(), 'the nav, box for box').toEqual(before);
-    const heights = await page.evaluate(() => (window as unknown as { izzyFooterHeights: number[] }).izzyFooterHeights);
-    expect(heights.length).toBeGreaterThan(1);
-    expect([...new Set(heights)], 'the footer’s height, through the takeover').toHaveLength(1);
+    await expectNothingMoved(page, before);
+    // …is on the site's own Menu button once it has taken over, not back at the start of the page.
+    if (phone) await expect(page.getByRole('button', { name: 'Menu' })).toBeFocused();
     await view(page, testInfo, 'legal-17-takeover-same-nav');
   });
+
+  test('opened as the app and reloaded on a policy reached in it, nothing moves either: no “Get the app” before or after, and Back once the reader goes on', async ({
+    page,
+    context,
+  }, testInfo) => {
+    await emulateStandalone(context);
+    await emulateStandaloneStyles(context);
+    const nav = page.getByRole('navigation', { name: 'Izzy Clipz' });
+    const footer = page.getByRole('contentinfo');
+    const policyLink = (name: string) => footer.getByRole('navigation', { name: 'Legal' }).getByRole('link', { name });
+    // Reached in the app, so its history has somewhere to go back to: the site has Back there.
+    await page.goto('/visit');
+    await expect(page.getByRole('heading', { level: 1, name: 'Visit the shop' })).toBeVisible();
+    await policyLink('Privacy Policy').click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible();
+    await expect(nav.getByRole('button', { name: 'Back' })).toBeVisible();
+
+    // Reloaded, as the "A new version is ready" bar's Reload does: the network's plain HTML first,
+    // drawn before any script, so with no Back, and "Get the app" hidden by the styles.
+    const release = await holdTheSiteScript(page);
+    await page.reload({ waitUntil: 'commit' });
+    const before = await measurePlainHtml(page);
+    expect(before.some((box) => box.startsWith('globalnav__back')), 'the plain HTML has no Back').toBe(false);
+    for (const area of [nav, footer]) await expect(area.getByRole('link', { name: 'Get the app' })).toHaveCount(0);
+
+    release();
+    await expectNothingMoved(page, before);
+    await expect(nav.getByRole('button', { name: 'Back' })).toHaveCount(0);
+    for (const area of [nav, footer]) await expect(area.getByRole('link', { name: 'Get the app' })).toHaveCount(0);
+    await view(page, testInfo, 'legal-18-app-takeover-same-nav');
+
+    // Going on in the app, Back is there as on every page, and on the policy again once back on it.
+    await policyLink('Terms of Service').click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Terms of Service' })).toBeVisible();
+    await nav.getByRole('button', { name: 'Back' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Privacy Policy' })).toBeVisible();
+    await expect(nav.getByRole('button', { name: 'Back' })).toBeVisible();
+  });
 });
+
+/** The site's script held back until the function this returns is called, as on a slow connection. */
+async function holdTheSiteScript(page: Page): Promise<() => void> {
+  let release = () => undefined as void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(/\/assets\/main-[^/]+\.js$/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  return release;
+}
+
+/** Every box in the nav: the bar, Back, the logo, the site's pages, Book and Menu (each shown or not, as the screen's width and the app have it). */
+function navBoxes(page: Page): Promise<string[]> {
+  return page.locator('nav.globalnav').evaluate((nav) =>
+    [
+      nav,
+      ...Array.from(
+        nav.querySelectorAll('.globalnav__back, .globalnav__logo, .globalnav__link, .globalnav__book, .globalnav__book-pill, .globalnav__menu-button, .globalnav__menu-standin'),
+      ),
+    ].map((element) => {
+      const box = element.getBoundingClientRect();
+      const name = element.className.toString().replace('globalnav__menu-standin', 'globalnav__menu-button');
+      return `${name} ${box.x.toFixed(1)},${box.y.toFixed(1)} ${box.width.toFixed(1)}x${box.height.toFixed(1)}`;
+    }),
+  );
+}
+
+/**
+ * A policy's plain HTML on screen, the site's script held back: its nav's boxes, and from then on the
+ * footer's height, noted each time anything in the page changes.
+ */
+async function measurePlainHtml(page: Page): Promise<string[]> {
+  const footer = page.getByRole('contentinfo');
+  await expect(page.locator('[data-prerendered]')).toHaveCount(1);
+  await expect(footer.getByTestId('footer-operator')).toBeVisible();
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+  });
+  const before = await navBoxes(page);
+  expect(before.some((box) => box.startsWith('globalnav__book ')), 'the plain HTML has Book').toBe(true);
+  await page.evaluate(() => {
+    const heights: number[] = [];
+    (window as unknown as { izzyFooterHeights: number[] }).izzyFooterHeights = heights;
+    const note = () => {
+      const element = document.querySelector('footer.globalfooter');
+      if (element) heights.push(Math.round(element.getBoundingClientRect().height * 10) / 10);
+    };
+    note();
+    new MutationObserver(note).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+  });
+  return before;
+}
+
+/** Once the script is let go: the site's own page in its place, with its nav box for box as the plain HTML's (`before`), and the footer's height the same all along. */
+async function expectNothingMoved(page: Page, before: string[]): Promise<void> {
+  const footer = page.getByRole('contentinfo');
+  await siteTookOver(page);
+  // The site's own Menu button now, and its footer with the hours and who runs the shop.
+  await expect(page.locator('nav.globalnav button.globalnav__menu-button')).toHaveCount(1);
+  await expect(page.locator('.globalnav__menu-standin')).toHaveCount(0);
+  await expect(footer.getByTestId('footer-operator')).toBeVisible();
+  await expect(footer.getByRole('list', { name: 'Hours' })).toBeVisible();
+  // Whatever the site asks for on the way (were it the catalog) has come.
+  await page.waitForLoadState('networkidle');
+  expect(await navBoxes(page), 'the nav, box for box').toEqual(before);
+  const heights = await page.evaluate(() => (window as unknown as { izzyFooterHeights: number[] }).izzyFooterHeights);
+  expect(heights.length).toBeGreaterThan(1);
+  expect([...new Set(heights)], 'the footer’s height, through the takeover').toHaveLength(1);
+}
 
 test('a legal page’s file address (“/privacy/index.html”) goes to the page itself, with or without JavaScript', async ({ page, request }) => {
   for (const path of ['/privacy', '/terms', '/cancellation-policy', '/accessibility']) {

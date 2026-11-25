@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
 import catalogData from '../../../data/catalog.json';
+import { MENU_BUTTON_ID, NOT_IN_APP } from '../components/Layout';
 import { LEGAL_DOCUMENTS } from './documents';
 import { DEMO_DRAFT_LINE, DRAFT_LINE, DRAFT_TITLE } from './LegalPage';
 import { PLACEHOLDER_START } from './placeholders';
@@ -68,13 +69,27 @@ describe('the legal pages in plain HTML', () => {
       const nav = page.body.slice(0, page.body.indexOf('</nav>')).replace(/<svg[\s\S]*?<\/svg>/g, '<svg/>');
       // The logo home, the site's pages (shown on a computer), Book, and the Menu stand-in (shown on a phone), in GlobalNav's order.
       expect(nav, page.path).toMatch(
-        /<a class="globalnav__logo" href="\/">.*<ul class="globalnav__links">.*<\/ul><a class="globalnav__book" aria-label="Book an appointment" href="\/book"><span class="globalnav__book-pill" aria-hidden="true">Book<\/span><\/a><a href="#site-directory" class="globalnav__menu-standin"/,
+        /<a class="globalnav__logo" href="\/">.*<ul class="globalnav__links">.*<\/ul><a class="globalnav__book" aria-label="Book an appointment" href="\/book"><span class="globalnav__book-pill" aria-hidden="true">Book<\/span><\/a><a id="globalnav-menu-button" href="#site-directory" class="globalnav__menu-standin"/,
       );
       // "Menu" works without the script: it goes to the footer's site directory, which says where it goes.
+      // It has the site's Menu button's id, so the keyboard on it is on that button once the site takes over.
+      expect(MENU_BUTTON_ID).toBe('globalnav-menu-button');
       expect(nav, page.path).toContain(
-        '<a href="#site-directory" class="globalnav__menu-standin" aria-label="Menu: the site&#x27;s pages, at the bottom of this page"><svg/><span>Menu</span></a>',
+        '<a id="globalnav-menu-button" href="#site-directory" class="globalnav__menu-standin" aria-label="Menu: the site&#x27;s pages, at the bottom of this page"><svg/><span>Menu</span></a>',
       );
       expect(page.body, page.path).toContain('<nav id="site-directory" class="globalfooter__directory" aria-label="Site directory">');
+    }
+  });
+
+  it('have “Get the app” in the nav and the footer as the site does, marked for the styles to hide when it’s open as the app', () => {
+    for (const page of renderLegalPages({ draft: true, demo: false })) {
+      const [nav, rest] = [page.body.slice(0, page.body.indexOf('</nav>')), page.body.slice(page.body.indexOf('<footer'))];
+      expect(nav, page.path).toContain(`<li class="${NOT_IN_APP}"><a class="globalnav__link" href="/app">Get the app</a></li>`);
+      expect(rest, page.path).toContain(`<li class="${NOT_IN_APP}"><a href="/app">Get the app</a></li>`);
+      // Only it: every other page in the nav stays.
+      expect(page.body.match(new RegExp(`class="${NOT_IN_APP}"`, 'g')), page.path).toHaveLength(2);
+      // No Back: the site draws none over the plain HTML either (components/Layout.tsx).
+      expect(page.body, page.path).not.toContain('globalnav__back');
     }
   });
 
